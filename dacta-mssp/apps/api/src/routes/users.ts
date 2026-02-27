@@ -1,45 +1,26 @@
 import { Hono } from "hono";
 import { getAdminClient } from "../db.js";
-import { authMiddleware, type AuthContext } from "../middleware/auth.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { requireRole, SOC_ROLES } from "../middleware/rbac.js";
 
-const users = new Hono<AuthContext>();
+const users = new Hono();
 users.use("*", authMiddleware);
 
-/**
- * GET /users - List users (SOC team members)
- * Query: role, status, shift
- */
+// GET /users
 users.get("/", requireRole(SOC_ROLES), async (c) => {
   const db = getAdminClient();
-  const q = c.req.query();
-
-  let query = db
+  const { data, error } = await db
     .from("users")
     .select("id, name, email, role, status, shift, avatar_url, last_active_at, org_id")
     .order("name", { ascending: true });
-
-  if (q.role) query = query.eq("role", q.role);
-  if (q.status) query = query.eq("status", q.status || "active");
-  if (q.shift) query = query.eq("shift", q.shift);
-
-  const { data, error } = await query;
-
-  if (error) {
-    return c.json({ error: error.message, code: "DB_ERROR" }, 500);
-  }
-
+  if (error) return c.json({ error: error.message, code: "DB_ERROR" }, 500);
   return c.json({ data: data || [] });
 });
 
-/**
- * GET /users/analysts - Get analysts with their current ticket counts
- * Used for the Analyst Workload dashboard panel
- */
+// GET /users/analysts
 users.get("/analysts", requireRole(SOC_ROLES), async (c) => {
   const db = getAdminClient();
 
-  // Get all SOC analysts
   const { data: analysts } = await db
     .from("users")
     .select("id, name, role, shift, avatar_url, status, last_active_at")
@@ -47,21 +28,19 @@ users.get("/analysts", requireRole(SOC_ROLES), async (c) => {
     .eq("status", "active")
     .order("name");
 
-  // Get open ticket counts per assignee
   const { data: tickets } = await db
     .from("tickets")
     .select("assignee_id, priority")
     .in("status", ["new", "open", "in_progress", "escalated"]);
 
-  const enriched = (analysts || []).map((a: any) => {
-    const assigned = (tickets || []).filter((t: any) => t.assignee_id === a.id);
+  const enriched = (analysts || []).map((a) => {
+    const assigned = (tickets || []).filter((t) => t.assignee_id === a.id);
     return {
       ...a,
       ticket_count: assigned.length,
-      p1_count: assigned.filter((t: any) => t.priority === "P1").length,
-      // Consider "online" if last_active within 10 minutes
+      p1_count: assigned.filter((t) => t.priority === "P1").length,
       is_online: a.last_active_at
-        ? Date.now() - new Date(a.last_active_at).getTime() < 600_000
+        ? Date.now() - new Date(a.last_active_at).getTime() < 600000
         : false,
     };
   });
