@@ -41,4 +41,4 @@ EXPOSE 3001
 ENV NODE_ENV=production
 ENV PORT=3001
 
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["npx", "tsx", "apps/api/src/index.ts"]
