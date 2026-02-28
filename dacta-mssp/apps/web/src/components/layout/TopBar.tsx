@@ -1,32 +1,29 @@
-import React, { useState, useRef, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { Search, Bell, ChevronDown, LogOut, User, Settings, Radio } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
+import { Search, Bell, ChevronDown, LogOut, User, Shield } from 'lucide-react'
 import { useAuthContext } from '../../contexts/AuthContext'
+
+const pageTitles: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/triage': 'Alert Triage',
+  '/threat-intel': 'Threat Intelligence',
+  '/mitre': 'MITRE ATT&CK',
+  '/detection-rules': 'Detection Rules',
+  '/log-parser': 'Log Parser',
+  '/assets': 'Asset Inventory',
+  '/geo-map': 'Geo Map',
+  '/reports': 'Reports',
+  '/integration-hub': 'Integration Hub',
+  '/settings': 'Settings',
+}
 
 export function TopBar() {
   const { profile, signOut } = useAuthContext()
+  const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const navigate = useNavigate()
-  const location = useLocation()
 
-  // Page title from path
-  const pageLabels: Record<string, string> = {
-    '/dashboard': 'Mission Control Center',
-    '/triage': 'Alert Triage',
-    '/threat-intel': 'Threat Intelligence',
-    '/mitre': 'MITRE ATT\u0026CK',
-    '/detection-rules': 'Detection Rules',
-    '/log-parser': 'Log Parser',
-    '/assets': 'Asset Inventory',
-    '/geo-map': 'Geo Map',
-    '/reports': 'Reports',
-    '/integration-hub': 'Integration Hub',
-    '/settings': 'Settings',
-  }
-
-  const currentPath = '/' + location.pathname.split('/')[1]
-  const pageTitle = pageLabels[currentPath] ?? 'Mission Control Center'
+  const pageTitle = pageTitles[location.pathname] ?? 'Dashboard'
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -38,87 +35,68 @@ export function TopBar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const handleSignOut = async () => {
-    await signOut()
-    navigate('/login')
-  }
-
   return (
-    <header className="h-[56px] flex items-center px-5 gap-4 flex-shrink-0 border-b border-[rgba(56,189,248,0.06)] bg-[rgba(13,18,32,0.85)] backdrop-blur-[20px] z-50">
-      {/* Page title */}
-      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <Radio size={14} strokeWidth={1.5} className="text-[#38bdf8] flex-shrink-0" />
-          <span className="text-sm font-semibold text-[#e2e8f0] whitespace-nowrap">{pageTitle}</span>
-        </div>
-        <div className="h-4 w-px bg-[rgba(255,255,255,0.1)] mx-1 hidden sm:block" />
-        <span className="text-xs text-[#64748b] hidden sm:block">DACTA SOC Platform</span>
+    <header className="mcc-topbar">
+      <div className="mcc-topbar-brand">
+        <Shield size={16} strokeWidth={1.5} style={{ color: 'var(--accent-cyan)' }} />
+        <span>Mission Control Center</span>
+        <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 12, marginLeft: 8 }}>
+          DACTA SOC Platform
+        </span>
       </div>
 
-      {/* Global search */}
-      <div className="relative hidden md:flex items-center">
-        <Search size={13} className="absolute left-3 text-[#64748b]" strokeWidth={1.5} />
-        <input
-          type="text"
-          placeholder="Search alerts, IOCs, assets… (⌘K)"
-          className="mcc-input pl-8 pr-4 py-1.5 text-xs w-64 lg:w-80"
-          onKeyDown={e => e.key === 'k' && e.metaKey && e.preventDefault()}
-        />
+      <div className="mcc-topbar-search" style={{ position: 'relative' }}>
+        <Search size={14} strokeWidth={1.5} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+        <input type="text" placeholder="Search alerts, IOCs, assets..." />
       </div>
 
-      {/* Right actions */}
-      <div className="flex items-center gap-2">
-        {/* Notifications */}
-        <button className="relative p-2 rounded-lg text-[#64748b] hover:text-[#e2e8f0] hover:bg-[rgba(255,255,255,0.06)] transition-colors">
-          <Bell size={16} strokeWidth={1.5} />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#ef4444] shadow-[0_0_6px_rgba(239,68,68,0.6)]" />
+      <div className="mcc-topbar-actions">
+        <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', position: 'relative', padding: 4 }} title="Notifications">
+          <Bell size={18} strokeWidth={1.5} />
         </button>
 
-        {/* User menu */}
-        <div ref={menuRef} className="relative">
+        <div ref={menuRef} style={{ position: 'relative' }}>
           <button
             onClick={() => setMenuOpen(v => !v)}
-            className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.06)] transition-colors"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'none', border: 'none', color: 'var(--text-secondary)',
+              padding: '4px 8px', borderRadius: 6, cursor: 'pointer',
+            }}
           >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#38bdf8] to-[#0066cc] flex items-center justify-center text-[10px] font-bold text-white">
-              {profile?.full_name?.charAt(0)?.toUpperCase() ?? 'U'}
+            <div className="mcc-sidebar-avatar" style={{ width: 26, height: 26, fontSize: 10 }}>
+              {(profile?.full_name ?? profile?.email ?? 'U').charAt(0).toUpperCase()}
             </div>
-            <span className="text-xs text-[#94a3b8] hidden sm:block max-w-[100px] truncate">
-              {profile?.full_name ?? profile?.email ?? 'Analyst'}
+            <span style={{ fontSize: 12, fontWeight: 500, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {profile?.email ?? 'Analyst'}
             </span>
-            <ChevronDown size={12} strokeWidth={1.5} className={`text-[#64748b] transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown size={14} strokeWidth={1.5} />
           </button>
 
           {menuOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-48 bg-[#111827] border border-[rgba(56,189,248,0.1)] rounded-lg shadow-2xl overflow-hidden z-50 animate-fade-in">
-              <div className="px-3 py-2.5 border-b border-[rgba(255,255,255,0.06)]">
-                <div className="text-xs font-medium text-[#e2e8f0] truncate">{profile?.full_name}</div>
-                <div className="text-[11px] text-[#64748b] truncate">{profile?.email}</div>
+            <div style={{
+              position: 'absolute', top: '100%', right: 0, marginTop: 8,
+              background: 'var(--bg-surface)', border: '1px solid var(--border-card)',
+              borderRadius: 'var(--radius-md)', padding: 4, minWidth: 180,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 200,
+            }}>
+              <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{profile?.full_name}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{profile?.email}</div>
               </div>
-              <div className="py-1">
-                <button
-                  onClick={() => { setMenuOpen(false); navigate('/settings') }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[rgba(255,255,255,0.05)] transition-colors"
-                >
-                  <User size={14} strokeWidth={1.5} />
-                  Profile
-                </button>
-                <button
-                  onClick={() => { setMenuOpen(false); navigate('/settings') }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[rgba(255,255,255,0.05)] transition-colors"
-                >
-                  <Settings size={14} strokeWidth={1.5} />
-                  Settings
-                </button>
-                <div className="my-1 h-px bg-[rgba(255,255,255,0.06)]" />
-                <button
-                  onClick={handleSignOut}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-red-400 hover:text-red-300 hover:bg-[rgba(239,68,68,0.06)] transition-colors"
-                >
-                  <LogOut size={14} strokeWidth={1.5} />
-                  Sign Out
-                </button>
-              </div>
+              <button
+                onClick={signOut}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                  padding: '8px 12px', background: 'none', border: 'none',
+                  color: 'var(--danger)', fontSize: 12, borderRadius: 4, cursor: 'pointer',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.08)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                <LogOut size={14} strokeWidth={1.5} />
+                Sign Out
+              </button>
             </div>
           )}
         </div>

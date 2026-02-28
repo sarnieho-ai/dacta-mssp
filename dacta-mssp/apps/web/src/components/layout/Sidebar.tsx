@@ -1,4 +1,3 @@
-import React, { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -82,51 +81,32 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { profile } = useAuthContext()
   const location = useLocation()
 
-  const getRoleColor = (role: string | undefined) => {
-    switch (role) {
-      case 'admin': return 'text-red-400 bg-red-500/10 border-red-500/25'
-      case 'manager': return 'text-orange-400 bg-orange-500/10 border-orange-500/25'
-      case 'analyst': return 'text-blue-400 bg-blue-500/10 border-blue-500/25'
-      default: return 'text-slate-400 bg-slate-500/10 border-slate-500/20'
-    }
+  const getRoleClass = (role: string | undefined) => {
+    if (role?.includes('admin')) return 'admin'
+    if (role?.includes('manager')) return 'manager'
+    if (role?.includes('analyst') || role?.includes('engineer')) return 'analyst'
+    return 'default'
   }
 
   return (
-    <aside
-      style={{
-        width: collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)',
-        minWidth: collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)',
-      }}
-      className="h-screen flex flex-col bg-[#0d1220] border-r border-[rgba(255,255,255,0.06)] transition-all duration-[350ms] ease-[cubic-bezier(0.4,0,0.2,1)] z-[100] relative overflow-hidden flex-shrink-0"
-    >
+    <aside className={`mcc-sidebar ${collapsed ? 'collapsed' : 'expanded'}`}>
       {/* Logo */}
-      <div className="h-[56px] flex items-center gap-2.5 px-3 border-b border-[rgba(255,255,255,0.06)] flex-shrink-0 overflow-hidden">
-        <div className="w-8 h-8 flex-shrink-0 rounded-[7px] bg-gradient-to-br from-[#38bdf8] to-[#0066cc] flex items-center justify-center shadow-[0_0_16px_rgba(56,189,248,0.35)]">
-          <Shield size={14} strokeWidth={2} className="text-white" />
+      <div className="mcc-sidebar-logo">
+        <div className="mcc-sidebar-logo-icon">
+          <Shield size={14} strokeWidth={2} color="white" />
         </div>
-        <div
-          className="overflow-hidden transition-all duration-[350ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
-          style={{
-            opacity: collapsed ? 0 : 1,
-            width: collapsed ? 0 : 'auto',
-            maxWidth: collapsed ? 0 : 200,
-          }}
-        >
-          <div className="font-bold text-[15px] text-[#e2e8f0] whitespace-nowrap font-[Sora]">DACTA</div>
-          <div className="text-[9px] font-medium text-[#64748b] uppercase tracking-[0.1em] whitespace-nowrap">SIEMLess</div>
+        <div className="mcc-sidebar-logo-text">
+          <div className="mcc-sidebar-brand">DACTA</div>
+          <div className="mcc-sidebar-sub">SIEMLess</div>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 scrollbar-thin">
+      <nav className="mcc-sidebar-nav">
         {navSections.map(section => (
-          <div key={section.title} className="mb-1">
-            {!collapsed && (
-              <div className="px-4 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#64748b] whitespace-nowrap">
-                {section.title}
-              </div>
-            )}
-            {collapsed && <div className="my-1 mx-3 h-px bg-[rgba(255,255,255,0.04)]" />}
+          <div key={section.title} style={{ marginBottom: 4 }}>
+            <div className="mcc-sidebar-section-label">{section.title}</div>
+            <div className="mcc-sidebar-section-divider" />
             {section.items.map(item => {
               const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + '/')
               return (
@@ -134,27 +114,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   key={item.to}
                   to={item.to}
                   title={collapsed ? item.label : undefined}
-                  className={`flex items-center gap-2.5 mx-1.5 my-0.5 px-3 py-2 rounded-md transition-all duration-150 cursor-pointer overflow-hidden relative group
-                    ${isActive
-                      ? 'bg-[rgba(56,189,248,0.1)] text-[#38bdf8] border-l-2 border-[#38bdf8] pl-[10px]'
-                      : 'text-[#64748b] border-l-2 border-transparent hover:bg-[rgba(255,255,255,0.04)] hover:text-[#94a3b8]'
-                    }`}
+                  className={`mcc-nav-item ${isActive ? 'active' : ''}`}
                 >
-                  <item.icon
-                    size={16}
-                    strokeWidth={1.5}
-                    className={`flex-shrink-0 transition-colors ${isActive ? 'text-[#38bdf8]' : 'text-[#64748b] group-hover:text-[#94a3b8]'}`}
-                  />
-                  <span
-                    className="text-[12.5px] font-medium whitespace-nowrap transition-all duration-[350ms]"
-                    style={{
-                      opacity: collapsed ? 0 : 1,
-                      width: collapsed ? 0 : 'auto',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {item.label}
-                  </span>
+                  <item.icon size={16} strokeWidth={1.5} style={{ flexShrink: 0 }} />
+                  <span className="mcc-nav-label">{item.label}</span>
                 </NavLink>
               )
             })}
@@ -163,36 +126,28 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* User section */}
-      {!collapsed && profile && (
-        <div className="flex-shrink-0 border-t border-[rgba(255,255,255,0.06)] p-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#38bdf8] to-[#0066cc] flex items-center justify-center flex-shrink-0 text-xs font-bold text-white">
-              {profile.full_name?.charAt(0)?.toUpperCase() ?? 'U'}
+      {profile && (
+        <div className="mcc-sidebar-user">
+          <div className="mcc-sidebar-user-row">
+            <div className="mcc-sidebar-avatar">
+              {(profile.full_name ?? profile.email ?? 'U').charAt(0).toUpperCase()}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-[#e2e8f0] truncate">{profile.full_name}</div>
-              <div className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border mt-0.5 ${getRoleColor(profile.role)}`}>
-                {profile.role}
+            {!collapsed && (
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {profile.full_name ?? profile.email}
+                </div>
+                <span className={`role-badge ${getRoleClass(profile.role)}`}>
+                  {profile.role?.replace(/_/g, ' ')}
+                </span>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {collapsed && profile && (
-        <div className="flex-shrink-0 border-t border-[rgba(255,255,255,0.06)] p-3 flex justify-center">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#38bdf8] to-[#0066cc] flex items-center justify-center text-xs font-bold text-white">
-            {profile.full_name?.charAt(0)?.toUpperCase() ?? 'U'}
+            )}
           </div>
         </div>
       )}
 
       {/* Toggle */}
-      <button
-        onClick={onToggle}
-        className="flex-shrink-0 h-10 flex items-center justify-center border-t border-[rgba(255,255,255,0.06)] text-[#64748b] hover:text-[#e2e8f0] hover:bg-[rgba(255,255,255,0.04)] transition-all duration-150"
-        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      >
+      <button onClick={onToggle} className="mcc-sidebar-toggle" title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
         {collapsed
           ? <ChevronRight size={16} strokeWidth={1.5} />
           : <ChevronLeft size={16} strokeWidth={1.5} />

@@ -334,6 +334,320 @@ a {
 }
 
 /* ============================================================
+   CORE LAYOUT
+   ============================================================ */
+.mcc-root {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.mcc-sidebar {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  transition: width var(--transition-slow), min-width var(--transition-slow);
+  z-index: 100;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.mcc-sidebar.expanded { width: var(--sidebar-width); min-width: var(--sidebar-width); }
+.mcc-sidebar.collapsed { width: var(--sidebar-collapsed); min-width: var(--sidebar-collapsed); }
+
+.mcc-sidebar-logo {
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.mcc-sidebar-logo-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--accent-cyan), #0066cc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+}
+
+.mcc-sidebar-logo-text {
+  overflow: hidden;
+  transition: opacity var(--transition-slow), width var(--transition-slow), max-width var(--transition-slow);
+}
+.mcc-sidebar.collapsed .mcc-sidebar-logo-text { opacity: 0; width: 0; max-width: 0; }
+.mcc-sidebar.expanded .mcc-sidebar-logo-text { opacity: 1; width: auto; max-width: 200px; }
+
+.mcc-sidebar-brand {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  font-family: var(--font-sans);
+}
+.mcc-sidebar-sub {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.mcc-sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+}
+
+.mcc-sidebar-section-label {
+  padding: 8px 16px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.mcc-sidebar.collapsed .mcc-sidebar-section-label { display: none; }
+.mcc-sidebar.collapsed .mcc-sidebar-section-divider { display: block; margin: 4px 12px; height: 1px; background: rgba(255, 255, 255, 0.04); }
+.mcc-sidebar.expanded .mcc-sidebar-section-divider { display: none; }
+
+.mcc-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  color: var(--text-muted);
+  border-left: 2px solid transparent;
+  text-decoration: none;
+}
+.mcc-nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+}
+.mcc-nav-item.active {
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-cyan);
+  border-left-color: var(--accent-cyan);
+  padding-left: 10px;
+}
+.mcc-nav-item.active svg { color: var(--accent-cyan); }
+
+.mcc-nav-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: opacity var(--transition-slow);
+}
+.mcc-sidebar.collapsed .mcc-nav-label { opacity: 0; width: 0; overflow: hidden; }
+
+.mcc-sidebar-user {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 12px;
+}
+.mcc-sidebar-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mcc-sidebar-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-cyan), #0066cc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+}
+.mcc-sidebar-toggle {
+  flex-shrink: 0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+  width: 100%;
+}
+.mcc-sidebar-toggle:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mcc-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.mcc-topbar {
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(13, 19, 36, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  flex-shrink: 0;
+  gap: 16px;
+}
+.mcc-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.mcc-topbar-search {
+  flex: 1;
+  max-width: 400px;
+}
+.mcc-topbar-search input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 7px 12px 7px 36px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color var(--transition);
+}
+.mcc-topbar-search input:focus {
+  border-color: var(--border-active);
+}
+.mcc-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mcc-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ============================================================
+   DASHBOARD SPECIFIC
+   ============================================================ */
+.mcc-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.mcc-kpi-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: border-color var(--transition);
+}
+.mcc-kpi-card:hover {
+  border-color: var(--border-active);
+}
+.mcc-kpi-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.mcc-kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.mcc-kpi-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+.mcc-org-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.mcc-org-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.mcc-org-card:hover {
+  border-color: var(--border-active);
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.06);
+}
+
+/* ============================================================
+   ROLE BADGE
+   ============================================================ */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid;
+}
+.role-badge.admin { color: #f87171; background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.25); }
+.role-badge.manager { color: #fb923c; background: rgba(251,146,60,0.1); border-color: rgba(251,146,60,0.25); }
+.role-badge.analyst { color: #60a5fa; background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.25); }
+.role-badge.default { color: #94a3b8; background: rgba(148,163,184,0.1); border-color: rgba(148,163,184,0.2); }
+
+/* ============================================================
    MITRE HEATMAP
    ============================================================ */
 .mitre-cell {

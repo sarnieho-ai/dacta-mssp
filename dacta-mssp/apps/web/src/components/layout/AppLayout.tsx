@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
@@ -7,11 +7,11 @@ export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#080d1a]">
+    <div className="mcc-root">
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(v => !v)} />
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="mcc-main">
         <TopBar />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <main className="mcc-content">
           <Outlet />
         </main>
       </div>
