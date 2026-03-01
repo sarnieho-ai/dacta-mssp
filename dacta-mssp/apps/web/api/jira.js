@@ -318,6 +318,107 @@ export default async function handler(req, res) {
       });
     }
 
+    // ─── ACTION: dashvisuals (full data for dashboard visuals) ────
+    if (action === 'dashvisuals') {
+      const B = 'project = DAC AND type = "[System] Incident"';
+
+      // Parallel: count queries + fetch 200 recent tickets for distribution analysis
+      const [
+        totalAll, totalOpen, inProgressCount, escalatedCount,
+        resolvedAllTime, resolvedWeek,
+        p1All, p2All, p3All, p4All,
+        recentBatch
+      ] = await Promise.all([
+        countJql(B),
+        countJql(`${B} AND status = "Open"`),
+        countJql(`${B} AND status = "In Progress"`),
+        countJql(`${B} AND status = "Escalated"`),
+        countJql(`${B} AND status in ("Closed","Completed","Canceled")`),
+        countJql(`${B} AND status in ("Closed","Completed","Canceled") AND updated >= startOfWeek()`),
+        countJql(`${B} AND priority = "P1 - Critical"`),
+        countJql(`${B} AND priority = "P2 - High"`),
+        countJql(`${B} AND priority = "P3 - Medium"`),
+        countJql(`${B} AND priority = "P4 - Low"`),
+        searchJql(`${B} ORDER BY created DESC`,
+          ['created','priority','status','customfield_10002'], 200)
+      ]);
+
+      // Process recent tickets for distributions
+      const issues = (recentBatch.issues || []).map(iss => ({
+        created: iss.fields?.created || '',
+        priority: (iss.fields?.priority || {}).name || '',
+        status: (iss.fields?.status || {}).name || '',
+        org: ((iss.fields?.customfield_10002 || [])[0] || {}).name || '\u2014'
+      }));
+
+      // Hourly distribution (today, SGT = UTC+8)
+      const now = new Date();
+      const todayStr = new Date(now.getTime() + 8 * 3600000).toISOString().slice(0, 10);
+      const hourlyToday = new Array(24).fill(0);
+      issues.forEach(i => {
+        if (!i.created) return;
+        const d = new Date(i.created);
+        const sgtDate = new Date(d.getTime() + 8 * 3600000);
+        if (sgtDate.toISOString().slice(0, 10) === todayStr) {
+          hourlyToday[sgtDate.getUTCHours()]++;
+        }
+      });
+
+      // 7-day heatmap (Mon=0 ... Sun=6, each has 24 hourly buckets)
+      const heatmap = Array.from({length: 7}, () => new Array(24).fill(0));
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+      issues.forEach(i => {
+        if (!i.created) return;
+        const d = new Date(i.created);
+        if (d < sevenDaysAgo) return;
+        const sgtD = new Date(d.getTime() + 8 * 3600000);
+        const dow = (sgtD.getDay() + 6) % 7; // Mon=0
+        const hour = sgtD.getUTCHours();
+        heatmap[dow][hour]++;
+      });
+
+      // Daily trend (last 14 days)
+      const dailyTrend = new Array(14).fill(0);
+      issues.forEach(i => {
+        if (!i.created) return;
+        const d = new Date(i.created);
+        const daysAgo = Math.floor((now.getTime() - d.getTime()) / 86400000);
+        if (daysAgo >= 0 && daysAgo < 14) dailyTrend[13 - daysAgo]++;
+      });
+
+      // Org distribution
+      const orgDist = {};
+      issues.forEach(i => {
+        orgDist[i.org] = (orgDist[i.org] || 0) + 1;
+      });
+
+      // Status distribution
+      const statusDist = {};
+      issues.forEach(i => {
+        statusDist[i.status] = (statusDist[i.status] || 0) + 1;
+      });
+
+      // Priority distribution across open tickets (from the recent batch)
+      const prioDist = { p1: 0, p2: 0, p3: 0, p4: 0 };
+      issues.forEach(i => {
+        if (i.status === 'Open') {
+          if (i.priority.includes('P1')) prioDist.p1++;
+          else if (i.priority.includes('P2')) prioDist.p2++;
+          else if (i.priority.includes('P3')) prioDist.p3++;
+          else if (i.priority.includes('P4')) prioDist.p4++;
+        }
+      });
+
+      return res.status(200).json({
+        totalAll, totalOpen, inProgressCount, escalatedCount,
+        resolvedAllTime, resolvedWeek,
+        p1All, p2All, p3All, p4All,
+        hourlyToday, heatmap, dailyTrend,
+        orgDist, statusDist, prioDist,
+        issueCount: issues.length
+      });
+    }
+
     // ─── ACTION: telemetry (extended dashboard data) ─────────
     if (action === 'telemetry') {
       const B = 'project = DAC AND type = "[System] Incident"';
@@ -388,7 +489,7 @@ export default async function handler(req, res) {
       return res.status(r.status >= 400 ? r.status : 200).json(result);
     }
 
-    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts, transitions, transition, assign, addcomment, assignable, createticket, opsdata' });
+    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts, transitions, transition, assign, addcomment, assignable, createticket, opsdata, dashvisuals' });
 
   } catch (err) {
     console.error('Jira proxy error:', err);

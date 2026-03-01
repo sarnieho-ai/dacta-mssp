@@ -25555,7 +25555,9 @@ function initDashboardCharts() {
   const ctx1 = document.getElementById('alertVolumeChart');
   if (!ctx1 || charts.alertVolume) return;
   const hours = Array.from({length: 23}, (_, i) => `${String(i).padStart(2,'0')}:00`);
-  const data = [0,0,0,1,0,0,1,2,3,4,3,2,1,2,3,2,2,1,0,0,0,0,0];
+  const data = (window._liveVis && window._liveVis.hourlyToday) ?
+    window._liveVis.hourlyToday.slice(0, 23) :
+    [0,0,0,1,0,0,1,2,3,4,3,2,1,2,3,2,2,1,0,0,0,0,0];
   charts.alertVolume = new Chart(ctx1, {
     type: 'bar',
     data: {
@@ -25582,12 +25584,15 @@ function initDashboardCharts() {
 
   const ctx2 = document.getElementById('sourceChart');
   if (!ctx2 || charts.source) return;
+  var _srcData = window._liveVis ? [
+    (window._liveVis.totalOpen || 0) + (window._liveVis.resolvedAllTime || 0), 0, 0
+  ] : [18, 3, 1];
   charts.source = new Chart(ctx2, {
     type: 'doughnut',
     data: {
-      labels: ['Jira', 'Manual Escalation', 'Auto-Created'],
+      labels: ['Jira (SOC Alerts)', 'Manual', 'Auto-Created'],
       datasets: [{
-        data: [18, 3, 1],
+        data: _srcData,
         backgroundColor: ['rgba(0,212,255,0.7)', 'rgba(245,158,11,0.7)', 'rgba(239,68,68,0.7)'],
         borderColor: ['rgba(0,212,255,0.9)', 'rgba(245,158,11,0.9)', 'rgba(239,68,68,0.9)'],
         borderWidth: 1.5,
@@ -27292,6 +27297,14 @@ document.addEventListener('keydown', (e) => {
 
 // ============================================================
 //  COMMAND CENTER VISUALIZATION
+// ── Global live data for dashboard visuals ──────────────────
+var _ccLive = {
+  alerts: 0, incidents: 0, automated: 0, manual: 0,
+  resolved: 0, open: 0, escalated: 0,
+  autoSev: [{c:'#ef4444',v:'0'},{c:'#f59e0b',v:'0'},{c:'#00d4ff',v:'0'},{c:'#10b981',v:'0'}],
+  manualSev: [{c:'#ef4444',v:'0'},{c:'#f59e0b',v:'0'},{c:'#00d4ff',v:'0'},{c:'#10b981',v:'0'}]
+};
+window._liveVis = null; // filled by populateLiveDashboard
 // ============================================================
 var ccAnimId = null;
 // roundRect polyfill for older browsers
@@ -27705,7 +27718,7 @@ function initCommandCenter() {
     ctx.restore();
 
     // Convergence text
-    drawText('1,406', CONVERGE_X, CONVERGE_Y - 8, 28, '#fff', 'center', '800 28px Sora, sans-serif');
+    drawText(_ccLive.alerts ? _ccLive.alerts.toLocaleString() : '—', CONVERGE_X, CONVERGE_Y - 8, 28, '#fff', 'center', '800 28px Sora, sans-serif');
     drawText('ALERTS', CONVERGE_X, CONVERGE_Y + 16, 10, '#4d5a6e', 'center', '500 10px "IBM Plex Sans", sans-serif');
 
     // DACTA SIEMLess Shield between convergence and spiral
@@ -27926,7 +27939,7 @@ function initCommandCenter() {
     ctx.restore();
 
     // Center incident text
-    drawText('62', SPIRAL_CX, SPIRAL_CY - 8, 42, '#fff', 'center', '800 42px Sora, sans-serif');
+    drawText(_ccLive.incidents ? String(_ccLive.incidents) : '—', SPIRAL_CX, SPIRAL_CY - 8, 42, '#fff', 'center', '800 42px Sora, sans-serif');
     drawText('INCIDENTS', SPIRAL_CX, SPIRAL_CY + 20, 10, '#4d5a6e', 'center', '600 10px "IBM Plex Sans", sans-serif');
 
     // === RIGHT ZONE: Resolution Flow ===
@@ -27980,7 +27993,7 @@ function initCommandCenter() {
     ctx.restore();
     // Shield icon (simple)
     drawText('\u26A1', AUTO_END_X - 36, AUTO_END_Y, 13, '#00d4ff', 'center', '400 13px sans-serif');
-    drawText('46', AUTO_END_X - 5, AUTO_END_Y - 6, 20, '#fff', 'center', '800 20px Sora, sans-serif');
+    drawText(String(_ccLive.automated), AUTO_END_X - 5, AUTO_END_Y - 6, 20, '#fff', 'center', '800 20px Sora, sans-serif');
     drawText('AUTOMATED', AUTO_END_X - 5, AUTO_END_Y + 12, 8, '#00d4ff', 'center', '600 8px "IBM Plex Sans", sans-serif');
 
     // Manual label box
@@ -27997,7 +28010,7 @@ function initCommandCenter() {
     ctx.restore();
     // Person icon
     drawText('\u{1F464}', MANUAL_END_X - 36, MANUAL_END_Y, 12, '#8892a4', 'center', '400 12px sans-serif');
-    drawText('11', MANUAL_END_X - 5, MANUAL_END_Y - 6, 20, '#fff', 'center', '800 20px Sora, sans-serif');
+    drawText(String(_ccLive.manual), MANUAL_END_X - 5, MANUAL_END_Y - 6, 20, '#fff', 'center', '800 20px Sora, sans-serif');
     drawText('MANUAL', MANUAL_END_X - 5, MANUAL_END_Y + 12, 8, '#8892a4', 'center', '600 8px "IBM Plex Sans", sans-serif');
 
     // === SUB-BRANCHES ===
@@ -28029,7 +28042,7 @@ function initCommandCenter() {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-    drawText('50', RESOLVED_X - 5, RESOLVED_Y - 5, 14, '#10b981', 'center', '800 14px Sora, sans-serif');
+    drawText(String(_ccLive.resolved), RESOLVED_X - 5, RESOLVED_Y - 5, 14, '#10b981', 'center', '800 14px Sora, sans-serif');
     drawText('RESOLVED', RESOLVED_X - 5, RESOLVED_Y + 10, 7, '#10b981', 'center', '600 7px "IBM Plex Sans", sans-serif');
 
     // --- Auto -> Severity (mid-right, multi-color) ---
@@ -28060,7 +28073,7 @@ function initCommandCenter() {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-    var sevData = [{c:'#ef4444',v:'2'},{c:'#f59e0b',v:'8'},{c:'#00d4ff',v:'24'},{c:'#10b981',v:'16'}];
+    var sevData = _ccLive.autoSev;
     var sevItemW = sevBoxW / 4;
     var sevItemStartX = sevBX + sevItemW / 2;
     var sevDotY = SEVERITY_Y - 4;
@@ -28102,7 +28115,7 @@ function initCommandCenter() {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-    drawText('6', OPEN_X - 5, OPEN_Y - 5, 14, '#f59e0b', 'center', '800 14px Sora, sans-serif');
+    drawText(String(_ccLive.open), OPEN_X - 5, OPEN_Y - 5, 14, '#f59e0b', 'center', '800 14px Sora, sans-serif');
     drawText('OPEN', OPEN_X - 5, OPEN_Y + 10, 7, '#f59e0b', 'center', '600 7px "IBM Plex Sans", sans-serif');
 
     // --- Manual -> Escalated (lower-right, red) ---
@@ -28130,7 +28143,7 @@ function initCommandCenter() {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-    drawText('2', ESCALATED_X - 5, ESCALATED_Y - 5, 14, '#ef4444', 'center', '800 14px Sora, sans-serif');
+    drawText(String(_ccLive.escalated), ESCALATED_X - 5, ESCALATED_Y - 5, 14, '#ef4444', 'center', '800 14px Sora, sans-serif');
     drawText('ESCALATED', ESCALATED_X - 5, ESCALATED_Y + 10, 7, '#ef4444', 'center', '600 7px "IBM Plex Sans", sans-serif');
 
     // --- Manual -> Severity Breakdown (mid-right from manual) ---
@@ -28158,7 +28171,7 @@ function initCommandCenter() {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-    var mSevData = [{c:'#ef4444',v:'1'},{c:'#f59e0b',v:'3'},{c:'#00d4ff',v:'5'},{c:'#10b981',v:'2'}];
+    var mSevData = _ccLive.manualSev;
     var mSevItemW = mSevBoxW / 4;
     var mSevStartX = mSevBX + mSevItemW / 2;
     var mSevDotY = mSevY - 4;
@@ -28189,8 +28202,15 @@ function initCommandCenter() {
 
   draw();
 
-  // === Sparkline Charts ===
-  function drawSparkline(canvasId, data, color) {
+  // Sparklines are drawn globally via drawSparkline() — called after data loads
+  drawSparkline('sparkEventsIng', window._liveVis && window._liveVis.dailyTrend ? window._liveVis.dailyTrend.slice(-12) : [14,16,15,18,20,19,22,21,23,22,20,22], '#00d4ff');
+  drawSparkline('sparkDataIng', window._liveVis && window._liveVis.dailyTrend ? window._liveVis.dailyTrend.slice(-12).map(function(v){return v*2+10;}) : [28,30,32,29,33,35,34,36,35,37,36,36], '#8b5cf6');
+}
+
+// ============================================================
+//  Global drawSparkline (also called from updateAllVisuals)
+// ============================================================
+function drawSparkline(canvasId, data, color) {
     var c = document.getElementById(canvasId);
     if (!c) return;
     var sctx = c.getContext('2d');
@@ -28238,10 +28258,6 @@ function initCommandCenter() {
     sctx.shadowColor = color;
     sctx.shadowBlur = 4;
     sctx.stroke();
-  }
-
-  drawSparkline('sparkEventsIng', [14, 16, 15, 18, 20, 19, 22, 21, 23, 22, 20, 22], '#00d4ff');
-  drawSparkline('sparkDataIng', [28, 30, 32, 29, 33, 35, 34, 36, 35, 37, 36, 36], '#8b5cf6');
 }
 
 // ============================================================
@@ -28263,7 +28279,7 @@ function initHeatMap() {
 
   var days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   var hours = 24;
-  var data = [
+  var data = (window._liveVis && window._liveVis.heatmap) ? window._liveVis.heatmap : [
     [0,0,0,0,1,1,2,4,6,8,7,5,4,5,6,5,4,3,2,1,1,0,0,0],
     [0,0,0,1,0,1,3,5,7,9,8,6,5,6,7,6,5,3,2,1,0,0,0,0],
     [0,0,0,0,0,2,3,6,8,11,9,7,6,7,8,7,5,4,2,1,1,0,0,0],
@@ -28385,7 +28401,9 @@ function initClassicCharts() {
   if (ctx1 && !classicAlertChartObj) {
     var hours = [];
     for (var i = 0; i < 23; i++) hours.push((i < 10 ? '0' : '') + i + ':00');
-    var data = [0,0,0,1,0,0,1,2,3,4,3,2,1,2,3,2,2,1,0,0,0,0,0];
+    var data = (window._liveVis && window._liveVis.hourlyToday) ?
+      window._liveVis.hourlyToday.slice(0, 23) :
+      [0,0,0,1,0,0,1,2,3,4,3,2,1,2,3,2,2,1,0,0,0,0,0];
     classicAlertChartObj = new Chart(ctx1, {
       type: 'bar',
       data: {
@@ -28414,12 +28432,15 @@ function initClassicCharts() {
   // Source breakdown doughnut
   var ctx2 = document.getElementById('classicSourceChart');
   if (ctx2 && !classicSourceChartObj) {
+    var _clsSrcData = window._liveVis ? [
+      (window._liveVis.totalOpen || 0) + (window._liveVis.resolvedAllTime || 0), 0, 0
+    ] : [18, 3, 1];
     classicSourceChartObj = new Chart(ctx2, {
       type: 'doughnut',
       data: {
-        labels: ['Jira', 'Manual Escalation', 'Auto-Created'],
+        labels: ['Jira (SOC Alerts)', 'Manual', 'Auto-Created'],
         datasets: [{
-          data: [18, 3, 1],
+          data: _clsSrcData,
           backgroundColor: ['rgba(0,212,255,0.7)', 'rgba(245,158,11,0.7)', 'rgba(239,68,68,0.7)'],
           borderColor: ['rgba(0,212,255,0.9)', 'rgba(245,158,11,0.9)', 'rgba(239,68,68,0.9)'],
           borderWidth: 1.5,
@@ -28449,6 +28470,18 @@ var geoMapAnimFrames = {};
 // WA=West/North Africa, ME=Middle East, RU=Russia/Central Asia,
 // IN=India, SE=SE Asia, EA=East Asia, JP=Japan, AU=Australia, NZ=New Zealand
 
+// Org -> geographic region mapping for GeoMap
+var ORG_GEO_MAP = {
+  'Dacta Global':     { country: 'Singapore',    regions: ['SE'], color: [16,185,129],  type: 'Client', ip: '10.x.x.x' },
+  'SPMT':             { country: 'Singapore',    regions: ['SE'], color: [0,212,255],   type: 'Client', ip: '10.x.x.x' },
+  'Naga World':       { country: 'Cambodia',     regions: ['SE'], color: [245,158,11],  type: 'Client', ip: '103.x.x.x' },
+  'Foxwood':          { country: 'Australia',    regions: ['AU'], color: [0,212,255],   type: 'Client', ip: '203.x.x.x' },
+  'ADV Partners':     { country: 'Japan',        regions: ['JP'], color: [139,92,246],  type: 'Client', ip: '203.x.x.x' },
+  'Global Advisor Co':{ country: 'Hong Kong',    regions: ['EA'], color: [0,212,255],   type: 'Client', ip: '147.x.x.x' },
+  '\u2014':           { country: 'Singapore',    regions: ['SE'], color: [77,90,110],   type: 'Unknown', ip: 'Unknown' }
+};
+
+// Build initial GEO_THREAT_REGIONS; rebuilt live by updateAllVisuals() once orgDist loads
 var GEO_THREAT_REGIONS = [
   { name: 'United States',     country: 'United States', direction: 'Source', regions: ['NA'], intensity: 0.85, alerts: 45, color: [239,68,68],  type: 'Malicious',     ip: 'Multiple' },
   { name: 'United Kingdom',    country: 'United Kingdom', direction: 'Source', regions: ['UK'], intensity: 0.9, alerts: 24, color: [239,68,68],  type: 'Malicious',     ip: '185.220.101.x' },
@@ -30168,6 +30201,17 @@ window.DactaJira = {
     this._cache.telemetry = data;
     this._cacheTime.telemetry = now;
     return data;
+  },
+
+  async fetchDashVisuals() {
+    var now = Date.now();
+    if (this._cache.dashvisuals && (now - this._cacheTime.dashvisuals) < this._CACHE_TTL) {
+      return this._cache.dashvisuals;
+    }
+    var data = await this._fetch('/api/jira?action=dashvisuals');
+    this._cache.dashvisuals = data;
+    this._cacheTime.dashvisuals = now;
+    return data;
   }
 };
 
@@ -30373,6 +30417,150 @@ function updateDashboardVisuals(kpi, tickets, tele) {
   }
 }
 
+// ============================================================
+//  UPDATE ALL VISUALS — called after dashvisuals data loads
+// ============================================================
+function updateAllVisuals(vis) {
+  if (!vis) return;
+  window._liveVis = vis;
+
+  // 1. Update Command Center canvas globals (_ccLive)
+  _ccLive.alerts    = vis.totalAll || 0;
+  _ccLive.incidents = vis.totalOpen || 0;
+  // Automated = resolved all time (proxy: all closed tickets handled by system)
+  var totalResolved  = vis.resolvedAllTime || 0;
+  var totalEsc       = vis.escalatedCount || 0;
+  var totalInProg    = vis.inProgressCount || 0;
+  _ccLive.automated  = totalResolved;
+  _ccLive.manual     = totalInProg + totalEsc;
+  _ccLive.resolved   = totalResolved;
+  _ccLive.open       = vis.totalOpen || 0;
+  _ccLive.escalated  = totalEsc;
+
+  // Severity dots from priority breakdowns
+  var p1 = vis.p1All || 0, p2 = vis.p2All || 0, p3 = vis.p3All || 0, p4 = vis.p4All || 0;
+  _ccLive.autoSev  = [
+    {c:'#ef4444', v: String(p1)},
+    {c:'#f59e0b', v: String(p2)},
+    {c:'#00d4ff', v: String(p3)},
+    {c:'#10b981', v: String(p4)}
+  ];
+  var op1 = vis.prioDist ? (vis.prioDist.p1||0) : 0;
+  var op2 = vis.prioDist ? (vis.prioDist.p2||0) : 0;
+  var op3 = vis.prioDist ? (vis.prioDist.p3||0) : 0;
+  var op4 = vis.prioDist ? (vis.prioDist.p4||0) : 0;
+  _ccLive.manualSev = [
+    {c:'#ef4444', v: String(op1)},
+    {c:'#f59e0b', v: String(op2)},
+    {c:'#00d4ff', v: String(op3)},
+    {c:'#10b981', v: String(op4)}
+  ];
+
+  // 2. Re-render heatmap with live data
+  initHeatMap();
+
+  // 3. Update Chart.js instances
+  if (charts.alertVolume && vis.hourlyToday) {
+    var hd = vis.hourlyToday.slice(0, 23);
+    var maxH = Math.max.apply(null, hd) || 1;
+    charts.alertVolume.data.datasets[0].data = hd;
+    charts.alertVolume.data.datasets[0].backgroundColor = hd.map(function(v) {
+      return v > (maxH * 0.75) ? 'rgba(239,68,68,0.6)' : v > (maxH * 0.3) ? 'rgba(245,158,11,0.5)' : 'rgba(0,212,255,0.35)';
+    });
+    charts.alertVolume.data.datasets[0].borderColor = hd.map(function(v) {
+      return v > (maxH * 0.75) ? 'rgba(239,68,68,0.9)' : v > (maxH * 0.3) ? 'rgba(245,158,11,0.8)' : 'rgba(0,212,255,0.6)';
+    });
+    charts.alertVolume.update('none');
+  }
+  var srcTotal = (vis.totalOpen || 0) + (vis.resolvedAllTime || 0);
+  if (charts.source) {
+    charts.source.data.datasets[0].data = [srcTotal || 1, 0, 0];
+    charts.source.data.labels = ['Jira (SOC Alerts)', 'Manual', 'Auto-Created'];
+    charts.source.update('none');
+  }
+  if (classicAlertChartObj && vis.hourlyToday) {
+    var chd = vis.hourlyToday.slice(0, 23);
+    var maxCH = Math.max.apply(null, chd) || 1;
+    classicAlertChartObj.data.datasets[0].data = chd;
+    classicAlertChartObj.data.datasets[0].backgroundColor = chd.map(function(v) {
+      return v > (maxCH * 0.75) ? 'rgba(239,68,68,0.6)' : v > (maxCH * 0.3) ? 'rgba(245,158,11,0.5)' : 'rgba(0,212,255,0.35)';
+    });
+    classicAlertChartObj.data.datasets[0].borderColor = chd.map(function(v) {
+      return v > (maxCH * 0.75) ? 'rgba(239,68,68,0.9)' : v > (maxCH * 0.3) ? 'rgba(245,158,11,0.8)' : 'rgba(0,212,255,0.6)';
+    });
+    classicAlertChartObj.update('none');
+  }
+  if (classicSourceChartObj) {
+    classicSourceChartObj.data.datasets[0].data = [srcTotal || 1, 0, 0];
+    classicSourceChartObj.data.labels = ['Jira (SOC Alerts)', 'Manual', 'Auto-Created'];
+    classicSourceChartObj.update('none');
+  }
+
+  // 4. Update sparklines
+  if (vis.dailyTrend) {
+    var spkData = vis.dailyTrend.slice(-12);
+    drawSparkline('sparkEventsIng', spkData, '#00d4ff');
+    drawSparkline('sparkDataIng', spkData.map(function(v){ return v * 2 + 10; }), '#8b5cf6');
+  }
+
+  // 5. Update metric cards 0 and 1 (cards 2 and 3 handled by populateLiveDashboard)
+  var metricCards = document.querySelectorAll('#commandView .cc-metric-card');
+  if (metricCards[0]) {
+    var v0 = metricCards[0].querySelector('.cc-metric-value');
+    if (v0) v0.textContent = vis.totalAll || 0;
+    var u0 = metricCards[0].querySelector('.cc-metric-unit');
+    if (u0) u0.textContent = 'TOTAL';
+    var l0 = metricCards[0].querySelector('.cc-metric-label');
+    if (l0) l0.textContent = 'Total Tickets Processed';
+  }
+  if (metricCards[1]) {
+    var v1 = metricCards[1].querySelector('.cc-metric-value');
+    if (v1) v1.textContent = vis.resolvedWeek || 0;
+    var u1 = metricCards[1].querySelector('.cc-metric-unit');
+    if (u1) u1.textContent = 'THIS WEEK';
+    var l1 = metricCards[1].querySelector('.cc-metric-label');
+    if (l1) l1.textContent = 'Resolved This Week';
+  }
+
+  // 6. Rebuild GEO_THREAT_REGIONS from org distribution
+  if (vis.orgDist && Object.keys(vis.orgDist).length > 0) {
+    var newRegions = [];
+    Object.entries(vis.orgDist).forEach(function(entry) {
+      var orgName = entry[0], count = entry[1];
+      var geo = ORG_GEO_MAP[orgName] || ORG_GEO_MAP['\u2014'];
+      // Avoid duplicate countries
+      var existing = newRegions.find(function(r) { return r.country === geo.country; });
+      if (existing) {
+        existing.alerts += count;
+      } else {
+        var maxCount = Math.max.apply(null, Object.values(vis.orgDist)) || 1;
+        newRegions.push({
+          name: orgName,
+          country: geo.country,
+          direction: 'Destination',
+          regions: geo.regions,
+          intensity: Math.min(0.95, 0.3 + (count / maxCount) * 0.65),
+          alerts: count,
+          color: geo.color,
+          type: geo.type,
+          ip: geo.ip
+        });
+      }
+    });
+    if (newRegions.length > 0) {
+      GEO_THREAT_REGIONS.length = 0;
+      newRegions.forEach(function(r) { GEO_THREAT_REGIONS.push(r); });
+      // Re-render geomap with live data
+      try { initGeoMap(); } catch(e) { /* ignore if not visible */ }
+    }
+  }
+
+  console.log('[DactaJira] All visuals updated with live data:', {
+    totalAll: vis.totalAll, totalOpen: vis.totalOpen, escalated: vis.escalatedCount,
+    resolvedWeek: vis.resolvedWeek, issueCount: vis.issueCount
+  });
+}
+
 async function populateLiveDashboard() {
   if (window._dactaMode !== 'production') return;
   if (_dashboardLoading) return;
@@ -30383,6 +30571,11 @@ async function populateLiveDashboard() {
     var kpi = data.kpi;
     var tickets = data.recentTickets || [];
 
+    // Fetch dashvisuals data in background (fills all canvas/chart visuals)
+    DactaJira.fetchDashVisuals().then(function(vis) {
+      if (vis) updateAllVisuals(vis);
+    }).catch(function(e) { console.warn('[DactaJira] dashvisuals error:', e); });
+
     // Fetch extended telemetry in background
     DactaJira.fetchTelemetry().then(function(tele) {
       if (!tele) return;
@@ -30390,18 +30583,22 @@ async function populateLiveDashboard() {
       var ac = tele.assigneeCounts || {};
 
       // Update 1st metric card (if present): In Progress count
-      var metricCards = document.querySelectorAll('#commandView .cc-metric-card');
-      if (metricCards[0]) {
-        var v0 = metricCards[0].querySelector('.cc-metric-value');
-        if (v0) v0.textContent = (c.inProgress || 0) + (c.escalated || 0);
-        var u0 = metricCards[0].querySelector('.cc-metric-unit');
-        if (u0) u0.textContent = 'ACTIVE';
-      }
-      if (metricCards[1]) {
-        var v1 = metricCards[1].querySelector('.cc-metric-value');
-        if (v1) v1.textContent = c.resolvedWeek || 0;
-        var u1 = metricCards[1].querySelector('.cc-metric-unit');
-        if (u1) u1.textContent = 'THIS WEEK';
+      // NOTE: metric cards 0 & 1 are primarily owned by updateAllVisuals (dashvisuals)
+      // Telemetry updates them only if dashvisuals hasn't loaded yet
+      if (!window._liveVis) {
+        var metricCards = document.querySelectorAll('#commandView .cc-metric-card');
+        if (metricCards[0]) {
+          var v0 = metricCards[0].querySelector('.cc-metric-value');
+          if (v0) v0.textContent = (c.inProgress || 0) + (c.escalated || 0);
+          var u0 = metricCards[0].querySelector('.cc-metric-unit');
+          if (u0) u0.textContent = 'ACTIVE';
+        }
+        if (metricCards[1]) {
+          var v1 = metricCards[1].querySelector('.cc-metric-value');
+          if (v1) v1.textContent = c.resolvedWeek || 0;
+          var u1 = metricCards[1].querySelector('.cc-metric-unit');
+          if (u1) u1.textContent = 'THIS WEEK';
+        }
       }
 
       // Populate classic view with extended data
