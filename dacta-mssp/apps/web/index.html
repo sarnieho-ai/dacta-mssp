@@ -26186,7 +26186,7 @@ function applyProductionMode() {
 
     // Table — clear body, show empty
     triagePage.querySelectorAll('table tbody').forEach(function(tbody) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:80px 24px;">' +
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:80px 24px;">' +
         emptyState('📋', 'No tickets in queue — connect Jira to populate') + '</td></tr>';
     });
 
@@ -30566,7 +30566,7 @@ async function populateLiveTriage(append) {
   // Show loading in table
   var tbody = triagePage.querySelector('table tbody');
   if (tbody && !append) {
-    tbody.innerHTML = '<tr><td colspan="10">' + jiraProgressBarHTML() + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11">' + jiraProgressBarHTML() + '</td></tr>';
   }
 
   try {
@@ -30617,6 +30617,7 @@ async function populateLiveTriage(append) {
           '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
           '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
           '<td><span style="font-size:10px;color:var(--text-muted);">—</span></td>' +
+          '<td style="font-size:11px;">' + t.org + '</td>' +
           '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
           '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
           '<td style="font-size:11px;color:' + (t.assignee === 'Unassigned' ? 'var(--text-muted)' : 'var(--cyan)') + ';">' + t.assignee + '</td>' +
@@ -30631,7 +30632,7 @@ async function populateLiveTriage(append) {
       tbody.innerHTML = rowsHTML;
 
       if (_triageCurrentIssues.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:60px;">' +
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;">' +
           '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;">' +
           '<div style="font-size:24px;opacity:0.5;">📋</div>' +
           '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div>' +
@@ -30659,7 +30660,7 @@ async function populateLiveTriage(append) {
   } catch (err) {
     console.error('[DactaJira] Triage error:', err);
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="10">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
     }
   } finally {
     _triageLoading = false;
@@ -30791,6 +30792,7 @@ function rerenderTriageTable() {
       '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
       '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
       '<td><span style="font-size:10px;color:var(--text-muted);">&mdash;</span></td>' +
+      '<td style="font-size:11px;">' + t.org + '</td>' +
       '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
       '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
       '<td style="font-size:11px;color:' + (t.assignee === 'Unassigned' ? 'var(--text-muted)' : 'var(--cyan)') + ';">' + t.assignee + '</td>' +
@@ -30799,7 +30801,7 @@ function rerenderTriageTable() {
     '</tr>';
   }).join('');
   tbody.innerHTML = rowsHTML;
-  if (filtered.length === 0) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div></td></tr>';
+  if (filtered.length === 0) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div></td></tr>';
   var tqSum = triagePage.querySelector('.tq-summary');
   if (tqSum) {
     var openC = filtered.filter(function(t) { return t.status === 'Open'; }).length;
