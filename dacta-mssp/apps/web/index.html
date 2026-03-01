@@ -9426,9 +9426,9 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
       <div class="demo-toggle-wrap" style="display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid var(--border-subtle);">
         <span class="demo-label-text" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">Demo</span><span class="prod-label-text" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">View</span>
         <label style="position:relative;width:32px;height:18px;cursor:pointer;">
-          <input type="checkbox" id="demoModeToggle" checked style="display:none;">
-          <span style="position:absolute;inset:0;background:rgba(0,212,255,0.3);border-radius:9px;transition:0.2s;" id="demoSlider"></span>
-          <span style="position:absolute;top:2px;left:16px;width:14px;height:14px;background:#00d4ff;border-radius:50%;transition:0.2s;box-shadow:0 0 6px rgba(0,212,255,0.5);" id="demoKnob"></span>
+          <input type="checkbox" id="demoModeToggle" style="display:none;">
+          <span style="position:absolute;inset:0;background:rgba(77,90,110,0.2);border-radius:9px;transition:0.2s;" id="demoSlider"></span>
+          <span style="position:absolute;top:2px;left:2px;width:14px;height:14px;background:#4d5a6e;border-radius:50%;transition:0.2s;" id="demoKnob"></span>
         </label>
       </div>
       <div class="prod-badge">PRODUCTION</div>
@@ -25751,27 +25751,35 @@ function init() {
       setTopbarUser(user);
       if (overlay) overlay.style.display = 'none';
       
-      // Check if user toggled to demo view (stored in sessionStorage)
+      // Determine mode based on user + any view override
+      var isAdmin = (user.email === 'admin@dacta.sg');
       var viewOverride = sessionStorage.getItem('dacta_view_override');
-      if (viewOverride === 'demo' && user.email === 'admin@dacta.sg') {
+      
+      if (isAdmin && viewOverride === 'demo') {
         window._dactaMode = 'demo';
         window._dactaOriginalMode = 'production';
-        sessionStorage.removeItem('dacta_view_override');
       } else {
-        window._dactaMode = (user.email === 'admin@dacta.sg') ? 'production' : 'demo';
+        window._dactaMode = isAdmin ? 'production' : 'demo';
         window._dactaOriginalMode = window._dactaMode;
       }
       
+      // Set toggle + badge state
+      var toggle = document.getElementById('demoModeToggle');
+      var knob = document.getElementById('demoKnob');
+      var slider = document.getElementById('demoSlider');
+      
       if (window._dactaMode === 'production') {
         document.body.classList.add('mode-production');
-        // Set toggle to OFF position for production
-        var toggle = document.getElementById('demoModeToggle');
-        var knob = document.getElementById('demoKnob');
-        var slider = document.getElementById('demoSlider');
         if (toggle) toggle.checked = false;
         if (knob) { knob.style.left = '2px'; knob.style.background = '#4d5a6e'; }
         if (slider) slider.style.background = 'rgba(77,90,110,0.2)';
+      } else {
+        document.body.classList.remove('mode-production');
+        if (toggle) toggle.checked = true;
+        if (knob) { knob.style.left = '16px'; knob.style.background = '#00d4ff'; knob.style.boxShadow = '0 0 6px rgba(0,212,255,0.5)'; }
+        if (slider) slider.style.background = 'rgba(0,212,255,0.3)';
       }
+      
       safeInit();
     }
     function showLogin() {
@@ -25888,40 +25896,16 @@ function init() {
 var demoToggle = document.getElementById('demoModeToggle');
 if (demoToggle) {
   demoToggle.addEventListener('change', function() {
-    var knob = document.getElementById('demoKnob');
-    var slider = document.getElementById('demoSlider');
-    var prodBadge = document.querySelector('.prod-badge');
-    if (this.checked) {
-      // Toggle ON = Demo view
-      knob.style.left = '16px';
-      knob.style.background = '#00d4ff';
-      slider.style.background = 'rgba(0,212,255,0.3)';
-      if (window._dactaMode === 'production') {
-        // Switch to demo view — store override and reload to render all demo data
+    if (window._dactaOriginalMode === 'production' || window._dactaMode === 'production') {
+      // Admin user toggling between production and demo views
+      if (this.checked) {
         sessionStorage.setItem('dacta_view_override', 'demo');
-        window._dactaMode = 'demo';
-        document.body.classList.remove('mode-production');
-        if (prodBadge) prodBadge.style.display = 'none';
-        window.location.reload();
-      }
-    } else {
-      // Toggle OFF = Production view
-      knob.style.left = '2px';
-      knob.style.background = '#4d5a6e';
-      slider.style.background = 'rgba(77,90,110,0.2)';
-      if (window._dactaOriginalMode === 'production') {
-        // Switch back to production — clear override and re-apply zeroing
+      } else {
         sessionStorage.removeItem('dacta_view_override');
-        window._dactaMode = 'production';
-        document.body.classList.add('mode-production');
-        if (prodBadge) prodBadge.style.display = 'flex';
-        window.location.reload();
       }
+      window.location.reload();
     }
   });
-  // Initialize position — checked by default (will be unchecked for production users in showApp)
-  var knob = document.getElementById('demoKnob');
-  if (knob) knob.style.left = '16px';
 }
 
 // ============================================================
