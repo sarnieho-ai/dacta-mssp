@@ -9811,14 +9811,14 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
         <!-- Filter Bar -->
         <div class="filter-bar">
           <span class="filter-label">Filter:</span>
-          <select class="filter-select"><option>All Priorities</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select>
-          <select class="filter-select"><option>All Organizations</option><option>Dacta Global</option><option>SPMT</option><option>Naga World</option><option>ADV Partners</option></select>
-          <select class="filter-select"><option>All Sources</option><option>Jira</option><option>Manual Escalation</option></select>
-          <select class="filter-select"><option>All Statuses</option><option>Open</option><option>Investigating</option><option>Escalated</option><option>Closed</option></select>
-          <select class="filter-select"><option>All Analysts</option><option>John Lim</option><option>Sarah Tan</option><option>Marcus Wong</option><option>Unassigned</option></select>
+          <select id="tqFilterPriority" class="filter-select"><option>All Priorities</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select>
+          <select id="tqFilterOrg" class="filter-select"><option>All Organizations</option><option>Dacta Global</option><option>SPMT</option><option>Naga World</option><option>ADV Partners</option></select>
+          <select id="tqFilterSource" class="filter-select"><option>All Sources</option><option>Jira</option><option>Manual Escalation</option></select>
+          <select id="tqFilterStatus" class="filter-select"><option>All Statuses</option><option>Open</option><option>Investigating</option><option>Escalated</option><option>Closed</option></select>
+          <select id="tqFilterAnalyst" class="filter-select"><option>All Analysts</option><option>John Lim</option><option>Sarah Tan</option><option>Marcus Wong</option><option>Unassigned</option></select>
           <select class="filter-select"><option>AI Confidence: All</option><option>High (&gt;80%)</option><option>Medium (50–80%)</option><option>Low (&lt;50%)</option></select>
           <select class="tq-bulk-select"><option>Bulk Actions</option><option>Assign</option><option>Change Priority</option><option>Close</option></select>
-          <input class="filter-input" placeholder="Search tickets..." style="margin-left:auto;width:200px;">
+          <input id="tqFilterSearch" class="filter-input" placeholder="Search tickets..." style="margin-left:auto;width:200px;">
         </div>
 
         <!-- Rich Alert Table -->
@@ -25602,6 +25602,8 @@ function navigate(page) {
 
   // Init charts on page show
   if (page === 'dashboard') { initDashboardCharts(); setTimeout(initCommandCenter, 100); setTimeout(initHeatMap, 150); setTimeout(function(){ initGeoMap(); }, 200); }
+  if (page === 'dashboard' && window._dactaMode === 'production') setTimeout(populateLiveDashboard, 300);
+  if (page === 'triage' && window._dactaMode === 'production') setTimeout(populateLiveTriage, 200);
   if (page === 'aiusage') setTimeout(initAICharts, 50);
   if (page === 'privacy') setTimeout(initPrivacyCharts, 50);
   if (page === 'rules') { renderRules(); renderMitre(); }
@@ -26296,6 +26298,12 @@ function applyProductionMode() {
       container.appendChild(o);
     }
   });
+
+  // ── Fetch live Jira data ──
+  setTimeout(function() {
+    populateLiveDashboard();
+    setupTriageFilters();
+  }, 300);
 }
 
 // Handle popstate for hash routing
@@ -29791,6 +29799,737 @@ function sendWrInvite() {
   } else {
     showToast('Please enter a valid email address');
   }
+}
+
+// ============================================================
+//  JIRA LIVE DATA INTEGRATION
+//  Production mode: fetches live data from /api/jira
+// ============================================================
+
+window.DactaJira = {
+  _cache: {},
+  _cacheTime: {},
+  _CACHE_TTL: 60000, // 1 minute cache
+
+  async _fetch(url, options) {
+    try {
+      const resp = await fetch(url, options);
+      if (!resp.ok) throw new Error('API error: ' + resp.status);
+      return await resp.json();
+    } catch (err) {
+      console.error('[DactaJira]', err);
+      throw err;
+    }
+  },
+
+  async fetchDashboard() {
+    var now = Date.now();
+    if (this._cache.dashboard && (now - this._cacheTime.dashboard) < this._CACHE_TTL) {
+      return this._cache.dashboard;
+    }
+    var data = await this._fetch('/api/jira?action=dashboard');
+    this._cache.dashboard = data;
+    this._cacheTime.dashboard = now;
+    return data;
+  },
+
+  async fetchTriage(filters) {
+    var body = filters || {};
+    return this._fetch('/api/jira?action=triage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  },
+
+  async fetchIssue(key) {
+    return this._fetch('/api/jira?action=issue&key=' + encodeURIComponent(key));
+  },
+
+  async fetchComments(key) {
+    return this._fetch('/api/jira?action=comments&key=' + encodeURIComponent(key));
+  }
+};
+
+// ── Helpers ──────────────────────────────────────────────────
+function jiraTimeAgo(isoStr) {
+  if (!isoStr) return '—';
+  var diff = Date.now() - new Date(isoStr).getTime();
+  var mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  var hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  var days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  return Math.floor(days / 30) + 'mo ago';
+}
+
+function jiraFormatDT(isoStr) {
+  if (!isoStr) return '—';
+  var d = new Date(isoStr);
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return String(d.getDate()).padStart(2,'0') + ' ' + months[d.getMonth()] + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+function jiraPriorityBadge(priority) {
+  var p = (priority || '').split(' - ')[0] || 'P3';
+  return 'badge-' + p.toLowerCase();
+}
+
+function jiraStatusBadge(status) {
+  var s = (status || '').toLowerCase();
+  if (s === 'open') return 'badge-open';
+  if (s === 'closed') return 'badge-closed';
+  if (s === 'canceled') return 'badge-closed';
+  if (s === 'completed') return 'badge-green';
+  if (s === 'reported to') return 'badge-blue';
+  return 'badge-blue';
+}
+
+function jiraPriorityDot(priority) {
+  var p = (priority || '').split(' - ')[0] || 'P3';
+  if (p === 'P1') return 'red';
+  if (p === 'P2') return 'amber';
+  if (p === 'P3') return 'cyan';
+  return 'green';
+}
+
+function jiraLoadingHTML(msg) {
+  return '<div style="display:flex;align-items:center;justify-content:center;padding:40px;gap:10px;">' +
+    '<div class="jira-spinner"></div>' +
+    '<span style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">' + (msg || 'Loading live data...') + '</span>' +
+  '</div>';
+}
+
+function jiraErrorHTML(msg, retryFn) {
+  return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;gap:10px;">' +
+    '<div style="font-size:24px;opacity:0.5;">⚠️</div>' +
+    '<div style="font-size:12px;color:var(--red-bright);font-family:var(--font-mono);">' + (msg || 'Failed to load data') + '</div>' +
+    (retryFn ? '<button class="btn btn-secondary btn-sm" onclick="' + retryFn + '">Retry</button>' : '') +
+  '</div>';
+}
+
+function jiraLiveBadge() {
+  return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:600;color:var(--green);letter-spacing:0.5px;padding:2px 8px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:10px;margin-left:8px;"><span style="width:6px;height:6px;background:var(--green);border-radius:50%;animation:livePulse 2s infinite;"></span>LIVE</span>';
+}
+
+// Add spinner + live pulse CSS
+(function() {
+  var style = document.createElement('style');
+  style.textContent = [
+    '@keyframes jiraSpin { to { transform: rotate(360deg); } }',
+    '.jira-spinner { width:18px;height:18px;border:2px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:jiraSpin 0.8s linear infinite; }',
+    '@keyframes livePulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }',
+    '.jira-loading-row td { background:rgba(0,212,255,0.02) !important; }'
+  ].join('\n');
+  document.head.appendChild(style);
+})();
+
+
+// ── DASHBOARD LIVE DATA ─────────────────────────────────────
+
+var _dashboardLoading = false;
+
+async function populateLiveDashboard() {
+  if (window._dactaMode !== 'production') return;
+  if (_dashboardLoading) return;
+  _dashboardLoading = true;
+
+  try {
+    var data = await DactaJira.fetchDashboard();
+    var kpi = data.kpi;
+    var tickets = data.recentTickets || [];
+
+    // ── Command View metrics ──
+    var metricCards = document.querySelectorAll('#commandView .cc-metric-card');
+    
+    // 3rd card: Total Open Incidents
+    if (metricCards[2]) {
+      var valEl = metricCards[2].querySelector('.cc-metric-value');
+      if (valEl) valEl.textContent = kpi.open;
+      var unitEl = metricCards[2].querySelector('.cc-metric-unit');
+      if (unitEl) unitEl.textContent = 'TOTAL';
+      var sevDots = metricCards[2].querySelector('.cc-severity-dots');
+      if (sevDots) {
+        var parts = [];
+        if (kpi.p1 > 0) parts.push('<span class="cc-sev-dot" style="--dot-color:#ef4444;">C<b>' + kpi.p1 + '</b></span>');
+        if (kpi.p2 > 0) parts.push('<span class="cc-sev-dot" style="--dot-color:#f59e0b;">H<b>' + kpi.p2 + '</b></span>');
+        if (kpi.p3 > 0) parts.push('<span class="cc-sev-dot" style="--dot-color:#00d4ff;">M<b>' + kpi.p3 + '</b></span>');
+        if (kpi.p4 > 0) parts.push('<span class="cc-sev-dot" style="--dot-color:#10b981;">L<b>' + kpi.p4 + '</b></span>');
+        if (parts.length === 0) parts.push('<span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">No open incidents</span>');
+        sevDots.innerHTML = parts.join('');
+      }
+    }
+
+    // 4th card: Auto-Resolved
+    if (metricCards[3]) {
+      var valEl4 = metricCards[3].querySelector('.cc-metric-value');
+      if (valEl4) valEl4.textContent = kpi.resolvedToday;
+    }
+
+    // ── Classic View summary cards ──
+    var scNums = document.querySelectorAll('#classicView .summary-cards .sc-num');
+    if (scNums.length >= 6) {
+      scNums[0].textContent = kpi.open;         // Total Alerts
+      scNums[1].textContent = kpi.p1;            // P1 Critical
+      scNums[2].textContent = kpi.p2 + kpi.p3;   // P3+ High
+      scNums[3].textContent = '0';               // Escalated (not tracked in Jira directly)
+      scNums[4].textContent = kpi.canceledToday;  // Auto-Cancelled
+      scNums[5].textContent = kpi.resolvedToday;  // Resolved
+    }
+
+    // ── Open Tickets card ──
+    var ticketsCard = document.querySelector('.cc-tickets-card');
+    if (ticketsCard) {
+      // Update badge
+      var badge = ticketsCard.querySelector('.badge');
+      if (badge) badge.textContent = kpi.open + ' OPEN';
+
+      // Remove existing ticket rows & empty states
+      ticketsCard.querySelectorAll('.ticket-row').forEach(function(r) { r.remove(); });
+      var prodEmpty = ticketsCard.querySelector('.prod-ticket-empty');
+      if (prodEmpty) prodEmpty.remove();
+
+      // Add live ticket rows (show up to 8 recent open)
+      var openTickets = tickets.filter(function(t) { return t.status === 'Open'; }).slice(0, 8);
+      if (openTickets.length === 0) openTickets = tickets.slice(0, 8); // fallback: show any recent
+
+      var cardHeader = ticketsCard.querySelector('.card-header');
+      openTickets.forEach(function(t) {
+        var row = document.createElement('div');
+        row.className = 'ticket-row';
+        row.style.cursor = 'pointer';
+        row.onclick = function() { openInvestigation(t.key); };
+        row.innerHTML = '<span class="ticket-id">' + t.key + '</span>' +
+          '<span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span>' +
+          '<span class="ticket-title">' + t.summary + '</span>' +
+          '<div class="ticket-meta">' +
+            '<span class="ticket-source">Jira</span>' +
+            '<div class="status-dot ' + jiraPriorityDot(t.priority) + '"></div>' +
+            '<span class="ticket-time">' + jiraTimeAgo(t.created) + '</span>' +
+          '</div>';
+        ticketsCard.appendChild(row);
+      });
+
+      // Add LIVE badge to card header
+      if (cardHeader && !cardHeader.querySelector('.jira-live-badge')) {
+        var liveBadge = document.createElement('span');
+        liveBadge.className = 'jira-live-badge';
+        liveBadge.innerHTML = jiraLiveBadge();
+        cardHeader.appendChild(liveBadge);
+      }
+    }
+
+    // ── By Organization sidebar ──
+    var rightSidebar = document.querySelector('#page-dashboard .cc-right-sidebar');
+    if (rightSidebar) {
+      var orgCard = rightSidebar.querySelector('.card');
+      if (orgCard) {
+        // Remove old rows and empty states
+        orgCard.querySelectorAll('.org-row').forEach(function(r) { r.remove(); });
+        var prodSideEmpty = orgCard.querySelector('.prod-sidebar-empty');
+        if (prodSideEmpty) prodSideEmpty.remove();
+
+        // Count orgs from recent tickets
+        var orgCounts = {};
+        tickets.forEach(function(t) {
+          var o = t.org || '—';
+          if (!orgCounts[o]) orgCounts[o] = { total: 0, open: 0 };
+          orgCounts[o].total++;
+          if (t.status === 'Open') orgCounts[o].open++;
+        });
+
+        var orgEntries = Object.entries(orgCounts).sort(function(a, b) { return b[1].total - a[1].total; });
+        var maxCount = orgEntries.length > 0 ? orgEntries[0][1].total : 1;
+
+        orgEntries.forEach(function(entry) {
+          var name = entry[0];
+          var data = entry[1];
+          var pct = Math.round((data.total / maxCount) * 100);
+          var dotColor = data.open > 3 ? 'amber' : data.open > 0 ? 'cyan' : 'green';
+          var openText = data.open > 0 ? data.open + ' open' : 'clear';
+          var openColor = data.open > 3 ? 'var(--amber)' : data.open > 0 ? 'var(--cyan)' : 'var(--green)';
+
+          var row = document.createElement('div');
+          row.className = 'org-row';
+          row.innerHTML = '<div class="status-dot ' + dotColor + '"></div>' +
+            '<span class="org-name">' + name + '</span>' +
+            '<div class="org-bar"><div class="org-fill" style="width:' + pct + '%;' + (dotColor === 'cyan' ? 'background:var(--cyan);' : dotColor === 'green' ? 'background:var(--green);' : '') + '"></div></div>' +
+            '<span class="org-count">' + data.total + ' · <span style="color:' + openColor + ';">' + openText + '</span></span>';
+          orgCard.appendChild(row);
+        });
+      }
+
+      // ── Triage Labels ──
+      var labelsGrid = rightSidebar.querySelector('.labels-grid');
+      if (labelsGrid) {
+        var labelCounts = {};
+        tickets.forEach(function(t) {
+          (t.labels || []).forEach(function(l) {
+            labelCounts[l] = (labelCounts[l] || 0) + 1;
+          });
+        });
+        // Update existing label chips or rebuild
+        labelsGrid.innerHTML = '';
+        Object.entries(labelCounts).sort(function(a, b) { return b[1] - a[1]; }).forEach(function(entry) {
+          var chip = document.createElement('div');
+          chip.className = 'label-chip';
+          chip.innerHTML = '<span>' + entry[0] + '</span><span class="label-count">' + entry[1] + '</span>';
+          labelsGrid.appendChild(chip);
+        });
+        if (Object.keys(labelCounts).length === 0) {
+          labelsGrid.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No labels in recent tickets</div>';
+        }
+      }
+    }
+
+  } catch (err) {
+    console.error('[DactaJira] Dashboard error:', err);
+    // Show error in tickets card
+    var ticketsCard2 = document.querySelector('.cc-tickets-card');
+    if (ticketsCard2) {
+      ticketsCard2.querySelectorAll('.ticket-row').forEach(function(r) { r.remove(); });
+      var errDiv = document.createElement('div');
+      errDiv.innerHTML = jiraErrorHTML('Failed to load live data: ' + err.message, 'populateLiveDashboard()');
+      ticketsCard2.appendChild(errDiv);
+    }
+  } finally {
+    _dashboardLoading = false;
+  }
+}
+
+
+// ── TRIAGE LIVE DATA ────────────────────────────────────────
+
+var _triageLoading = false;
+var _triageNextPageToken = null;
+var _triageCurrentIssues = [];
+
+async function populateLiveTriage(append) {
+  if (window._dactaMode !== 'production') return;
+  if (_triageLoading) return;
+  _triageLoading = true;
+
+  var triagePage = document.getElementById('page-triage');
+  if (!triagePage) { _triageLoading = false; return; }
+
+  // Get filter values
+  var filters = {};
+  var prioEl = document.getElementById('tqFilterPriority');
+  var orgEl = document.getElementById('tqFilterOrg');
+  var statusEl = document.getElementById('tqFilterStatus');
+  var analystEl = document.getElementById('tqFilterAnalyst');
+  var searchEl = document.getElementById('tqFilterSearch');
+
+  if (prioEl && prioEl.value !== 'All Priorities') filters.priority = prioEl.value;
+  if (orgEl && orgEl.value !== 'All Organizations') filters.org = orgEl.value;
+  if (statusEl && statusEl.value !== 'All Statuses') filters.status = statusEl.value;
+  if (analystEl && analystEl.value !== 'All Analysts') {
+    filters.assignee = analystEl.value;
+  }
+  if (searchEl && searchEl.value.trim()) filters.search = searchEl.value.trim();
+
+  filters.maxResults = 50;
+  if (append && _triageNextPageToken) {
+    filters.nextPageToken = _triageNextPageToken;
+  }
+
+  // Show loading in table
+  var tbody = triagePage.querySelector('table tbody');
+  if (tbody && !append) {
+    tbody.innerHTML = '<tr><td colspan="11">' + jiraLoadingHTML('Fetching live tickets from Jira...') + '</td></tr>';
+  }
+
+  try {
+    var data = await DactaJira.fetchTriage(filters);
+    var issues = data.issues || [];
+    _triageNextPageToken = data.nextPageToken || null;
+
+    if (append) {
+      _triageCurrentIssues = _triageCurrentIssues.concat(issues);
+    } else {
+      _triageCurrentIssues = issues;
+    }
+
+    // ── Update subtitle ──
+    var subtitle = triagePage.querySelector('.page-subtitle');
+    if (subtitle) {
+      subtitle.innerHTML = _triageCurrentIssues.length + ' tickets loaded ' + jiraLiveBadge();
+    }
+
+    // ── Update metric strip ──
+    var metricVals = triagePage.querySelectorAll('.tq-metric-value');
+    if (metricVals.length >= 4) {
+      var p1Count = _triageCurrentIssues.filter(function(t) { return t.priorityShort === 'P1' && t.status === 'Open'; }).length;
+      var openCount = _triageCurrentIssues.filter(function(t) { return t.status === 'Open'; }).length;
+      metricVals[0].textContent = p1Count;
+      metricVals[1].textContent = openCount;
+      metricVals[2].textContent = '—';
+      metricVals[3].innerHTML = '—';
+    }
+    var metricSubs = triagePage.querySelectorAll('.tq-metric-sub');
+    if (metricSubs.length >= 4) {
+      metricSubs[0].textContent = p1Count > 0 ? 'Active now' : 'None active';
+      metricSubs[1].textContent = 'Needs analyst review';
+      metricSubs[2].textContent = 'Not available';
+      metricSubs[3].textContent = 'Not available';
+    }
+
+    // ── Render table ──
+    if (tbody) {
+      var rowsHTML = _triageCurrentIssues.map(function(t) {
+        var isP1 = t.priorityShort === 'P1';
+        var isCanceled = t.status === 'Canceled';
+        var rowStyle = isP1 ? 'background:rgba(239,68,68,0.04);cursor:pointer;' : (isCanceled ? 'opacity:0.65;cursor:pointer;' : 'cursor:pointer;');
+        
+        return '<tr onclick="openInvestigation(\'' + t.key + '\')" style="' + rowStyle + '">' +
+          '<td><input type="checkbox" class="tq-cb" onclick="event.stopPropagation();"></td>' +
+          '<td><span class="mono" style="color:var(--cyan);font-size:11px;">' + t.key + '</span></td>' +
+          '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
+          '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
+          '<td><span style="font-size:10px;color:var(--text-muted);">—</span></td>' +
+          '<td style="font-size:11px;">' + t.org + '</td>' +
+          '<td style="font-size:11px;">Jira</td>' +
+          '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
+          '<td style="font-size:11px;color:' + (t.assignee === 'Unassigned' ? 'var(--text-muted)' : 'var(--cyan)') + ';">' + t.assignee + '</td>' +
+          '<td style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">' + jiraFormatDT(t.created) + '</td>' +
+          '<td><div style="display:flex;gap:4px;">' +
+            '<button class="btn btn-xs btn-secondary" onclick="event.stopPropagation();">Assign</button>' +
+            '<button class="btn btn-xs btn-amber" onclick="event.stopPropagation();">Escalate</button>' +
+          '</div></td>' +
+        '</tr>';
+      }).join('');
+
+      tbody.innerHTML = rowsHTML;
+
+      if (_triageCurrentIssues.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;">' +
+          '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;">' +
+          '<div style="font-size:24px;opacity:0.5;">📋</div>' +
+          '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div>' +
+          '</div></td></tr>';
+      }
+    }
+
+    // ── Summary bar ──
+    var tqSum = triagePage.querySelector('.tq-summary');
+    if (tqSum) {
+      var openC = _triageCurrentIssues.filter(function(t) { return t.status === 'Open'; }).length;
+      var closedC = _triageCurrentIssues.filter(function(t) { return t.status === 'Closed' || t.status === 'Completed'; }).length;
+      var canceledC = _triageCurrentIssues.filter(function(t) { return t.status === 'Canceled'; }).length;
+      var moreBtn = !data.isLast ? ' <button class="btn btn-secondary btn-sm" onclick="populateLiveTriage(true)" style="margin-left:12px;font-size:10px;">Load More</button>' : '';
+      tqSum.innerHTML = '<span>Showing <strong style="color:var(--cyan);">' + _triageCurrentIssues.length + '</strong> tickets</span>' +
+        '<span class="sep">·</span>' +
+        '<span><strong style="color:var(--amber);">' + openC + '</strong> open</span>' +
+        '<span class="sep">·</span>' +
+        '<span><strong style="color:var(--green);">' + closedC + '</strong> resolved</span>' +
+        '<span class="sep">·</span>' +
+        '<span><strong style="color:var(--text-muted);">' + canceledC + '</strong> canceled</span>' +
+        moreBtn;
+    }
+
+  } catch (err) {
+    console.error('[DactaJira] Triage error:', err);
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="11">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
+    }
+  } finally {
+    _triageLoading = false;
+  }
+}
+
+// ── Setup triage filters ──
+function setupTriageFilters() {
+  var prioEl = document.getElementById('tqFilterPriority');
+  var orgEl = document.getElementById('tqFilterOrg');
+  var statusEl = document.getElementById('tqFilterStatus');
+  var analystEl = document.getElementById('tqFilterAnalyst');
+  var searchEl = document.getElementById('tqFilterSearch');
+
+  // Replace options with real values
+  if (prioEl) {
+    prioEl.innerHTML = '<option>All Priorities</option><option>P1 - Critical</option><option>P2 - High</option><option>P3 - Medium</option><option>P4 - Low</option>';
+    prioEl.onchange = function() { populateLiveTriage(); };
+  }
+  if (orgEl) {
+    orgEl.innerHTML = '<option>All Organizations</option><option>Dacta Global</option><option>SPMT</option><option>Foxwood</option><option>PT Pelindo Multi Terminal</option>';
+    orgEl.onchange = function() { populateLiveTriage(); };
+  }
+  if (statusEl) {
+    statusEl.innerHTML = '<option>All Statuses</option><option>Open</option><option>Closed</option><option>Canceled</option><option>Completed</option><option>Reported To</option>';
+    statusEl.onchange = function() { populateLiveTriage(); };
+  }
+  if (analystEl) {
+    analystEl.innerHTML = '<option>All Analysts</option><option>Christian Miguel Gepanaga</option><option>Wendy Melyana</option><option>Marcfrance Limasin</option><option>Unassigned</option>';
+    analystEl.onchange = function() { populateLiveTriage(); };
+  }
+  if (searchEl) {
+    var searchTimeout;
+    searchEl.oninput = function() {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(function() { populateLiveTriage(); }, 500);
+    };
+  }
+}
+
+
+// ── INVESTIGATION LIVE DATA ─────────────────────────────────
+
+async function openInvestigation(ticketKey) {
+  if (!ticketKey) return;
+  navigate('investigation');
+
+  var invPage = document.getElementById('page-investigation');
+  if (!invPage) return;
+
+  // Hide demo layout, show live panel
+  var demoLayout = invPage.querySelector('.investigation-layout');
+  if (demoLayout) demoLayout.style.display = 'none';
+
+  // Remove previous live panel
+  var oldLive = invPage.querySelector('.prod-investigation-live');
+  if (oldLive) oldLive.remove();
+  
+  // Remove previous empty state
+  var oldEmpty = invPage.querySelector('.prod-inv-empty');
+  if (oldEmpty) oldEmpty.remove();
+
+  // Update subtitle
+  var subtitle = invPage.querySelector('.page-subtitle');
+  if (subtitle) subtitle.textContent = 'Loading ' + ticketKey + '...';
+
+  // Show action buttons
+  invPage.querySelectorAll('.page-actions .btn').forEach(function(btn) {
+    btn.style.display = '';
+  });
+
+  // Create live investigation panel
+  var livePanel = document.createElement('div');
+  livePanel.className = 'prod-investigation-live';
+  livePanel.innerHTML = jiraLoadingHTML('Loading investigation data for ' + ticketKey + '...');
+  
+  if (demoLayout) {
+    demoLayout.parentNode.insertBefore(livePanel, demoLayout.nextSibling);
+  } else {
+    invPage.appendChild(livePanel);
+  }
+
+  try {
+    // Fetch issue and comments in parallel
+    var issuePromise = DactaJira.fetchIssue(ticketKey);
+    var commentsPromise = DactaJira.fetchComments(ticketKey);
+    
+    var issueData = await issuePromise;
+    var commentsData = await commentsPromise;
+    
+    var f = issueData.fields || {};
+    var orgs = (f.customfield_10002 || []).map(function(o) { return o.name; });
+    var assignee = f.assignee ? f.assignee.displayName : 'Unassigned';
+    var reporter = f.reporter ? f.reporter.displayName : 'Unknown';
+    var priority = f.priority ? f.priority.name : 'Unknown';
+    var status = f.status ? f.status.name : 'Unknown';
+    var workCat = f.customfield_10038;
+    var workCatStr = workCat && typeof workCat === 'object' ? (workCat.value || '') : (workCat || '');
+    var labels = f.labels || [];
+    var useCase = f.customfield_10072 || '';
+    var description = '';
+    
+    // Extract description text from ADF format
+    if (f.description && f.description.content) {
+      description = extractADFText(f.description);
+    } else if (typeof f.description === 'string') {
+      description = f.description;
+    }
+    
+    // Use rendered description if available
+    if (issueData.renderedFields && issueData.renderedFields.description) {
+      description = issueData.renderedFields.description;
+    }
+
+    // Update subtitle
+    if (subtitle) subtitle.innerHTML = ticketKey + ' · ' + status + ' ' + jiraLiveBadge();
+
+    // Build the investigation view
+    var commentsArr = (commentsData.comments || commentsData.values || []);
+    
+    // Build changelog timeline
+    var changelog = (issueData.changelog && issueData.changelog.histories) || [];
+    var timelineItems = [];
+    
+    changelog.forEach(function(entry) {
+      (entry.items || []).forEach(function(item) {
+        timelineItems.push({
+          time: entry.created,
+          author: entry.author ? entry.author.displayName : 'System',
+          type: 'change',
+          field: item.field,
+          from: item.fromString || '',
+          to: item.toString || ''
+        });
+      });
+    });
+    
+    commentsArr.forEach(function(c) {
+      var body = '';
+      if (c.renderedBody) {
+        body = c.renderedBody;
+      } else if (c.body && c.body.content) {
+        body = extractADFText(c.body);
+      } else if (typeof c.body === 'string') {
+        body = c.body;
+      }
+      timelineItems.push({
+        time: c.created,
+        author: c.author ? c.author.displayName : 'Unknown',
+        type: 'comment',
+        body: body
+      });
+    });
+    
+    // Sort timeline by time desc
+    timelineItems.sort(function(a, b) { return new Date(b.time) - new Date(a.time); });
+
+    var labelsHTML = labels.length > 0 
+      ? labels.map(function(l) { return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + l + '</span>'; }).join('')
+      : '<span style="color:var(--text-muted);font-size:11px;">None</span>';
+
+    livePanel.innerHTML = '<div style="display:grid;grid-template-columns:1fr 380px;gap:16px;margin-top:4px;">' +
+      
+      // ── Left Panel: Ticket Details ──
+      '<div>' +
+        // Header card
+        '<div class="card" style="margin-bottom:12px;padding:20px;">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;">' +
+            '<div>' +
+              '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
+                '<span class="mono" style="color:var(--cyan);font-size:15px;font-weight:700;">' + ticketKey + '</span>' +
+                '<span class="badge ' + jiraPriorityBadge(priority) + '">' + (priority.split(' - ')[0]) + '</span>' +
+                '<span class="badge ' + jiraStatusBadge(status) + '">' + status + '</span>' +
+                (workCatStr ? '<span style="font-size:9px;padding:2px 8px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:10px;color:#a78bfa;">' + workCatStr + '</span>' : '') +
+              '</div>' +
+              '<div style="font-size:14px;font-weight:600;color:var(--text-primary);line-height:1.4;max-width:600px;">' + (f.summary || '') + '</div>' +
+            '</div>' +
+          '</div>' +
+          
+          '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--border-subtle);">' +
+            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Organization</div><div style="font-size:12px;color:var(--text-primary);font-weight:500;">' + (orgs.join(', ') || '—') + '</div></div>' +
+            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Assignee</div><div style="font-size:12px;color:var(--cyan);font-weight:500;">' + assignee + '</div></div>' +
+            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Reporter</div><div style="font-size:12px;color:var(--text-primary);font-weight:500;">' + reporter + '</div></div>' +
+            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Issue Type</div><div style="font-size:12px;color:var(--text-primary);font-weight:500;">' + (f.issuetype ? f.issuetype.name : '—') + '</div></div>' +
+          '</div>' +
+          
+          '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--border-subtle);">' +
+            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Created</div><div style="font-size:12px;color:var(--text-primary);font-family:var(--font-mono);">' + jiraFormatDT(f.created) + '</div></div>' +
+            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Updated</div><div style="font-size:12px;color:var(--text-primary);font-family:var(--font-mono);">' + jiraFormatDT(f.updated) + '</div></div>' +
+            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Use Case</div><div style="font-size:12px;color:var(--text-primary);">' + (useCase || '—') + '</div></div>' +
+            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Labels</div><div style="display:flex;gap:4px;flex-wrap:wrap;">' + labelsHTML + '</div></div>' +
+          '</div>' +
+        '</div>' +
+        
+        // Description card
+        '<div class="card" style="margin-bottom:12px;padding:16px;">' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Description</span></div>' +
+          '<div style="font-size:12px;line-height:1.6;color:var(--text-secondary);max-height:400px;overflow-y:auto;padding-right:8px;' + (description ? '' : 'font-style:italic;color:var(--text-muted);') + '">' +
+            (description || 'No description provided') +
+          '</div>' +
+        '</div>' +
+
+        // Action buttons
+        '<div style="display:flex;gap:8px;">' +
+          '<button class="btn btn-primary btn-sm" onclick="navigate(\'triage\')">← Back to Triage</button>' +
+          '<button class="btn btn-secondary btn-sm" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\', \'_blank\')">Open in Jira ↗</button>' +
+        '</div>' +
+      '</div>' +
+      
+      // ── Right Panel: Activity Timeline ──
+      '<div>' +
+        '<div class="card" style="padding:16px;max-height:calc(100vh - 200px);overflow-y:auto;">' +
+          '<div class="card-header" style="margin-bottom:12px;"><span class="card-title">Activity Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px;">' + timelineItems.length + ' events</span></div>' +
+          (timelineItems.length === 0 
+            ? '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No activity recorded</div>'
+            : '<div style="display:flex;flex-direction:column;gap:0;">' +
+              timelineItems.map(function(item) {
+                if (item.type === 'comment') {
+                  return '<div style="padding:12px;border-left:2px solid rgba(0,212,255,0.3);margin-left:8px;margin-bottom:8px;">' +
+                    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+                      '<span style="font-size:11px;font-weight:600;color:var(--cyan);">' + item.author + '</span>' +
+                      '<span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">' + jiraTimeAgo(item.time) + '</span>' +
+                    '</div>' +
+                    '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;">' + (item.body || '(empty comment)') + '</div>' +
+                  '</div>';
+                } else {
+                  return '<div style="padding:8px 12px;border-left:2px solid rgba(255,255,255,0.06);margin-left:8px;margin-bottom:4px;">' +
+                    '<div style="display:flex;align-items:center;gap:6px;">' +
+                      '<span style="font-size:10px;color:var(--text-muted);">' + item.author + '</span>' +
+                      '<span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">' + jiraTimeAgo(item.time) + '</span>' +
+                    '</div>' +
+                    '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">' +
+                      '<span style="color:var(--text-muted);">' + item.field + ':</span> ' +
+                      (item.from ? '<span style="text-decoration:line-through;opacity:0.5;">' + item.from + '</span> → ' : '') +
+                      '<span style="color:var(--text-primary);">' + item.to + '</span>' +
+                    '</div>' +
+                  '</div>';
+                }
+              }).join('') +
+            '</div>'
+          ) +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  } catch (err) {
+    console.error('[DactaJira] Investigation error:', err);
+    livePanel.innerHTML = jiraErrorHTML('Failed to load ' + ticketKey + ': ' + err.message, 'openInvestigation(\'' + ticketKey + '\')');
+  }
+}
+
+// Helper: Extract text from Atlassian Document Format (ADF)
+function extractADFText(adf) {
+  if (!adf || !adf.content) return '';
+  var text = '';
+  function walk(nodes) {
+    (nodes || []).forEach(function(node) {
+      if (node.type === 'text') {
+        text += node.text || '';
+      } else if (node.type === 'hardBreak') {
+        text += '<br>';
+      } else if (node.type === 'paragraph') {
+        walk(node.content);
+        text += '<br>';
+      } else if (node.type === 'heading') {
+        text += '<strong>';
+        walk(node.content);
+        text += '</strong><br>';
+      } else if (node.type === 'bulletList' || node.type === 'orderedList') {
+        walk(node.content);
+      } else if (node.type === 'listItem') {
+        text += '• ';
+        walk(node.content);
+      } else if (node.type === 'codeBlock') {
+        text += '<pre style="background:var(--bg-elevated);padding:8px;border-radius:4px;font-size:11px;overflow-x:auto;">';
+        walk(node.content);
+        text += '</pre>';
+      } else if (node.type === 'table') {
+        text += '<div style="overflow-x:auto;margin:8px 0;"><table style="border-collapse:collapse;font-size:11px;">';
+        walk(node.content);
+        text += '</table></div>';
+      } else if (node.type === 'tableRow') {
+        text += '<tr>';
+        walk(node.content);
+        text += '</tr>';
+      } else if (node.type === 'tableCell' || node.type === 'tableHeader') {
+        var tag = node.type === 'tableHeader' ? 'th' : 'td';
+        text += '<' + tag + ' style="border:1px solid var(--border-subtle);padding:4px 8px;">';
+        walk(node.content);
+        text += '</' + tag + '>';
+      } else {
+        walk(node.content);
+      }
+    });
+  }
+  walk(adf.content);
+  return text;
 }
 
 </script>
