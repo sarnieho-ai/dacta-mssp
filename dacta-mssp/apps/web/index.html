@@ -28970,7 +28970,7 @@ function initHeatMap() {
   var gap = 2;
 
   function getColor(val) {
-    if (val === 0) return 'rgba(10,22,40,0.5)';
+    if (val === 0) return 'rgba(15,28,50,0.6)';
     var t = val / maxVal;
     if (t < 0.33) {
       var lt = t / 0.33;
@@ -29003,6 +29003,8 @@ function initHeatMap() {
 
   var cellPositions = [];
   for (var d = 0; d < 7; d++) {
+    var rowTotal = 0;
+    for (var h = 0; h < 24; h++) rowTotal += data[d][h];
     for (var h = 0; h < 24; h++) {
       var x = labelW + h * cellW + gap / 2;
       var y = labelH + d * cellH + gap / 2;
@@ -29013,6 +29015,18 @@ function initHeatMap() {
       ctx.roundRect(x, y, cw, ch, 2);
       ctx.fill();
       cellPositions.push({ x: x, y: y, w: cw, h: ch, day: d, hour: h, val: data[d][h] });
+    }
+    // Annotate empty rows so they don't look broken
+    if (rowTotal === 0) {
+      ctx.save();
+      ctx.font = '500 8px "IBM Plex Mono", monospace';
+      ctx.fillStyle = 'rgba(77,90,110,0.5)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      var rowCenterX = labelW + (W - labelW - 4) / 2;
+      var rowCenterY = labelH + d * cellH + cellH / 2;
+      ctx.fillText('No alerts', rowCenterX, rowCenterY);
+      ctx.restore();
     }
   }
 
