@@ -61,7 +61,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { action } = req.query;
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    let { action } = req.query;
+
+    // Fallback: if no action in query params, check body for endpoint or jql
+    if (!action && body.endpoint) {
+      action = body.endpoint;
+    }
+    if (!action && body.jql) {
+      action = 'search';
+    }
+
+    // ─── ACTION: users ──────────────────────────────────────
+    if (action === 'users') {
+      // Get all users assignable to the DAC project
+      const r = await fetch(`${baseUrl}/rest/api/3/user/assignable/search?project=DAC&maxResults=100`, {
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+      });
+      const users = await r.json();
+      return res.status(200).json(Array.isArray(users) ? users : []);
+    }
 
     // ─── ACTION: dashboard ────────────────────────────────────
     if (action === 'dashboard') {
@@ -154,7 +173,6 @@ export default async function handler(req, res) {
 
     // ─── ACTION: search (generic) ─────────────────────────────
     if (action === 'search') {
-      const body = req.body || {};
       const data = await searchJql(
         body.jql || 'project = DAC AND type = "[System] Incident" ORDER BY created DESC',
         body.fields || ['summary','status','priority','assignee','created','updated','issuetype','labels','customfield_10002','customfield_10050','customfield_10072','customfield_10038'],
