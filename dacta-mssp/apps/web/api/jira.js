@@ -115,7 +115,8 @@ export default async function handler(req, res) {
       const data = await searchJql(jql, [
         'summary','status','priority','assignee','reporter','created','updated','issuetype',
         'labels','customfield_10002','customfield_10050','customfield_10072','customfield_10068',
-        'customfield_10038','customfield_10406','customfield_10472','customfield_10473','customfield_10573'
+        'customfield_10038','customfield_10406','customfield_10472','customfield_10473','customfield_10573',
+        'customfield_10010'
       ], body.maxResults || 50, body.nextPageToken);
 
       return res.status(200).json({
@@ -168,7 +169,83 @@ export default async function handler(req, res) {
       return res.status(200).json(results);
     }
 
-    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts' });
+    // ─── ACTION: transitions ──────────────────────────────────
+    if (action === 'transitions') {
+      const key = req.query.key;
+      if (!key) return res.status(400).json({ error: 'Missing key parameter' });
+      const r = await fetch(`${baseUrl}/rest/api/3/issue/${key}/transitions`, {
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+      });
+      return res.status(r.status).json(await r.json());
+    }
+
+    // ─── ACTION: transition (change status) ───────────────────
+    if (action === 'transition') {
+      const body = req.body || {};
+      const key = body.key;
+      const transitionId = body.transitionId;
+      if (!key || !transitionId) return res.status(400).json({ error: 'Missing key or transitionId' });
+      const payload = { transition: { id: transitionId } };
+      const r = await fetch(`${baseUrl}/rest/api/3/issue/${key}/transitions`, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (r.status === 204) return res.status(200).json({ success: true });
+      return res.status(r.status).json(await r.json());
+    }
+
+    // ─── ACTION: assign ──────────────────────────────────────
+    if (action === 'assign') {
+      const body = req.body || {};
+      const key = body.key;
+      const accountId = body.accountId;
+      if (!key) return res.status(400).json({ error: 'Missing key' });
+      const payload = { accountId: accountId || null }; // null = unassign
+      const r = await fetch(`${baseUrl}/rest/api/3/issue/${key}/assignee`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (r.status === 204) return res.status(200).json({ success: true });
+      return res.status(r.status).json(await r.json());
+    }
+
+    // ─── ACTION: comment ─────────────────────────────────────
+    if (action === 'addcomment') {
+      const body = req.body || {};
+      const key = body.key;
+      const text = body.text;
+      if (!key || !text) return res.status(400).json({ error: 'Missing key or text' });
+      const adfBody = {
+        body: {
+          type: 'doc', version: 1,
+          content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+        }
+      };
+      const r = await fetch(`${baseUrl}/rest/api/3/issue/${key}/comment`, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(adfBody)
+      });
+      return res.status(r.status).json(await r.json());
+    }
+
+    // ─── ACTION: assignable (list users) ─────────────────────
+    if (action === 'assignable') {
+      const r = await fetch(`${baseUrl}/rest/api/3/user/assignable/search?project=DAC&maxResults=50`, {
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+      });
+      const users = await r.json();
+      const mapped = (Array.isArray(users) ? users : []).map(u => ({
+        accountId: u.accountId,
+        displayName: u.displayName,
+        avatar: (u.avatarUrls || {})['24x24'] || null
+      }));
+      return res.status(200).json(mapped);
+    }
+
+    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts, transitions, transition, assign, addcomment, assignable' });
 
   } catch (err) {
     console.error('Jira proxy error:', err);
@@ -185,20 +262,42 @@ function normalizeIssue(issue) {
   const reporter = f.reporter;
   const workCat = f.customfield_10038;
 
+  // Compute queue origin from request type + issuetype + status + org
+  const requestTypeData = f.customfield_10010;
+  const requestTypeName = requestTypeData?.requestType?.name || '';
+  const issueTypeName = (f.issuetype || {}).name || '';
+  const statusName = (f.status || {}).name || 'Unknown';
+
+  let queueOrigin = 'General';
+  if (requestTypeName === 'Elastic Alerts' || requestTypeName === 'Elastic Alerts (DAC)') {
+    queueOrigin = 'Elastic Alerts';
+  } else if (issueTypeName.includes('Incident') && !requestTypeName) {
+    queueOrigin = 'Incidents';
+  } else if (issueTypeName.includes('Incident')) {
+    queueOrigin = 'Incidents';
+  }
+  // Overlay queue context from status / org
+  if (statusName === 'Client Responded') queueOrigin = 'Client Responded';
+  if (statusName === 'Escalated') queueOrigin = 'Escalated';
+  if (statusName === 'In Progress') queueOrigin = queueOrigin === 'General' ? 'In Progress' : queueOrigin;
+  const orgName = orgs[0] || '';
+  if (orgName === 'DG_Demo Client') queueOrigin = 'Demo Client';
+
   return {
     key: issue.key,
     id: issue.id,
     summary: f.summary || '',
-    status: (f.status || {}).name || 'Unknown',
+    status: statusName,
     statusCat: (f.status || {}).statusCategory?.key || '',
     priority: (f.priority || {}).name || 'None',
     priorityShort: ((f.priority || {}).name || '').split(' - ')[0] || '',
     assignee: assignee ? assignee.displayName : 'Unassigned',
+    assigneeId: assignee ? assignee.accountId : null,
     assigneeAvatar: assignee ? (assignee.avatarUrls || {})['24x24'] : null,
     reporter: reporter ? reporter.displayName : 'Unknown',
     created: f.created || '',
     updated: f.updated || '',
-    issueType: (f.issuetype || {}).name || '',
+    issueType: issueTypeName,
     labels: f.labels || [],
     orgs,
     org: orgs[0] || '—',
@@ -210,6 +309,8 @@ function normalizeIssue(issue) {
     slaAcknowledge: f.customfield_10472 || null,
     slaRespond: f.customfield_10473 || null,
     slaInvestigate: f.customfield_10573 || null,
+    queueOrigin,
+    requestType: requestTypeName || issueTypeName.replace('[System] ', ''),
     source: 'Jira'
   };
 }

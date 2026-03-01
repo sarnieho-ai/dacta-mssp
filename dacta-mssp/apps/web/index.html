@@ -9813,7 +9813,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           <span class="filter-label">Filter:</span>
           <select id="tqFilterPriority" class="filter-select"><option>All Priorities</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select>
           <select id="tqFilterOrg" class="filter-select"><option>All Organizations</option><option>Dacta Global</option><option>SPMT</option><option>Naga World</option><option>ADV Partners</option></select>
-          <select id="tqFilterSource" class="filter-select"><option>All Sources</option><option>Jira</option><option>Manual Escalation</option></select>
+          <select id="tqFilterSource" class="filter-select"><option>All Queues</option><option>Elastic Alerts</option><option>Incidents</option><option>Client Responded</option><option>Escalated</option><option>In Progress</option><option>Demo Client</option><option>General</option></select>
           <select id="tqFilterStatus" class="filter-select"><option>All Statuses</option><option>Open</option><option>Investigating</option><option>Escalated</option><option>Closed</option></select>
           <select id="tqFilterAnalyst" class="filter-select"><option>All Analysts</option><option>John Lim</option><option>Sarah Tan</option><option>Marcus Wong</option><option>Unassigned</option></select>
           <select class="filter-select"><option>AI Confidence: All</option><option>High (&gt;80%)</option><option>Medium (50–80%)</option><option>Low (&lt;50%)</option></select>
@@ -9833,7 +9833,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   <th>Title</th>
                   <th>AI Verdict</th>
                   <th>Organization</th>
-                  <th>Source</th>
+                  <th>Queue</th>
                   <th>Status</th>
                   <th>Analyst</th>
                   <th>Created</th>
@@ -29848,6 +29848,42 @@ window.DactaJira = {
 
   async fetchComments(key) {
     return this._fetch('/api/jira?action=comments&key=' + encodeURIComponent(key));
+  },
+
+  async fetchTransitions(key) {
+    return this._fetch('/api/jira?action=transitions&key=' + encodeURIComponent(key));
+  },
+
+  async transitionIssue(key, transitionId) {
+    return this._fetch('/api/jira?action=transition', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, transitionId })
+    });
+  },
+
+  async assignIssue(key, accountId) {
+    return this._fetch('/api/jira?action=assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, accountId })
+    });
+  },
+
+  async addComment(key, text) {
+    return this._fetch('/api/jira?action=addcomment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, text })
+    });
+  },
+
+  async fetchAssignableUsers() {
+    if (this._cache.assignable && (Date.now() - this._cacheTime.assignable) < 300000) return this._cache.assignable;
+    var data = await this._fetch('/api/jira?action=assignable');
+    this._cache.assignable = data;
+    this._cacheTime.assignable = Date.now();
+    return data;
   }
 };
 
@@ -29884,6 +29920,11 @@ function jiraStatusBadge(status) {
   if (s === 'canceled') return 'badge-closed';
   if (s === 'completed') return 'badge-green';
   if (s === 'reported to') return 'badge-blue';
+  if (s === 'in progress') return 'badge-investigating';
+  if (s === 'escalated') return 'badge-escalated';
+  if (s === 'client responded') return 'badge-green';
+  if (s === 'notified') return 'badge-blue';
+  if (s === 'resolved') return 'badge-green';
   return 'badge-blue';
 }
 
@@ -30182,21 +30223,22 @@ async function populateLiveTriage(append) {
         var isP1 = t.priorityShort === 'P1';
         var isCanceled = t.status === 'Canceled';
         var rowStyle = isP1 ? 'background:rgba(239,68,68,0.04);cursor:pointer;' : (isCanceled ? 'opacity:0.65;cursor:pointer;' : 'cursor:pointer;');
+        var qBadge = jiraQueueBadge(t.queueOrigin || 'General');
         
         return '<tr onclick="openInvestigation(\'' + t.key + '\')" style="' + rowStyle + '">' +
-          '<td><input type="checkbox" class="tq-cb" onclick="event.stopPropagation();"></td>' +
+          '<td><input type="checkbox" class="tq-cb" data-key="' + t.key + '" onclick="event.stopPropagation();updateBulkCount();"></td>' +
           '<td><span class="mono" style="color:var(--cyan);font-size:11px;">' + t.key + '</span></td>' +
           '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
           '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
           '<td><span style="font-size:10px;color:var(--text-muted);">—</span></td>' +
           '<td style="font-size:11px;">' + t.org + '</td>' +
-          '<td style="font-size:11px;">Jira</td>' +
+          '<td>' + qBadge + '</td>' +
           '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
           '<td style="font-size:11px;color:' + (t.assignee === 'Unassigned' ? 'var(--text-muted)' : 'var(--cyan)') + ';">' + t.assignee + '</td>' +
           '<td style="font-family:var(--font-mono);font-size:10px;white-space:nowrap;"><div style="color:var(--text-primary);">' + jiraFormatDT(t.created) + '</div><div style="color:var(--text-muted);font-size:9px;">' + jiraTimeAgo(t.created) + '</div></td>' +
           '<td><div style="display:flex;gap:4px;">' +
-            '<button class="btn btn-xs btn-secondary" onclick="event.stopPropagation();">Assign</button>' +
-            '<button class="btn btn-xs btn-amber" onclick="event.stopPropagation();">Escalate</button>' +
+            '<button class="btn btn-xs btn-secondary" onclick="event.stopPropagation();openAssignModal(\'' + t.key + '\',\'' + (t.assigneeId || '') + '\');">Assign</button>' +
+            '<button class="btn btn-xs btn-amber" onclick="event.stopPropagation();openEscalateModal(\'' + t.key + '\',\'' + t.status + '\');">Escalate</button>' +
           '</div></td>' +
         '</tr>';
       }).join('');
@@ -30246,6 +30288,7 @@ function setupTriageFilters() {
   var statusEl = document.getElementById('tqFilterStatus');
   var analystEl = document.getElementById('tqFilterAnalyst');
   var searchEl = document.getElementById('tqFilterSearch');
+  var queueEl = document.getElementById('tqFilterSource');
 
   // Replace options with real values
   if (prioEl) {
@@ -30253,16 +30296,20 @@ function setupTriageFilters() {
     prioEl.onchange = function() { populateLiveTriage(); };
   }
   if (orgEl) {
-    orgEl.innerHTML = '<option>All Organizations</option><option>Dacta Global</option><option>SPMT</option><option>Foxwood</option><option>PT Pelindo Multi Terminal</option>';
+    orgEl.innerHTML = '<option>All Organizations</option><option>Dacta Global</option><option>SPMT</option><option>Foxwood</option><option>Naga World</option><option>DG_Demo Client</option><option>PT Pelindo Multi Terminal</option>';
     orgEl.onchange = function() { populateLiveTriage(); };
   }
   if (statusEl) {
-    statusEl.innerHTML = '<option>All Statuses</option><option>Open</option><option>Closed</option><option>Canceled</option><option>Completed</option><option>Reported To</option>';
+    statusEl.innerHTML = '<option>All Statuses</option><option>Open</option><option>In Progress</option><option>Reported To</option><option>Escalated</option><option>Client Responded</option><option>Closed</option><option>Completed</option><option>Canceled</option>';
     statusEl.onchange = function() { populateLiveTriage(); };
   }
   if (analystEl) {
     analystEl.innerHTML = '<option>All Analysts</option><option>Christian Miguel Gepanaga</option><option>Wendy Melyana</option><option>Marcfrance Limasin</option><option>Unassigned</option>';
     analystEl.onchange = function() { populateLiveTriage(); };
+  }
+  if (queueEl) {
+    queueEl.innerHTML = '<option>All Queues</option><option>Elastic Alerts</option><option>Incidents</option><option>Client Responded</option><option>Escalated</option><option>In Progress</option><option>Demo Client</option><option>General</option>';
+    queueEl.onchange = function() { _triageQueueFilter = (queueEl.value === 'All Queues') ? '' : queueEl.value; rerenderTriageTable(); };
   }
   if (searchEl) {
     var searchTimeout;
@@ -30271,8 +30318,230 @@ function setupTriageFilters() {
       searchTimeout = setTimeout(function() { populateLiveTriage(); }, 500);
     };
   }
+
+  // Setup bulk actions
+  var bulkEl = document.querySelector('.tq-bulk-select');
+  if (bulkEl) {
+    bulkEl.innerHTML = '<option>Bulk Actions</option><option value="assign">Assign Selected</option><option value="escalate">Escalate Selected</option><option value="close">Close Selected</option>';
+    bulkEl.onchange = function() {
+      var action = bulkEl.value;
+      if (!action || action === 'Bulk Actions') return;
+      var keys = getSelectedTicketKeys();
+      if (keys.length === 0) { showToast('No tickets selected', 'warn'); bulkEl.value = 'Bulk Actions'; return; }
+      if (action === 'assign') openBulkAssignModal(keys);
+      else if (action === 'escalate') bulkEscalate(keys);
+      else if (action === 'close') bulkClose(keys);
+      bulkEl.value = 'Bulk Actions';
+    };
+  }
+
+  // Setup Export button
+  var exportBtn = document.querySelector('#page-triage .page-actions .btn-secondary');
+  if (exportBtn) {
+    exportBtn.onclick = function() { exportTriageCSV(); };
+  }
 }
 
+
+// ── Queue badge helper ──
+var _triageQueueFilter = '';
+function jiraQueueBadge(queue) {
+  var colors = {
+    'Elastic Alerts': 'background:rgba(0,212,255,0.1);color:#00d4ff;border-color:rgba(0,212,255,0.25);',
+    'Incidents': 'background:rgba(239,68,68,0.1);color:#ef4444;border-color:rgba(239,68,68,0.25);',
+    'Client Responded': 'background:rgba(16,185,129,0.1);color:#10b981;border-color:rgba(16,185,129,0.25);',
+    'Escalated': 'background:rgba(245,158,11,0.1);color:#f59e0b;border-color:rgba(245,158,11,0.25);',
+    'In Progress': 'background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.25);',
+    'Demo Client': 'background:rgba(168,85,247,0.1);color:#a855f7;border-color:rgba(168,85,247,0.25);',
+    'General': 'background:rgba(148,163,184,0.1);color:#94a3b8;border-color:rgba(148,163,184,0.25);'
+  };
+  var style = colors[queue] || colors['General'];
+  return '<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid;white-space:nowrap;letter-spacing:0.3px;' + style + '">' + queue + '</span>';
+}
+
+// ── Re-render with client-side queue filter ──
+function rerenderTriageTable() {
+  if (!_triageCurrentIssues || !_triageCurrentIssues.length) return;
+  var triagePage = document.getElementById('page-triage');
+  if (!triagePage) return;
+  var tbody = triagePage.querySelector('table tbody');
+  if (!tbody) return;
+  var filtered = _triageCurrentIssues;
+  if (_triageQueueFilter) filtered = _triageCurrentIssues.filter(function(t) { return t.queueOrigin === _triageQueueFilter; });
+  var rowsHTML = filtered.map(function(t) {
+    var isP1 = t.priorityShort === 'P1';
+    var isCanceled = t.status === 'Canceled';
+    var rowStyle = isP1 ? 'background:rgba(239,68,68,0.04);cursor:pointer;' : (isCanceled ? 'opacity:0.65;cursor:pointer;' : 'cursor:pointer;');
+    var qBadge = jiraQueueBadge(t.queueOrigin || 'General');
+    return '<tr onclick="openInvestigation(\'' + t.key + '\')" style="' + rowStyle + '">' +
+      '<td><input type="checkbox" class="tq-cb" data-key="' + t.key + '" onclick="event.stopPropagation();updateBulkCount();"></td>' +
+      '<td><span class="mono" style="color:var(--cyan);font-size:11px;">' + t.key + '</span></td>' +
+      '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
+      '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
+      '<td><span style="font-size:10px;color:var(--text-muted);">&mdash;</span></td>' +
+      '<td style="font-size:11px;">' + t.org + '</td>' +
+      '<td>' + qBadge + '</td>' +
+      '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
+      '<td style="font-size:11px;color:' + (t.assignee === 'Unassigned' ? 'var(--text-muted)' : 'var(--cyan)') + ';">' + t.assignee + '</td>' +
+      '<td style="font-family:var(--font-mono);font-size:10px;white-space:nowrap;"><div style="color:var(--text-primary);">' + jiraFormatDT(t.created) + '</div><div style="color:var(--text-muted);font-size:9px;">' + jiraTimeAgo(t.created) + '</div></td>' +
+      '<td><div style="display:flex;gap:4px;"><button class="btn btn-xs btn-secondary" onclick="event.stopPropagation();openAssignModal(\'' + t.key + '\',\'' + (t.assigneeId||'') + '\');">Assign</button><button class="btn btn-xs btn-amber" onclick="event.stopPropagation();openEscalateModal(\'' + t.key + '\',\'' + t.status + '\');">Escalate</button></div></td>' +
+    '</tr>';
+  }).join('');
+  tbody.innerHTML = rowsHTML;
+  if (filtered.length === 0) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div></td></tr>';
+  var tqSum = triagePage.querySelector('.tq-summary');
+  if (tqSum) {
+    var openC = filtered.filter(function(t) { return t.status === 'Open'; }).length;
+    var closedC = filtered.filter(function(t) { return t.status === 'Closed' || t.status === 'Completed'; }).length;
+    tqSum.innerHTML = '<span>Showing <strong style="color:var(--cyan);">' + filtered.length + '</strong> of <strong>' + _triageCurrentIssues.length + '</strong></span><span class="sep">·</span><span><strong style="color:var(--amber);">' + openC + '</strong> open</span><span class="sep">·</span><span><strong style="color:var(--green);">' + closedC + '</strong> resolved</span>';
+  }
+}
+
+// ── Ticket selection helpers ──
+function getSelectedTicketKeys() {
+  var keys = [];
+  document.querySelectorAll('#page-triage .tq-cb[data-key]:checked').forEach(function(cb) { keys.push(cb.dataset.key); });
+  return keys;
+}
+function updateBulkCount() {
+  var keys = getSelectedTicketKeys();
+  var bulkEl = document.querySelector('.tq-bulk-select');
+  if (bulkEl) { var o = bulkEl.querySelector('option'); if (o) o.textContent = keys.length > 0 ? 'Bulk Actions (' + keys.length + ')' : 'Bulk Actions'; }
+}
+
+// ── ASSIGN MODAL ──
+var _assignUsers = null;
+async function openAssignModal(ticketKey, currentAssigneeId) {
+  if (!_assignUsers) {
+    showToast('Loading team members...', 'info');
+    try { _assignUsers = await DactaJira.fetchAssignableUsers(); } catch(e) { showToast('Failed to load users', 'error'); return; }
+  }
+  var ov = document.createElement('div');
+  ov.id = 'assignModalOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  var userHtml = (_assignUsers || []).map(function(u) {
+    var sel = u.accountId === currentAssigneeId ? 'background:rgba(0,212,255,0.15);' : '';
+    var dn = u.displayName.replace(/'/g,"\\'");
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;' + sel + '" onmouseover="this.style.background=\'rgba(0,212,255,0.08)\'" onmouseout="this.style.background=\'' + sel + '\'" onclick="doAssign(\'' + ticketKey + '\',\'' + u.accountId + '\',\'' + dn + '\')">' +
+      '<div style="width:28px;height:28px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cyan);font-weight:600;">' + u.displayName.charAt(0) + '</div>' +
+      '<div style="font-size:12px;color:var(--text-primary);">' + u.displayName + '</div></div>';
+  }).join('');
+  ov.innerHTML = '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;width:380px;max-height:500px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"><div style="font-size:14px;font-weight:600;color:var(--text-primary);">Assign ' + ticketKey + '</div><div style="cursor:pointer;color:var(--text-muted);font-size:18px;" onclick="this.closest(\'#assignModalOverlay\').remove()">&times;</div></div>' +
+    '<div style="padding:12px 14px;max-height:380px;overflow-y:auto;">' +
+    '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;" onmouseover="this.style.background=\'rgba(239,68,68,0.08)\'" onmouseout="this.style.background=\'\'" onclick="doAssign(\'' + ticketKey + '\',null,\'Unassigned\')">' +
+    '<div style="width:28px;height:28px;border-radius:50%;background:rgba(239,68,68,0.1);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--red-bright);">✕</div><div style="font-size:12px;color:var(--text-muted);">Unassign</div></div>' +
+    userHtml + '</div></div>';
+  document.body.appendChild(ov);
+}
+async function doAssign(ticketKey, accountId, name) {
+  var ov = document.getElementById('assignModalOverlay'); if (ov) ov.remove();
+  showToast('Assigning ' + ticketKey + ' to ' + name + '...', 'info');
+  try {
+    await DactaJira.assignIssue(ticketKey, accountId);
+    showToast(ticketKey + ' assigned to ' + name, 'success');
+    var issue = _triageCurrentIssues.find(function(t) { return t.key === ticketKey; });
+    if (issue) { issue.assignee = name; issue.assigneeId = accountId; }
+    rerenderTriageTable();
+  } catch(e) { showToast('Failed to assign: ' + e.message, 'error'); }
+}
+
+// ── ESCALATE / TRANSITION MODAL ──
+async function openEscalateModal(ticketKey, currentStatus) {
+  showToast('Loading transitions...', 'info');
+  try {
+    var data = await DactaJira.fetchTransitions(ticketKey);
+    var transitions = data.transitions || [];
+    var ov = document.createElement('div');
+    ov.id = 'escalateModalOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+    ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+    var btns = transitions.map(function(tr) {
+      var toName = tr.to ? tr.to.name : tr.name;
+      var isEsc = tr.name.toLowerCase().includes('escalat');
+      var isCls = tr.name.toLowerCase().includes('clos') || tr.name.toLowerCase().includes('complet') || tr.name.toLowerCase().includes('resolv');
+      var cls = isEsc ? 'btn-amber' : (isCls ? 'btn-primary' : 'btn-secondary');
+      return '<button class="btn btn-sm ' + cls + '" style="flex:1;" onclick="doTransition(\'' + ticketKey + '\',\'' + tr.id + '\',\'' + toName.replace(/'/g,"\\'") + '\')">' + tr.name + ' → ' + toName + '</button>';
+    }).join('');
+    ov.innerHTML = '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+      '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"><div style="font-size:14px;font-weight:600;color:var(--text-primary);">Transition ' + ticketKey + '</div><div style="cursor:pointer;color:var(--text-muted);font-size:18px;" onclick="this.closest(\'#escalateModalOverlay\').remove()">&times;</div></div>' +
+      '<div style="padding:14px 20px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Current: <strong style="color:var(--text-primary);">' + currentStatus + '</strong></div><div style="display:flex;flex-direction:column;gap:8px;">' + btns + '</div></div>' +
+      '<div style="padding:10px 20px 16px;border-top:1px solid var(--border);margin-top:8px;"><div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Add comment (optional):</div>' +
+      '<textarea id="escalateComment" placeholder="Notes..." style="width:100%;height:60px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text-primary);font-size:11px;font-family:var(--font-mono);resize:none;"></textarea></div></div>';
+    document.body.appendChild(ov);
+  } catch(e) { showToast('Failed: ' + e.message, 'error'); }
+}
+async function doTransition(ticketKey, transitionId, toName) {
+  var cEl = document.getElementById('escalateComment');
+  var comment = cEl ? cEl.value.trim() : '';
+  var ov = document.getElementById('escalateModalOverlay'); if (ov) ov.remove();
+  showToast('Moving ' + ticketKey + ' to ' + toName + '...', 'info');
+  try {
+    await DactaJira.transitionIssue(ticketKey, transitionId);
+    if (comment) await DactaJira.addComment(ticketKey, comment);
+    showToast(ticketKey + ' → ' + toName, 'success');
+    var issue = _triageCurrentIssues.find(function(t) { return t.key === ticketKey; });
+    if (issue) issue.status = toName;
+    rerenderTriageTable();
+  } catch(e) { showToast('Failed: ' + e.message, 'error'); }
+}
+
+// ── BULK OPERATIONS ──
+async function openBulkAssignModal(keys) {
+  if (!_assignUsers) { try { _assignUsers = await DactaJira.fetchAssignableUsers(); } catch(e) { showToast('Failed to load users','error'); return; } }
+  var ov = document.createElement('div');
+  ov.id = 'assignModalOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  var uHtml = (_assignUsers||[]).map(function(u) {
+    var dn = u.displayName.replace(/'/g,"\\'");
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;" onmouseover="this.style.background=\'rgba(0,212,255,0.08)\'" onmouseout="this.style.background=\'\'" onclick="doBulkAssign(' + JSON.stringify(keys) + ',\'' + u.accountId + '\',\'' + dn + '\')">' +
+      '<div style="width:28px;height:28px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cyan);font-weight:600;">' + u.displayName.charAt(0) + '</div>' +
+      '<div style="font-size:12px;color:var(--text-primary);">' + u.displayName + '</div></div>';
+  }).join('');
+  ov.innerHTML = '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;width:380px;max-height:500px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="padding:16px 20px;border-bottom:1px solid var(--border);"><div style="font-size:14px;font-weight:600;color:var(--text-primary);">Assign ' + keys.length + ' tickets</div><div style="font-size:10px;color:var(--text-muted);margin-top:4px;">' + keys.join(', ') + '</div></div>' +
+    '<div style="padding:12px 14px;max-height:380px;overflow-y:auto;">' + uHtml + '</div></div>';
+  document.body.appendChild(ov);
+}
+async function doBulkAssign(keys, accountId, name) {
+  var ov = document.getElementById('assignModalOverlay'); if (ov) ov.remove();
+  showToast('Assigning ' + keys.length + ' tickets to ' + name + '...', 'info');
+  var ok=0, fail=0;
+  for (var i=0;i<keys.length;i++) { try { await DactaJira.assignIssue(keys[i],accountId); var is=_triageCurrentIssues.find(function(t){return t.key===keys[i];}); if(is){is.assignee=name;is.assigneeId=accountId;} ok++; } catch(e){fail++;} }
+  showToast(ok+' assigned'+(fail?', '+fail+' failed':''), fail?'warn':'success');
+  rerenderTriageTable();
+}
+async function bulkEscalate(keys) {
+  showToast('Escalating '+keys.length+' tickets...','info');
+  var ok=0,fail=0;
+  for(var i=0;i<keys.length;i++){try{var d=await DactaJira.fetchTransitions(keys[i]);var esc=(d.transitions||[]).find(function(tr){return tr.name.toLowerCase().includes('escalat');});if(esc){await DactaJira.transitionIssue(keys[i],esc.id);var is=_triageCurrentIssues.find(function(t){return t.key===keys[i];});if(is)is.status='Escalated';ok++;}else{fail++;}}catch(e){fail++;}}
+  showToast(ok+' escalated'+(fail?', '+fail+' failed':''),fail?'warn':'success');
+  rerenderTriageTable();
+}
+async function bulkClose(keys) {
+  showToast('Closing '+keys.length+' tickets...','info');
+  var ok=0,fail=0;
+  for(var i=0;i<keys.length;i++){try{var d=await DactaJira.fetchTransitions(keys[i]);var cl=(d.transitions||[]).find(function(tr){var n=tr.name.toLowerCase();return n.includes('clos')||n.includes('complet');});if(cl){await DactaJira.transitionIssue(keys[i],cl.id);var is=_triageCurrentIssues.find(function(t){return t.key===keys[i];});if(is)is.status=cl.to?cl.to.name:'Closed';ok++;}else{fail++;}}catch(e){fail++;}}
+  showToast(ok+' closed'+(fail?', '+fail+' failed':''),fail?'warn':'success');
+  rerenderTriageTable();
+}
+
+// ── EXPORT CSV ──
+function exportTriageCSV() {
+  var data = _triageCurrentIssues || [];
+  if (_triageQueueFilter) data = data.filter(function(t){return t.queueOrigin===_triageQueueFilter;});
+  if (data.length === 0) { showToast('No data to export','warn'); return; }
+  var headers = ['ID','Priority','Summary','Organization','Queue','Status','Assignee','Created','Updated'];
+  var rows = data.map(function(t){ return [t.key,t.priority,'"'+(t.summary||'').replace(/"/g,'""')+'"','"'+t.org+'"',t.queueOrigin||'General',t.status,'"'+t.assignee+'"',t.created,t.updated].join(','); });
+  var csv = headers.join(',')+'\n'+rows.join('\n');
+  var blob = new Blob([csv],{type:'text/csv'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href=url; a.download='dacta-triage-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('Exported '+data.length+' tickets','success');
+}
 
 // ── INVESTIGATION LIVE DATA ─────────────────────────────────
 
