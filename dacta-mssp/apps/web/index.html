@@ -9423,7 +9423,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
         <span>All Organizations</span>
         <span>▾</span>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid var(--border-subtle);">
+      <div class="demo-toggle-wrap" style="display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid var(--border-subtle);">
         <span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">Demo</span>
         <label style="position:relative;width:32px;height:18px;cursor:pointer;">
           <input type="checkbox" id="demoModeToggle" checked style="display:none;">
@@ -9431,6 +9431,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           <span style="position:absolute;top:2px;left:16px;width:14px;height:14px;background:#00d4ff;border-radius:50%;transition:0.2s;box-shadow:0 0 6px rgba(0,212,255,0.5);" id="demoKnob"></span>
         </label>
       </div>
+      <div class="prod-badge">PRODUCTION</div>
       <div class="topbar-right">
         <div class="live-badge">
           <div class="live-dot"></div>
@@ -17686,6 +17687,56 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   border-radius: 4px;
   margin-left: auto;
 }
+
+/* ============================================================
+   PRODUCTION MODE — Zero State  
+   ============================================================ */
+body.mode-production .demo-toggle-wrap { display: none !important; }
+
+.prod-badge {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.prod-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+  animation: livePulse 2s ease-in-out infinite;
+}
+body.mode-production .prod-badge { display: flex; }
+
+.prod-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  gap: 8px;
+}
+.prod-empty-state .prod-empty-icon {
+  font-size: 24px;
+  opacity: 0.3;
+}
+.prod-empty-state .prod-empty-text {
+  letter-spacing: 0.05em;
+}
 </style>
 
 <!-- ============================================================
@@ -25146,6 +25197,7 @@ const mitreStatus = {
 // ============================================================
 
 function renderTriage() {
+  if (window._dactaMode === 'production') return;
   const tbody = document.getElementById('triageTableBody');
   if (!tbody) return;
   tbody.innerHTML = triageData.map(t => `
@@ -25170,6 +25222,7 @@ function renderTriage() {
 }
 
 function renderRules() {
+  if (window._dactaMode === 'production') return;
   const tbody = document.getElementById('drRepoTableBody');
   if (!tbody) return;
   const sevColor = { 'Critical':'red', 'High':'amber', 'Medium':'blue', 'Low':'gray', 'Informational':'gray' };
@@ -25259,6 +25312,7 @@ function renderMitreIcs() {
 }
 
 function renderLogSources() {
+  if (window._dactaMode === 'production') return;
   const tbody = document.getElementById('logSourcesBody');
   if (!tbody) return;
   const statusLabel = { 'green': 'Healthy', 'amber': 'Degraded', 'red': 'Silent' };
@@ -25279,6 +25333,7 @@ function renderLogSources() {
 }
 
 function renderAssets() {
+  if (window._dactaMode === 'production') return;
   const tbody = document.getElementById('assetsTableBody');
   if (!tbody) return;
   tbody.innerHTML = assetsData.map(a => `
@@ -25304,6 +25359,7 @@ function renderAssets() {
 }
 
 function renderIntegrations() {
+  if (window._dactaMode === 'production') return;
   const grid = document.getElementById('integrationsGrid');
   if (!grid) return;
   const catLabels = { Core: 'Core Platform — SIEM, ITSM & Threat Intel', Comms: 'Communication & Notifications', Workflow: 'Workflow & Operations' };
@@ -25341,6 +25397,7 @@ function renderIntegrations() {
 }
 
 function renderAuditLog() {
+  if (window._dactaMode === 'production') return;
   const tbody = document.getElementById('auditLogBody');
   if (!tbody) return;
   const typeColors = { 'AI': 'purple', 'Response': 'red', 'Ticket': 'cyan', 'Config': 'amber', 'Auth': 'green' };
@@ -25363,6 +25420,7 @@ function renderAuditLog() {
 let charts = {};
 
 function initDashboardCharts() {
+  if (window._dactaMode === 'production') return;
   const ctx1 = document.getElementById('alertVolumeChart');
   if (!ctx1 || charts.alertVolume) return;
   const hours = Array.from({length: 23}, (_, i) => `${String(i).padStart(2,'0')}:00`);
@@ -25421,6 +25479,7 @@ function initDashboardCharts() {
 //  PRIVACY ENGINE CHARTS
 // ============================================================
 function initPrivacyCharts() {
+  if (window._dactaMode === 'production') return;
   const ctx = document.getElementById('privTokenChart');
   if (!ctx || charts.privToken) return;
   charts.privToken = new Chart(ctx, {
@@ -25467,6 +25526,7 @@ function initPrivacyCharts() {
 }
 
 function initAICharts() {
+  if (window._dactaMode === 'production') return;
   const ctx = document.getElementById('aiProviderChart');
   if (!ctx || charts.aiProvider) return;
   charts.aiProvider = new Chart(ctx, {
@@ -25617,16 +25677,18 @@ function init() {
   else navigate('dashboard');
 
   // Animate dashboard counters after short delay
-  setTimeout(() => {
-    const mttd = document.getElementById('counter-mttd');
-    const mttr = document.getElementById('counter-mttr');
-    const p1 = document.getElementById('counter-p1');
-    const compliance = document.getElementById('counter-compliance');
-    if (mttd) animateCounter(mttd, 4.2, '', true);
-    if (mttr) animateCounter(mttr, 18, '', false);
-    if (p1) animateCounter(p1, 6, '', false);
-    if (compliance) animateCounter(compliance, 98.4, '', true);
-  }, 400);
+  if (window._dactaMode !== 'production') {
+    setTimeout(() => {
+      const mttd = document.getElementById('counter-mttd');
+      const mttr = document.getElementById('counter-mttr');
+      const p1 = document.getElementById('counter-p1');
+      const compliance = document.getElementById('counter-compliance');
+      if (mttd) animateCounter(mttd, 4.2, '', true);
+      if (mttr) animateCounter(mttr, 18, '', false);
+      if (p1) animateCounter(p1, 6, '', false);
+      if (compliance) animateCounter(compliance, 98.4, '', true);
+    }, 400);
+  }
 
   // Init dashboard charts immediately
   setTimeout(initDashboardCharts, 100);
@@ -25645,6 +25707,7 @@ function init() {
     if (!_initCalled) {
       _initCalled = true;
       init();
+      setTimeout(applyProductionMode, 600);
     }
   }
 
@@ -25684,6 +25747,10 @@ function init() {
     function showApp(user) {
       setTopbarUser(user);
       if (overlay) overlay.style.display = 'none';
+      window._dactaMode = (user.email === 'admin@dacta.sg') ? 'production' : 'demo';
+      if (window._dactaMode === 'production') {
+        document.body.classList.add('mode-production');
+      }
       safeInit();
     }
     function showLogin() {
@@ -25815,6 +25882,93 @@ if (demoToggle) {
   // Initialize position (checked by default)
   var knob = document.getElementById('demoKnob');
   if (knob) knob.style.left = '16px';
+}
+
+// ============================================================
+//  PRODUCTION MODE — Zero all demo data
+// ============================================================
+function applyProductionMode() {
+  if (window._dactaMode !== 'production') return;
+  
+  document.body.classList.add('mode-production');
+  
+  // Dashboard KPI counters
+  var counterIds = ['counter-mttd','counter-mttr','counter-p1','counter-compliance'];
+  counterIds.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '—';
+  });
+  
+  // Command Center metric cards (Events Ingestion, Data Ingestion, etc.)
+  document.querySelectorAll('.cc-metric-value').forEach(function(el) { el.textContent = '0'; });
+  
+  // Big animated counters (ALERTS, INCIDENTS)
+  document.querySelectorAll('.cc-count-value, .cc-big-count').forEach(function(el) { el.textContent = '0'; });
+  
+  // SLA value
+  document.querySelectorAll('.sla-val').forEach(function(el) {
+    el.innerHTML = '—<span style="font-size:12px;color:var(--text-muted);">%</span>';
+  });
+  
+  // Notification badge
+  var notifBadge = document.querySelector('.notif-badge');
+  if (notifBadge) notifBadge.textContent = '0';
+  
+  // Triage queue header stats — zero any numbers
+  document.querySelectorAll('.triage-stat-value, .triage-kpi-value, .kpi-value').forEach(function(el) {
+    if (/\d/.test(el.textContent)) el.textContent = '0';
+  });
+  
+  // Dashboard ticket feed / open tickets list — replace with empty state
+  document.querySelectorAll('.ticket-feed, .open-tickets-list').forEach(function(el) {
+    el.innerHTML = '<div class="prod-empty-state"><div class="prod-empty-icon">📡</div><div class="prod-empty-text">Awaiting Jira integration</div></div>';
+  });
+  
+  // Individual ticket rows in dashboard
+  document.querySelectorAll('.ticket-row').forEach(function(el) { el.remove(); });
+  
+  // Triage table — clear rows, show empty state
+  document.querySelectorAll('#page-triage table tbody, .triage-table tbody').forEach(function(el) {
+    el.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:60px;color:var(--text-muted);font-size:12px;font-family:var(--font-mono);">Awaiting Jira data source connection</td></tr>';
+  });
+  
+  // Recent alerts feed on dashboard right panel
+  document.querySelectorAll('.alert-feed, .recent-alerts, .feed-list').forEach(function(el) {
+    el.innerHTML = '<div class="prod-empty-state"><div class="prod-empty-icon">🔇</div><div class="prod-empty-text">No active alerts</div></div>';
+  });
+  
+  // Chart canvases — hide and show placeholder
+  document.querySelectorAll('.chart-container').forEach(function(container) {
+    var canvas = container.querySelector('canvas');
+    if (canvas) canvas.style.display = 'none';
+    container.style.position = 'relative';
+    var overlay = document.createElement('div');
+    overlay.className = 'prod-empty-state';
+    overlay.style.position = 'absolute';
+    overlay.style.inset = '0';
+    overlay.innerHTML = '<div class="prod-empty-text">Awaiting data source</div>';
+    container.appendChild(overlay);
+  });
+  
+  // Heatmap container
+  document.querySelectorAll('.cc-heatmap-container').forEach(function(container) {
+    var canvas = container.querySelector('canvas');
+    if (canvas) canvas.style.display = 'none';
+    var overlay = document.createElement('div');
+    overlay.className = 'prod-empty-state';
+    overlay.innerHTML = '<div class="prod-empty-text">Awaiting data source</div>';
+    container.appendChild(overlay);
+  });
+  
+  // Geo map container
+  document.querySelectorAll('.cc-geomap-container, .geomap-container').forEach(function(container) {
+    var canvas = container.querySelector('canvas');
+    if (canvas) canvas.style.display = 'none';
+    var overlay = document.createElement('div');
+    overlay.className = 'prod-empty-state';
+    overlay.innerHTML = '<div class="prod-empty-icon">🌐</div><div class="prod-empty-text">Awaiting geo data</div>';
+    container.appendChild(overlay);
+  });
 }
 
 // Handle popstate for hash routing
@@ -26731,6 +26885,7 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
   };
 }
 function initCommandCenter() {
+  if (window._dactaMode === 'production') return;
   var canvas = document.getElementById('commandCenterCanvas');
   if (!canvas) return;
   var ctx = canvas.getContext('2d');
@@ -27667,6 +27822,7 @@ function initCommandCenter() {
 //  HEAT MAP
 // ============================================================
 function initHeatMap() {
+  if (window._dactaMode === 'production') return;
   var canvas = document.getElementById('heatmapCanvas');
   if (!canvas) return;
   var container = canvas.parentElement;
@@ -28011,6 +28167,7 @@ var DOT_MAP_REGION = [
 ];
 
 function initGeoMapCanvas(canvasId, tooltipId, tipNameId, tipInfoId) {
+  if (window._dactaMode === 'production') return;
   var canvas = document.getElementById(canvasId);
   if (!canvas) return;
   var tip     = document.getElementById(tooltipId);
@@ -28789,6 +28946,7 @@ function wr2escapeHtml(s) {
 
 // --- Init War Room v2 ---
 function initWarRoom2() {
+  if (window._dactaMode === 'production') return;
   wr2BuildMitreGrid('wr2MitreGrid003');
   wr2TickTimers();
   if (!window._wr2TimerSet) {
