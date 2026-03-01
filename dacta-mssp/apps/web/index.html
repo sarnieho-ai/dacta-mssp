@@ -9813,7 +9813,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           <span class="filter-label">Filter:</span>
           <select id="tqFilterPriority" class="filter-select"><option>All Priorities</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select>
           <select id="tqFilterOrg" class="filter-select"><option>All Organizations</option><option>Dacta Global</option><option>SPMT</option><option>Naga World</option><option>ADV Partners</option></select>
-          <select id="tqFilterSource" class="filter-select"><option>All Queues</option><option>Elastic Alerts</option><option>Incidents</option><option>Client Responded</option><option>Escalated</option><option>In Progress</option><option>Demo Client</option><option>General</option></select>
+          <select id="tqFilterSource" class="filter-select"><option>All Queues</option><option>Elastic Alerts</option><option>SOC Alerts</option><option>Client Responded</option><option>Escalated</option><option>In Progress</option><option>Demo Client</option><option>General</option></select>
           <select id="tqFilterStatus" class="filter-select"><option>All Statuses</option><option>Open</option><option>Investigating</option><option>Escalated</option><option>Closed</option></select>
           <select id="tqFilterAnalyst" class="filter-select"><option>All Analysts</option><option>John Lim</option><option>Sarah Tan</option><option>Marcus Wong</option><option>Unassigned</option></select>
           <select class="filter-select"><option>AI Confidence: All</option><option>High (&gt;80%)</option><option>Medium (50–80%)</option><option>Low (&lt;50%)</option></select>
@@ -30308,7 +30308,7 @@ function setupTriageFilters() {
     analystEl.onchange = function() { populateLiveTriage(); };
   }
   if (queueEl) {
-    queueEl.innerHTML = '<option>All Queues</option><option>Elastic Alerts</option><option>Incidents</option><option>Client Responded</option><option>Escalated</option><option>In Progress</option><option>Demo Client</option><option>General</option>';
+    queueEl.innerHTML = '<option>All Queues</option><option>Elastic Alerts</option><option>SOC Alerts</option><option>Client Responded</option><option>Escalated</option><option>In Progress</option><option>Demo Client</option><option>General</option>';
     queueEl.onchange = function() { _triageQueueFilter = (queueEl.value === 'All Queues') ? '' : queueEl.value; rerenderTriageTable(); };
   }
   if (searchEl) {
@@ -30348,7 +30348,7 @@ var _triageQueueFilter = '';
 function jiraQueueBadge(queue) {
   var colors = {
     'Elastic Alerts': 'background:rgba(0,212,255,0.1);color:#00d4ff;border-color:rgba(0,212,255,0.25);',
-    'Incidents': 'background:rgba(239,68,68,0.1);color:#ef4444;border-color:rgba(239,68,68,0.25);',
+    'SOC Alerts': 'background:rgba(239,68,68,0.1);color:#ef4444;border-color:rgba(239,68,68,0.25);',
     'Client Responded': 'background:rgba(16,185,129,0.1);color:#10b981;border-color:rgba(16,185,129,0.25);',
     'Escalated': 'background:rgba(245,158,11,0.1);color:#f59e0b;border-color:rgba(245,158,11,0.25);',
     'In Progress': 'background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.25);',

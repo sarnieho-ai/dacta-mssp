@@ -271,10 +271,8 @@ function normalizeIssue(issue) {
   let queueOrigin = 'General';
   if (requestTypeName === 'Elastic Alerts' || requestTypeName === 'Elastic Alerts (DAC)') {
     queueOrigin = 'Elastic Alerts';
-  } else if (issueTypeName.includes('Incident') && !requestTypeName) {
-    queueOrigin = 'Incidents';
   } else if (issueTypeName.includes('Incident')) {
-    queueOrigin = 'Incidents';
+    queueOrigin = 'SOC Alerts';
   }
   // Overlay queue context from status / org
   if (statusName === 'Client Responded') queueOrigin = 'Client Responded';
