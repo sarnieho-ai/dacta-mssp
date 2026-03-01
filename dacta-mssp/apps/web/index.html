@@ -25909,89 +25909,357 @@ if (demoToggle) {
 }
 
 // ============================================================
-//  PRODUCTION MODE — Zero all demo data
+//  PRODUCTION MODE — Zero all demo data across all pages
+//  Prepares every page for live Jira data injection
 // ============================================================
 function applyProductionMode() {
   if (window._dactaMode !== 'production') return;
-  
   document.body.classList.add('mode-production');
-  
-  // Dashboard KPI counters
-  var counterIds = ['counter-mttd','counter-mttr','counter-p1','counter-compliance'];
-  counterIds.forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.textContent = '—';
+
+  // Helper: create a consistent empty-state box
+  function emptyState(icon, text) {
+    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;gap:10px;">' +
+      '<div style="font-size:28px;opacity:0.5;">' + icon + '</div>' +
+      '<div style="font-size:12px;font-family:var(--font-mono);color:var(--text-muted);letter-spacing:0.05em;">' + text + '</div>' +
+    '</div>';
+  }
+
+  // ────────────────────────────────────────────────
+  //  1. SOC DASHBOARD
+  // ────────────────────────────────────────────────
+
+  // KPI counters
+  ['counter-mttd','counter-mttr','counter-p1','counter-compliance'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.textContent = '—';
   });
-  
-  // Command Center metric cards (Events Ingestion, Data Ingestion, etc.)
+
+  // Command Center metric values
   document.querySelectorAll('.cc-metric-value').forEach(function(el) { el.textContent = '0'; });
-  
-  // Big animated counters (ALERTS, INCIDENTS)
+  document.querySelectorAll('.cc-metric-unit').forEach(function(el) { el.textContent = ''; });
   document.querySelectorAll('.cc-count-value, .cc-big-count').forEach(function(el) { el.textContent = '0'; });
-  
-  // SLA value
+
+  // Severity dots in metric card
+  document.querySelectorAll('.cc-severity-dots').forEach(function(el) {
+    el.innerHTML = '<span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">No incidents</span>';
+  });
+
+  // Prevented bar
+  document.querySelectorAll('.cc-prevented-fill').forEach(function(el) { el.style.width = '0%'; });
+
+  // Sparkline canvases — clear
+  ['sparkEventsIng','sparkDataIng'].forEach(function(id) {
+    var c = document.getElementById(id);
+    if (c && c.getContext) { var ctx = c.getContext('2d'); ctx.clearRect(0, 0, c.width, c.height); }
+  });
+
+  // Command Center canvas
+  var ccCanvas = document.getElementById('commandCenterCanvas');
+  if (ccCanvas && ccCanvas.getContext) { var ctx = ccCanvas.getContext('2d'); ctx.clearRect(0, 0, ccCanvas.width, ccCanvas.height); }
+
+  // Heatmap
+  document.querySelectorAll('.cc-heatmap-container').forEach(function(container) {
+    var canvas = container.querySelector('canvas'); if (canvas) canvas.style.display = 'none';
+    if (!container.querySelector('.prod-overlay')) {
+      var o = document.createElement('div'); o.className = 'prod-overlay';
+      o.innerHTML = emptyState('📊', 'Awaiting alert data');
+      o.style.cssText = 'position:relative;'; container.appendChild(o);
+    }
+  });
+
+  // Geo map
+  var geoCanvas = document.getElementById('geoMapCanvas');
+  if (geoCanvas) geoCanvas.style.display = 'none';
+  document.querySelectorAll('.cc-geomap-card').forEach(function(card) {
+    var wrap = card.querySelector('div[style*="position:relative"]');
+    if (wrap && !wrap.querySelector('.prod-overlay')) {
+      var o = document.createElement('div'); o.className = 'prod-overlay';
+      o.innerHTML = emptyState('🌐', 'Awaiting geo data');
+      wrap.appendChild(o);
+    }
+  });
+
+  // SLA strip values (Classic View)
   document.querySelectorAll('.sla-val').forEach(function(el) {
-    el.innerHTML = '—<span style="font-size:12px;color:var(--text-muted);">%</span>';
+    el.innerHTML = '—<span style="font-size:12px;color:var(--text-muted);"></span>';
   });
-  
+
+  // Summary cards in classic view
+  document.querySelectorAll('#page-dashboard .summary-card .sc-num, #page-dashboard .summary-cards .sc-num').forEach(function(el) {
+    el.textContent = '0';
+  });
+
+  // Classic view chart canvases
+  ['classicAlertChart','classicSourceChart'].forEach(function(id) {
+    var c = document.getElementById(id);
+    if (c) { c.style.display = 'none'; }
+  });
+  document.querySelectorAll('#classicView .card').forEach(function(card) {
+    var canvas = card.querySelector('canvas');
+    if (canvas && !card.querySelector('.prod-overlay')) {
+      var wrap = canvas.parentElement; wrap.style.position = 'relative';
+      var o = document.createElement('div'); o.className = 'prod-overlay';
+      o.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
+      o.innerHTML = '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">Awaiting data</div>';
+      wrap.appendChild(o);
+    }
+  });
+
+  // Status pills
+  document.querySelectorAll('.cc-status-pill').forEach(function(el) {
+    if (el.textContent.includes('ANALYST:')) el.textContent = 'ANALYST: —';
+  });
+
+  // Open Tickets card (bottom grid) — clear ticket rows, show empty
+  var ticketsCard = document.querySelector('.cc-tickets-card');
+  if (ticketsCard) {
+    var badge = ticketsCard.querySelector('.badge'); if (badge) badge.textContent = '0 OPEN';
+    // Remove all ticket rows
+    ticketsCard.querySelectorAll('.ticket-row').forEach(function(r) { r.remove(); });
+    // Add empty state
+    var existingEmpty = ticketsCard.querySelector('.prod-ticket-empty');
+    if (!existingEmpty) {
+      var d = document.createElement('div'); d.className = 'prod-ticket-empty';
+      d.innerHTML = emptyState('📡', 'Awaiting Jira ticket feed');
+      ticketsCard.appendChild(d);
+    }
+  }
+
+  // Right sidebar — By Organization
+  document.querySelectorAll('#page-dashboard .cc-right-sidebar .org-row').forEach(function(r) { r.remove(); });
+  document.querySelectorAll('#page-dashboard .cc-right-sidebar .card').forEach(function(card) {
+    if (!card.querySelector('.prod-sidebar-empty')) {
+      var d = document.createElement('div'); d.className = 'prod-sidebar-empty';
+      d.innerHTML = '<div style="text-align:center;padding:20px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Awaiting data</div>';
+      card.appendChild(d);
+    }
+  });
+
+  // Triage Labels
+  document.querySelectorAll('.labels-grid .label-chip .label-count').forEach(function(el) { el.textContent = '0'; });
+
   // Notification badge
-  var notifBadge = document.querySelector('.notif-badge');
-  if (notifBadge) notifBadge.textContent = '0';
-  
-  // Triage queue header stats — zero any numbers
-  document.querySelectorAll('.triage-stat-value, .triage-kpi-value, .kpi-value').forEach(function(el) {
-    if (/\d/.test(el.textContent)) el.textContent = '0';
-  });
-  
-  // Dashboard ticket feed / open tickets list — replace with empty state
-  document.querySelectorAll('.ticket-feed, .open-tickets-list').forEach(function(el) {
-    el.innerHTML = '<div class="prod-empty-state"><div class="prod-empty-icon">📡</div><div class="prod-empty-text">Awaiting Jira integration</div></div>';
-  });
-  
-  // Individual ticket rows in dashboard
-  document.querySelectorAll('.ticket-row').forEach(function(el) { el.remove(); });
-  
-  // Triage table — clear rows, show empty state
-  document.querySelectorAll('#page-triage table tbody, .triage-table tbody').forEach(function(el) {
-    el.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:60px;color:var(--text-muted);font-size:12px;font-family:var(--font-mono);">Awaiting Jira data source connection</td></tr>';
-  });
-  
-  // Recent alerts feed on dashboard right panel
-  document.querySelectorAll('.alert-feed, .recent-alerts, .feed-list').forEach(function(el) {
-    el.innerHTML = '<div class="prod-empty-state"><div class="prod-empty-icon">🔇</div><div class="prod-empty-text">No active alerts</div></div>';
-  });
-  
-  // Chart canvases — hide and show placeholder
+  var notifBadge = document.querySelector('.notif-badge'); if (notifBadge) notifBadge.textContent = '0';
+
+  // ────────────────────────────────────────────────
+  //  2. TRIAGE QUEUE
+  // ────────────────────────────────────────────────
+  var triagePage = document.getElementById('page-triage');
+  if (triagePage) {
+    // Subtitle
+    var tSub = triagePage.querySelector('.page-subtitle');
+    if (tSub) tSub.textContent = '0 tickets — awaiting Jira data source';
+
+    // Metric strip values
+    triagePage.querySelectorAll('.tq-metric-value').forEach(function(el) { el.textContent = '0'; });
+    triagePage.querySelectorAll('.tq-metric-sub').forEach(function(el) { el.textContent = '—'; });
+
+    // Table — clear body, show empty
+    triagePage.querySelectorAll('table tbody').forEach(function(tbody) {
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:80px 24px;">' +
+        emptyState('📋', 'No tickets in queue — connect Jira to populate') + '</td></tr>';
+    });
+
+    // Summary bar
+    var tqSum = triagePage.querySelector('.tq-summary');
+    if (tqSum) tqSum.innerHTML = '<span style="color:var(--text-muted);font-family:var(--font-mono);font-size:11px;">Showing 0 of 0 tickets</span>';
+  }
+
+  // ────────────────────────────────────────────────
+  //  3. INVESTIGATION WORKSPACE
+  // ────────────────────────────────────────────────
+  var invPage = document.getElementById('page-investigation');
+  if (invPage) {
+    // Subtitle
+    var iSub = invPage.querySelector('.page-subtitle');
+    if (iSub) iSub.textContent = 'Select a ticket from Triage to begin investigation';
+
+    // Hide all investigation content, show empty state
+    var invLayout = invPage.querySelector('.investigation-layout');
+    if (invLayout) {
+      invLayout.style.display = 'none';
+      if (!invPage.querySelector('.prod-inv-empty')) {
+        var d = document.createElement('div'); d.className = 'prod-inv-empty';
+        d.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:120px 24px;gap:16px;">' +
+          '<div style="font-size:48px;opacity:0.4;">🔍</div>' +
+          '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">No Active Investigation</div>' +
+          '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);max-width:400px;text-align:center;line-height:1.6;">Select a ticket from the Triage Queue to open the investigation workspace. AI-powered analysis will begin automatically once a ticket is loaded.</div>' +
+          '<div style="display:flex;gap:8px;margin-top:8px;">' +
+            '<button class="btn btn-primary btn-sm" onclick="navigate(\'triage\')">Go to Triage Queue</button>' +
+          '</div>' +
+        '</div>';
+        invLayout.parentNode.insertBefore(d, invLayout.nextSibling);
+      }
+    }
+
+    // Hide action buttons that reference specific tickets
+    invPage.querySelectorAll('.page-actions .btn').forEach(function(btn) {
+      if (btn.textContent.includes('Accept') || btn.textContent.includes('Override') || btn.textContent.includes('Copilot')) {
+        btn.style.display = 'none';
+      }
+    });
+  }
+
+  // ────────────────────────────────────────────────
+  //  4. RESPONSE CENTER
+  // ────────────────────────────────────────────────
+  var respPage = document.getElementById('page-response');
+  if (respPage) {
+    // Subtitle
+    var rSub = respPage.querySelector('.page-subtitle');
+    if (rSub) rSub.textContent = 'No active containment actions';
+
+    // Active Responses card — clear content
+    var activeCard = respPage.querySelector('.card[style*="border-color:rgba(239,68,68"]');
+    if (activeCard) {
+      var headerDiv = activeCard.querySelector('.card-header');
+      var contentDiv = activeCard.querySelector('div[style*="flex-direction:column"]');
+      if (contentDiv) contentDiv.innerHTML = emptyState('🛡️', 'No active response actions');
+      // Remove pulsing dot
+      var pulseDot = activeCard.querySelector('.status-dot[style*="animation"]');
+      if (pulseDot) pulseDot.style.animation = 'none';
+    }
+
+    // Response Stats — zero values
+    respPage.querySelectorAll('.metric-value').forEach(function(el) {
+      var text = el.textContent.trim();
+      if (/\d/.test(text)) el.textContent = '0';
+    });
+    respPage.querySelectorAll('.metric-sub').forEach(function(el) { el.textContent = '—'; });
+
+    // Playbook section — hide
+    var playbook = respPage.querySelector('.resp-playbook');
+    if (playbook) {
+      playbook.style.display = 'none';
+      if (!playbook.parentNode.querySelector('.prod-pb-empty')) {
+        var d = document.createElement('div'); d.className = 'prod-pb-empty';
+        d.style.cssText = 'margin-bottom:16px;';
+        d.innerHTML = '<div class="card">' + emptyState('📋', 'No active playbooks — awaiting incident triggers') + '</div>';
+        playbook.parentNode.insertBefore(d, playbook.nextSibling);
+      }
+    }
+
+    // Response History table — clear
+    respPage.querySelectorAll('table tbody').forEach(function(tbody) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:60px;">' +
+        emptyState('📜', 'No response history yet') + '</td></tr>';
+    });
+
+    // AI Recommendation overlay — hide
+    respPage.querySelectorAll('.resp-ai-overlay').forEach(function(el) { el.style.display = 'none'; });
+  }
+
+  // ────────────────────────────────────────────────
+  //  5. SHIFT HANDOVER
+  // ────────────────────────────────────────────────
+  var handoverPage = document.getElementById('page-handover');
+  if (handoverPage) {
+    // Subtitle
+    var hSub = handoverPage.querySelector('.page-subtitle');
+    if (hSub) hSub.textContent = 'Shift handover — awaiting live roster data';
+
+    // Shift header metric values
+    handoverPage.querySelectorAll('.shift-header-bar .metric-value').forEach(function(el) {
+      var text = el.textContent.trim();
+      if (/\d/.test(text)) el.textContent = '0';
+    });
+
+    // Team roster cards — clear to empty state
+    handoverPage.querySelectorAll('.grid-2 .card').forEach(function(card, i) {
+      if (i < 2) { // Only first two (team cards)
+        var cardHeader = card.querySelector('.card-header');
+        var contentDiv = card.querySelector('div[style*="flex-direction:column"]');
+        if (contentDiv) contentDiv.innerHTML = emptyState('👥', 'Awaiting roster data');
+      }
+    });
+
+    // Handover notes — clear
+    var handoverNote = handoverPage.querySelector('.handover-note');
+    if (handoverNote) {
+      handoverNote.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:11px;font-family:var(--font-mono);">No handover notes from previous shift</div>';
+    }
+
+    // Open items table — clear
+    handoverPage.querySelectorAll('table tbody').forEach(function(tbody) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:60px;">' +
+        emptyState('📝', 'No open items carrying over') + '</td></tr>';
+    });
+
+    // Upload artifacts — clear pre-loaded files
+    var fileList = document.getElementById('artifactFileList');
+    if (fileList) fileList.innerHTML = '';
+  }
+
+  // ────────────────────────────────────────────────
+  //  6. COPILOT
+  // ────────────────────────────────────────────────
+  var copilotPage = document.getElementById('page-copilot');
+  if (copilotPage) {
+    // Clear session ID
+    var sessionText = copilotPage.querySelector('.copilot-title-text p');
+    if (sessionText) sessionText.textContent = 'AI-Powered Investigation Intelligence · Ready';
+
+    // Clear any pre-loaded conversation bubbles (keep the chat interface)
+    copilotPage.querySelectorAll('.copilot-msg-ai, .copilot-msg-user, .copilot-thread').forEach(function(el) {
+      el.remove();
+    });
+
+    // Clear results panels if any
+    copilotPage.querySelectorAll('.copilot-result-panel').forEach(function(el) {
+      el.innerHTML = emptyState('🤖', 'Ready for investigation queries');
+    });
+  }
+
+  // ────────────────────────────────────────────────
+  //  7. WAR ROOM
+  // ────────────────────────────────────────────────
+  var warRoom = document.getElementById('page-warroom');
+  if (warRoom) {
+    // Subtitle
+    var wSub = warRoom.querySelector('.page-subtitle');
+    if (wSub) wSub.textContent = 'DFIR / MDR / SOCaaS · No active engagements';
+
+    // Engagement bar — clear tabs
+    var engBar = document.getElementById('wr2EngBar');
+    if (engBar) {
+      engBar.querySelectorAll('.wr2-eng-tab').forEach(function(tab) { tab.remove(); });
+      // Keep the "Add Engagement" button
+    }
+
+    // Hide all engagement panels, show empty
+    warRoom.querySelectorAll('.wr2-engagement-panel').forEach(function(panel) {
+      panel.style.display = 'none';
+    });
+
+    // Insert global empty state for war room
+    if (!warRoom.querySelector('.prod-wr-empty')) {
+      var d = document.createElement('div'); d.className = 'prod-wr-empty';
+      d.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:120px 24px;gap:16px;">' +
+        '<div style="font-size:48px;opacity:0.4;">⚔️</div>' +
+        '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">No Active Engagements</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);max-width:450px;text-align:center;line-height:1.6;">The War Room activates when an incident response engagement is created. Create a new engagement or wait for automatic escalation from the SOC pipeline.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:8px;">' +
+          '<button class="btn btn-primary btn-sm" onclick="wr2OpenNewEng()">+ New Engagement</button>' +
+        '</div>' +
+      '</div>';
+      // Insert after engBar
+      if (engBar) engBar.parentNode.insertBefore(d, engBar.nextSibling);
+      else warRoom.appendChild(d);
+    }
+  }
+
+  // ────────────────────────────────────────────────
+  //  GLOBAL: Chart canvases not yet handled
+  // ────────────────────────────────────────────────
   document.querySelectorAll('.chart-container').forEach(function(container) {
     var canvas = container.querySelector('canvas');
     if (canvas) canvas.style.display = 'none';
-    container.style.position = 'relative';
-    var overlay = document.createElement('div');
-    overlay.className = 'prod-empty-state';
-    overlay.style.position = 'absolute';
-    overlay.style.inset = '0';
-    overlay.innerHTML = '<div class="prod-empty-text">Awaiting data source</div>';
-    container.appendChild(overlay);
-  });
-  
-  // Heatmap container
-  document.querySelectorAll('.cc-heatmap-container').forEach(function(container) {
-    var canvas = container.querySelector('canvas');
-    if (canvas) canvas.style.display = 'none';
-    var overlay = document.createElement('div');
-    overlay.className = 'prod-empty-state';
-    overlay.innerHTML = '<div class="prod-empty-text">Awaiting data source</div>';
-    container.appendChild(overlay);
-  });
-  
-  // Geo map container
-  document.querySelectorAll('.cc-geomap-container, .geomap-container').forEach(function(container) {
-    var canvas = container.querySelector('canvas');
-    if (canvas) canvas.style.display = 'none';
-    var overlay = document.createElement('div');
-    overlay.className = 'prod-empty-state';
-    overlay.innerHTML = '<div class="prod-empty-icon">🌐</div><div class="prod-empty-text">Awaiting geo data</div>';
-    container.appendChild(overlay);
+    if (!container.querySelector('.prod-overlay')) {
+      container.style.position = 'relative';
+      var o = document.createElement('div'); o.className = 'prod-overlay';
+      o.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
+      o.innerHTML = '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">Awaiting data</div>';
+      container.appendChild(o);
+    }
   });
 }
 
@@ -27977,6 +28245,7 @@ function toggleDashView() {
 var classicAlertChartObj = null;
 var classicSourceChartObj = null;
 function initClassicCharts() {
+  if (window._dactaMode === 'production') return;
   // Alert Volume bar chart
   var ctx1 = document.getElementById('classicAlertChart');
   if (ctx1 && !classicAlertChartObj) {
