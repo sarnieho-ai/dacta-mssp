@@ -31885,7 +31885,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         logs.childProcesses.push({ status: 'ALERT', query: 'process.parent.name:"' + pa.processName + '"', result: 'Child processes: ' + [...new Set(cNames)].join(', '), count: childHits.length, live: true });
       }
     } else {
-      qD2.status = 'no_data';
+      qD2.status = 'success'; qD2.hits = 0;
       logs.childProcesses.push({ status: 'CLEAR', query: 'child process search', result: 'No child process telemetry in alert index', count: 0, live: true });
     }
 
@@ -31905,7 +31905,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
           qD3.status = 'success'; qD3.hits = netResult.hits.total.value;
           logs.networkConnections.push({ status: 'ALERT', query: 'destination.ip:"' + ip + '" (Firewall)', result: 'Connection to ' + ip + ' found — ' + netResult.hits.total.value + ' events in firewall logs', ip: ip, count: netResult.hits.total.value, live: true });
         } else {
-          qD3.status = netResult ? 'no_data' : 'error';
+          qD3.status = netResult ? 'success' : 'error'; qD3.hits = 0;
           logs.networkConnections.push({ status: 'CLEAR', query: 'destination.ip:"' + ip + '" (Firewall ±5min)', result: 'No outbound connection to ' + ip + ' in firewall logs' + (isPrivate ? ' (private IP)' : ''), ip: ip, count: 0, live: true });
         }
       }
@@ -31922,7 +31922,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       qD4.status = 'success'; qD4.hits = 1;
       var hs = hostResult.hits.hits[0]._source;
       logs.hostInfo = { hostname: (hs.host || {}).hostname, os: ((hs.host || {}).os || {}).full || 'Unknown', ip: ((hs.host || {}).ip || []).join(', '), geo: (hs.host || {}).geo || {}, mac: ((hs.host || {}).mac || []).join(', '), company: ((hs.company || {}).name) || '', lastSeen: hs['@timestamp'] };
-    } else { qD4.status = 'no_data'; }
+    } else { qD4.status = 'success'; qD4.hits = 0; }
 
     // ── QUERY 5: Alert History ──
     var qD5 = { name: 'Alert History', index: alertIndex, query: 'host:' + pa.hostname + ' (aggs)', status: 'running' };
@@ -31931,7 +31931,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     if (histResult && histResult.aggregations) {
       qD5.status = 'success'; qD5.hits = histResult.hits.total ? histResult.hits.total.value : 0;
       logs.alertHistory = { totalAlerts: qD5.hits, byName: (histResult.aggregations.by_name || {}).buckets || [], bySeverity: (histResult.aggregations.by_sev || {}).buckets || [], firstAlert: ((histResult.aggregations.time_range || {}).min_as_string) || '', lastAlert: ((histResult.aggregations.time_range || {}).max_as_string) || '' };
-    } else { qD5.status = 'no_data'; }
+    } else { qD5.status = 'success'; qD5.hits = 0; }
 
     // Hashes from alert
     if (pa.processHash && pa.processHash !== '0000000000000000000000000000000000000000') {
@@ -31954,7 +31954,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       logs.fileEvents.push({ status: 'CLEAR', query: 'disposition.quarantine_file', result: 'No files quarantined by CrowdStrike', count: 0, live: true });
     }
   } else {
-    qD1.status = alertResult ? 'no_data' : 'error';
+    qD1.status = alertResult ? 'success' : 'error'; qD1.hits = 0;
     if (alertResult) logs.elasticConnected = true;
     logs.childProcesses.push({ status: 'UNCLEAR', query: 'No CrowdStrike alert found', result: 'Unable to correlate Jira ticket to Elastic alert', count: 0, live: false });
     logs.networkConnections.push({ status: 'UNCLEAR', query: 'N/A', result: 'No Elastic data for network correlation', ip: 'N/A', count: 0, live: false });
@@ -31972,7 +31972,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     if (ocR && ocR.data && ocR.data.stixCyberObservables) {
       logs.openctiConnected = true;
       var oEdges = ocR.data.stixCyberObservables.edges || [];
-      qDO.status = oEdges.length > 0 ? 'success' : 'no_data'; qDO.hits = oEdges.length;
+      qDO.status = 'success'; qDO.hits = oEdges.length;
       var oLabels = [];
       oEdges.forEach(function(e) { (e.node.objectLabel || []).forEach(function(l) { if (!oLabels.includes(l.value)) oLabels.push(l.value); }); });
       logs.openctiResults.push({ type: 'IP', value: lip, found: oEdges.length > 0, labels: oLabels, source: oEdges.length > 0 ? ((oEdges[0].node.createdBy || {}).name || 'OpenCTI') : '' });
@@ -31990,7 +31990,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     if (hcR && hcR.data && hcR.data.stixCyberObservables) {
       logs.openctiConnected = true;
       var hEdges = hcR.data.stixCyberObservables.edges || [];
-      qDH.status = hEdges.length > 0 ? 'success' : 'no_data'; qDH.hits = hEdges.length;
+      qDH.status = 'success'; qDH.hits = hEdges.length;
       var hLbls = [];
       hEdges.forEach(function(e) { (e.node.objectLabel || []).forEach(function(l) { if (!hLbls.includes(l.value)) hLbls.push(l.value); }); });
       logs.openctiResults.push({ type: 'Hash', value: lh, found: hEdges.length > 0, labels: hLbls, source: hEdges.length > 0 ? ((hEdges[0].node.createdBy || {}).name || 'OpenCTI') : '' });
@@ -32651,12 +32651,12 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
       '<details style="cursor:pointer;"><summary style="font-size:9px;font-weight:600;color:var(--text-muted);letter-spacing:0.05em;">\u25B6 QUERY EXECUTION LOG (' + elasticLogs.queryDetails.length + ' queries)</summary>' +
       '<div style="margin-top:6px;">';
     elasticLogs.queryDetails.forEach(function(qd, qi) {
-      var sc = qd.status === 'success' ? '#10b981' : (qd.status === 'no_data' ? '#f59e0b' : (qd.status === 'error' ? '#ef4444' : 'var(--text-muted)'));
+      var sc = qd.status === 'success' ? '#10b981' : (qd.status === 'error' ? '#ef4444' : 'var(--text-muted)');
       html += '<div style="font-size:9px;padding:2px 0;display:flex;gap:6px;align-items:baseline;border-bottom:1px solid var(--border-subtle);">' +
         '<span style="color:var(--text-muted);min-width:16px;">' + (qi + 1) + '.</span>' +
         '<span style="color:var(--text-secondary);flex:1;">' + qd.name + '</span>' +
         '<span style="font-family:var(--font-mono);color:var(--cyan);font-size:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (qd.query || '') + '</span>' +
-        '<span style="color:' + sc + ';font-weight:600;font-size:8px;min-width:50px;text-align:right;">' + qd.status + (qd.hits !== undefined ? ' (' + qd.hits + ')' : '') + '</span></div>';
+        '<span style="color:' + sc + ';font-weight:600;font-size:8px;min-width:60px;text-align:right;text-transform:uppercase;">' + qd.status + (qd.hits !== undefined ? '(' + qd.hits + ')' : '') + '</span></div>';
     });
     html += '</div></details></div>';
   }
