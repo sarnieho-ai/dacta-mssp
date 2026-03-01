@@ -31933,6 +31933,8 @@ function generateExculpatoryEvidence(summary, desc, techniques, iocs, cmdCtx, el
 }
 
 // ── Build the comprehensive investigation HTML ──
+function sleep(ms) { return new Promise(function(resolve) { setTimeout(resolve, ms); }); }
+
 async function runAIInvestigation(ticketKey, issueData) {
   try {
   var invPage = document.getElementById('page-investigation');
