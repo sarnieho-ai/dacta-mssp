@@ -31692,8 +31692,8 @@ function analyzeCommandContext(text) {
 
   // Check for LLM prompt patterns — strings inside quotes after model invocation
   var promptPatterns = [
-    /ollama[.\w]*\s+run\s+[\w-]+\s+["'](.+?)["']/si,
-    /ollama[.\w]*\s+run\s+[\w-]+\s+"([^"]+)"/si,
+    /ollama[.\w]*\s+run\s+[\w-]+\s+["'](.+?)["']/i,
+    /ollama[.\w]*\s+run\s+[\w-]+\s+"([^"]+)"/i,
     /"analyze\s+these?\s+/i,
     /"scan\s+these?\s+/i,
     /"investigate\s+/i,
@@ -31720,7 +31720,7 @@ function analyzeCommandContext(text) {
   ];
 
   // Determine if suspicious commands are inside ollama prompt string
-  var ollamaPromptMatch = text.match(/ollama[.\w]*['"]*\s+run\s+[\w-]+\s+["']?(.*)/si);
+  var ollamaPromptMatch = text.match(/ollama[.\w]*['"]?\s*run\s+[\w-]+\s+["']?(.*)/i);
   if (ollamaPromptMatch) {
     var promptContent = ollamaPromptMatch[1];
     var hasMaliciousInPrompt = /(?:powershell|nc\.exe|cmd\.exe|reverse.shell|4444)/i.test(promptContent);
@@ -31769,7 +31769,7 @@ function simulateElasticLookup(summary, desc, iocs, techniques) {
   // ── Network Connection Query ──
   iocs.ips.forEach(function(ip) {
     var netQuery = 'destination.ip: "' + ip + '"';
-    if (lower.includes('no network connection') || lower.includes('no.*connection') || (lower.includes('process killed') && !lower.includes('established'))) {
+    if (lower.includes('no network connection') || (lower.includes('no') && lower.includes('connection')) || (lower.includes('process killed') && !lower.includes('established'))) {
       logs.networkConnections.push({ status: 'CLEAR', query: netQuery, result: 'No outbound connection to ' + ip + ' established', ip: ip });
     } else if (lower.includes('connect') || lower.includes('established') || lower.includes('beacon')) {
       logs.networkConnections.push({ status: 'ALERT', query: netQuery, result: 'Active connection to ' + ip + ' detected', ip: ip });
@@ -31783,7 +31783,7 @@ function simulateElasticLookup(summary, desc, iocs, techniques) {
 
   // ── File Drop Query ──
   var fileQuery = 'file.path: * AND process.name: "' + (iocs.files[0] || 'unknown') + '"';
-  if (lower.includes('no.*file') || lower.includes('no suspicious.*dropped') || lower.includes('no dropped file')) {
+  if ((lower.includes('no') && lower.includes('file')) || (lower.includes('no') && lower.includes('dropped')) || lower.includes('no dropped file')) {
     logs.fileEvents.push({ status: 'CLEAR', query: fileQuery, result: 'No suspicious files written to disk by the process', count: 0 });
   } else if (lower.includes('dropped') || lower.includes('written') || lower.includes('created file')) {
     logs.fileEvents.push({ status: 'ALERT', query: fileQuery, result: 'Suspicious file artifacts detected on disk', count: 1 });
@@ -31934,6 +31934,7 @@ function generateExculpatoryEvidence(summary, desc, techniques, iocs, cmdCtx, el
 
 // ── Build the comprehensive investigation HTML ──
 async function runAIInvestigation(ticketKey, issueData) {
+  try {
   var invPage = document.getElementById('page-investigation');
   if (!invPage) return;
 
@@ -32103,10 +32104,17 @@ async function runAIInvestigation(ticketKey, issueData) {
     await sleep(roundTimings[rnd-1] || 2000);
 
     // Generate round content
+    console.log('[AI Investigation] Round ' + rnd + ' generating content...');
     var roundHTML = '';
+    try {
     if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority);
     else if (rnd === 2) roundHTML = buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs);
     else if (rnd === 3) roundHTML = buildRound3HTML(inculpatory, exculpatory, techniques, iocs, elasticLogs, cmdCtx, verdict, confidence, fullText);
+    console.log('[AI Investigation] Round ' + rnd + ' HTML generated, length=' + roundHTML.length);
+    } catch (roundErr) {
+      console.error('[AI Investigation] Round ' + rnd + ' ERROR:', roundErr);
+      roundHTML = '<div style="color:var(--red-bright);font-size:11px;">Error generating round ' + rnd + ' analysis: ' + roundErr.message + '</div>';
+    }
 
     // Update round card to complete
     updateRoundHTML(roundsContainer, rnd, totalRounds, 'done', roundHTML);
@@ -32163,6 +32171,15 @@ async function runAIInvestigation(ticketKey, issueData) {
       '<span>' + actionLabel + '</span></div></div>';
 
   roundsContainer.innerHTML += verdictBannerHTML;
+  } catch (aiErr) {
+    console.error('[AI Investigation] Error:', aiErr);
+    var errPanel = document.getElementById('aiInvestigationPanel');
+    if (errPanel) {
+      errPanel.innerHTML += '<div style="padding:12px;border:1px solid rgba(239,68,68,0.3);border-radius:6px;background:rgba(239,68,68,0.05);margin-top:8px;">' +
+        '<div style="font-size:11px;font-weight:600;color:var(--red-bright);margin-bottom:4px;">AI Investigation Error</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);">' + aiErr.message + '</div></div>';
+    }
+  }
 }
 
 // ── Round 1 HTML: Classification + Elastic Log Query ──
