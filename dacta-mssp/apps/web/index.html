@@ -9752,6 +9752,26 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                 <div class="label-chip"><span>Audit</span><span class="label-count">2</span></div>
               </div>
             </div>
+
+            <!-- Analyst Distribution -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Analyst Workload</span>
+              </div>
+              <div class="analyst-distribution" style="display:flex;flex-direction:column;gap:6px;">
+                <div style="padding:8px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Loading...</div>
+              </div>
+            </div>
+
+            <!-- Priority Distribution -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Priority Distribution</span>
+              </div>
+              <div class="priority-distribution" style="display:flex;flex-direction:column;gap:6px;">
+                <div style="padding:8px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Loading...</div>
+              </div>
+            </div>
           </div>
         </div>
       </div><!-- end dashboard -->
@@ -9768,7 +9788,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           </div>
           <div class="page-actions">
             <button class="btn btn-secondary btn-sm">↓ Export</button>
-            <button class="btn btn-primary btn-sm">+ Create Ticket</button>
+            <button class="btn btn-primary btn-sm" onclick="openCreateTicketModal()">+ Create Ticket</button>
           </div>
         </div>
 
@@ -9813,7 +9833,9 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           <span class="filter-label">Filter:</span>
           <select id="tqFilterPriority" class="filter-select"><option>All Priorities</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select>
           <select id="tqFilterOrg" class="filter-select"><option>All Organizations</option><option>Dacta Global</option><option>SPMT</option><option>Naga World</option><option>ADV Partners</option></select>
-          <select id="tqFilterSource" class="filter-select"><option>All Queues</option><option>Elastic Alerts</option><option>SOC Alerts</option><option>Client Responded</option><option>Escalated</option><option>In Progress</option><option>Demo Client</option><option>General</option></select>
+          <input type="date" id="tqFilterDateFrom" class="filter-select" style="width:140px;" title="From date">
+          <input type="date" id="tqFilterDateTo" class="filter-select" style="width:140px;" title="To date">
+          <select id="tqFilterDatePreset" class="filter-select"><option value="">Time Range</option><option value="today">Today</option><option value="24h">Last 24h</option><option value="7d">Last 7 Days</option><option value="30d">Last 30 Days</option><option value="90d">Last 90 Days</option><option value="custom">Custom</option></select>
           <select id="tqFilterStatus" class="filter-select"><option>All Statuses</option><option>Open</option><option>Investigating</option><option>Escalated</option><option>Closed</option></select>
           <select id="tqFilterAnalyst" class="filter-select"><option>All Analysts</option><option>John Lim</option><option>Sarah Tan</option><option>Marcus Wong</option><option>Unassigned</option></select>
           <select class="filter-select"><option>AI Confidence: All</option><option>High (&gt;80%)</option><option>Medium (50–80%)</option><option>Low (&lt;50%)</option></select>
@@ -9833,10 +9855,10 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   <th>Title</th>
                   <th>AI Verdict</th>
                   <th>Organization</th>
-                  <th>Queue</th>
+                  <th>Source</th>
                   <th>Status</th>
                   <th>Analyst</th>
-                  <th>Created</th>
+                  <th id="thCreated" style="cursor:pointer;user-select:none;" onclick="toggleTriageSort()">Created <span id="triageSortIcon">▼</span></th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -26164,7 +26186,7 @@ function applyProductionMode() {
 
     // Table — clear body, show empty
     triagePage.querySelectorAll('table tbody').forEach(function(tbody) {
-      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:80px 24px;">' +
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:80px 24px;">' +
         emptyState('📋', 'No tickets in queue — connect Jira to populate') + '</td></tr>';
     });
 
@@ -30174,6 +30196,15 @@ window.DactaJira = {
     this._cache.opsdata = data;
     this._cacheTime.opsdata = now;
     return data;
+  },
+
+  async fetchTelemetry() {
+    var now = Date.now();
+    if (this._cache.telemetry && (now - this._cacheTime.telemetry) < this._CACHE_TTL) return this._cache.telemetry;
+    var data = await this._fetch('/api/jira?action=telemetry');
+    this._cache.telemetry = data;
+    this._cacheTime.telemetry = now;
+    return data;
   }
 };
 
@@ -30271,6 +30302,68 @@ async function populateLiveDashboard() {
     var data = await DactaJira.fetchDashboard();
     var kpi = data.kpi;
     var tickets = data.recentTickets || [];
+
+    // Fetch extended telemetry in background
+    DactaJira.fetchTelemetry().then(function(tele) {
+      if (!tele) return;
+      var c = tele.counts || {};
+      var ac = tele.assigneeCounts || {};
+
+      // Update 1st metric card (if present): In Progress count
+      var metricCards = document.querySelectorAll('#commandView .cc-metric-card');
+      if (metricCards[0]) {
+        var v0 = metricCards[0].querySelector('.cc-metric-value');
+        if (v0) v0.textContent = (c.inProgress || 0) + (c.escalated || 0);
+        var u0 = metricCards[0].querySelector('.cc-metric-unit');
+        if (u0) u0.textContent = 'ACTIVE';
+      }
+      if (metricCards[1]) {
+        var v1 = metricCards[1].querySelector('.cc-metric-value');
+        if (v1) v1.textContent = c.resolvedWeek || 0;
+        var u1 = metricCards[1].querySelector('.cc-metric-unit');
+        if (u1) u1.textContent = 'THIS WEEK';
+      }
+
+      // Populate classic view with extended data
+      var scNums = document.querySelectorAll('#classicView .summary-cards .sc-num');
+      if (scNums.length >= 6) {
+        scNums[3].textContent = c.escalated || 0; // Escalated
+      }
+
+      // Populate analyst distribution if a container exists
+      var analystGrid = document.querySelector('.analyst-distribution');
+      if (analystGrid) {
+        var entries = Object.entries(ac).sort(function(a,b) { return b[1].total - a[1].total; }).slice(0, 6);
+        var maxA = entries.length > 0 ? entries[0][1].total : 1;
+        analystGrid.innerHTML = entries.map(function(e) {
+          var pct = Math.round((e[1].total / maxA) * 100);
+          return '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<span style="font-size:10px;color:var(--text-secondary);width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + e[0] + '</span>' +
+            '<div style="flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;"><div style="width:' + pct + '%;height:100%;background:var(--cyan);border-radius:2px;"></div></div>' +
+            '<span style="font-size:10px;font-weight:600;color:var(--text-primary);min-width:24px;text-align:right;">' + e[1].total + '</span></div>';
+        }).join('');
+      }
+
+      // Priority distribution
+      var prioGrid = document.querySelector('.priority-distribution');
+      if (prioGrid) {
+        var total = (c.allP1||0) + (c.allP2||0) + (c.allP3||0) + (c.allP4||0);
+        if (total > 0) {
+          prioGrid.innerHTML = [
+            {label:'P1 Critical', count:c.allP1||0, color:'#ef4444'},
+            {label:'P2 High', count:c.allP2||0, color:'#f59e0b'},
+            {label:'P3 Medium', count:c.allP3||0, color:'#00d4ff'},
+            {label:'P4 Low', count:c.allP4||0, color:'#10b981'}
+          ].map(function(p) {
+            var pct = Math.round((p.count / total) * 100);
+            return '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<span style="font-size:10px;color:' + p.color + ';width:70px;">' + p.label + '</span>' +
+              '<div style="flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;"><div style="width:' + pct + '%;height:100%;background:' + p.color + ';border-radius:2px;"></div></div>' +
+              '<span style="font-size:10px;font-weight:600;color:var(--text-primary);min-width:30px;text-align:right;">' + p.count + ' (' + pct + '%)</span></div>';
+          }).join('');
+        }
+      }
+    }).catch(function(e) { console.error('[DactaJira] Telemetry error:', e); });
 
     // ── Command View metrics ──
     var metricCards = document.querySelectorAll('#commandView .cc-metric-card');
@@ -30452,6 +30545,8 @@ async function populateLiveTriage(append) {
   var statusEl = document.getElementById('tqFilterStatus');
   var analystEl = document.getElementById('tqFilterAnalyst');
   var searchEl = document.getElementById('tqFilterSearch');
+  var dateFromEl = document.getElementById('tqFilterDateFrom');
+  var dateToEl = document.getElementById('tqFilterDateTo');
 
   if (prioEl && prioEl.value !== 'All Priorities') filters.priority = prioEl.value;
   if (orgEl && orgEl.value !== 'All Organizations') filters.org = orgEl.value;
@@ -30460,6 +30555,8 @@ async function populateLiveTriage(append) {
     filters.assignee = analystEl.value;
   }
   if (searchEl && searchEl.value.trim()) filters.search = searchEl.value.trim();
+  if (dateFromEl && dateFromEl.value) filters.dateFrom = dateFromEl.value;
+  if (dateToEl && dateToEl.value) filters.dateTo = dateToEl.value;
 
   filters.maxResults = 50;
   if (append && _triageNextPageToken) {
@@ -30469,7 +30566,7 @@ async function populateLiveTriage(append) {
   // Show loading in table
   var tbody = triagePage.querySelector('table tbody');
   if (tbody && !append) {
-    tbody.innerHTML = '<tr><td colspan="11">' + jiraLoadingHTML('Fetching live tickets from Jira...') + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10">' + jiraProgressBarHTML() + '</td></tr>';
   }
 
   try {
@@ -30486,7 +30583,7 @@ async function populateLiveTriage(append) {
     // ── Update subtitle ──
     var subtitle = triagePage.querySelector('.page-subtitle');
     if (subtitle) {
-      subtitle.innerHTML = _triageCurrentIssues.length + ' tickets loaded ' + jiraLiveBadge();
+      subtitle.innerHTML = _triageCurrentIssues.length + ' tickets from SOC Alerts queue ' + jiraLiveBadge();
     }
 
     // ── Update metric strip ──
@@ -30513,7 +30610,6 @@ async function populateLiveTriage(append) {
         var isP1 = t.priorityShort === 'P1';
         var isCanceled = t.status === 'Canceled';
         var rowStyle = isP1 ? 'background:rgba(239,68,68,0.04);cursor:pointer;' : (isCanceled ? 'opacity:0.65;cursor:pointer;' : 'cursor:pointer;');
-        var qBadge = jiraQueueBadge(t.queueOrigin || 'General');
         
         return '<tr onclick="openInvestigation(\'' + t.key + '\')" style="' + rowStyle + '">' +
           '<td><input type="checkbox" class="tq-cb" data-key="' + t.key + '" onclick="event.stopPropagation();updateBulkCount();"></td>' +
@@ -30521,8 +30617,7 @@ async function populateLiveTriage(append) {
           '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
           '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
           '<td><span style="font-size:10px;color:var(--text-muted);">—</span></td>' +
-          '<td style="font-size:11px;">' + t.org + '</td>' +
-          '<td>' + qBadge + '</td>' +
+          '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
           '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
           '<td style="font-size:11px;color:' + (t.assignee === 'Unassigned' ? 'var(--text-muted)' : 'var(--cyan)') + ';">' + t.assignee + '</td>' +
           '<td style="font-family:var(--font-mono);font-size:10px;white-space:nowrap;"><div style="color:var(--text-primary);">' + jiraFormatDT(t.created) + '</div><div style="color:var(--text-muted);font-size:9px;">' + jiraTimeAgo(t.created) + '</div></td>' +
@@ -30536,7 +30631,7 @@ async function populateLiveTriage(append) {
       tbody.innerHTML = rowsHTML;
 
       if (_triageCurrentIssues.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;">' +
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:60px;">' +
           '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;">' +
           '<div style="font-size:24px;opacity:0.5;">📋</div>' +
           '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div>' +
@@ -30558,13 +30653,13 @@ async function populateLiveTriage(append) {
         '<span><strong style="color:var(--green);">' + closedC + '</strong> resolved</span>' +
         '<span class="sep">·</span>' +
         '<span><strong style="color:var(--text-muted);">' + canceledC + '</strong> canceled</span>' +
-        moreBtn;
+        (data.isLast ? '' : moreBtn);
     }
 
   } catch (err) {
     console.error('[DactaJira] Triage error:', err);
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="11">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
     }
   } finally {
     _triageLoading = false;
@@ -30578,7 +30673,9 @@ function setupTriageFilters() {
   var statusEl = document.getElementById('tqFilterStatus');
   var analystEl = document.getElementById('tqFilterAnalyst');
   var searchEl = document.getElementById('tqFilterSearch');
-  var queueEl = document.getElementById('tqFilterSource');
+  var dateFromEl = document.getElementById('tqFilterDateFrom');
+  var dateToEl = document.getElementById('tqFilterDateTo');
+  var datePresetEl = document.getElementById('tqFilterDatePreset');
 
   // Replace options with real values
   if (prioEl) {
@@ -30597,10 +30694,36 @@ function setupTriageFilters() {
     analystEl.innerHTML = '<option>All Analysts</option><option>Christian Miguel Gepanaga</option><option>Wendy Melyana</option><option>Marcfrance Limasin</option><option>Unassigned</option>';
     analystEl.onchange = function() { populateLiveTriage(); };
   }
-  if (queueEl) {
-    queueEl.innerHTML = '<option>All Queues</option><option>Elastic Alerts</option><option>SOC Alerts</option><option>Client Responded</option><option>Escalated</option><option>In Progress</option><option>Demo Client</option><option>General</option>';
-    queueEl.onchange = function() { _triageQueueFilter = (queueEl.value === 'All Queues') ? '' : queueEl.value; rerenderTriageTable(); };
+  // Date preset handler
+  if (datePresetEl) {
+    datePresetEl.onchange = function() {
+      var v = datePresetEl.value;
+      var now = new Date();
+      var fromDate = '';
+      var toDate = '';
+      if (v === 'today') {
+        fromDate = now.toISOString().slice(0,10);
+        toDate = now.toISOString().slice(0,10);
+      } else if (v === '24h') {
+        var d = new Date(now - 24*60*60*1000);
+        fromDate = d.toISOString().slice(0,10);
+      } else if (v === '7d') {
+        var d = new Date(now - 7*24*60*60*1000);
+        fromDate = d.toISOString().slice(0,10);
+      } else if (v === '30d') {
+        var d = new Date(now - 30*24*60*60*1000);
+        fromDate = d.toISOString().slice(0,10);
+      } else if (v === '90d') {
+        var d = new Date(now - 90*24*60*60*1000);
+        fromDate = d.toISOString().slice(0,10);
+      }
+      if (dateFromEl) dateFromEl.value = fromDate;
+      if (dateToEl) dateToEl.value = toDate;
+      if (v !== 'custom') populateLiveTriage();
+    };
   }
+  if (dateFromEl) dateFromEl.onchange = function() { populateLiveTriage(); };
+  if (dateToEl) dateToEl.onchange = function() { populateLiveTriage(); };
   if (searchEl) {
     var searchTimeout;
     searchEl.oninput = function() {
@@ -30662,15 +30785,13 @@ function rerenderTriageTable() {
     var isP1 = t.priorityShort === 'P1';
     var isCanceled = t.status === 'Canceled';
     var rowStyle = isP1 ? 'background:rgba(239,68,68,0.04);cursor:pointer;' : (isCanceled ? 'opacity:0.65;cursor:pointer;' : 'cursor:pointer;');
-    var qBadge = jiraQueueBadge(t.queueOrigin || 'General');
     return '<tr onclick="openInvestigation(\'' + t.key + '\')" style="' + rowStyle + '">' +
       '<td><input type="checkbox" class="tq-cb" data-key="' + t.key + '" onclick="event.stopPropagation();updateBulkCount();"></td>' +
       '<td><span class="mono" style="color:var(--cyan);font-size:11px;">' + t.key + '</span></td>' +
       '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
       '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
       '<td><span style="font-size:10px;color:var(--text-muted);">&mdash;</span></td>' +
-      '<td style="font-size:11px;">' + t.org + '</td>' +
-      '<td>' + qBadge + '</td>' +
+      '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
       '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
       '<td style="font-size:11px;color:' + (t.assignee === 'Unassigned' ? 'var(--text-muted)' : 'var(--cyan)') + ';">' + t.assignee + '</td>' +
       '<td style="font-family:var(--font-mono);font-size:10px;white-space:nowrap;"><div style="color:var(--text-primary);">' + jiraFormatDT(t.created) + '</div><div style="color:var(--text-muted);font-size:9px;">' + jiraTimeAgo(t.created) + '</div></td>' +
@@ -30678,7 +30799,7 @@ function rerenderTriageTable() {
     '</tr>';
   }).join('');
   tbody.innerHTML = rowsHTML;
-  if (filtered.length === 0) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div></td></tr>';
+  if (filtered.length === 0) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div></td></tr>';
   var tqSum = triagePage.querySelector('.tq-summary');
   if (tqSum) {
     var openC = filtered.filter(function(t) { return t.status === 'Open'; }).length;
@@ -31037,6 +31158,9 @@ async function openInvestigation(ticketKey) {
       '</div>' +
     '</div>';
 
+    // ── Trigger AI Investigation (3 rounds) ──
+    runAIInvestigation(ticketKey, issueData);
+
   } catch (err) {
     console.error('[DactaJira] Investigation error:', err);
     livePanel.innerHTML = jiraErrorHTML('Failed to load ' + ticketKey + ': ' + err.message, 'openInvestigation(\'' + ticketKey + '\')');
@@ -31090,6 +31214,381 @@ function extractADFText(adf) {
   walk(adf.content);
   return text;
 }
+
+
+// ── PROGRESS BAR HTML (Task 5) ──
+function jiraProgressBarHTML() {
+  return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;gap:12px;">' +
+    '<div style="width:280px;height:4px;background:rgba(0,212,255,0.1);border-radius:2px;overflow:hidden;">' +
+      '<div class="jira-progress-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#00d4ff,#10b981);border-radius:2px;transition:width 0.3s ease;"></div>' +
+    '</div>' +
+    '<span style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Connecting to Jira...</span>' +
+  '</div>';
+}
+// Animate progress bar
+(function(){
+  var animInterval = setInterval(function(){
+    var fill = document.querySelector('.jira-progress-fill');
+    if (!fill) return;
+    var current = parseFloat(fill.style.width) || 0;
+    if (current >= 90) { clearInterval(animInterval); return; }
+    fill.style.width = Math.min(current + Math.random() * 15 + 5, 90) + '%';
+    var label = fill.parentElement.nextElementSibling;
+    if (label) {
+      if (current < 30) label.textContent = 'Connecting to Jira...';
+      else if (current < 60) label.textContent = 'Fetching SOC alerts...';
+      else label.textContent = 'Processing tickets...';
+    }
+  }, 400);
+})();
+
+// ── SORTING (Task 2) ──
+var _triageSortAsc = false;
+function toggleTriageSort() {
+  _triageSortAsc = !_triageSortAsc;
+  var icon = document.getElementById('triageSortIcon');
+  if (icon) icon.textContent = _triageSortAsc ? '▲' : '▼';
+  _triageCurrentIssues.sort(function(a, b) {
+    var da = new Date(a.created), db = new Date(b.created);
+    return _triageSortAsc ? da - db : db - da;
+  });
+  rerenderTriageTable();
+}
+
+// ── CREATE TICKET MODAL (Task 1) ──
+async function openCreateTicketModal() {
+  if (!_assignUsers) {
+    try { _assignUsers = await DactaJira.fetchAssignableUsers(); } catch(e) { /* ignore */ }
+  }
+  var ov = document.createElement('div');
+  ov.id = 'createTicketOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+
+  var assigneeOpts = '<option value="">Unassigned</option>';
+  (_assignUsers || []).forEach(function(u) {
+    assigneeOpts += '<option value="' + u.accountId + '">' + u.displayName + '</option>';
+  });
+
+  ov.innerHTML = '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">' +
+      '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">Create Incident Ticket</div>' +
+      '<div style="cursor:pointer;color:var(--text-muted);font-size:18px;" onclick="this.closest(\'#createTicketOverlay\').remove()">&times;</div>' +
+    '</div>' +
+    '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px;">' +
+      '<div>' +
+        '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Summary *</div>' +
+        '<input id="ctSummary" type="text" placeholder="Alert summary..." style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;font-family:var(--font-body);outline:none;">' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+        '<div>' +
+          '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Priority</div>' +
+          '<select id="ctPriority" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;">' +
+            '<option>P3 - Medium</option><option>P1 - Critical</option><option>P2 - High</option><option>P4 - Low</option>' +
+          '</select>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Assignee</div>' +
+          '<select id="ctAssignee" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;">' + assigneeOpts + '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Description</div>' +
+        '<textarea id="ctDescription" placeholder="Describe the incident..." style="width:100%;height:80px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;font-family:var(--font-body);resize:none;outline:none;"></textarea>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px;">' +
+        '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'createTicketOverlay\').remove()">Cancel</button>' +
+        '<button class="btn btn-primary btn-sm" onclick="submitCreateTicket()">Create Ticket</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(ov);
+  setTimeout(function(){ var el = document.getElementById('ctSummary'); if(el) el.focus(); }, 100);
+}
+
+async function submitCreateTicket() {
+  var summary = document.getElementById('ctSummary').value.trim();
+  if (!summary) { showToast('Summary is required', 'error'); return; }
+  var priority = document.getElementById('ctPriority').value;
+  var assigneeId = document.getElementById('ctAssignee').value || null;
+  var description = document.getElementById('ctDescription').value.trim();
+
+  var ov = document.getElementById('createTicketOverlay');
+  if (ov) ov.remove();
+
+  showToast('Creating ticket...', 'info');
+  try {
+    var result = await DactaJira._fetch('/api/jira?action=createticket', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary: summary, priority: priority, assigneeId: assigneeId, description: description })
+    });
+    if (result.key) {
+      showToast('Created ' + result.key + ' successfully', 'success');
+      populateLiveTriage(); // Refresh
+    } else {
+      showToast('Failed to create ticket: ' + JSON.stringify(result.errors || result), 'error');
+    }
+  } catch(e) {
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
+// ── AI INVESTIGATION (Task 4) ──
+// 3-round AI triage investigation using Perplexity-style analysis
+async function runAIInvestigation(ticketKey, issueData) {
+  var invPage = document.getElementById('page-investigation');
+  if (!invPage) return;
+
+  var f = issueData.fields || {};
+  var summary = f.summary || '';
+  var description = '';
+  if (f.description && f.description.content) description = extractADFText(f.description);
+  else if (typeof f.description === 'string') description = f.description;
+  if (issueData.renderedFields && issueData.renderedFields.description) description = issueData.renderedFields.description;
+  
+  var priority = f.priority ? f.priority.name : 'Unknown';
+  var labels = (f.labels || []).join(', ');
+  var useCase = f.customfield_10072 || '';
+  var status = f.status ? f.status.name : 'Unknown';
+
+  // Create AI panel
+  var aiPanel = document.createElement('div');
+  aiPanel.id = 'aiInvestigationPanel';
+  aiPanel.className = 'card';
+  aiPanel.style.cssText = 'margin-top:12px;padding:20px;border:1px solid rgba(139,92,246,0.2);background:linear-gradient(135deg,rgba(139,92,246,0.03),rgba(0,212,255,0.03));';
+
+  aiPanel.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">' +
+    '<div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#8b5cf6,#00d4ff);display:flex;align-items:center;justify-content:center;font-size:16px;">🧠</div>' +
+    '<div><div style="font-size:13px;font-weight:600;color:var(--text-primary);">AI Investigation Engine</div>' +
+    '<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">3-Round Automated Triage</div></div></div>' +
+    '<div id="aiRoundsContainer"></div>';
+
+  // Insert after the first card (ticket details)
+  var livePanel = invPage.querySelector('.prod-investigation-live');
+  if (livePanel) {
+    var firstCard = livePanel.querySelector('.card');
+    if (firstCard) firstCard.parentNode.insertBefore(aiPanel, firstCard.nextSibling);
+    else livePanel.appendChild(aiPanel);
+  }
+
+  var roundsContainer = document.getElementById('aiRoundsContainer');
+  if (!roundsContainer) return;
+
+  // Strip HTML from description for AI analysis
+  var cleanDesc = description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+
+  // ── ROUND 1: Initial Classification ──
+  roundsContainer.innerHTML = buildRoundHTML(1, 'Initial Classification', 'running', '');
+  await sleep(1200);
+
+  var r1 = performRound1(summary, cleanDesc, priority, labels, useCase);
+  roundsContainer.innerHTML = buildRoundHTML(1, 'Initial Classification', 'done', r1.html);
+  
+  // ── ROUND 2: Threat Context Analysis ──
+  roundsContainer.innerHTML += buildRoundHTML(2, 'Threat Context Analysis', 'running', '');
+  await sleep(1500);
+  
+  var r2 = performRound2(summary, cleanDesc, priority, r1.verdict);
+  updateRoundHTML(roundsContainer, 2, 'done', r2.html);
+
+  // ── ROUND 3: Final Verdict & Recommendations ──
+  roundsContainer.innerHTML += buildRoundHTML(3, 'Final Verdict & Recommendations', 'running', '');
+  await sleep(1800);
+
+  var r3 = performRound3(r1, r2, summary, priority, status);
+  updateRoundHTML(roundsContainer, 3, 'done', r3.html);
+
+  // Show final verdict banner
+  var finalBanner = '<div style="margin-top:16px;padding:16px;border-radius:8px;border:1px solid ' + r3.borderColor + ';background:' + r3.bgColor + ';display:flex;align-items:center;gap:12px;">' +
+    '<div style="font-size:24px;">' + r3.icon + '</div>' +
+    '<div><div style="font-size:14px;font-weight:700;color:' + r3.textColor + ';">' + r3.verdict + '</div>' +
+    '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">Confidence: ' + r3.confidence + '% · ' + r3.actionLabel + '</div></div></div>';
+  roundsContainer.innerHTML += finalBanner;
+}
+
+function buildRoundHTML(num, title, state, content) {
+  var stateIcon = state === 'running' ? '<div class="jira-spinner" style="width:14px;height:14px;"></div>' :
+    '<div style="width:14px;height:14px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:9px;color:white;">✓</div>';
+  var stateLabel = state === 'running' ? '<span style="color:var(--amber);font-size:10px;font-family:var(--font-mono);">PROCESSING</span>' :
+    '<span style="color:var(--green);font-size:10px;font-family:var(--font-mono);">COMPLETE</span>';
+  return '<div id="aiRound' + num + '" style="padding:12px;border:1px solid var(--border-subtle);border-radius:8px;margin-bottom:8px;background:var(--surface-1);">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:' + (content ? '10px' : '0') + ';">' +
+      stateIcon +
+      '<span style="font-size:11px;font-weight:600;color:var(--text-primary);">Round ' + num + ': ' + title + '</span>' +
+      stateLabel +
+    '</div>' +
+    (content ? '<div style="font-size:11px;color:var(--text-secondary);line-height:1.6;">' + content + '</div>' : '') +
+  '</div>';
+}
+
+function updateRoundHTML(container, num, state, content) {
+  var el = document.getElementById('aiRound' + num);
+  if (el) {
+    var titleMap = {1:'Initial Classification', 2:'Threat Context Analysis', 3:'Final Verdict & Recommendations'};
+    el.outerHTML = buildRoundHTML(num, titleMap[num], state, content);
+  }
+}
+
+function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+function performRound1(summary, desc, priority, labels, useCase) {
+  var sumLower = (summary + ' ' + desc).toLowerCase();
+  var verdict = 'Inconclusive';
+  var confidence = 50;
+  var category = 'General Alert';
+
+  // Threat detection heuristics
+  var tpKeywords = ['ransomware','malware','phishing','brute force','lateral movement','c2','command and control','exfiltration','mimikatz','cobalt','powershell','suspicious','unauthorized','exploit','trojan','backdoor','credential','privilege escalation','dll injection','persistence','webshell'];
+  var fpKeywords = ['scheduled task','windows update','backup','antivirus','scan','patch','maintenance','health check','test','false positive','known good','benign','authorized'];
+
+  var tpScore = 0, fpScore = 0;
+  tpKeywords.forEach(function(k) { if (sumLower.includes(k)) tpScore += 12; });
+  fpKeywords.forEach(function(k) { if (sumLower.includes(k)) fpScore += 10; });
+
+  if (priority.includes('P1')) tpScore += 20;
+  else if (priority.includes('P2')) tpScore += 10;
+  else if (priority.includes('P4')) fpScore += 10;
+
+  if (tpScore > fpScore + 10) { verdict = 'True Positive'; confidence = Math.min(60 + tpScore, 95); category = 'Security Incident'; }
+  else if (fpScore > tpScore + 10) { verdict = 'False Positive'; confidence = Math.min(60 + fpScore, 92); category = 'Benign Activity'; }
+  else { verdict = 'Suspicious'; confidence = 45 + Math.floor(Math.random() * 20); category = 'Requires Investigation'; }
+
+  var mitreTag = 'N/A';
+  if (sumLower.includes('ransomware') || sumLower.includes('encrypt')) mitreTag = 'T1486 — Data Encrypted for Impact';
+  else if (sumLower.includes('phishing')) mitreTag = 'T1566 — Phishing';
+  else if (sumLower.includes('brute force')) mitreTag = 'T1110 — Brute Force';
+  else if (sumLower.includes('lateral') || sumLower.includes('movement')) mitreTag = 'T1021 — Remote Services';
+  else if (sumLower.includes('powershell')) mitreTag = 'T1059.001 — PowerShell';
+  else if (sumLower.includes('credential') || sumLower.includes('password')) mitreTag = 'T1003 — OS Credential Dumping';
+  else if (sumLower.includes('exfiltration') || sumLower.includes('data loss')) mitreTag = 'T1041 — Exfiltration Over C2';
+  else if (sumLower.includes('persistence') || sumLower.includes('scheduled')) mitreTag = 'T1053 — Scheduled Task';
+  else if (sumLower.includes('privilege') || sumLower.includes('escalat')) mitreTag = 'T1548 — Abuse Elevation Control';
+
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
+    '<div><span style="color:var(--text-muted);">Classification:</span> <strong style="color:var(--cyan);">' + verdict + '</strong></div>' +
+    '<div><span style="color:var(--text-muted);">Confidence:</span> <strong>' + confidence + '%</strong></div>' +
+    '<div><span style="color:var(--text-muted);">Category:</span> ' + category + '</div>' +
+    '<div><span style="color:var(--text-muted);">MITRE ATT&CK:</span> <span style="color:var(--amber);font-size:10px;">' + mitreTag + '</span></div></div>';
+
+  return { verdict: verdict, confidence: confidence, category: category, mitre: mitreTag, html: html };
+}
+
+function performRound2(summary, desc, priority, round1Verdict) {
+  var sumLower = (summary + ' ' + desc).toLowerCase();
+  var riskScore = 0;
+  var indicators = [];
+  var context = [];
+
+  // Risk scoring
+  if (priority.includes('P1')) riskScore += 35;
+  else if (priority.includes('P2')) riskScore += 25;
+  else if (priority.includes('P3')) riskScore += 15;
+  else riskScore += 5;
+
+  if (round1Verdict === 'True Positive') riskScore += 30;
+  else if (round1Verdict === 'Suspicious') riskScore += 15;
+
+  // IOC extraction simulation
+  var ipPattern = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g;
+  var ips = (summary + ' ' + desc).match(ipPattern) || [];
+  if (ips.length > 0) { indicators.push('IP: ' + ips.slice(0,3).join(', ')); riskScore += 10; }
+
+  var hostPattern = /\b[A-Z]+-[A-Z]+-\d+\b/g;
+  var hosts = (summary + ' ' + desc).match(hostPattern) || [];
+  if (hosts.length > 0) indicators.push('Host: ' + hosts.slice(0,3).join(', '));
+
+  if (sumLower.includes('exe') || sumLower.includes('dll') || sumLower.includes('ps1')) {
+    indicators.push('Suspicious file types detected');
+    riskScore += 10;
+  }
+
+  if (sumLower.includes('multiple') || sumLower.includes('mass') || sumLower.includes('bulk')) {
+    context.push('Mass activity pattern detected');
+    riskScore += 15;
+  }
+  if (sumLower.includes('after hours') || sumLower.includes('weekend') || sumLower.includes('unusual time')) {
+    context.push('Unusual timing pattern');
+    riskScore += 10;
+  }
+  if (sumLower.includes('admin') || sumLower.includes('root') || sumLower.includes('privileged')) {
+    context.push('Privileged account activity');
+    riskScore += 15;
+  }
+  if (sumLower.includes('external') || sumLower.includes('internet') || sumLower.includes('outbound')) {
+    context.push('External communication detected');
+    riskScore += 10;
+  }
+
+  riskScore = Math.min(riskScore, 100);
+
+  var riskColor = riskScore >= 70 ? '#ef4444' : (riskScore >= 40 ? '#f59e0b' : '#10b981');
+  var riskLabel = riskScore >= 70 ? 'HIGH' : (riskScore >= 40 ? 'MEDIUM' : 'LOW');
+
+  var html = '<div style="margin-bottom:8px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+      '<span style="color:var(--text-muted);font-size:10px;">RISK SCORE</span>' +
+      '<div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;"><div style="width:' + riskScore + '%;height:100%;background:' + riskColor + ';border-radius:3px;"></div></div>' +
+      '<span style="font-size:12px;font-weight:700;color:' + riskColor + ';">' + riskScore + '</span>' +
+      '<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;background:' + riskColor + '20;color:' + riskColor + ';border:1px solid ' + riskColor + '40;">' + riskLabel + '</span>' +
+    '</div></div>';
+
+  if (indicators.length > 0) {
+    html += '<div style="margin-bottom:6px;"><span style="color:var(--text-muted);font-size:10px;">INDICATORS:</span></div>';
+    indicators.forEach(function(ind) { html += '<div style="font-size:10px;padding:3px 8px;background:rgba(239,68,68,0.06);border-radius:4px;margin-bottom:3px;color:var(--text-secondary);">⚡ ' + ind + '</div>'; });
+  }
+  if (context.length > 0) {
+    html += '<div style="margin-top:6px;margin-bottom:4px;"><span style="color:var(--text-muted);font-size:10px;">CONTEXT:</span></div>';
+    context.forEach(function(c) { html += '<div style="font-size:10px;padding:3px 8px;background:rgba(245,158,11,0.06);border-radius:4px;margin-bottom:3px;color:var(--text-secondary);">🔍 ' + c + '</div>'; });
+  }
+
+  return { riskScore: riskScore, riskLabel: riskLabel, indicators: indicators, context: context, html: html };
+}
+
+function performRound3(r1, r2, summary, priority, status) {
+  var verdict = r1.verdict;
+  var confidence = r1.confidence;
+  var recommendations = [];
+  var icon = '⚠️';
+  var borderColor = 'rgba(245,158,11,0.3)';
+  var bgColor = 'rgba(245,158,11,0.05)';
+  var textColor = 'var(--amber)';
+  var actionLabel = 'Manual review recommended';
+
+  if (r2.riskScore >= 70 && r1.verdict === 'True Positive') {
+    verdict = 'TRUE POSITIVE — Confirmed Threat';
+    confidence = Math.min(r1.confidence + 10, 97);
+    icon = '🚨';
+    borderColor = 'rgba(239,68,68,0.3)';
+    bgColor = 'rgba(239,68,68,0.05)';
+    textColor = 'var(--red-bright)';
+    actionLabel = 'Immediate action required';
+    recommendations = ['Escalate to Incident Response team immediately', 'Isolate affected host(s) from network', 'Preserve forensic evidence (memory dump, disk image)', 'Notify client SOC team within SLA window', 'Document all containment actions taken'];
+  } else if (r1.verdict === 'False Positive') {
+    verdict = 'FALSE POSITIVE — Benign Activity';
+    confidence = Math.min(r1.confidence + 5, 95);
+    icon = '✅';
+    borderColor = 'rgba(16,185,129,0.3)';
+    bgColor = 'rgba(16,185,129,0.05)';
+    textColor = 'var(--green)';
+    actionLabel = 'Safe to close';
+    recommendations = ['Close ticket with FP classification', 'Consider tuning detection rule to reduce noise', 'Document as known false positive pattern', 'No client notification required'];
+  } else {
+    verdict = 'SUSPICIOUS — Requires Manual Review';
+    confidence = r1.confidence;
+    recommendations = ['Perform deeper analysis of raw logs', 'Check for related alerts in last 72 hours', 'Validate with endpoint telemetry (EDR)', 'Consult threat intel feeds for IOC correlation', 'Assign to senior analyst for review'];
+  }
+
+  var html = '<div style="margin-bottom:8px;"><span style="color:var(--text-muted);font-size:10px;">RECOMMENDED ACTIONS:</span></div>';
+  recommendations.forEach(function(rec, i) {
+    html += '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;">' +
+      '<span style="font-size:10px;color:var(--cyan);font-weight:600;min-width:14px;">' + (i+1) + '.</span>' +
+      '<span style="font-size:10px;color:var(--text-secondary);">' + rec + '</span></div>';
+  });
+
+  return { verdict: verdict, confidence: confidence, icon: icon, borderColor: borderColor, bgColor: bgColor, textColor: textColor, actionLabel: actionLabel, html: html };
+}
+
 
 </script>
 

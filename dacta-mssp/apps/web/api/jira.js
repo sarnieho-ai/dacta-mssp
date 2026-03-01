@@ -65,7 +65,7 @@ export default async function handler(req, res) {
 
     // ─── ACTION: dashboard ────────────────────────────────────
     if (action === 'dashboard') {
-      const B = 'project = DAC AND ("request type" = "Elastic Alerts (DAC)" OR (status = Open AND "request type" != "Elastic Alerts (DAC)") OR status = "Client Responded" OR (Organizations = "DG_Demo Client" AND resolution = Unresolved) OR (Organizations = "Dacta Global" AND status = Escalated) OR issuetype in ("[System] Incident", "Incident ticket"))';
+      const B = 'project = DAC AND type = "[System] Incident"';
       const [
         openCount, p1Count, p2Count, p3Count, p4Count,
         closedTodayCount, canceledTodayCount, completedTodayCount,
@@ -102,7 +102,11 @@ export default async function handler(req, res) {
     // ─── ACTION: triage ───────────────────────────────────────
     if (action === 'triage') {
       const body = req.body || {};
-      let jqlParts = ['project = DAC AND ("request type" = "Elastic Alerts (DAC)" OR (status = Open AND "request type" != "Elastic Alerts (DAC)") OR status = "Client Responded" OR (Organizations = "DG_Demo Client" AND resolution = Unresolved) OR (Organizations = "Dacta Global" AND status = Escalated) OR issuetype in ("[System] Incident", "Incident ticket"))'];
+      let jqlParts = ['project = DAC AND type = "[System] Incident"'];
+
+      // Date range filter
+      if (body.dateFrom) jqlParts.push('created >= "' + body.dateFrom + '"');
+      if (body.dateTo) jqlParts.push('created <= "' + body.dateTo + '"');
 
       if (body.status && body.status !== 'all') jqlParts.push(`status="${body.status}"`);
       if (body.priority && body.priority !== 'all') jqlParts.push(`priority="${body.priority}"`);
@@ -152,7 +156,7 @@ export default async function handler(req, res) {
     if (action === 'search') {
       const body = req.body || {};
       const data = await searchJql(
-        body.jql || 'project = DAC AND ("request type" = "Elastic Alerts (DAC)" OR (status = Open AND "request type" != "Elastic Alerts (DAC)") OR status = "Client Responded" OR (Organizations = "DG_Demo Client" AND resolution = Unresolved) OR (Organizations = "Dacta Global" AND status = Escalated) OR issuetype in ("[System] Incident", "Incident ticket")) ORDER BY created DESC',
+        body.jql || 'project = DAC AND type = "[System] Incident" ORDER BY created DESC',
         body.fields || ['summary','status','priority','assignee','created','updated','issuetype','labels','customfield_10002','customfield_10050','customfield_10072','customfield_10038'],
         body.maxResults || 50,
         body.nextPageToken
@@ -314,7 +318,77 @@ export default async function handler(req, res) {
       });
     }
 
-    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts, transitions, transition, assign, addcomment, assignable, opsdata' });
+    // ─── ACTION: telemetry (extended dashboard data) ─────────
+    if (action === 'telemetry') {
+      const B = 'project = DAC AND type = "[System] Incident"';
+      const now = new Date();
+      const queries = {};
+      // MTTR proxy: avg time tickets stay open (count by status)
+      queries.inProgress = `${B} AND status = "In Progress"`;
+      queries.escalated = `${B} AND status = "Escalated"`;
+      queries.clientResponded = `${B} AND status = "Client Responded"`;
+      queries.reportedTo = `${B} AND status = "Reported To"`;
+      queries.notified = `${B} AND status = "Notified"`;
+      // Trends
+      queries.yesterday = `${B} AND created >= "-2d" AND created < "-1d"`;
+      queries.twoDaysAgo = `${B} AND created >= "-3d" AND created < "-2d"`;
+      // By priority (all)
+      queries.allP1 = `${B} AND priority = "P1 - Critical"`;
+      queries.allP2 = `${B} AND priority = "P2 - High"`;
+      queries.allP3 = `${B} AND priority = "P3 - Medium"`;
+      queries.allP4 = `${B} AND priority = "P4 - Low"`;
+      // Resolved this week
+      queries.resolvedWeek = `${B} AND status in ("Closed","Completed","Canceled") AND updated >= startOfWeek()`;
+      // Top assignees (fetch recent with assignee)
+      const [counts, recentAssignees] = await Promise.all([
+        (async () => {
+          const results = {};
+          await Promise.all(Object.entries(queries).map(([key, jql]) => countJql(jql).then(c => { results[key] = c; })));
+          return results;
+        })(),
+        searchJql(`${B} AND assignee is not EMPTY ORDER BY created DESC`, ['assignee','status','priority','created'], 100)
+      ]);
+      // Compute assignee distribution
+      const assigneeCounts = {};
+      (recentAssignees.issues || []).forEach(iss => {
+        const name = iss.fields?.assignee?.displayName || 'Unknown';
+        if (!assigneeCounts[name]) assigneeCounts[name] = {total:0,open:0};
+        assigneeCounts[name].total++;
+        if ((iss.fields?.status?.name || '') === 'Open') assigneeCounts[name].open++;
+      });
+      return res.status(200).json({ counts, assigneeCounts });
+    }
+
+    // ─── ACTION: createticket ─────────────────────────────────
+    if (action === 'createticket') {
+      const body = req.body || {};
+      const summary = body.summary;
+      const priority = body.priority || 'P3 - Medium';
+      const descriptionText = body.description || '';
+      if (!summary) return res.status(400).json({ error: 'Missing summary' });
+      const payload = {
+        fields: {
+          project: { key: 'DAC' },
+          issuetype: { id: '10011' }, // [System] Incident
+          summary: summary,
+          priority: { name: priority },
+          description: {
+            type: 'doc', version: 1,
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: descriptionText || 'Created from DACTA SIEMLess' }] }]
+          }
+        }
+      };
+      if (body.assigneeId) payload.fields.assignee = { accountId: body.assigneeId };
+      const r = await fetch(`${baseUrl}/rest/api/3/issue`, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await r.json();
+      return res.status(r.status >= 400 ? r.status : 200).json(result);
+    }
+
+    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts, transitions, transition, assign, addcomment, assignable, createticket, opsdata' });
 
   } catch (err) {
     console.error('Jira proxy error:', err);
@@ -331,24 +405,11 @@ function normalizeIssue(issue) {
   const reporter = f.reporter;
   const workCat = f.customfield_10038;
 
-  // Compute queue origin from request type + issuetype + status + org
   const requestTypeData = f.customfield_10010;
   const requestTypeName = requestTypeData?.requestType?.name || '';
   const issueTypeName = (f.issuetype || {}).name || '';
   const statusName = (f.status || {}).name || 'Unknown';
-
-  let queueOrigin = 'General';
-  if (requestTypeName === 'Elastic Alerts' || requestTypeName === 'Elastic Alerts (DAC)') {
-    queueOrigin = 'Elastic Alerts';
-  } else if (issueTypeName.includes('Incident')) {
-    queueOrigin = 'SOC Alerts';
-  }
-  // Overlay queue context from status / org
-  if (statusName === 'Client Responded') queueOrigin = 'Client Responded';
-  if (statusName === 'Escalated') queueOrigin = 'Escalated';
-  if (statusName === 'In Progress') queueOrigin = queueOrigin === 'General' ? 'In Progress' : queueOrigin;
-  const orgName = orgs[0] || '';
-  if (orgName === 'DG_Demo Client') queueOrigin = 'Demo Client';
+  const queueOrigin = 'SOC Alerts';
 
   return {
     key: issue.key,
