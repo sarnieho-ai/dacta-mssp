@@ -29914,7 +29914,7 @@ function toggleOverrideMode() {
       '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Justification *</div>' +
       '<textarea id="overrideJustification" placeholder="Explain why the AI verdict is incorrect..." style="width:100%;height:80px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;font-family:var(--font-body);resize:none;outline:none;box-sizing:border-box;"></textarea></div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px;">' +
-        '<button class="btn btn-secondary btn-sm" onclick="document.getElementById('overrideOverlay').remove()">Cancel</button>' +
+        '<button class="btn btn-secondary btn-sm" onclick="closeOverrideModal()">Cancel</button>' +
         '<button class="btn btn-amber btn-sm" onclick="submitOverride()">Submit Override</button>' +
       '</div>' +
     '</div></div>';
@@ -29924,8 +29924,11 @@ function submitOverride() {
   var sel = document.getElementById('overrideSelect');
   var just = document.getElementById('overrideJustification');
   if (!just || !just.value.trim()) { showToast('Please provide justification', 'warn'); return; }
+  closeOverrideModal();
+  showToast('Verdict overridden to: ' + sel.value.split('\u2014')[0].trim(), 'success');
+}
+function closeOverrideModal() {
   var ov = document.getElementById('overrideOverlay'); if (ov) ov.remove();
-  showToast('Verdict overridden to: ' + sel.value.split('—')[0].trim(), 'success');
 }
 function overrideSection(sectionId) {
   overriddenSections[sectionId] = true;
@@ -31523,7 +31526,7 @@ async function openInvestigation(ticketKey) {
             '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Use Case</span><span style="color:var(--text-primary);font-size:10px;">' + (useCase || '\u2014') + '</span></div>' +
             (workCatStr ? '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Work Category</span><span style="color:#a78bfa;font-size:10px;">' + workCatStr + '</span></div>' : '') +
           '</div>' +
-          (labels.length > 0 ? '<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">' + labels.map(function(l) { return \'<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">\' + l + \'</span>\'; }).join(\'\') + \'</div>\' : \'\') +
+          (labels.length > 0 ? '<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">' + labels.map(function(l) { return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + l + '</span>'; }).join('') + '</div>' : '') +
         '</div>' +
 
         // Raw Alert card (from description)
