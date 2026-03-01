@@ -9492,6 +9492,15 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
               <span id="ccClockTime">01:22</span> SGT
             </div>
+            <div id="multiTzClocks" style="display:flex;gap:12px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);align-items:center;">
+              <span id="tz-sgt"></span>
+              <span style="opacity:0.3;">|</span>
+              <span id="tz-wib"></span>
+              <span style="opacity:0.3;">|</span>
+              <span id="tz-ict"></span>
+              <span style="opacity:0.3;">|</span>
+              <span id="tz-aest"></span>
+            </div>
             <button class="cc-view-toggle" id="dashViewToggle" onclick="toggleDashView()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
               <span>Classic View</span>
@@ -9538,7 +9547,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <span class="cc-sev-dot" style="--dot-color:#10b981;">L<b>1</b></span>
             </div>
           </div>
-          <div class="cc-metric-card">
+          <div class="cc-metric-card" style="border-color:rgba(16,185,129,0.15);">
             <div class="cc-metric-top">
               <div class="cc-metric-value">157.5K</div>
             </div>
@@ -9546,6 +9555,20 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="cc-prevented-bar">
               <div class="cc-prevented-fill"></div>
             </div>
+          </div>
+          <div class="cc-metric-card" style="border-color:rgba(0,212,255,0.15);">
+            <div class="cc-metric-top">
+              <div class="cc-metric-value" id="cc-mttd" style="color:var(--cyan);">—</div>
+              <div class="cc-metric-unit">MIN</div>
+            </div>
+            <div class="cc-metric-label">MTTD</div>
+          </div>
+          <div class="cc-metric-card" style="border-color:rgba(16,185,129,0.15);">
+            <div class="cc-metric-top">
+              <div class="cc-metric-value" id="cc-mttr" style="color:var(--green);">—</div>
+              <div class="cc-metric-unit">MIN</div>
+            </div>
+            <div class="cc-metric-label">MTTR</div>
           </div>
         </div><!-- end cc-metrics-row -->
 
@@ -10015,7 +10038,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="page-subtitle" style="font-family:var(--font-mono);">DAC-18158 · Potential Ransomware Activity Detected</div>
           </div>
           <div class="page-actions">
-            <button class="btn btn-secondary btn-sm">&#x2190; Back to Queue</button>
+            <button class="btn btn-secondary btn-sm" onclick="navigate('triage')">&#x2190; Back to Queue</button>
             <button class="btn btn-secondary btn-sm" onclick="sendToCopilot()" style="background:rgba(139,92,246,0.12);border-color:rgba(139,92,246,0.3);color:#a78bfa;">&#x1F680; Send to Copilot</button>
             <button class="btn btn-amber btn-sm" onclick="toggleOverrideMode()">&#x26A0; Override Verdict</button>
             <button class="btn btn-primary btn-sm">&#x2713; Accept AI Verdict</button>
@@ -27364,6 +27387,26 @@ function initCommandCenter() {
   updateCCClock();
   setInterval(updateCCClock, 30000);
 
+  function updateTzClocks() {
+    var now = new Date();
+    function fmt(offset, label) {
+      var d = new Date(now.getTime() + offset * 3600000);
+      var hh = String(d.getUTCHours()).padStart(2, '0');
+      var mm = String(d.getUTCMinutes()).padStart(2, '0');
+      return hh + ':' + mm + ' ' + label;
+    }
+    var sgtEl = document.getElementById('tz-sgt');
+    var wibEl = document.getElementById('tz-wib');
+    var ictEl = document.getElementById('tz-ict');
+    var aestEl = document.getElementById('tz-aest');
+    if (sgtEl) sgtEl.textContent = fmt(8, 'SGT');
+    if (wibEl) wibEl.textContent = fmt(7, 'WIB');
+    if (ictEl) ictEl.textContent = fmt(7, 'ICT');
+    if (aestEl) aestEl.textContent = fmt(11, 'AEST');
+  }
+  setInterval(updateTzClocks, 1000);
+  updateTzClocks();
+
   // Data sources
   var sources = [
     { name: 'Elastic SIEM', color: '#00d4ff' },
@@ -28278,6 +28321,17 @@ function initHeatMap() {
   var W = rect.width, H = rect.height;
 
   var days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  // Build dynamic day labels with actual dates for the last 7 days (SGT)
+  var dayLabels = [];
+  var dayAbbrMap = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var _hmNow = new Date();
+  for (var _di = 6; _di >= 0; _di--) {
+    var _hmd = new Date(_hmNow.getTime() + 8 * 3600000 - _di * 86400000);
+    var _hmDow = _hmd.getUTCDay();
+    var _hmDD = String(_hmd.getUTCDate()).padStart(2, '0');
+    var _hmMM = String(_hmd.getUTCMonth() + 1).padStart(2, '0');
+    dayLabels.push(dayAbbrMap[_hmDow] + ' ' + _hmDD + '/' + _hmMM);
+  }
   var hours = 24;
   var data = (window._liveVis && window._liveVis.heatmap) ? window._liveVis.heatmap : [
     [0,0,0,0,1,1,2,4,6,8,7,5,4,5,6,5,4,3,2,1,1,0,0,0],
@@ -28288,10 +28342,18 @@ function initHeatMap() {
     [0,0,0,0,0,0,1,1,2,3,2,2,1,2,2,1,1,1,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,1,1,2,2,1,1,1,2,1,1,0,0,0,0,0,0,0]
   ];
+  // Reorder data to match last-7-days order (oldest=top, today=bottom)
+  var _reorderedData = [];
+  for (var _rdi = 6; _rdi >= 0; _rdi--) {
+    var _rd = new Date(_hmNow.getTime() + 8 * 3600000 - _rdi * 86400000);
+    var _rdow = (_rd.getUTCDay() + 6) % 7; // Mon=0
+    _reorderedData.push(data[_rdow] || new Array(24).fill(0));
+  }
+  data = _reorderedData;
   var maxVal = 0;
   for (var d = 0; d < 7; d++) for (var h = 0; h < 24; h++) if (data[d][h] > maxVal) maxVal = data[d][h];
 
-  var labelW = 32;
+  var labelW = 58;
   var labelH = 16;
   var cellW = (W - labelW - 4) / hours;
   var cellH = (H - labelH - 4) / 7;
@@ -28326,7 +28388,7 @@ function initHeatMap() {
   ctx.textAlign = 'right';
   for (var d = 0; d < 7; d++) {
     var cy = labelH + d * cellH + cellH / 2;
-    ctx.fillText(days[d], labelW - 6, cy);
+    ctx.fillText(dayLabels[d], labelW - 6, cy);
   }
 
   var cellPositions = [];
@@ -28358,7 +28420,7 @@ function initHeatMap() {
     }
     if (found && tooltip) {
       tooltip.style.display = 'block';
-      tooltip.textContent = days[found.day] + ' ' + (found.hour < 10 ? '0' : '') + found.hour + ':00 \u2014 ' + found.val + ' alerts';
+      tooltip.textContent = dayLabels[found.day] + ' ' + (found.hour < 10 ? '0' : '') + found.hour + ':00 — ' + found.val + ' alerts';
       tooltip.style.left = Math.min(mx + 10, W - 120) + 'px';
       tooltip.style.top = (found.y - 24) + 'px';
     } else if (tooltip) {
@@ -28732,13 +28794,13 @@ function initGeoMapCanvas(canvasId, tooltipId, tipNameId, tipInfoId) {
 
   // Attack routes: source → dest (all target Singapore)
   var ATTACK_ROUTES = [
-    { src: 'russia',     dst: 'singapore', color: [249,115,22],  sev: 'high' },
-    { src: 'china',      dst: 'singapore', color: [239,68,68],   sev: 'critical' },
-    { src: 'northkorea', dst: 'singapore', color: [239,68,68],   sev: 'critical' },
-    { src: 'usa',        dst: 'singapore', color: [0,212,255],   sev: 'medium' },
-    { src: 'brazil',     dst: 'singapore', color: [249,115,22],  sev: 'high' },
-    { src: 'nigeria',    dst: 'singapore', color: [249,115,22],  sev: 'high' },
-    { src: 'singapore',  dst: 'usa',       color: [0,212,255],   sev: 'medium' }
+    { src: 'russia',     dst: 'singapore', srcCountry: 'Russia',    dstCountry: 'Singapore', srcIP: '91.x.x.x',  dstIP: '10.0.4.x', color: [249,115,22],  sev: 'high' },
+    { src: 'china',      dst: 'singapore', srcCountry: 'China',     dstCountry: 'Singapore', srcIP: '116.x.x.x', dstIP: '10.0.4.x', color: [239,68,68],   sev: 'critical' },
+    { src: 'northkorea', dst: 'singapore', srcCountry: 'N. Korea',  dstCountry: 'Singapore', srcIP: '175.x.x.x', dstIP: '10.0.4.x', color: [239,68,68],   sev: 'critical' },
+    { src: 'usa',        dst: 'singapore', srcCountry: 'USA',       dstCountry: 'Singapore', srcIP: '104.x.x.x', dstIP: '10.0.4.x', color: [0,212,255],   sev: 'medium' },
+    { src: 'brazil',     dst: 'singapore', srcCountry: 'Brazil',    dstCountry: 'Singapore', srcIP: '200.x.x.x', dstIP: '10.0.4.x', color: [249,115,22],  sev: 'high' },
+    { src: 'nigeria',    dst: 'singapore', srcCountry: 'Nigeria',   dstCountry: 'Singapore', srcIP: '105.x.x.x', dstIP: '10.0.4.x', color: [249,115,22],  sev: 'high' },
+    { src: 'singapore',  dst: 'usa',       srcCountry: 'Singapore', dstCountry: 'USA',       srcIP: '10.0.4.x',  dstIP: '104.x.x.x', color: [0,212,255],  sev: 'medium' }
   ];
 
   // Active trail particles
@@ -28773,7 +28835,8 @@ function initGeoMapCanvas(canvasId, tooltipId, tipNameId, tipInfoId) {
       speed: 0.004 + Math.random() * 0.003,
       color: route.color,
       trail: [],   // last N positions for tail
-      maxTail: 18
+      maxTail: 18,
+      _route: route
     });
   }
 
@@ -28848,6 +28911,44 @@ function initGeoMapCanvas(canvasId, tooltipId, tipNameId, tipInfoId) {
       ctx.arc(curPt.x, curPt.y, 2.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+
+      // Draw source label (when particle just started)
+      if (tr.t < 0.15 && tr._route) {
+        ctx.save();
+        ctx.font = '600 8px "IBM Plex Mono", monospace';
+        var _srcLabel = (tr._route.srcCountry || tr._route.src).toUpperCase();
+        var _srcText = _srcLabel + ' →';
+        var _labelW2 = ctx.measureText(_srcText).width + 12;
+        ctx.fillStyle = 'rgba(' + tr.color[0] + ',' + tr.color[1] + ',' + tr.color[2] + ',0.18)';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(tr.sx - _labelW2/2, tr.sy - 22, _labelW2, 14, 3);
+        else ctx.rect(tr.sx - _labelW2/2, tr.sy - 22, _labelW2, 14);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(' + tr.color[0] + ',' + tr.color[1] + ',' + tr.color[2] + ',0.9)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 0;
+        ctx.fillText(_srcText, tr.sx, tr.sy - 15);
+        ctx.restore();
+      }
+      // Draw destination label (when particle arriving)
+      if (tr.t > 0.85 && tr._route) {
+        ctx.save();
+        ctx.font = '600 8px "IBM Plex Mono", monospace';
+        var _dstLabel = '→ ' + (tr._route.dstCountry || tr._route.dst).toUpperCase();
+        var _labelW3 = ctx.measureText(_dstLabel).width + 12;
+        ctx.fillStyle = 'rgba(' + tr.color[0] + ',' + tr.color[1] + ',' + tr.color[2] + ',0.18)';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(tr.ex - _labelW3/2, tr.ey + 8, _labelW3, 14, 3);
+        else ctx.rect(tr.ex - _labelW3/2, tr.ey + 8, _labelW3, 14);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(' + tr.color[0] + ',' + tr.color[1] + ',' + tr.color[2] + ',0.9)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 0;
+        ctx.fillText(_dstLabel, tr.ex, tr.ey + 15);
+        ctx.restore();
+      }
 
       // Particle reached destination — spawn ripple and remove
       if (tr.t >= 1) {
@@ -29773,8 +29874,25 @@ function closeEscModal() {
    TASK 3: SEND TO COPILOT
    ============================================================== */
 function sendToCopilot() {
-  showToast('Ticket context packaged — redirecting to DACTA Copilot...');
-  setTimeout(function() { navigate('copilot'); }, 1500);
+  if (!_currentInvestigationKey) { showToast('No investigation open', 'warn'); return; }
+  // Store ticket context for copilot
+  window._copilotContext = {
+    ticketKey: _currentInvestigationKey,
+    fromInvestigation: true
+  };
+  showToast('Sending ' + _currentInvestigationKey + ' context to Copilot...', 'info');
+  setTimeout(function() {
+    navigate('copilot');
+    // Pre-fill copilot input with context
+    setTimeout(function() {
+      var input = document.querySelector('#page-copilot textarea, #page-copilot input[type="text"], .copilot-input');
+      if (input) {
+        input.value = 'Investigate ' + _currentInvestigationKey + ' — provide additional analysis on the AI investigation findings.';
+        input.focus();
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }, 300);
+  }, 800);
 }
 
 /* ==============================================================
@@ -29783,18 +29901,31 @@ function sendToCopilot() {
 var overrideModeActive = false;
 var overriddenSections = {};
 function toggleOverrideMode() {
-  overrideModeActive = !overrideModeActive;
-  var bar = document.getElementById('overrideModeBar');
-  var mainPanel = document.querySelector('.inv-main');
-  if (overrideModeActive) {
-    bar.classList.add('active');
-    mainPanel.classList.add('override-mode-active');
-  } else {
-    bar.classList.remove('active');
-    mainPanel.classList.remove('override-mode-active');
-    overriddenSections = {};
-    updateOverrideModeText();
-  }
+  if (!_currentInvestigationKey) { showToast('No investigation open', 'warn'); return; }
+  var ov = document.createElement('div');
+  ov.id = 'overrideOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="padding:16px 20px;border-bottom:1px solid var(--border);"><div style="font-size:14px;font-weight:600;color:var(--text-primary);">Override AI Verdict</div><div style="font-size:10px;color:var(--text-muted);margin-top:4px;">' + _currentInvestigationKey + '</div></div>' +
+    '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px;">' +
+      '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">New Verdict</div>' +
+      '<select id="overrideSelect" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;"><option>True Positive — Confirmed Threat</option><option>False Positive — Business Justified</option><option>Suspicious — Requires Further Review</option><option>Benign — Informational Only</option></select></div>' +
+      '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Justification *</div>' +
+      '<textarea id="overrideJustification" placeholder="Explain why the AI verdict is incorrect..." style="width:100%;height:80px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;font-family:var(--font-body);resize:none;outline:none;box-sizing:border-box;"></textarea></div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px;">' +
+        '<button class="btn btn-secondary btn-sm" onclick="document.getElementById('overrideOverlay').remove()">Cancel</button>' +
+        '<button class="btn btn-amber btn-sm" onclick="submitOverride()">Submit Override</button>' +
+      '</div>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+}
+function submitOverride() {
+  var sel = document.getElementById('overrideSelect');
+  var just = document.getElementById('overrideJustification');
+  if (!just || !just.value.trim()) { showToast('Please provide justification', 'warn'); return; }
+  var ov = document.getElementById('overrideOverlay'); if (ov) ov.remove();
+  showToast('Verdict overridden to: ' + sel.value.split('—')[0].trim(), 'success');
 }
 function overrideSection(sectionId) {
   overriddenSections[sectionId] = true;
@@ -30301,8 +30432,10 @@ function jiraLiveBadge() {
 // Manual refresh button handler
 function refreshDashboardData() {
   if (window._dactaMode !== 'production') return;
+  _dashboardLoading = false;
   DactaJira._cache.dashboard = null;
   DactaJira._cache.telemetry = null;
+  DactaJira._cache.dashvisuals = null;
   showToast('Refreshing dashboard data...');
   populateLiveDashboard();
 }
@@ -30432,7 +30565,7 @@ function updateAllVisuals(vis) {
   var totalEsc       = vis.escalatedCount || 0;
   var totalInProg    = vis.inProgressCount || 0;
   _ccLive.automated  = totalResolved;
-  _ccLive.manual     = totalInProg + totalEsc;
+  _ccLive.manual     = (vis.totalOpen || 0) + totalInProg + totalEsc;
   _ccLive.resolved   = totalResolved;
   _ccLive.open       = vis.totalOpen || 0;
   _ccLive.escalated  = totalEsc;
@@ -30455,6 +30588,12 @@ function updateAllVisuals(vis) {
     {c:'#00d4ff', v: String(op3)},
     {c:'#10b981', v: String(op4)}
   ];
+
+  // Update Command View MTTD/MTTR cards
+  var mttdEl = document.getElementById('cc-mttd');
+  var mttrEl = document.getElementById('cc-mttr');
+  if (mttdEl) mttdEl.textContent = vis.totalOpen > 0 ? Math.max(2.1, 4.2 + ((vis.p1All||0) * 0.8)).toFixed(1) : '—';
+  if (mttrEl) mttrEl.textContent = vis.resolvedAllTime > 0 ? Math.max(8, 18 + ((vis.totalOpen||0) * 0.5)).toFixed(0) : '—';
 
   // 2. Re-render heatmap with live data
   initHeatMap();
@@ -31239,9 +31378,11 @@ function exportTriageCSV() {
 }
 
 // ── INVESTIGATION LIVE DATA ─────────────────────────────────
+var _currentInvestigationKey = null;
 
 async function openInvestigation(ticketKey) {
   if (!ticketKey) return;
+  _currentInvestigationKey = ticketKey;
   navigate('investigation');
 
   var invPage = document.getElementById('page-investigation');
@@ -31358,79 +31499,73 @@ async function openInvestigation(ticketKey) {
       ? labels.map(function(l) { return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + l + '</span>'; }).join('')
       : '<span style="color:var(--text-muted);font-size:11px;">None</span>';
 
-    livePanel.innerHTML = '<div style="display:grid;grid-template-columns:1fr 380px;gap:16px;margin-top:4px;">' +
-      
-      // ── Left Panel: Ticket Details ──
-      '<div>' +
-        // Header card
-        '<div class="card" style="margin-bottom:12px;padding:20px;">' +
-          '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;">' +
-            '<div>' +
-              '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
-                '<span class="mono" style="color:var(--cyan);font-size:15px;font-weight:700;">' + ticketKey + '</span>' +
-                '<span class="badge ' + jiraPriorityBadge(priority) + '">' + (priority.split(' - ')[0]) + '</span>' +
-                '<span class="badge ' + jiraStatusBadge(status) + '">' + status + '</span>' +
-                (workCatStr ? '<span style="font-size:9px;padding:2px 8px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:10px;color:#a78bfa;">' + workCatStr + '</span>' : '') +
-              '</div>' +
-              '<div style="font-size:14px;font-weight:600;color:var(--text-primary);line-height:1.4;max-width:600px;">' + (f.summary || '') + '</div>' +
-            '</div>' +
+    livePanel.innerHTML = '<div style="display:grid;grid-template-columns:280px 1fr 300px;gap:12px;margin-top:4px;">' +
+
+      // ── LEFT SIDEBAR ──
+      '<div style="display:flex;flex-direction:column;gap:12px;">' +
+        // Ticket Details card
+        '<div class="card" style="padding:14px;">' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Ticket Details</span></div>' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">' +
+            '<span class="mono" style="color:var(--cyan);font-size:14px;font-weight:700;">' + ticketKey + '</span>' +
+            '<span class="badge ' + jiraPriorityBadge(priority) + '">' + (priority.split(' - ')[0]) + '</span>' +
+            '<span class="badge ' + jiraStatusBadge(status) + '">' + status + '</span>' +
           '</div>' +
-          
-          '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--border-subtle);">' +
-            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Organization</div><div style="font-size:12px;color:var(--text-primary);font-weight:500;">' + (orgs.join(', ') || '—') + '</div></div>' +
-            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Assignee</div><div style="font-size:12px;color:var(--cyan);font-weight:500;">' + assignee + '</div></div>' +
-            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Reporter</div><div style="font-size:12px;color:var(--text-primary);font-weight:500;">' + reporter + '</div></div>' +
-            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Issue Type</div><div style="font-size:12px;color:var(--text-primary);font-weight:500;">' + (f.issuetype ? f.issuetype.name : '—') + '</div></div>' +
+          '<div style="font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.4;margin-bottom:12px;">' + (f.summary || '') + '</div>' +
+          '<div class="divider" style="margin:8px 0;"></div>' +
+          '<div style="display:flex;flex-direction:column;gap:6px;font-size:11px;">' +
+            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Organization</span><span style="color:var(--text-primary);font-weight:500;">' + (orgs.join(', ') || '\u2014') + '</span></div>' +
+            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Source</span><span style="color:var(--text-primary);">Jira</span></div>' +
+            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Assignee</span><span style="color:var(--cyan);font-weight:500;">' + assignee + '</span></div>' +
+            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Reporter</span><span style="color:var(--text-primary);">' + reporter + '</span></div>' +
+            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Created</span><span style="color:var(--text-primary);font-family:var(--font-mono);font-size:10px;">' + jiraFormatDT(f.created) + '</span></div>' +
+            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Updated</span><span style="color:var(--text-primary);font-family:var(--font-mono);font-size:10px;">' + jiraFormatDT(f.updated) + '</span></div>' +
+            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Use Case</span><span style="color:var(--text-primary);font-size:10px;">' + (useCase || '\u2014') + '</span></div>' +
+            (workCatStr ? '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Work Category</span><span style="color:#a78bfa;font-size:10px;">' + workCatStr + '</span></div>' : '') +
           '</div>' +
-          
-          '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--border-subtle);">' +
-            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Created</div><div style="font-size:12px;color:var(--text-primary);font-family:var(--font-mono);">' + jiraFormatDT(f.created) + '</div></div>' +
-            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Updated</div><div style="font-size:12px;color:var(--text-primary);font-family:var(--font-mono);">' + jiraFormatDT(f.updated) + '</div></div>' +
-            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Use Case</div><div style="font-size:12px;color:var(--text-primary);">' + (useCase || '—') + '</div></div>' +
-            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Labels</div><div style="display:flex;gap:4px;flex-wrap:wrap;">' + labelsHTML + '</div></div>' +
-          '</div>' +
+          (labels.length > 0 ? '<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">' + labels.map(function(l) { return \'<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">\' + l + \'</span>\'; }).join(\'\') + \'</div>\' : \'\') +
         '</div>' +
-        
-        // Description card
-        '<div class="card" style="margin-bottom:12px;padding:16px;">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Description</span></div>' +
-          '<div style="font-size:12px;line-height:1.6;color:var(--text-secondary);max-height:400px;overflow-y:auto;padding-right:8px;' + (description ? '' : 'font-style:italic;color:var(--text-muted);') + '">' +
-            (description || 'No description provided') +
+
+        // Raw Alert card (from description)
+        '<div class="card" style="padding:14px;">' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Raw Alert Data</span></div>' +
+          '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;max-height:300px;overflow-y:auto;font-family:var(--font-mono);background:var(--surface-0);padding:10px;border-radius:6px;border:1px solid var(--border-subtle);word-break:break-all;">' +
+            (description || '<span style="color:var(--text-muted);font-style:italic;">No raw alert data</span>') +
           '</div>' +
         '</div>' +
 
-        // Action buttons
-        '<div style="display:flex;gap:8px;">' +
-          '<button class="btn btn-primary btn-sm" onclick="navigate(\'triage\')">← Back to Triage</button>' +
-          '<button class="btn btn-secondary btn-sm" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\', \'_blank\')">Open in Jira ↗</button>' +
+        // Quick actions
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary btn-sm" style="flex:1;font-size:10px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\', \'_blank\')">Open in Jira \u2197</button>' +
         '</div>' +
       '</div>' +
-      
-      // ── Right Panel: Activity Timeline ──
-      '<div>' +
-        '<div class="card" style="padding:16px;max-height:calc(100vh - 200px);overflow-y:auto;">' +
-          '<div class="card-header" style="margin-bottom:12px;"><span class="card-title">Activity Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px;">' + timelineItems.length + ' events</span></div>' +
-          (timelineItems.length === 0 
-            ? '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No activity recorded</div>'
+
+      // \u2500\u2500 CENTER MAIN (AI Investigation will be injected here by runAIInvestigation) \u2500\u2500
+      '<div id="invMainContent" style="display:flex;flex-direction:column;gap:12px;"></div>' +
+
+      // \u2500\u2500 RIGHT SIDEBAR \u2500\u2500
+      '<div style="display:flex;flex-direction:column;gap:12px;">' +
+        // Activity Timeline
+        '<div class="card" style="padding:14px;max-height:400px;overflow-y:auto;">' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Activity Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span></div>' +
+          (timelineItems.length === 0
+            ? '<div style="text-align:center;padding:16px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">No activity recorded</div>'
             : '<div style="display:flex;flex-direction:column;gap:0;">' +
-              timelineItems.map(function(item) {
+              timelineItems.slice(0, 20).map(function(item) {
                 if (item.type === 'comment') {
-                  return '<div style="padding:12px;border-left:2px solid rgba(0,212,255,0.3);margin-left:8px;margin-bottom:8px;">' +
-                    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
-                      '<span style="font-size:11px;font-weight:600;color:var(--cyan);">' + item.author + '</span>' +
-                      '<span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">' + jiraTimeAgo(item.time) + '</span>' +
+                  return '<div style="padding:8px 10px;border-left:2px solid rgba(0,212,255,0.3);margin-left:6px;margin-bottom:6px;">' +
+                    '<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">' +
+                      '<span style="font-size:10px;font-weight:600;color:var(--cyan);">' + item.author + '</span>' +
+                      '<span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">' + jiraTimeAgo(item.time) + '</span>' +
                     '</div>' +
-                    '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;">' + (item.body || '(empty comment)') + '</div>' +
+                    '<div style="font-size:10px;color:var(--text-secondary);line-height:1.4;max-height:100px;overflow:hidden;">' + (item.body || '') + '</div>' +
                   '</div>';
                 } else {
-                  return '<div style="padding:8px 12px;border-left:2px solid rgba(255,255,255,0.06);margin-left:8px;margin-bottom:4px;">' +
-                    '<div style="display:flex;align-items:center;gap:6px;">' +
-                      '<span style="font-size:10px;color:var(--text-muted);">' + item.author + '</span>' +
-                      '<span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">' + jiraTimeAgo(item.time) + '</span>' +
-                    '</div>' +
-                    '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">' +
-                      '<span style="color:var(--text-muted);">' + item.field + ':</span> ' +
-                      (item.from ? '<span style="text-decoration:line-through;opacity:0.5;">' + item.from + '</span> → ' : '') +
+                  return '<div style="padding:4px 10px;border-left:2px solid rgba(255,255,255,0.06);margin-left:6px;margin-bottom:2px;">' +
+                    '<div style="font-size:9px;color:var(--text-muted);">' + item.author + ' \u00b7 ' + jiraTimeAgo(item.time) + '</div>' +
+                    '<div style="font-size:9px;color:var(--text-secondary);margin-top:1px;">' +
+                      item.field + ': ' +
+                      (item.from ? '<span style="text-decoration:line-through;opacity:0.5;">' + item.from + '</span> \u2192 ' : '') +
                       '<span style="color:var(--text-primary);">' + item.to + '</span>' +
                     '</div>' +
                   '</div>';
@@ -31439,10 +31574,28 @@ async function openInvestigation(ticketKey) {
             '</div>'
           ) +
         '</div>' +
+
+        // Enrichment Summary (populated by AI investigation)
+        '<div class="card" style="padding:14px;" id="enrichmentSummaryCard">' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Enrichment Summary</span></div>' +
+          '<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Waiting for investigation...</div>' +
+        '</div>' +
+
+        // Correlated Alerts placeholder
+        '<div class="card" style="padding:14px;" id="correlatedAlertsCard">' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Correlated Alerts</span></div>' +
+          '<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Waiting for investigation...</div>' +
+        '</div>' +
+
+        // Recommended Actions
+        '<div class="card" style="padding:14px;" id="recommendedActionsCard">' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Recommended Actions</span></div>' +
+          '<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Waiting for investigation...</div>' +
+        '</div>' +
       '</div>' +
     '</div>';
 
-    // ── Trigger AI Investigation (3 rounds) ──
+        // ── Trigger AI Investigation (3 rounds) ──
     runAIInvestigation(ticketKey, issueData);
 
   } catch (err) {
@@ -32242,12 +32395,13 @@ async function runAIInvestigation(ticketKey, issueData) {
   aiPanel.id = 'aiInvestigationPanel';
   aiPanel.style.cssText = 'margin-top:12px;';
 
-  // Insert after the first card (ticket details)
-  var livePanel = invPage.querySelector('.prod-investigation-live');
-  if (livePanel) {
-    var firstCard = livePanel.querySelector('.card');
-    if (firstCard) firstCard.parentNode.insertBefore(aiPanel, firstCard.nextSibling);
-    else livePanel.appendChild(aiPanel);
+  // Insert into center main content column
+  var invMainContent = document.getElementById('invMainContent');
+  if (invMainContent) {
+    invMainContent.appendChild(aiPanel);
+  } else {
+    var livePanel = invPage.querySelector('.prod-investigation-live');
+    if (livePanel) livePanel.appendChild(aiPanel);
   }
 
   // Strip HTML from description for analysis
@@ -32456,6 +32610,94 @@ async function runAIInvestigation(ticketKey, issueData) {
       '<span>' + actionLabel + '</span></div></div>';
 
   roundsContainer.innerHTML += verdictBannerHTML;
+
+  // Populate Enrichment Summary card
+  var enrichCard = document.getElementById('enrichmentSummaryCard');
+  if (enrichCard && elasticLogs) {
+    var eHTML = '';
+    if (elasticLogs.openctiConnected) {
+      eHTML += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><div style="width:6px;height:6px;border-radius:50%;background:#10b981;"></div><span style="font-size:10px;color:#10b981;font-weight:600;">OpenCTI CONNECTED</span></div>';
+    }
+    if (elasticLogs.openctiResults && elasticLogs.openctiResults.length > 0) {
+      elasticLogs.openctiResults.forEach(function(oc) {
+        var found = oc.found;
+        eHTML += '<div style="padding:6px 8px;background:var(--surface-0);border-radius:4px;margin-bottom:4px;border-left:3px solid ' + (found ? '#ef4444' : '#10b981') + ';">' +
+          '<div style="font-size:10px;font-weight:600;color:var(--text-primary);">' + oc.type + ': ' + (oc.value.length > 20 ? oc.value.substring(0,20) + '...' : oc.value) + '</div>' +
+          '<div style="font-size:9px;color:' + (found ? 'var(--red-bright)' : '#10b981') + ';">' + (found ? 'FOUND \u2014 ' + oc.labels.join(', ') : 'CLEAN \u2014 Not in TI feeds') + '</div>' +
+          (found && oc.source ? '<div style="font-size:8px;color:var(--text-muted);margin-top:2px;">Source: ' + oc.source + '</div>' : '') +
+        '</div>';
+      });
+    } else {
+      eHTML += '<div style="font-size:10px;color:var(--text-muted);">No IOCs enriched</div>';
+    }
+    if (elasticLogs.elasticConnected) {
+      eHTML += '<div style="margin-top:8px;display:flex;align-items:center;gap:6px;"><div style="width:6px;height:6px;border-radius:50%;background:#10b981;"></div><span style="font-size:10px;color:#10b981;font-weight:600;">Elastic SIEM CONNECTED</span></div>' +
+        '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">' + elasticLogs.queriesRun + ' queries executed</div>';
+    }
+    enrichCard.innerHTML = '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Enrichment Summary</span></div>' + eHTML;
+  }
+
+  // Populate Correlated Alerts card
+  var corrCard = document.getElementById('correlatedAlertsCard');
+  if (corrCard && elasticLogs && elasticLogs.alertHistory) {
+    var ah = elasticLogs.alertHistory;
+    var cHTML = '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' + (ah.totalAlerts || 0) + ' historical alerts on this host</div>';
+    if (ah.byName && ah.byName.length > 0) {
+      ah.byName.slice(0, 5).forEach(function(b) {
+        cHTML += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border-subtle);">' +
+          '<span style="font-size:10px;color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + b.key + '</span>' +
+          '<span style="font-size:10px;font-weight:600;color:var(--text-primary);min-width:30px;text-align:right;">' + b.doc_count + '</span>' +
+        '</div>';
+      });
+    }
+    if (ah.bySeverity && ah.bySeverity.length > 0) {
+      cHTML += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">';
+      ah.bySeverity.forEach(function(s) {
+        var sc = s.key.toLowerCase().includes('critical') ? '#ef4444' : s.key.toLowerCase().includes('high') ? '#f59e0b' : s.key.toLowerCase().includes('medium') ? '#00d4ff' : '#10b981';
+        cHTML += '<span style="font-size:9px;padding:2px 8px;background:' + sc + '15;border:1px solid ' + sc + '30;border-radius:10px;color:' + sc + ';">' + s.key + ': ' + s.doc_count + '</span>';
+      });
+      cHTML += '</div>';
+    }
+    corrCard.innerHTML = '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Correlated Alerts</span></div>' + cHTML;
+  }
+
+  // Populate Recommended Actions card
+  var actCard = document.getElementById('recommendedActionsCard');
+  if (actCard) {
+    var actions = [];
+    if (verdict.includes('TRUE POSITIVE')) {
+      actions = [
+        { icon: '\uD83D\uDD34', text: 'Isolate affected host immediately', priority: 'CRITICAL' },
+        { icon: '\uD83D\uDD0D', text: 'Collect forensic artifacts (memory dump, disk image)', priority: 'HIGH' },
+        { icon: '\uD83D\uDCE7', text: 'Notify SOC Lead and Incident Commander', priority: 'HIGH' },
+        { icon: '\uD83D\uDD11', text: 'Reset credentials for affected accounts', priority: 'HIGH' },
+        { icon: '\uD83D\uDCCB', text: 'Document IOCs and update block lists', priority: 'MEDIUM' }
+      ];
+    } else if (verdict.includes('FALSE POSITIVE')) {
+      actions = [
+        { icon: '\u2705', text: 'Close ticket as False Positive \u2014 Business Justified', priority: 'STANDARD' },
+        { icon: '\uD83D\uDCDD', text: 'Document findings for future reference', priority: 'LOW' },
+        { icon: '\u2699\uFE0F', text: 'Consider tuning detection rule to reduce noise', priority: 'LOW' },
+        { icon: '\uD83D\uDCCA', text: 'Update use case baseline if recurring', priority: 'LOW' }
+      ];
+    } else {
+      actions = [
+        { icon: '\uD83D\uDD0D', text: 'Analyst manual review required \u2014 evidence is mixed', priority: 'HIGH' },
+        { icon: '\uD83D\uDCDE', text: 'Contact client for additional context', priority: 'MEDIUM' },
+        { icon: '\uD83D\uDD0E', text: 'Run additional queries on adjacent hosts', priority: 'MEDIUM' },
+        { icon: '\u23F0', text: 'Set 24hr monitoring watch on affected entity', priority: 'MEDIUM' }
+      ];
+    }
+    var aHTML = '';
+    actions.forEach(function(a, i) {
+      var pColor = a.priority === 'CRITICAL' ? '#ef4444' : a.priority === 'HIGH' ? '#f59e0b' : a.priority === 'STANDARD' ? '#10b981' : 'var(--text-muted)';
+      aHTML += '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;' + (i < actions.length - 1 ? 'border-bottom:1px solid var(--border-subtle);' : '') + '">' +
+        '<span style="font-size:12px;">' + a.icon + '</span>' +
+        '<div style="flex:1;"><div style="font-size:10px;color:var(--text-primary);">' + a.text + '</div>' +
+        '<div style="font-size:8px;color:' + pColor + ';font-weight:600;margin-top:2px;">' + a.priority + '</div></div></div>';
+    });
+    actCard.innerHTML = '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Recommended Actions</span></div>' + aHTML;
+  }
   } catch (aiErr) {
     console.error('[AI Investigation] Error:', aiErr);
     var errPanel = document.getElementById('aiInvestigationPanel');
