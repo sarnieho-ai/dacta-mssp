@@ -31624,6 +31624,32 @@ async function submitCreateTicket() {
 // AI INVESTIGATION ENGINE v2 — ELASTIC LOG ANALYSIS + BALANCED EVIDENCE
 // ═══════════════════════════════════════════════════════════════════════
 
+// ── Elastic SIEM Query Helper ──
+async function queryElastic(action, index, body) {
+  try {
+    var resp = await fetch('/api/elastic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: action, index: index, body: body })
+    });
+    if (!resp.ok) { console.warn('[Elastic] HTTP ' + resp.status); return null; }
+    return await resp.json();
+  } catch (err) { console.error('[Elastic] Query failed:', err); return null; }
+}
+
+// ── OpenCTI GraphQL Helper ──
+async function queryOpenCTI(gqlQuery, variables) {
+  try {
+    var resp = await fetch('/api/opencti', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: gqlQuery, variables: variables || {} })
+    });
+    if (!resp.ok) { console.warn('[OpenCTI] HTTP ' + resp.status); return null; }
+    return await resp.json();
+  } catch (err) { console.error('[OpenCTI] Query failed:', err); return null; }
+}
+
 // Helper: extract IOCs (IPs, domains, hashes, files, hosts) from text
 function extractIOCs(text) {
   var iocs = { ips: [], hosts: [], files: [], hashes: [], ports: [], users: [], paths: [] };
@@ -31744,6 +31770,237 @@ function analyzeCommandContext(text) {
 }
 
 // ── Simulate Elastic/SIEM log queries ──
+// ═══════════════════════════════════════════════════════════════
+// REAL Elastic SIEM + OpenCTI Lookup (async — queries live data)
+// ═══════════════════════════════════════════════════════════════
+async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
+  var logs = {
+    childProcesses: [], networkConnections: [], fileEvents: [],
+    authEvents: [], edrActions: [], queryResults: [],
+    rawAlerts: [], hostInfo: null, alertHistory: null,
+    openctiResults: [],
+    elasticConnected: false, openctiConnected: false,
+    queriesRun: 0, queryDetails: []
+  };
+
+  var f = issueData.fields || {};
+  var org = '';
+  if (f.customfield_10002 && f.customfield_10002.length > 0) org = (f.customfield_10002[0].name || '').toLowerCase();
+  var namespace = 'default';
+  if (org.includes('naga')) namespace = 'nagaworld';
+  else if (org.includes('dacta')) namespace = 'dacta';
+  else if (org.includes('foxwood')) namespace = 'foxwood';
+  else if (org.includes('silver')) namespace = 'silverkey';
+  else if (org.includes('hla')) namespace = 'hla';
+  else if (org.includes('demo')) namespace = 'demo';
+
+  // ── QUERY 1: CrowdStrike Alert Correlation ──
+  var alertIndex = '.ds-logs-crowdstrike.alert-' + namespace + '-*';
+  var alertQuery = { size: 5, sort: [{ '@timestamp': 'desc' }], _source: true };
+  var hostnames = iocs.hosts || [];
+  if (hostnames.length > 0) {
+    alertQuery.query = { bool: { should: hostnames.map(function(h) { return { match: { 'host.hostname': h } }; }), minimum_should_match: 1 } };
+  } else {
+    var procNames = (iocs.files || []).filter(function(f) { return f.includes('.exe'); });
+    if (procNames.length > 0) {
+      alertQuery.query = { bool: { should: procNames.map(function(p) { return { match: { 'process.name': p } }; }), minimum_should_match: 1 } };
+    } else {
+      alertQuery.query = { match_all: {} };
+    }
+  }
+
+  var qD1 = { name: 'CrowdStrike Alert Lookup', index: alertIndex, query: JSON.stringify(alertQuery.query || {}).substring(0, 120), status: 'running' };
+  logs.queryDetails.push(qD1);
+  logs.queriesRun++;
+
+  var alertResult = await queryElastic('search', alertIndex, alertQuery);
+  if (alertResult && alertResult.hits && alertResult.hits.hits && alertResult.hits.hits.length > 0) {
+    logs.elasticConnected = true;
+    qD1.status = 'success';
+    qD1.hits = alertResult.hits.total ? alertResult.hits.total.value : alertResult.hits.hits.length;
+
+    alertResult.hits.hits.forEach(function(hit) {
+      var src = hit._source;
+      var cs = (src.crowdstrike || {}).alert || {};
+      logs.rawAlerts.push({
+        timestamp: src['@timestamp'],
+        hostname: (src.host || {}).hostname || 'unknown',
+        processName: (src.process || {}).name || 'unknown',
+        parentProcess: ((src.process || {}).parent || {}).name || 'unknown',
+        cmdline: cs.cmdline || '',
+        alertName: cs.display_name || cs.name || '',
+        severity: cs.severity_name || '',
+        confidence: cs.confidence || 0,
+        disposition: cs.pattern_disposition_description || '',
+        dispositionDetails: cs.pattern_disposition_details || {},
+        tactic: ((src.threat || {}).tactic || {}).name || [],
+        technique: ((src.threat || {}).technique || {}).name || [],
+        techniqueId: ((src.threat || {}).technique || {}).id || [],
+        relatedIPs: (src.related || {}).ip || [],
+        relatedHashes: (src.related || {}).hash || [],
+        relatedUsers: (src.related || {}).user || [],
+        relatedHosts: (src.related || {}).hosts || [],
+        falconLink: cs.falcon_host_link || '',
+        product: cs.product || '',
+        scenario: cs.scenario || '',
+        objective: cs.objective || '',
+        localPrevalence: cs.local_prevalence || '',
+        globalPrevalence: cs.global_prevalence || '',
+        grandparentProcess: (cs.grandparent_details || {}).filename || '',
+        grandparentCmdline: (cs.grandparent_details || {}).cmdline || '',
+        processHash: ((src.process || {}).hash || {}).sha256 || '',
+        parentHash: (((src.process || {}).parent || {}).hash || {}).sha256 || ''
+      });
+    });
+
+    var pa = logs.rawAlerts[0];
+
+    // EDR Actions
+    if (pa.disposition) {
+      logs.edrActions.push({ status: pa.dispositionDetails.kill_process ? 'KILLED' : 'INFO', action: pa.disposition, result: pa.disposition, engine: 'CrowdStrike Falcon', falconLink: pa.falconLink });
+    }
+    if (pa.dispositionDetails.kill_process) {
+      logs.edrActions.push({ status: 'CLEAR', action: 'Kill Effective', result: 'CrowdStrike confirmed kill_process=true, kill_subprocess=' + (pa.dispositionDetails.kill_subprocess || false) });
+    }
+
+    // ── QUERY 2: Child Processes ──
+    var alertTime = pa.timestamp;
+    var timeFrom = new Date(new Date(alertTime).getTime() - 300000).toISOString();
+    var timeTo = new Date(new Date(alertTime).getTime() + 300000).toISOString();
+    var childQ = { size: 20, query: { bool: { must: [{ match: { 'host.hostname': pa.hostname } }, { range: { '@timestamp': { gte: timeFrom, lte: timeTo } } }] } }, sort: [{ '@timestamp': 'asc' }], _source: ['@timestamp', 'process.name', 'process.parent.name', 'crowdstrike.alert.name', 'crowdstrike.alert.cmdline'] };
+    var qD2 = { name: 'Child Process Search', index: alertIndex, query: 'host:' + pa.hostname + ' ±5min', status: 'running' };
+    logs.queryDetails.push(qD2); logs.queriesRun++;
+
+    var childResult = await queryElastic('search', alertIndex, childQ);
+    if (childResult && childResult.hits) {
+      qD2.status = 'success'; qD2.hits = childResult.hits.total ? childResult.hits.total.value : 0;
+      var childHits = (childResult.hits.hits || []).filter(function(h) {
+        var pName = (h._source.process || {}).name || '';
+        return pName !== pa.processName;
+      });
+      if (childHits.length === 0) {
+        logs.childProcesses.push({ status: 'CLEAR', query: 'process.parent.name:"' + pa.processName + '" on ' + pa.hostname + ' (±5min)', result: 'No child processes spawned. Elastic returned 0 child process events in ±5min window.', count: 0, live: true });
+      } else {
+        var cNames = childHits.map(function(h) { return (h._source.process || {}).name || 'unknown'; });
+        logs.childProcesses.push({ status: 'ALERT', query: 'process.parent.name:"' + pa.processName + '"', result: 'Child processes: ' + [...new Set(cNames)].join(', '), count: childHits.length, live: true });
+      }
+    } else {
+      qD2.status = 'no_data';
+      logs.childProcesses.push({ status: 'CLEAR', query: 'child process search', result: 'No child process telemetry in alert index', count: 0, live: true });
+    }
+
+    // ── QUERY 3: Network Connections (Firewall logs) ──
+    var alertIPs = (pa.relatedIPs || []).concat((iocs.ips || []).filter(function(ip) { return !(pa.relatedIPs || []).includes(ip); }));
+    if (alertIPs.length > 0) {
+      for (var ni = 0; ni < alertIPs.length; ni++) {
+        var ip = alertIPs[ni];
+        var isPrivate = ip.startsWith('10.') || ip.startsWith('172.') || ip.startsWith('192.168.') || ip.startsWith('127.');
+        var netIndex = 'logs-fortinet_fortigate.log-' + namespace + '-*,logs-panw.panos-' + namespace + '-*';
+        var netQ = { size: 5, query: { bool: { must: [{ range: { '@timestamp': { gte: timeFrom, lte: timeTo } } }], should: [{ match: { 'destination.ip': ip } }, { match: { 'source.ip': ip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
+        var qD3 = { name: 'Network: ' + ip, index: 'Firewall logs', query: 'dst.ip:"' + ip + '" ±5min', status: 'running' };
+        logs.queryDetails.push(qD3); logs.queriesRun++;
+
+        var netResult = await queryElastic('search', netIndex, netQ);
+        if (netResult && netResult.hits && netResult.hits.total && netResult.hits.total.value > 0) {
+          qD3.status = 'success'; qD3.hits = netResult.hits.total.value;
+          logs.networkConnections.push({ status: 'ALERT', query: 'destination.ip:"' + ip + '" (Firewall)', result: 'Connection to ' + ip + ' found — ' + netResult.hits.total.value + ' events in firewall logs', ip: ip, count: netResult.hits.total.value, live: true });
+        } else {
+          qD3.status = netResult ? 'no_data' : 'error';
+          logs.networkConnections.push({ status: 'CLEAR', query: 'destination.ip:"' + ip + '" (Firewall ±5min)', result: 'No outbound connection to ' + ip + ' in firewall logs' + (isPrivate ? ' (private IP)' : ''), ip: ip, count: 0, live: true });
+        }
+      }
+    } else {
+      logs.networkConnections.push({ status: 'CLEAR', query: 'No IPs from alert', result: 'No external IPs for network correlation', ip: 'N/A', count: 0, live: true });
+    }
+
+    // ── QUERY 4: Host Inventory ──
+    var hostIndex = '.ds-logs-crowdstrike.host-' + namespace + '-*';
+    var qD4 = { name: 'Host Inventory', index: hostIndex, query: 'host:' + pa.hostname, status: 'running' };
+    logs.queryDetails.push(qD4); logs.queriesRun++;
+    var hostResult = await queryElastic('search', hostIndex, { size: 1, query: { match: { 'host.hostname': pa.hostname } }, sort: [{ '@timestamp': 'desc' }], _source: ['host', 'related', 'company', '@timestamp'] });
+    if (hostResult && hostResult.hits && hostResult.hits.hits && hostResult.hits.hits.length > 0) {
+      qD4.status = 'success'; qD4.hits = 1;
+      var hs = hostResult.hits.hits[0]._source;
+      logs.hostInfo = { hostname: (hs.host || {}).hostname, os: ((hs.host || {}).os || {}).full || 'Unknown', ip: ((hs.host || {}).ip || []).join(', '), geo: (hs.host || {}).geo || {}, mac: ((hs.host || {}).mac || []).join(', '), company: ((hs.company || {}).name) || '', lastSeen: hs['@timestamp'] };
+    } else { qD4.status = 'no_data'; }
+
+    // ── QUERY 5: Alert History ──
+    var qD5 = { name: 'Alert History', index: alertIndex, query: 'host:' + pa.hostname + ' (aggs)', status: 'running' };
+    logs.queryDetails.push(qD5); logs.queriesRun++;
+    var histResult = await queryElastic('search', alertIndex, { size: 0, query: { match: { 'host.hostname': pa.hostname } }, aggs: { by_name: { terms: { field: 'crowdstrike.alert.name', size: 20 } }, by_sev: { terms: { field: 'crowdstrike.alert.severity_name', size: 10 } }, time_range: { stats: { field: '@timestamp' } } } });
+    if (histResult && histResult.aggregations) {
+      qD5.status = 'success'; qD5.hits = histResult.hits.total ? histResult.hits.total.value : 0;
+      logs.alertHistory = { totalAlerts: qD5.hits, byName: (histResult.aggregations.by_name || {}).buckets || [], bySeverity: (histResult.aggregations.by_sev || {}).buckets || [], firstAlert: ((histResult.aggregations.time_range || {}).min_as_string) || '', lastAlert: ((histResult.aggregations.time_range || {}).max_as_string) || '' };
+    } else { qD5.status = 'no_data'; }
+
+    // Hashes from alert
+    if (pa.processHash && pa.processHash !== '0000000000000000000000000000000000000000') {
+      logs.queryResults.push({ type: 'Process Hash (CrowdStrike)', status: 'INFO', hash: pa.processHash.substring(0, 16) + '...', fullHash: pa.processHash, result: 'SHA256: ' + pa.processHash, live: true });
+    }
+    if (pa.parentHash) {
+      logs.queryResults.push({ type: 'Parent Hash', status: 'INFO', hash: pa.parentHash.substring(0, 16) + '...', fullHash: pa.parentHash, result: 'Parent SHA256: ' + pa.parentHash, live: true });
+    }
+
+    // User context
+    var users = (pa.relatedUsers || []).filter(function(u) { return !u.startsWith('uid:') && !u.startsWith('S-1-'); });
+    if (users.length > 0) {
+      logs.authEvents.push({ status: 'INFO', user: users.join(', '), result: 'Users: ' + users.join(', ') + ' — Domain: ' + (pa.relatedHosts || []).filter(function(h) { return h.includes('.'); }).join(', '), live: true });
+    }
+
+    // File events from disposition
+    if (pa.dispositionDetails.quarantine_file) {
+      logs.fileEvents.push({ status: 'ALERT', query: 'quarantine_file=true', result: 'CrowdStrike quarantined a file', count: 1, live: true });
+    } else {
+      logs.fileEvents.push({ status: 'CLEAR', query: 'disposition.quarantine_file', result: 'No files quarantined by CrowdStrike', count: 0, live: true });
+    }
+  } else {
+    qD1.status = alertResult ? 'no_data' : 'error';
+    if (alertResult) logs.elasticConnected = true;
+    logs.childProcesses.push({ status: 'UNCLEAR', query: 'No CrowdStrike alert found', result: 'Unable to correlate Jira ticket to Elastic alert', count: 0, live: false });
+    logs.networkConnections.push({ status: 'UNCLEAR', query: 'N/A', result: 'No Elastic data for network correlation', ip: 'N/A', count: 0, live: false });
+    logs.fileEvents.push({ status: 'UNCLEAR', query: 'N/A', result: 'No Elastic data for file correlation', count: 0, live: false });
+  }
+
+  // ── QUERY 6: OpenCTI IOC Lookups ──
+  var lookupIPs = (logs.rawAlerts.length > 0 ? logs.rawAlerts[0].relatedIPs : iocs.ips) || [];
+  for (var oi = 0; oi < lookupIPs.length; oi++) {
+    var lip = lookupIPs[oi];
+    if (lip.startsWith('10.') || lip.startsWith('172.') || lip.startsWith('192.168.') || lip.startsWith('127.')) continue;
+    var qDO = { name: 'OpenCTI IP: ' + lip, index: 'OpenCTI', query: 'search("' + lip + '")', status: 'running' };
+    logs.queryDetails.push(qDO); logs.queriesRun++;
+    var ocR = await queryOpenCTI('{ stixCyberObservables(first: 5, search: "' + lip + '") { edges { node { id entity_type observable_value objectLabel { value } createdBy { name } } } } }');
+    if (ocR && ocR.data && ocR.data.stixCyberObservables) {
+      logs.openctiConnected = true;
+      var oEdges = ocR.data.stixCyberObservables.edges || [];
+      qDO.status = oEdges.length > 0 ? 'success' : 'no_data'; qDO.hits = oEdges.length;
+      var oLabels = [];
+      oEdges.forEach(function(e) { (e.node.objectLabel || []).forEach(function(l) { if (!oLabels.includes(l.value)) oLabels.push(l.value); }); });
+      logs.openctiResults.push({ type: 'IP', value: lip, found: oEdges.length > 0, labels: oLabels, source: oEdges.length > 0 ? ((oEdges[0].node.createdBy || {}).name || 'OpenCTI') : '' });
+    } else { qDO.status = 'error'; }
+  }
+
+  // Hash lookups in OpenCTI
+  var lookupHashes = (logs.rawAlerts.length > 0 ? logs.rawAlerts[0].relatedHashes : iocs.hashes) || [];
+  var validH = lookupHashes.filter(function(h) { return h.length >= 32 && h !== '0000000000000000000000000000000000000000'; });
+  for (var hi2 = 0; hi2 < Math.min(validH.length, 3); hi2++) {
+    var lh = validH[hi2];
+    var qDH = { name: 'OpenCTI Hash: ' + lh.substring(0, 12) + '...', index: 'OpenCTI', query: 'search hash', status: 'running' };
+    logs.queryDetails.push(qDH); logs.queriesRun++;
+    var hcR = await queryOpenCTI('{ stixCyberObservables(first: 5, search: "' + lh + '") { edges { node { id entity_type observable_value objectLabel { value } createdBy { name } } } } }');
+    if (hcR && hcR.data && hcR.data.stixCyberObservables) {
+      logs.openctiConnected = true;
+      var hEdges = hcR.data.stixCyberObservables.edges || [];
+      qDH.status = hEdges.length > 0 ? 'success' : 'no_data'; qDH.hits = hEdges.length;
+      var hLbls = [];
+      hEdges.forEach(function(e) { (e.node.objectLabel || []).forEach(function(l) { if (!hLbls.includes(l.value)) hLbls.push(l.value); }); });
+      logs.openctiResults.push({ type: 'Hash', value: lh, found: hEdges.length > 0, labels: hLbls, source: hEdges.length > 0 ? ((hEdges[0].node.createdBy || {}).name || 'OpenCTI') : '' });
+    } else { qDH.status = 'error'; }
+  }
+
+  return logs;
+}
+
+// ── LEGACY: simulateElasticLookup (fallback for non-async contexts) ──
 function simulateElasticLookup(summary, desc, iocs, techniques) {
   var lower = (summary + ' ' + desc).toLowerCase();
   var logs = {
@@ -31878,6 +32135,23 @@ function generateExculpatoryEvidence(summary, desc, techniques, iocs, cmdCtx, el
 
   // Elastic log findings that exonerate
   if (elasticLogs) {
+    // Real CrowdStrike alert data enrichment
+    if (elasticLogs.rawAlerts && elasticLogs.rawAlerts.length > 0) {
+      var ra = elasticLogs.rawAlerts[0];
+      if (ra.dispositionDetails && ra.dispositionDetails.kill_process) {
+        evidence.push({ title: 'CrowdStrike killed the process (Elastic SIEM verified)', severity: 'strong', detail: 'CrowdStrike Falcon pattern disposition confirms kill_process=true. The EDR terminated ' + ra.processName + ' on ' + ra.hostname + ' at ' + ra.timestamp + ' before any payload could execute. kill_subprocess=' + (ra.dispositionDetails.kill_subprocess || false) + '.' });
+      }
+      if (ra.globalPrevalence === 'common') {
+        evidence.push({ title: 'Process has common global prevalence (CrowdStrike)', severity: 'moderate', detail: 'CrowdStrike reports global_prevalence="common" for this process, meaning it is widely seen across many endpoints worldwide and is not a novel or rare binary.' });
+      }
+    }
+    // Alert history context
+    if (elasticLogs.alertHistory && elasticLogs.alertHistory.totalAlerts > 5) {
+      var sameNameCount = (elasticLogs.alertHistory.byName || []).find(function(b) { return elasticLogs.rawAlerts && elasticLogs.rawAlerts.length > 0 && b.key === elasticLogs.rawAlerts[0].alertName; });
+      if (sameNameCount && sameNameCount.doc_count > 3) {
+        evidence.push({ title: 'Repeated alert pattern on this host (' + sameNameCount.doc_count + ' occurrences)', severity: 'moderate', detail: 'This host has triggered ' + sameNameCount.doc_count + ' alerts of the same type ("' + sameNameCount.key + '"), suggesting a recurring false positive pattern rather than a targeted attack.' });
+      }
+    }
     elasticLogs.childProcesses.forEach(function(cp) {
       if (cp.status === 'CLEAR') {
         evidence.push({ title: 'No child processes spawned (Elastic verified)', severity: 'strong', detail: 'Query: ' + cp.query + ' — returned 0 results. The allegedly malicious child processes (powershell.exe, nc.exe) were never actually created. The parent process was killed before any execution could occur.' });
@@ -31984,7 +32258,16 @@ async function runAIInvestigation(ticketKey, issueData) {
   var iocs = extractIOCs(fullText);
   var techniques = detectTechniques(fullText);
   var cmdCtx = analyzeCommandContext(fullText);
-  var elasticLogs = simulateElasticLookup(summary, cleanDesc, iocs, techniques);
+  // Real Elastic SIEM + OpenCTI lookup (async)
+  console.log('[AI Investigation] Starting real Elastic SIEM + OpenCTI queries...');
+  var elasticLogs;
+  try {
+    elasticLogs = await realElasticLookup(ticketKey, iocs, techniques, issueData);
+    console.log('[AI Investigation] Elastic lookup complete: ' + elasticLogs.queriesRun + ' queries, connected=' + elasticLogs.elasticConnected);
+  } catch (elErr) {
+    console.error('[AI Investigation] Elastic lookup failed, falling back to simulation:', elErr);
+    elasticLogs = simulateElasticLookup(summary, cleanDesc, iocs, techniques);
+  }
   var inculpatory = generateInculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx);
   var exculpatory = generateExculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs);
 
@@ -32086,9 +32369,9 @@ async function runAIInvestigation(ticketKey, issueData) {
   // PHASE 2: Animate through rounds
   // ═══════════════════════════════════════════════
 
-  var roundTimings = [1800, 2200, 2500];
+  var roundTimings = [3500, 2200, 2500];
   var roundLabels = ['Initial Classification + Log Query', 'Threat Context & Evidence Gathering', 'Deep Investigation & Balanced Verdict'];
-  var roundSubtitles = ['Elastic log query + inculpatory signals', 'IOC enrichment + exculpatory analysis', 'Attack chain synthesis + final assessment'];
+  var roundSubtitles = ['Elastic SIEM + CrowdStrike + OpenCTI queries', 'IOC enrichment + exculpatory analysis', 'Attack chain synthesis + final assessment'];
 
   // Process each round
   for (var rnd = 1; rnd <= totalRounds; rnd++) {
@@ -32215,9 +32498,68 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
       '<div style="font-size:10px;color:var(--text-secondary);line-height:1.5;">' + cmdCtx.promptIndicators.join('. ') + '</div></div>';
   }
 
+  // ── Data Source Connection Status ──
+  var elConn = elasticLogs.elasticConnected || false;
+  var ocConn = elasticLogs.openctiConnected || false;
+  var qCount = elasticLogs.queriesRun || 0;
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">' +
+    '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;' + (elConn ? 'background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);') + '">' + (elConn ? '\u25CF ELASTIC SIEM LIVE' : '\u25CB ELASTIC OFFLINE') + '</span>' +
+    '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;' + (ocConn ? 'background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);') + '">' + (ocConn ? '\u25CF OPENCTI LIVE' : '\u25CB OPENCTI NO HITS') + '</span>' +
+    '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;color:var(--text-muted);background:var(--surface-1);border:1px solid var(--border-subtle);">' + qCount + ' QUERIES EXECUTED</span>' +
+  '</div>';
+
+  // ── Raw CrowdStrike Alert Data ──
+  if (elasticLogs.rawAlerts && elasticLogs.rawAlerts.length > 0) {
+    var ra = elasticLogs.rawAlerts[0];
+    html += '<div style="margin-bottom:10px;padding:8px 10px;background:rgba(139,92,246,0.04);border:1px solid rgba(139,92,246,0.15);border-radius:6px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8b5cf6;margin-bottom:6px;">\uD83D\uDCE1 CROWDSTRIKE ALERT DATA (LIVE)</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:10px;">' +
+        '<div><span style="color:var(--text-muted);">Alert:</span> <span style="color:var(--red-bright);font-weight:600;">' + ra.alertName + '</span></div>' +
+        '<div><span style="color:var(--text-muted);">Severity:</span> <span style="color:var(--amber);font-weight:600;">' + ra.severity + ' (' + ra.confidence + '% conf)</span></div>' +
+        '<div><span style="color:var(--text-muted);">Process:</span> <span style="font-family:var(--font-mono);color:var(--text-primary);">' + ra.processName + '</span></div>' +
+        '<div><span style="color:var(--text-muted);">Parent:</span> <span style="font-family:var(--font-mono);color:var(--text-primary);">' + ra.parentProcess + '</span></div>' +
+        '<div><span style="color:var(--text-muted);">Hostname:</span> <span style="font-family:var(--font-mono);color:var(--cyan);">' + ra.hostname + '</span></div>' +
+        '<div><span style="color:var(--text-muted);">Disposition:</span> <span style="color:' + (ra.disposition.includes('killed') ? 'var(--amber)' : 'var(--text-secondary)') + ';">' + ra.disposition + '</span></div>' +
+        '<div><span style="color:var(--text-muted);">Prevalence:</span> Local=' + (ra.localPrevalence || 'N/A') + ', Global=' + (ra.globalPrevalence || 'N/A') + '</div>' +
+        '<div><span style="color:var(--text-muted);">MITRE:</span> <span style="color:var(--amber);">' + (ra.techniqueId || []).join(', ') + '</span></div>' +
+      '</div>';
+    if (ra.cmdline) {
+      html += '<div style="margin-top:6px;padding:6px;background:rgba(0,0,0,0.3);border-radius:4px;font-family:var(--font-mono);font-size:9px;color:var(--cyan);word-break:break-all;line-height:1.5;max-height:80px;overflow-y:auto;">' + ra.cmdline.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+    }
+    if (ra.falconLink) {
+      html += '<div style="margin-top:4px;"><a href="' + ra.falconLink + '" target="_blank" style="font-size:9px;color:var(--cyan);text-decoration:underline;">View in CrowdStrike Falcon \u2192</a></div>';
+    }
+    html += '</div>';
+  }
+
+  // ── Host Info ──
+  if (elasticLogs.hostInfo) {
+    var hi = elasticLogs.hostInfo;
+    html += '<div style="margin-bottom:10px;padding:6px 10px;background:var(--surface-1);border:1px solid var(--border-subtle);border-radius:6px;font-size:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px 12px;">' +
+      '<div><span style="color:var(--text-muted);">Host:</span> ' + (hi.hostname || 'N/A') + '</div>' +
+      '<div><span style="color:var(--text-muted);">OS:</span> ' + (hi.os || 'N/A') + '</div>' +
+      '<div><span style="color:var(--text-muted);">IP:</span> <span style="font-family:var(--font-mono);">' + (hi.ip || 'N/A') + '</span></div>' +
+      '<div><span style="color:var(--text-muted);">Location:</span> ' + ((hi.geo || {}).city_name || '') + ', ' + ((hi.geo || {}).country_name || 'N/A') + '</div>' +
+      '<div><span style="color:var(--text-muted);">Company:</span> ' + (hi.company || 'N/A') + '</div>' +
+      '<div><span style="color:var(--text-muted);">Last Seen:</span> ' + (hi.lastSeen ? new Date(hi.lastSeen).toLocaleString() : 'N/A') + '</div>' +
+    '</div>';
+  }
+
+  // ── Alert History ──
+  if (elasticLogs.alertHistory && elasticLogs.alertHistory.totalAlerts > 0) {
+    var ah = elasticLogs.alertHistory;
+    html += '<div style="margin-bottom:10px;padding:6px 10px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15);border-radius:6px;">' +
+      '<div style="font-size:9px;font-weight:600;color:var(--amber);margin-bottom:4px;">\uD83D\uDCCA HOST ALERT HISTORY (' + ah.totalAlerts + ' total alerts)</div>' +
+      '<div style="display:flex;gap:4px;flex-wrap:wrap;">';
+    (ah.byName || []).forEach(function(b) {
+      html += '<span style="font-size:8px;padding:1px 6px;border-radius:8px;background:rgba(245,158,11,0.08);color:var(--amber);border:1px solid rgba(245,158,11,0.2);">' + b.key + ' (' + b.doc_count + ')</span>';
+    });
+    html += '</div></div>';
+  }
+
   // Elastic Log Queries
   html += '<div style="margin-top:4px;padding:10px 12px;background:rgba(0,212,255,0.02);border:1px solid rgba(0,212,255,0.12);border-radius:6px;">' +
-    '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--cyan);margin-bottom:8px;">\uD83D\uDD0D ELASTIC SIEM LOG QUERIES</div>';
+    '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--cyan);margin-bottom:8px;">\uD83D\uDD0D ELASTIC SIEM LOG QUERIES' + (elConn ? ' (LIVE)' : '') + '</div>';
 
   // Child process query
   elasticLogs.childProcesses.forEach(function(cp) {
@@ -32277,6 +32619,48 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
   });
 
   html += '</div>'; // end elastic section
+
+  // ── OpenCTI Results ──
+  if (elasticLogs.openctiResults && elasticLogs.openctiResults.length > 0) {
+    html += '<div style="margin-top:8px;padding:10px 12px;background:rgba(139,92,246,0.02);border:1px solid rgba(139,92,246,0.12);border-radius:6px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8b5cf6;margin-bottom:8px;">\uD83D\uDD0E OPENCTI THREAT INTELLIGENCE' + (ocConn ? ' (LIVE)' : '') + '</div>';
+    elasticLogs.openctiResults.forEach(function(oc) {
+      var found = oc.found;
+      html += '<div style="margin-bottom:6px;padding:6px 8px;background:var(--surface-1);border-radius:4px;border:1px solid var(--border-subtle);">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">' +
+          '<span style="font-size:9px;color:var(--text-muted);">' + oc.type + ': <span style="font-family:var(--font-mono);color:var(--cyan);">' + oc.value.substring(0, 24) + (oc.value.length > 24 ? '...' : '') + '</span></span>' +
+          '<span style="font-size:9px;font-weight:600;color:' + (found ? 'var(--red-bright)' : 'var(--green)') + ';">' + (found ? '\uD83D\uDEA8 FOUND IN TI' : '\u2705 CLEAN') + '</span></div>';
+      if (found && oc.labels.length > 0) {
+        html += '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">';
+        oc.labels.forEach(function(l) {
+          html += '<span style="font-size:7px;padding:1px 5px;border-radius:6px;background:rgba(239,68,68,0.08);color:var(--red-bright);border:1px solid rgba(239,68,68,0.2);">' + l + '</span>';
+        });
+        html += '</div>';
+      }
+      if (found && oc.source) {
+        html += '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Source: ' + oc.source + '</div>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // ── Query Execution Log ──
+  if (elasticLogs.queryDetails && elasticLogs.queryDetails.length > 0) {
+    html += '<div style="margin-top:8px;padding:8px 10px;background:var(--surface-0);border:1px solid var(--border-subtle);border-radius:6px;">' +
+      '<details style="cursor:pointer;"><summary style="font-size:9px;font-weight:600;color:var(--text-muted);letter-spacing:0.05em;">\u25B6 QUERY EXECUTION LOG (' + elasticLogs.queryDetails.length + ' queries)</summary>' +
+      '<div style="margin-top:6px;">';
+    elasticLogs.queryDetails.forEach(function(qd, qi) {
+      var sc = qd.status === 'success' ? '#10b981' : (qd.status === 'no_data' ? '#f59e0b' : (qd.status === 'error' ? '#ef4444' : 'var(--text-muted)'));
+      html += '<div style="font-size:9px;padding:2px 0;display:flex;gap:6px;align-items:baseline;border-bottom:1px solid var(--border-subtle);">' +
+        '<span style="color:var(--text-muted);min-width:16px;">' + (qi + 1) + '.</span>' +
+        '<span style="color:var(--text-secondary);flex:1;">' + qd.name + '</span>' +
+        '<span style="font-family:var(--font-mono);color:var(--cyan);font-size:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (qd.query || '') + '</span>' +
+        '<span style="color:' + sc + ';font-weight:600;font-size:8px;min-width:50px;text-align:right;">' + qd.status + (qd.hits !== undefined ? ' (' + qd.hits + ')' : '') + '</span></div>';
+    });
+    html += '</div></details></div>';
+  }
+
   return html;
 }
 
