@@ -25742,6 +25742,11 @@ function initAICharts() {
 //  NAVIGATION
 // ============================================================
 function navigate(page) {
+  // Cancel running canvas animations when leaving dashboard
+  if (typeof ccAnimId !== 'undefined' && ccAnimId) { cancelAnimationFrame(ccAnimId); ccAnimId = null; }
+  if (typeof geoMapAnimFrames !== 'undefined') { Object.keys(geoMapAnimFrames).forEach(function(k) { if (geoMapAnimFrames[k]) { cancelAnimationFrame(geoMapAnimFrames[k]); geoMapAnimFrames[k] = null; } }); }
+  if (typeof eeAnimFrame !== 'undefined' && eeAnimFrame) { cancelAnimationFrame(eeAnimFrame); eeAnimFrame = null; }
+
   // Hide all pages
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -27703,6 +27708,7 @@ function initCommandCenter() {
 
   function draw() {
     ccAnimId = requestAnimationFrame(draw);
+    if (W <= 0 || H <= 0) return; // Skip frame when canvas is hidden/zero-size
     frameCount++;
     ctx.clearRect(0, 0, W, H);
 
@@ -27868,7 +27874,7 @@ function initCommandCenter() {
     // === CENTER ZONE: Radar Detector ===
     radarAngle += 0.022;
     if (radarAngle > Math.PI * 2) radarAngle -= Math.PI * 2;
-    var maxR = Math.min(W * 0.12, H * 0.32);
+    var maxR = Math.max(Math.min(W * 0.12, H * 0.32), 3);
 
     // Outer glow ring
     ctx.save();
