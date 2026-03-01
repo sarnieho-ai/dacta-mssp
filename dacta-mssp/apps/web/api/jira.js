@@ -63,7 +63,7 @@ export default async function handler(req, res) {
 
     // ─── ACTION: dashboard ────────────────────────────────────
     if (action === 'dashboard') {
-      const B = 'project = DAC AND ("request type" = "Elastic Alerts (DAC)" OR (status = Open AND "request type" != "Elastic Alerts (DAC)") OR status = "Client Responded" OR (Organizations = "DG_Demo Client" AND resolution = Unresolved) OR (Organizations = "Dacta Global" AND status = Escalated))';
+      const B = 'project = DAC AND ("request type" = "Elastic Alerts (DAC)" OR (status = Open AND "request type" != "Elastic Alerts (DAC)") OR status = "Client Responded" OR (Organizations = "DG_Demo Client" AND resolution = Unresolved) OR (Organizations = "Dacta Global" AND status = Escalated) OR issuetype in ("[System] Incident", "Incident ticket"))';
       const [
         openCount, p1Count, p2Count, p3Count, p4Count,
         closedTodayCount, canceledTodayCount, completedTodayCount,
@@ -100,7 +100,7 @@ export default async function handler(req, res) {
     // ─── ACTION: triage ───────────────────────────────────────
     if (action === 'triage') {
       const body = req.body || {};
-      let jqlParts = ['project = DAC AND ("request type" = "Elastic Alerts (DAC)" OR (status = Open AND "request type" != "Elastic Alerts (DAC)") OR status = "Client Responded" OR (Organizations = "DG_Demo Client" AND resolution = Unresolved) OR (Organizations = "Dacta Global" AND status = Escalated))'];
+      let jqlParts = ['project = DAC AND ("request type" = "Elastic Alerts (DAC)" OR (status = Open AND "request type" != "Elastic Alerts (DAC)") OR status = "Client Responded" OR (Organizations = "DG_Demo Client" AND resolution = Unresolved) OR (Organizations = "Dacta Global" AND status = Escalated) OR issuetype in ("[System] Incident", "Incident ticket"))'];
 
       if (body.status && body.status !== 'all') jqlParts.push(`status="${body.status}"`);
       if (body.priority && body.priority !== 'all') jqlParts.push(`priority="${body.priority}"`);
@@ -149,7 +149,7 @@ export default async function handler(req, res) {
     if (action === 'search') {
       const body = req.body || {};
       const data = await searchJql(
-        body.jql || 'project = DAC AND ("request type" = "Elastic Alerts (DAC)" OR (status = Open AND "request type" != "Elastic Alerts (DAC)") OR status = "Client Responded" OR (Organizations = "DG_Demo Client" AND resolution = Unresolved) OR (Organizations = "Dacta Global" AND status = Escalated)) ORDER BY created DESC',
+        body.jql || 'project = DAC AND ("request type" = "Elastic Alerts (DAC)" OR (status = Open AND "request type" != "Elastic Alerts (DAC)") OR status = "Client Responded" OR (Organizations = "DG_Demo Client" AND resolution = Unresolved) OR (Organizations = "Dacta Global" AND status = Escalated) OR issuetype in ("[System] Incident", "Incident ticket")) ORDER BY created DESC',
         body.fields || ['summary','status','priority','assignee','created','updated','issuetype','labels','customfield_10002','customfield_10050','customfield_10072','customfield_10038'],
         body.maxResults || 50,
         body.nextPageToken
