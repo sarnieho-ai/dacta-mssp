@@ -5,6 +5,8 @@
 const _JE = 'c2FybmllLmhvQGRhY3RhZ2xvYmFsLmNvbQ=='; // email
 const _JT = 'QVRBVFQzeEZmR0YwS3FTUXExdGZIT0hmVlNiWlVTQ3ZNMnFCVFRBazlQUndnaElvT0pUOVRqOFZFZjRzdjllVEp0cGxGWW5vSkRsakFWU2RTdC1aYUJZZ2xIWl9nQzUyenItSFM4czJDWTNCZUJCbWh6czVVSEROLVNsOVZZWlk4M1g0YW9rSm1TVFQ3Tjh1RXlhSHlSOFhGbkVMWGZaWGJnNWR2cFlXcTFxNW83ZW1jQzhnSWhrPThFMzU2NkY2'; // token
 const _JI = 'dactaglobal-sg.atlassian.net';
+const _CID = '018ce0b3-5943-4d3f-9542-d005b0ce2872'; // Atlassian Cloud ID
+const _TID = 'de6cdba5-d36e-486c-8ace-a41c3eb69b8b'; // [SOC] Alert Ops team ID
 
 function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
 
@@ -245,7 +247,74 @@ export default async function handler(req, res) {
       return res.status(200).json(mapped);
     }
 
-    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts, transitions, transition, assign, addcomment, assignable' });
+    // ─── ACTION: opsdata (JSM Ops schedules/routing/escalation) ─────
+    if (action === 'opsdata') {
+      const opsBase = `https://api.atlassian.com/jsm/ops/api/${_CID}/v1`;
+      const opsHeaders = { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' };
+
+      const [schedulesR, routingR, escalationsR] = await Promise.all([
+        fetch(`${opsBase}/schedules?expand=rotation`, { headers: opsHeaders }),
+        fetch(`${opsBase}/teams/${_TID}/routing-rules`, { headers: opsHeaders }),
+        fetch(`${opsBase}/teams/${_TID}/escalations`, { headers: opsHeaders })
+      ]);
+      const [schedules, routing, escalations] = await Promise.all([
+        schedulesR.json(), routingR.json(), escalationsR.json()
+      ]);
+
+      // Fetch on-call participants for each schedule
+      const scheduleVals = schedules.values || [];
+      const onCallPromises = scheduleVals.map(s =>
+        fetch(`${opsBase}/schedules/${s.id}/on-calls?flat=false`, { headers: opsHeaders }).then(r => r.json())
+      );
+      const onCallResults = await Promise.all(onCallPromises);
+
+      // Resolve user IDs to display names
+      const userIds = new Set();
+      scheduleVals.forEach(s => (s.rotations || []).forEach(r => (r.participants || []).forEach(p => { if (p.type === 'user') userIds.add(p.id); })));
+      onCallResults.forEach(oc => (oc.onCallParticipants || []).forEach(p => { if (p.type === 'user') userIds.add(p.id); }));
+
+      const userMap = {};
+      const jiraApi = `https://api.atlassian.com/ex/jira/${_CID}/rest/api/3`;
+      await Promise.all([...userIds].map(async uid => {
+        try {
+          const r = await fetch(`${jiraApi}/user?accountId=${uid}`, { headers: opsHeaders });
+          const d = await r.json();
+          userMap[uid] = d.displayName || uid;
+        } catch { userMap[uid] = uid; }
+      }));
+
+      return res.status(200).json({
+        team: '[SOC] Alert Ops',
+        teamId: _TID,
+        schedules: scheduleVals.map((s, i) => ({
+          id: s.id, name: s.name, timezone: s.timezone, enabled: s.enabled,
+          rotations: (s.rotations || []).map(r => ({
+            id: r.id, name: r.name, type: r.type, length: r.length,
+            startDate: r.startDate, endDate: r.endDate,
+            participants: (r.participants || []).map(p => ({ type: p.type, id: p.id, name: userMap[p.id] || p.id })),
+            timeRestriction: r.timeRestriction
+          })),
+          onCall: (onCallResults[i]?.onCallParticipants || []).map(p => ({ type: p.type, id: p.id, name: userMap[p.id] || p.id }))
+        })),
+        routingRules: (routing.values || []).map(r => ({
+          id: r.id, name: r.name, isDefault: r.isDefault, order: r.order,
+          criteria: r.criteria, timezone: r.timezone,
+          timeRestriction: r.timeRestriction || null,
+          notify: r.notify
+        })),
+        escalationPolicies: (escalations.values || []).map(e => ({
+          id: e.id, name: e.name, enabled: e.enabled,
+          rules: (e.rules || []).map(r => ({
+            condition: r.condition, notifyType: r.notifyType, delay: r.delay,
+            recipient: r.recipient
+          })),
+          repeat: e.repeat || null
+        })),
+        userMap
+      });
+    }
+
+    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts, transitions, transition, assign, addcomment, assignable, opsdata' });
 
   } catch (err) {
     console.error('Jira proxy error:', err);

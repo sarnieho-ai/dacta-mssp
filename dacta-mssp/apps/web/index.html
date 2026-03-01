@@ -10717,6 +10717,111 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           <div class="metric-card red"><div class="metric-label">Escalated</div><div class="metric-value">2</div><div class="metric-sub">active escalations</div></div>
         </div>
 
+        <!-- ===== JSM OPS COMMAND CENTER ===== -->
+        <style>
+          .ops-cmd-section { margin-bottom:16px; }
+          .ops-cmd-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+          .ops-cmd-title { font-size:14px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px; }
+          .ops-cmd-title svg { width:16px; height:16px; stroke:var(--cyan); }
+          .ops-cmd-live { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--green); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; }
+          .ops-cmd-live .live-dot { width:6px; height:6px; border-radius:50%; background:var(--green); animation:pulse-live 2s ease infinite; }
+          @keyframes pulse-live { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+          .ops-cmd-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+          @media(max-width:1100px) { .ops-cmd-grid { grid-template-columns:1fr; } }
+          .ops-card { background:rgba(15,23,42,0.5); border:1px solid var(--border-card); border-radius:10px; overflow:hidden; }
+          .ops-card-head { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border-subtle); }
+          .ops-card-head-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-secondary); display:flex; align-items:center; gap:6px; }
+          .ops-card-head-title svg { width:14px; height:14px; }
+          .ops-card-body { padding:12px 14px; }
+          .ops-card-count { font-size:10px; font-weight:600; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); }
+          .ops-schedule-item { padding:10px; background:var(--bg-elevated); border-radius:8px; margin-bottom:8px; }
+          .ops-schedule-item:last-child { margin-bottom:0; }
+          .ops-schedule-name { font-size:11px; font-weight:700; color:var(--text-primary); margin-bottom:4px; display:flex; align-items:center; gap:6px; }
+          .ops-schedule-name .ops-enabled { width:6px; height:6px; border-radius:50%; }
+          .ops-schedule-name .ops-enabled.on { background:var(--green); }
+          .ops-schedule-name .ops-enabled.off { background:var(--text-muted); }
+          .ops-rotation { padding:6px 8px; background:rgba(0,0,0,0.15); border-radius:6px; margin-top:6px; }
+          .ops-rotation-name { font-size:10px; font-weight:600; color:var(--cyan); margin-bottom:3px; }
+          .ops-rotation-detail { font-size:9px; color:var(--text-muted); line-height:1.5; }
+          .ops-rotation-detail strong { color:var(--text-secondary); }
+          .ops-oncall-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:6px; font-size:10px; font-weight:600; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); color:var(--green); margin-top:6px; }
+          .ops-oncall-badge svg { width:10px; height:10px; }
+          .ops-rule-item { padding:10px; background:var(--bg-elevated); border-radius:8px; margin-bottom:8px; }
+          .ops-rule-item:last-child { margin-bottom:0; }
+          .ops-rule-name { font-size:11px; font-weight:700; color:var(--text-primary); margin-bottom:4px; }
+          .ops-rule-condition { font-size:9px; color:var(--text-muted); padding:4px 8px; background:rgba(0,0,0,0.15); border-radius:4px; margin-bottom:4px; font-family:var(--font-mono); }
+          .ops-rule-time { font-size:9px; color:var(--amber); display:flex; align-items:center; gap:4px; }
+          .ops-rule-time svg { width:10px; height:10px; stroke:var(--amber); }
+          .ops-rule-notify { font-size:9px; color:var(--text-secondary); display:flex; align-items:center; gap:4px; margin-top:4px; }
+          .ops-rule-notify svg { width:10px; height:10px; stroke:var(--cyan); }
+          .ops-esc-item { padding:10px; background:var(--bg-elevated); border-radius:8px; margin-bottom:8px; }
+          .ops-esc-item:last-child { margin-bottom:0; }
+          .ops-esc-name { font-size:11px; font-weight:700; color:var(--text-primary); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+          .ops-esc-step { display:flex; align-items:flex-start; gap:8px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+          .ops-esc-step:last-child { border-bottom:none; }
+          .ops-esc-timer { min-width:36px; text-align:center; font-size:10px; font-weight:700; font-family:var(--font-mono); color:var(--amber); padding:3px 6px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.15); border-radius:4px; }
+          .ops-esc-action { font-size:10px; color:var(--text-secondary); line-height:1.4; }
+          .ops-esc-action strong { color:var(--text-primary); }
+          .ops-esc-repeat { font-size:9px; color:var(--purple); display:flex; align-items:center; gap:4px; margin-top:6px; padding:4px 8px; background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.15); border-radius:4px; }
+          .ops-skeleton { animation:shimmer 1.5s ease infinite; background:linear-gradient(90deg,rgba(255,255,255,0.02) 25%,rgba(255,255,255,0.06) 50%,rgba(255,255,255,0.02) 75%); background-size:200% 100%; border-radius:6px; height:60px; margin-bottom:8px; }
+          .ops-default-badge { font-size:8px; padding:1px 5px; border-radius:3px; background:rgba(100,116,139,0.15); color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
+          .ops-none-badge { font-size:9px; color:var(--text-muted); font-style:italic; }
+        </style>
+
+        <div class="ops-cmd-section" id="opsCommandSection">
+          <div class="ops-cmd-header">
+            <div class="ops-cmd-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Operations Command — JSM Ops
+            </div>
+            <div class="ops-cmd-live" id="opsLiveIndicator" style="display:none;">
+              <span class="live-dot"></span> LIVE
+            </div>
+          </div>
+          <div class="ops-cmd-grid">
+            <!-- On-Call Schedules -->
+            <div class="ops-card">
+              <div class="ops-card-head">
+                <div class="ops-card-head-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                  On-Call Schedules
+                </div>
+                <span class="ops-card-count" id="opsScheduleCount" style="background:rgba(0,212,255,0.1);color:var(--cyan);">—</span>
+              </div>
+              <div class="ops-card-body" id="opsScheduleBody">
+                <div class="ops-skeleton"></div><div class="ops-skeleton"></div>
+              </div>
+            </div>
+            <!-- Routing Rules -->
+            <div class="ops-card">
+              <div class="ops-card-head">
+                <div class="ops-card-head-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  Routing Rules
+                </div>
+                <span class="ops-card-count" id="opsRoutingCount" style="background:rgba(245,158,11,0.1);color:var(--amber);">—</span>
+              </div>
+              <div class="ops-card-body" id="opsRoutingBody">
+                <div class="ops-skeleton"></div><div class="ops-skeleton"></div>
+              </div>
+            </div>
+            <!-- Escalation Policies -->
+            <div class="ops-card">
+              <div class="ops-card-head">
+                <div class="ops-card-head-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="var(--red-bright)" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                  Escalation Policies
+                </div>
+                <span class="ops-card-count" id="opsEscCount" style="background:rgba(239,68,68,0.1);color:var(--red-bright);">—</span>
+              </div>
+              <div class="ops-card-body" id="opsEscBody">
+                <div class="ops-skeleton"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- ===== END JSM OPS COMMAND CENTER ===== -->
+
         <div class="grid-2" style="margin-bottom:16px;">
           <div class="card">
             <div class="card-header"><span class="card-title">Shift B Team On Duty</span></div>
@@ -25611,6 +25716,7 @@ function navigate(page) {
   if (page === 'clientportal') resetClientPortalSplash();
   if (page === 'warroom') setTimeout(initWarRoom2, 50);
   if (page === 'copilot') initCopilotPage();
+  if (page === 'handover' && window._dactaMode === 'production') setTimeout(loadOpsCommandData, 200);
 
   // Scroll to top
   document.getElementById('content-area').scrollTop = 0;
@@ -29761,6 +29867,181 @@ function toggleClientSend() {
 }
 
 /* ==============================================================
+   JSM OPS COMMAND CENTER — Render Functions
+   ============================================================== */
+var _opsDataLoaded = false;
+
+async function loadOpsCommandData() {
+  if (_opsDataLoaded) return;
+  try {
+    var data = await DactaJira.fetchOpsData();
+    _opsDataLoaded = true;
+    renderOpsSchedules(data.schedules || [], data.userMap || {});
+    renderOpsRouting(data.routingRules || [], data.schedules || [], data.escalationPolicies || []);
+    renderOpsEscalation(data.escalationPolicies || [], data.schedules || []);
+    var liveInd = document.getElementById('opsLiveIndicator');
+    if (liveInd) liveInd.style.display = 'flex';
+  } catch (err) {
+    console.error('[OpsCmd] Failed to load:', err);
+    var bodies = ['opsScheduleBody','opsRoutingBody','opsEscBody'];
+    bodies.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = '<div style="text-align:center;padding:20px;font-size:10px;color:var(--text-muted);">Unable to load JSM Ops data</div>';
+    });
+  }
+}
+
+function formatTimeRestriction(tr) {
+  if (!tr) return 'All times';
+  if (tr.type === 'time-of-day' && tr.restriction) {
+    return String(tr.restriction.startHour||0).padStart(2,'0')+':'+String(tr.restriction.startMin||0).padStart(2,'0')+' → '+String(tr.restriction.endHour||0).padStart(2,'0')+':'+String(tr.restriction.endMin||0).padStart(2,'0');
+  }
+  if (tr.type === 'weekday-and-time-of-day' && tr.restrictions && tr.restrictions.length) {
+    // Summarize: find the most common pattern
+    var r0 = tr.restrictions[0];
+    var startH = String(r0.startHour||0).padStart(2,'0')+':'+String(r0.startMin||0).padStart(2,'0');
+    var endH = String(r0.endHour||0).padStart(2,'0')+':'+String(r0.endMin||0).padStart(2,'0');
+    var days = tr.restrictions.map(function(r){return r.startDay.charAt(0).toUpperCase()+r.startDay.slice(1,3);}).join(', ');
+    return days + ' ' + startH + '→' + endH;
+  }
+  return 'Custom';
+}
+
+function renderOpsSchedules(schedules, userMap) {
+  var body = document.getElementById('opsScheduleBody');
+  var count = document.getElementById('opsScheduleCount');
+  if (!body) return;
+  if (count) count.textContent = schedules.length;
+  if (!schedules.length) { body.innerHTML = '<div style="text-align:center;padding:20px;font-size:10px;color:var(--text-muted);">No schedules configured</div>'; return; }
+
+  var html = '';
+  schedules.forEach(function(s) {
+    var enabledClass = s.enabled ? 'on' : 'off';
+    var enabledLabel = s.enabled ? 'Active' : 'Disabled';
+    html += '<div class="ops-schedule-item">';
+    html += '<div class="ops-schedule-name"><span class="ops-enabled '+enabledClass+'"></span> '+escH(s.name)+'</div>';
+    html += '<div style="font-size:9px;color:var(--text-muted);margin-bottom:4px;">'+escH(s.timezone)+' · '+enabledLabel+'</div>';
+
+    // Rotations
+    (s.rotations || []).forEach(function(r) {
+      var participants = (r.participants || []).map(function(p){return p.name || p.id;}).join(', ');
+      var timeStr = formatTimeRestriction(r.timeRestriction);
+      html += '<div class="ops-rotation">';
+      html += '<div class="ops-rotation-name">'+escH(r.name)+'</div>';
+      html += '<div class="ops-rotation-detail"><strong>Type:</strong> '+r.type+(r.length>1?' ('+r.length+')':'')+' · <strong>Staff:</strong> '+escH(participants)+'</div>';
+      html += '<div class="ops-rotation-detail"><strong>Hours:</strong> '+escH(timeStr)+'</div>';
+      html += '</div>';
+    });
+
+    // On-call now
+    if (s.onCall && s.onCall.length) {
+      s.onCall.forEach(function(oc) {
+        html += '<div class="ops-oncall-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> On-Call: '+escH(oc.name || oc.id)+'</div>';
+      });
+    }
+    html += '</div>';
+  });
+  body.innerHTML = html;
+}
+
+function renderOpsRouting(rules, schedules, escPolicies) {
+  var body = document.getElementById('opsRoutingBody');
+  var count = document.getElementById('opsRoutingCount');
+  if (!body) return;
+  if (count) count.textContent = rules.length;
+  if (!rules.length) { body.innerHTML = '<div style="text-align:center;padding:20px;font-size:10px;color:var(--text-muted);">No routing rules configured</div>'; return; }
+
+  // Build lookup maps
+  var schedMap = {}; schedules.forEach(function(s){schedMap[s.id]=s.name;});
+  var escMap = {}; escPolicies.forEach(function(e){escMap[e.id]=e.name;});
+
+  var html = '';
+  rules.forEach(function(r) {
+    html += '<div class="ops-rule-item">';
+    html += '<div class="ops-rule-name">';
+    html += escH(r.name);
+    if (r.isDefault) html += ' <span class="ops-default-badge">DEFAULT</span>';
+    html += '</div>';
+
+    // Conditions
+    if (r.criteria) {
+      if (r.criteria.type === 'match-all') {
+        html += '<div class="ops-rule-condition">Match: ALL alerts</div>';
+      } else if (r.criteria.conditions && r.criteria.conditions.length) {
+        r.criteria.conditions.forEach(function(c) {
+          html += '<div class="ops-rule-condition">'+escH(c.field)+' '+escH(c.operation)+' "'+escH(c.expectedValue)+'"</div>';
+        });
+      }
+    }
+
+    // Time restriction
+    if (r.timeRestriction) {
+      html += '<div class="ops-rule-time"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> '+escH(formatTimeRestriction(r.timeRestriction))+'</div>';
+    }
+
+    // Notify target
+    if (r.notify) {
+      var target = 'None';
+      if (r.notify.type === 'escalation') target = '↗ Escalation: ' + (escMap[r.notify.id] || r.notify.id);
+      else if (r.notify.type === 'schedule') target = '📅 Schedule: ' + (schedMap[r.notify.id] || r.notify.id);
+      else if (r.notify.type !== 'None') target = r.notify.type;
+
+      if (r.notify.type === 'None') {
+        html += '<div class="ops-rule-notify"><span class="ops-none-badge">No notification</span></div>';
+      } else {
+        html += '<div class="ops-rule-notify"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg> '+escH(target)+'</div>';
+      }
+    }
+    html += '</div>';
+  });
+  body.innerHTML = html;
+}
+
+function renderOpsEscalation(policies, schedules) {
+  var body = document.getElementById('opsEscBody');
+  var count = document.getElementById('opsEscCount');
+  if (!body) return;
+  if (count) count.textContent = policies.length;
+  if (!policies.length) { body.innerHTML = '<div style="text-align:center;padding:20px;font-size:10px;color:var(--text-muted);">No escalation policies configured</div>'; return; }
+
+  var schedMap = {}; schedules.forEach(function(s){schedMap[s.id]=s.name;});
+
+  var html = '';
+  policies.forEach(function(p) {
+    html += '<div class="ops-esc-item">';
+    html += '<div class="ops-esc-name"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red-bright)" stroke-width="1.5" style="width:12px;height:12px;"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> '+escH(p.name);
+    if (p.enabled) html += ' <span style="font-size:8px;padding:1px 5px;border-radius:3px;background:rgba(16,185,129,0.12);color:var(--green);font-weight:700;">ACTIVE</span>';
+    html += '</div>';
+
+    // Steps
+    (p.rules || []).forEach(function(r, idx) {
+      var timerLabel = r.delay === 0 ? 'NOW' : r.delay + 'm';
+      var condLabel = r.condition === 'if-not-acked' ? 'If not acknowledged' : (r.condition === 'if-not-closed' ? 'If not closed' : r.condition);
+      var recipientName = '';
+      if (r.recipient) {
+        if (r.recipient.type === 'schedule') recipientName = schedMap[r.recipient.id] || r.recipient.id;
+        else recipientName = r.recipient.type + ': ' + r.recipient.id;
+      }
+      var actionLabel = r.notifyType === 'default' ? 'Notify on-call' : (r.notifyType === 'next' ? 'Notify next on-call' : r.notifyType);
+
+      html += '<div class="ops-esc-step">';
+      html += '<div class="ops-esc-timer">'+timerLabel+'</div>';
+      html += '<div class="ops-esc-action"><strong>Step '+(idx+1)+':</strong> '+escH(actionLabel)+'<br><span style="font-size:9px;color:var(--text-muted);">'+escH(condLabel)+' → '+escH(recipientName)+'</span></div>';
+      html += '</div>';
+    });
+
+    // Repeat info
+    if (p.repeat && p.repeat.count > 0) {
+      html += '<div class="ops-esc-repeat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg> Repeat '+p.repeat.count+'x every '+p.repeat.waitInterval+'m</div>';
+    }
+    html += '</div>';
+  });
+  body.innerHTML = html;
+}
+
+function escH(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+/* ==============================================================
    TASK 7: WAR ROOM SHARE MODAL + CHAT MODE TOGGLE
    ============================================================== */
 function openWrShareModal() {
@@ -29883,6 +30164,15 @@ window.DactaJira = {
     var data = await this._fetch('/api/jira?action=assignable');
     this._cache.assignable = data;
     this._cacheTime.assignable = Date.now();
+    return data;
+  },
+
+  async fetchOpsData() {
+    var now = Date.now();
+    if (this._cache.opsdata && (now - this._cacheTime.opsdata) < 120000) return this._cache.opsdata;
+    var data = await this._fetch('/api/jira?action=opsdata');
+    this._cache.opsdata = data;
+    this._cacheTime.opsdata = now;
     return data;
   }
 };
