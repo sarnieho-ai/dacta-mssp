@@ -327,7 +327,7 @@ export default async function handler(req, res) {
         totalAll, totalOpen, inProgressCount, escalatedCount,
         resolvedAllTime, resolvedWeek,
         p1All, p2All, p3All, p4All,
-        recentBatch
+        recentBatch, weekBatch
       ] = await Promise.all([
         countJql(B),
         countJql(`${B} AND status = "Open"`),
@@ -340,7 +340,9 @@ export default async function handler(req, res) {
         countJql(`${B} AND priority = "P3 - Medium"`),
         countJql(`${B} AND priority = "P4 - Low"`),
         searchJql(`${B} ORDER BY created DESC`,
-          ['created','priority','status','customfield_10002'], 200)
+          ['created','priority','status','customfield_10002'], 200),
+        searchJql(`${B} AND created >= -7d ORDER BY created DESC`,
+          ['created'], 500)
       ]);
 
       // Process recent tickets for distributions
@@ -365,11 +367,14 @@ export default async function handler(req, res) {
       });
 
       // 7-day heatmap (Mon=0 ... Sun=6, each has 24 hourly buckets)
+      // Uses dedicated 7-day query (weekBatch) for full coverage
       const heatmap = Array.from({length: 7}, () => new Array(24).fill(0));
       const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
-      issues.forEach(i => {
-        if (!i.created) return;
-        const d = new Date(i.created);
+      const weekIssues = (weekBatch.issues || []);
+      weekIssues.forEach(iss => {
+        const created = iss.fields?.created || '';
+        if (!created) return;
+        const d = new Date(created);
         if (d < sevenDaysAgo) return;
         const sgtD = new Date(d.getTime() + 8 * 3600000);
         const dow = (sgtD.getDay() + 6) % 7; // Mon=0
