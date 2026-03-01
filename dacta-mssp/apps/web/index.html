@@ -24162,6 +24162,7 @@ Analyst: K. Rasmussen | 2026-02-28
               <div class="copilot-shortcut-badge"><kbd>Ctrl</kbd><kbd>K</kbd> Command Bar</div>
               <button class="btn btn-secondary btn-sm" onclick="openCopilotCmd()">&#x2318; Command Bar</button>
               <button class="btn btn-secondary btn-sm">&#x1F5C4; Export Session</button>
+              <button class="btn btn-secondary btn-sm" onclick="clearCopilotScreen()" style="background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:#f87171;">&#x1F5D1; Clear Screen</button>
               <button class="btn btn-primary btn-sm">+ New Session</button>
             </div>
           </div>
@@ -26196,16 +26197,50 @@ function applyProductionMode() {
   if (copilotPage) {
     // Clear session ID
     var sessionText = copilotPage.querySelector('.copilot-title-text p');
-    if (sessionText) sessionText.textContent = 'AI-Powered Investigation Intelligence · Ready';
+    if (sessionText) sessionText.textContent = 'AI-Powered Investigation Intelligence \u00b7 Ready';
 
-    // Clear any pre-loaded conversation bubbles (keep the chat interface)
-    copilotPage.querySelectorAll('.copilot-msg-ai, .copilot-msg-user, .copilot-thread').forEach(function(el) {
-      el.remove();
+    // Clear conversation messages (keep the messages container)
+    var msgContainer = copilotPage.querySelector('#copilotMessages, .copilot-messages');
+    if (msgContainer) {
+      msgContainer.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:12px;flex:1;">' +
+        '<div style="font-size:40px;opacity:0.4;">\ud83e\udd16</div>' +
+        '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">DACTA Copilot Ready</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);max-width:400px;text-align:center;line-height:1.6;">Start a new investigation session. Ask questions about IOCs, search logs, query MITRE ATT&CK, or analyze scripts.</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:4px;">' +
+          '<span style="font-size:10px;padding:3px 10px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:12px;color:var(--cyan);cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'Check IP \';document.getElementById(\'copilotInput\').focus();">Check IP...</span>' +
+          '<span style="font-size:10px;padding:3px 10px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:12px;color:#a78bfa;cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'What is \';document.getElementById(\'copilotInput\').focus();">MITRE Lookup</span>' +
+          '<span style="font-size:10px;padding:3px 10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.15);border-radius:12px;color:var(--green);cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'Show me all \';document.getElementById(\'copilotInput\').focus();">Log Search</span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Clear conversation header context badge
+    var convHeader = copilotPage.querySelector('.copilot-conv-header');
+    if (convHeader) {
+      var ctxBadge = convHeader.querySelector('.badge');
+      if (ctxBadge) ctxBadge.style.display = 'none';
+    }
+
+    // Clear Active Context panel
+    var ctxCards = copilotPage.querySelectorAll('.ctx-card');
+    ctxCards.forEach(function(card) {
+      var header = card.querySelector('.ctx-card-header');
+      if (!header) return;
+      var headerText = header.textContent.trim();
+
+      if (headerText.includes('Active Context')) {
+        var body = card.querySelector('.ctx-card-body');
+        if (body) body.innerHTML = '<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No active investigation context</div>';
+      }
+      if (headerText.includes('Recent IOCs')) {
+        var body = card.querySelector('.ctx-card-body');
+        if (body) body.innerHTML = '<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No IOCs in session</div>';
+      }
     });
 
     // Clear results panels if any
     copilotPage.querySelectorAll('.copilot-result-panel').forEach(function(el) {
-      el.innerHTML = emptyState('🤖', 'Ready for investigation queries');
+      el.innerHTML = emptyState('\ud83e\udd16', 'Ready for investigation queries');
     });
   }
 
@@ -29376,6 +29411,44 @@ function insertSavedSearch(name) {
     input.value = 'Run saved search: ' + name;
     input.focus();
   }
+}
+
+// --- Copilot Clear Screen ---
+function clearCopilotScreen() {
+  var msgContainer = document.querySelector('#copilotMessages, .copilot-messages');
+  if (msgContainer) {
+    msgContainer.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:12px;flex:1;">' +
+      '<div style="font-size:40px;opacity:0.4;">\ud83e\udd16</div>' +
+      '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">DACTA Copilot Ready</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);max-width:400px;text-align:center;line-height:1.6;">Start a new investigation session. Ask questions about IOCs, search logs, query MITRE ATT&CK, or analyze scripts.</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:4px;">' +
+        '<span style="font-size:10px;padding:3px 10px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:12px;color:var(--cyan);cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'Check IP \';document.getElementById(\'copilotInput\').focus();">Check IP...</span>' +
+        '<span style="font-size:10px;padding:3px 10px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:12px;color:#a78bfa;cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'What is \';document.getElementById(\'copilotInput\').focus();">MITRE Lookup</span>' +
+        '<span style="font-size:10px;padding:3px 10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.15);border-radius:12px;color:var(--green);cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'Show me all \';document.getElementById(\'copilotInput\').focus();">Log Search</span>' +
+      '</div>' +
+    '</div>';
+  }
+  // Clear context badge
+  var convHeader = document.querySelector('.copilot-conv-header');
+  if (convHeader) {
+    var ctxBadge = convHeader.querySelector('.badge');
+    if (ctxBadge) ctxBadge.style.display = 'none';
+  }
+  // Clear Active Context + Recent IOCs sidebar panels
+  document.querySelectorAll('#page-copilot .ctx-card').forEach(function(card) {
+    var header = card.querySelector('.ctx-card-header');
+    if (!header) return;
+    var txt = header.textContent.trim();
+    if (txt.includes('Active Context')) {
+      var b = card.querySelector('.ctx-card-body');
+      if (b) b.innerHTML = '<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No active investigation context</div>';
+    }
+    if (txt.includes('Recent IOCs')) {
+      var b = card.querySelector('.ctx-card-body');
+      if (b) b.innerHTML = '<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No IOCs in session</div>';
+    }
+  });
+  showToast('Copilot screen cleared');
 }
 
 // --- Copilot Command Bar ---
