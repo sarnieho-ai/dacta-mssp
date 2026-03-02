@@ -11555,18 +11555,16 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
         <!-- ════════════════════════════════════════════════════════
              TAB 2: RULE BUILDER  (IDE-like creation)
              ════════════════════════════════════════════════════════ -->
-        <div class="dr-panel" id="dr-panel-builder">
+        <div class="dr-panel" id="dr-panel-builder" style="position:relative;">
           <!-- Grey overlay when no rule is loaded -->
-          <div id="drBuilderOverlay" style="position:relative;">
-            <div id="drBuilderGreyMask" style="position:absolute;inset:0;background:rgba(8,12,24,0.75);backdrop-filter:blur(2px);z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;border-radius:8px;">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.3)" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-              <div style="font-size:14px;font-weight:600;color:var(--text-muted);text-align:center;">No rule loaded in editor</div>
-              <div style="font-size:11px;color:var(--text-muted);max-width:300px;text-align:center;line-height:1.5;">Click &ldquo;Edit&rdquo; on a rule in the Repository, or create a new rule to get started.</div>
-              <button class="btn btn-primary btn-sm" onclick="document.getElementById('drBuilderGreyMask').style.display='none';openCreateRuleModal();">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                + Create Rule
-              </button>
-            </div>
+          <div id="drBuilderGreyMask" style="position:absolute;inset:0;background:rgba(8,12,24,0.82);backdrop-filter:blur(3px);z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;border-radius:8px;min-height:500px;">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.25)" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <div style="font-size:16px;font-weight:700;color:var(--text-secondary);text-align:center;">No rule loaded in editor</div>
+            <div style="font-size:12px;color:var(--text-muted);max-width:340px;text-align:center;line-height:1.6;">Click "Edit" on a rule in the Repository tab, or create a new rule to get started.</div>
+            <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="document.getElementById('drBuilderGreyMask').style.display='none';openCreateRuleModal();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              + Create Rule
+            </button>
           </div>
           <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;">
             <!-- Left: IDE Editor -->
