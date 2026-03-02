@@ -8,6 +8,22 @@ const _JI = 'dactaglobal-sg.atlassian.net';
 const _CID = '018ce0b3-5943-4d3f-9542-d005b0ce2872'; // Atlassian Cloud ID
 const _TID = 'de6cdba5-d36e-486c-8ace-a41c3eb69b8b'; // [SOC] Alert Ops team ID
 
+// Server-side in-memory cache (survives across warm invocations on same Vercel instance)
+const _serverCache = {};
+const _serverCacheTime = {};
+const _SERVER_CACHE_TTL = 30000; // 30 seconds — balances freshness vs. speed
+
+function _getCached(key) {
+  if (_serverCache[key] && (Date.now() - _serverCacheTime[key]) < _SERVER_CACHE_TTL) {
+    return _serverCache[key];
+  }
+  return null;
+}
+function _setCache(key, data) {
+  _serverCache[key] = data;
+  _serverCacheTime[key] = Date.now();
+}
+
 function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
 
 export default async function handler(req, res) {
@@ -84,6 +100,12 @@ export default async function handler(req, res) {
 
     // ─── ACTION: dashboard ────────────────────────────────────
     if (action === 'dashboard') {
+      // Check server-side cache first
+      var cached = _getCached('dashboard');
+      if (cached) {
+        res.setHeader('X-Cache', 'HIT');
+        return res.status(200).json(cached);
+      }
       const B = 'project = DAC AND type = "[System] Incident"';
       const [
         openCount, p1Count, p2Count, p3Count, p4Count,
@@ -106,7 +128,7 @@ export default async function handler(req, res) {
         ], 20)
       ]);
 
-      return res.status(200).json({
+      const dashResult = {
         kpi: {
           open: openCount, p1: p1Count, p2: p2Count, p3: p3Count, p4: p4Count,
           closedToday: closedTodayCount, canceledToday: canceledTodayCount,
@@ -115,7 +137,9 @@ export default async function handler(req, res) {
           resolvedToday: closedTodayCount + completedTodayCount + canceledTodayCount
         },
         recentTickets: (recentData.issues || []).map(normalizeIssue)
-      });
+      };
+      _setCache('dashboard', dashResult);
+      return res.status(200).json(dashResult);
     }
 
     // ─── ACTION: triage ───────────────────────────────────────
@@ -338,6 +362,12 @@ export default async function handler(req, res) {
 
     // ─── ACTION: dashvisuals (full data for dashboard visuals) ────
     if (action === 'dashvisuals') {
+      // Check server-side cache first
+      var cachedVis = _getCached('dashvisuals');
+      if (cachedVis) {
+        res.setHeader('X-Cache', 'HIT');
+        return res.status(200).json(cachedVis);
+      }
       const B = 'project = DAC AND type = "[System] Incident"';
 
       // Parallel: count queries + fetch 200 recent tickets for distribution analysis
@@ -432,18 +462,26 @@ export default async function handler(req, res) {
         }
       });
 
-      return res.status(200).json({
+      const visResult = {
         totalAll, totalOpen, inProgressCount, escalatedCount,
         resolvedAllTime, resolvedWeek,
         p1All, p2All, p3All, p4All,
         hourlyToday, heatmap, dailyTrend,
         orgDist, statusDist, prioDist,
         issueCount: issues.length
-      });
+      };
+      _setCache('dashvisuals', visResult);
+      return res.status(200).json(visResult);
     }
 
     // ─── ACTION: telemetry (extended dashboard data) ─────────
     if (action === 'telemetry') {
+      // Check server-side cache first
+      var cachedTele = _getCached('telemetry');
+      if (cachedTele) {
+        res.setHeader('X-Cache', 'HIT');
+        return res.status(200).json(cachedTele);
+      }
       const B = 'project = DAC AND type = "[System] Incident"';
       const now = new Date();
       const queries = {};
@@ -480,7 +518,9 @@ export default async function handler(req, res) {
         assigneeCounts[name].total++;
         if ((iss.fields?.status?.name || '') === 'Open') assigneeCounts[name].open++;
       });
-      return res.status(200).json({ counts, assigneeCounts });
+      const teleResult = { counts, assigneeCounts };
+      _setCache('telemetry', teleResult);
+      return res.status(200).json(teleResult);
     }
 
     // ─── ACTION: createticket ─────────────────────────────────

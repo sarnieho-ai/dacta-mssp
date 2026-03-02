@@ -26704,7 +26704,7 @@ function navigate(page) {
 
   // Init charts on page show
   if (page === 'dashboard') { initDashboardCharts(); setTimeout(initCommandCenter, 100); setTimeout(initHeatMap, 150); setTimeout(function(){ initGeoMap(); }, 200); setTimeout(initGeoHeatMap, 250); }
-  if (page === 'dashboard' && window._dactaMode === 'production') setTimeout(populateLiveDashboard, 300);
+  if (page === 'dashboard' && window._dactaMode === 'production') populateLiveDashboard();
   if (page === 'triage' && window._dactaMode === 'production') setTimeout(populateLiveTriage, 200);
   if (page === 'aiusage') setTimeout(initAICharts, 50);
   if (page === 'privacy') setTimeout(initPrivacyCharts, 50);
@@ -26806,10 +26806,12 @@ function init() {
     }, 400);
   }
 
-  // Init dashboard charts immediately
-  setTimeout(initDashboardCharts, 100);
-  setTimeout(initCommandCenter, 200);
-  setTimeout(initHeatMap, 250);
+  // Init dashboard charts in next frame (all at once, no staggered delays)
+  requestAnimationFrame(function() {
+    initDashboardCharts();
+    initCommandCenter();
+    initHeatMap();
+  });
 }
 
 // init() is called by Supabase auth after session check (see SUPABASE AUTHENTICATION block below)
@@ -26822,8 +26824,9 @@ function init() {
   function safeInit() {
     if (!_initCalled) {
       _initCalled = true;
+      // Apply production mode FIRST (zeros out dashboard) so live data writes over it
+      applyProductionMode();
       init();
-      setTimeout(applyProductionMode, 600);
     }
   }
 
@@ -26891,6 +26894,18 @@ function init() {
         if (toggle) toggle.checked = true;
         if (knob) { knob.style.left = '16px'; knob.style.background = '#00d4ff'; knob.style.boxShadow = '0 0 6px rgba(0,212,255,0.5)'; }
         if (slider) slider.style.background = 'rgba(0,212,255,0.3)';
+      }
+      
+      // PRE-FETCH: Start API calls NOW before init()/navigate() even runs
+      // This saves ~400ms by overlapping network I/O with DOM setup
+      if (window._dactaMode === 'production') {
+        console.log('[Perf] Pre-fetching dashboard data...');
+        window._dactaPrefetch = {
+          dashboard: DactaJira.fetchDashboard(),
+          dashvisuals: DactaJira.fetchDashVisuals(),
+          telemetry: DactaJira.fetchTelemetry(),
+          ingestion: loadDataIngestion()
+        };
       }
       
       safeInit();
@@ -32139,25 +32154,36 @@ async function populateLiveDashboard() {
   if (window._dactaMode !== 'production') return;
   if (_dashboardLoading) return;
   _dashboardLoading = true;
+  var _perfStart = performance.now();
 
   try {
-    var data = await DactaJira.fetchDashboard();
+    // ── PARALLEL FETCH: Fire all 4 data sources simultaneously ──
+    var _prefetched = window._dactaPrefetch || {};
+    var dashPromise = _prefetched.dashboard || DactaJira.fetchDashboard();
+    var visPromise = _prefetched.dashvisuals || DactaJira.fetchDashVisuals();
+    var telePromise = _prefetched.telemetry || DactaJira.fetchTelemetry();
+    var ingestPromise = _prefetched.ingestion || loadDataIngestion();
+    // Clear prefetch cache so subsequent calls are fresh
+    window._dactaPrefetch = null;
+
+    // Wait for dashboard (critical path) while others continue in background
+    var data = await dashPromise;
     var kpi = data.kpi;
     var tickets = data.recentTickets || [];
+    console.log('[Perf] Dashboard API resolved in', Math.round(performance.now() - _perfStart), 'ms');
 
-    // Fetch dashvisuals data in background (fills all canvas/chart visuals)
-    DactaJira.fetchDashVisuals().then(function(vis) {
+    // Process dashvisuals when ready (non-blocking)
+    visPromise.then(function(vis) {
       if (vis) updateAllVisuals(vis);
+      console.log('[Perf] DashVisuals resolved in', Math.round(performance.now() - _perfStart), 'ms');
     }).catch(function(e) { console.warn('[DactaJira] dashvisuals error:', e); });
 
-    // Load data ingestion metric (24h doc count from Elastic)
-    loadDataIngestion();
-
-    // Fetch extended telemetry in background
-    DactaJira.fetchTelemetry().then(function(tele) {
+    // Process telemetry when ready (non-blocking)
+    telePromise.then(function(tele) {
       if (!tele) return;
       var c = tele.counts || {};
       var ac = tele.assigneeCounts || {};
+      console.log('[Perf] Telemetry resolved in', Math.round(performance.now() - _perfStart), 'ms');
 
       // Update 1st metric card (if present): In Progress count
       // NOTE: metric cards 0 & 1 are primarily owned by updateAllVisuals (dashvisuals)
