@@ -3772,6 +3772,56 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   transition: var(--transition);
 }
 .cc-time-filter:hover { border-color: var(--cyan); color: var(--cyan); }
+.cc-time-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cc-time-select {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cyan);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 6px;
+  padding: 5px 24px 5px 10px;
+  cursor: pointer;
+  transition: var(--transition);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2300d4ff' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+.cc-time-select:hover, .cc-time-select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px rgba(0,212,255,0.15);
+}
+.cc-time-select option {
+  background: #0c1020;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.cc-refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--border-card);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.cc-refresh-btn:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
 .cc-clock-display {
   display: flex;
   align-items: center;
@@ -9504,9 +9554,18 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             </div>
           </div>
           <div class="cc-command-right">
-            <div class="cc-time-filter" style="cursor:pointer;" onclick="refreshDashboardData()" title="Refresh dashboard data">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
-              <span>Live · 24H</span>
+            <div class="cc-time-filter-group">
+              <select id="dashTimeRange" class="cc-time-select" onchange="onDashTimeRangeChange()" title="Select time range">
+                <option value="1h">Last 1H</option>
+                <option value="4h">Last 4H</option>
+                <option value="12h">Last 12H</option>
+                <option value="24h" selected>Last 24H</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+              </select>
+              <button class="cc-refresh-btn" onclick="refreshDashboardData()" title="Refresh dashboard data">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+              </button>
             </div>
             <div class="cc-clock-display">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
@@ -23764,25 +23823,24 @@ Analyst: K. Rasmussen | 2026-02-28
            ===================================================== -->
       <div class="page" id="page-audit">
         <div class="page-header">
-          <div><div class="page-title">Audit Log</div><div class="page-subtitle">All platform actions — immutable record</div></div>
+          <div><div class="page-title">Audit Trail</div><div class="page-subtitle" id="auditSubtitle">All platform actions — immutable record</div></div>
           <div class="page-actions">
-            <button class="btn btn-secondary btn-sm">↓ Export CSV</button>
+            <button class="btn btn-secondary btn-sm" onclick="exportAuditCSV()">&#x2193; Export CSV</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadLiveAuditLog();showToast('Refreshed','success')" style="border-color:rgba(0,212,255,0.3);color:var(--cyan);">&#x21BB; Refresh</button>
           </div>
         </div>
 
         <div class="filter-bar" style="margin-bottom:16px;">
           <span class="filter-label">Filter:</span>
-          <input class="filter-input" placeholder="Search actions, users, targets..." style="width:250px;">
-          <select class="filter-select"><option>All Users</option><option>John Lim</option><option>Sarah Tan</option><option>Marcus Wong</option><option>AI System</option></select>
-          <select class="filter-select"><option>All Action Types</option><option>Ticket</option><option>Response</option><option>Auth</option><option>Config</option><option>AI</option></select>
-          <select class="filter-select"><option>Last 24 Hours</option><option>Last 7 Days</option><option>Last 30 Days</option></select>
+          <input class="filter-input" id="auditSearchInput" placeholder="Search actions, users, resources..." style="width:250px;" oninput="filterAuditLog(this.value)">
+          <select class="filter-select" id="auditActionFilter" onchange="filterAuditLog(document.getElementById('auditSearchInput').value)"><option value="">All Actions</option><option value="copilot_query">Copilot Query</option><option value="ticket_close">Ticket Close</option><option value="ticket_escalate">Ticket Escalate</option><option value="rule_sync">Rule Sync</option></select>
         </div>
 
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Timestamp</th><th>User</th><th>Action Type</th><th>Action</th><th>Target</th><th>Details</th><th>IP</th></tr></thead>
-              <tbody id="auditLogBody"></tbody>
+              <thead><tr><th>Timestamp</th><th>User</th><th>Resource Type</th><th>Action</th><th>Resource ID</th><th>Details</th><th>IP</th></tr></thead>
+              <tbody id="auditLogBody"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);font-size:12px;">Loading audit entries...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -25176,6 +25234,49 @@ Analyst: K. Rasmussen | 2026-02-28
 
 <!-- Entity Drill-Down Panel -->
 <div class="entity-panel-backdrop" id="entityPanelBackdrop" onclick="closeEntityPanel()"></div>
+
+<!-- ============================================================
+     COMPLIANCE: Bulk Action Confirmation Modal
+     ============================================================ -->
+<div id="bulkActionModalOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:99999;display:none;align-items:center;justify-content:center;">
+  <div id="bulkActionModal" style="background:rgba(8,12,24,0.97);border:1px solid rgba(0,212,255,0.18);border-radius:16px;padding:28px 32px;width:480px;max-width:95vw;backdrop-filter:blur(12px);box-shadow:0 24px 80px rgba(0,0,0,0.6),0 0 40px rgba(0,212,255,0.06);font-family:'Sora',sans-serif;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+      <div id="bulkActionModalIcon" style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;"></div>
+      <div>
+        <div id="bulkActionModalTitle" style="font-size:15px;font-weight:700;color:#f1f5f9;"></div>
+        <div id="bulkActionModalSubtitle" style="font-size:11px;color:rgba(241,245,249,0.45);margin-top:2px;"></div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <div style="font-size:11px;font-weight:600;color:rgba(241,245,249,0.55);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Decision Type</div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.04);margin-bottom:8px;">
+        <input type="radio" name="bulkDecisionType" value="analyst-decided" checked style="accent-color:#00d4ff;">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#f1f5f9;">Analyst Decision</div>
+          <div style="font-size:10px;color:rgba(241,245,249,0.45);">Manual review — analyst determined disposition</div>
+        </div>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);">
+        <input type="radio" name="bulkDecisionType" value="ai-recommended-analyst-approved" style="accent-color:#00d4ff;">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#f1f5f9;">AI-Recommended (Analyst Approved)</div>
+          <div style="font-size:10px;color:rgba(241,245,249,0.45);">AI suggested — analyst confirmed and approved</div>
+        </div>
+      </label>
+    </div>
+
+    <div style="margin-bottom:22px;">
+      <div style="font-size:11px;font-weight:600;color:rgba(241,245,249,0.55);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Justification / Notes <span style="font-weight:400;font-size:10px;opacity:0.6;">(optional)</span></div>
+      <textarea id="bulkActionJustification" placeholder="Add a brief note about why this action was taken..." style="width:100%;min-height:72px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#f1f5f9;font-family:'Sora',sans-serif;font-size:12px;resize:vertical;outline:none;box-sizing:border-box;line-height:1.5;"></textarea>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="_closeBulkModal(false)" style="padding:9px 20px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:rgba(241,245,249,0.7);font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;">Cancel</button>
+      <button id="bulkActionConfirmBtn" onclick="_closeBulkModal(true)" style="padding:9px 22px;border-radius:8px;border:1px solid rgba(0,212,255,0.4);background:rgba(0,212,255,0.12);color:#00d4ff;font-family:'Sora',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">Confirm</button>
+    </div>
+  </div>
+</div>
 <div class="entity-panel" id="entityPanel">
   <div class="entity-panel-header">
     <div class="entity-panel-icon" id="epIcon">🖥</div>
@@ -25530,6 +25631,143 @@ function renderTriage() {
 // ============================================================
 //  DETECTION RULES — LIVE DATA FROM ELASTIC
 // ============================================================
+
+// Supabase versions cache: rule name -> { id, version, rule_content }
+var _ruleVersionCache = {};
+var _ruleVersionsLoaded = false;
+
+async function syncDetectionRulesToSupabase(rules) {
+  if (!window._dactaSupabase || !rules || rules.length === 0) return;
+  try {
+    // Load all existing rules from Supabase to compare
+    var res = await window._dactaSupabase.from('detection_rules').select('id,name,version,rule_content');
+    var existing = {};
+    if (res.data) {
+      res.data.forEach(function(r) { existing[r.name] = r; });
+    }
+    // Update version cache for renderRules
+    _ruleVersionCache = {};
+    if (res.data) {
+      res.data.forEach(function(r) { _ruleVersionCache[r.name] = { id: r.id, version: r.version }; });
+    }
+    _ruleVersionsLoaded = true;
+    // Re-render to pick up real versions
+    renderRules();
+
+    var currentUser = _getCurrentUserEmail();
+    for (var i = 0; i < rules.length; i++) {
+      var rule = rules[i];
+      var ruleContent = JSON.stringify({ id: rule.id, type: rule.type, severity: rule.severity, mitre: rule.mitre, logSources: rule.logSources, hits: rule.hits });
+      try {
+        if (!existing[rule.name]) {
+          // Insert new rule
+          var ins = await window._dactaSupabase.from('detection_rules').insert({
+            name: rule.name,
+            description: '',
+            rule_content: ruleContent,
+            syntax: rule.type,
+            severity: rule.severity,
+            status: rule.status || 'Production',
+            mitre_tactic: '',
+            mitre_technique_id: rule.mitre !== '\u2014' ? rule.mitre : null,
+            mitre_technique_name: '',
+            data_sources: rule.logSources || [],
+            tags: [],
+            author: rule.author || 'Custom',
+            version: 1,
+            avg_daily_hits: rule.hits || 0
+          }).select('id').single();
+          if (!ins.error && ins.data) {
+            _ruleVersionCache[rule.name] = { id: ins.data.id, version: 1 };
+            logToSupabase('audit_log', {
+              user_email: 'system',
+              action: 'rule_sync',
+              resource_type: 'detection_rule',
+              resource_id: ins.data.id,
+              details: { rule_name: rule.name, version: 1, change_type: 'sync_from_elastic', event: 'new_rule' }
+            });
+          }
+        } else {
+          var ex = existing[rule.name];
+          var existingContent = ex.rule_content || '';
+          var newVersion = ex.version || 1;
+          var changed = existingContent !== ruleContent;
+          if (changed) {
+            newVersion = (ex.version || 1) + 1;
+            await window._dactaSupabase.from('detection_rules').update({
+              rule_content: ruleContent,
+              version: newVersion,
+              severity: rule.severity,
+              status: rule.status || 'Production',
+              avg_daily_hits: rule.hits || 0,
+              last_triggered_at: new Date().toISOString()
+            }).eq('id', ex.id);
+            _ruleVersionCache[rule.name] = { id: ex.id, version: newVersion };
+            logToSupabase('audit_log', {
+              user_email: 'system',
+              action: 'rule_sync',
+              resource_type: 'detection_rule',
+              resource_id: ex.id,
+              details: { rule_name: rule.name, version: newVersion, change_type: 'sync_from_elastic', event: 'rule_updated' }
+            });
+          } else {
+            _ruleVersionCache[rule.name] = { id: ex.id, version: ex.version || 1 };
+          }
+        }
+      } catch(ruleErr) { console.warn('[RuleSync] Error syncing rule:', rule.name, ruleErr); }
+    }
+    // Re-render with updated versions
+    renderRules();
+    console.log('[RuleSync] Synced ' + rules.length + ' rules to Supabase');
+  } catch(e) { console.warn('[RuleSync] Supabase sync error:', e); }
+}
+
+// Show rule version history from audit_log
+async function showRuleHistory(ruleId, ruleName) {
+  if (!window._dactaSupabase) { showToast('Supabase not connected', 'warn'); return; }
+  try {
+    var res = await window._dactaSupabase.from('audit_log')
+      .select('created_at,user_email,action,details')
+      .eq('resource_type', 'detection_rule')
+      .eq('resource_id', ruleId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    var rows = res.data || [];
+    var html = '<div style="font-family:\'Sora\',sans-serif;font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:14px;">Version History: ' + ruleName + '</div>';
+    if (rows.length === 0) {
+      html += '<div style="font-size:11px;color:rgba(241,245,249,0.5);">No version history recorded yet.</div>';
+    } else {
+      html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+      rows.forEach(function(r) {
+        var d = r.details || {};
+        var ts = r.created_at ? new Date(r.created_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        html += '<div style="padding:10px 12px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.1);border-radius:8px;">';
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+        html += '<span style="font-family:var(--font-mono);font-size:10px;color:#00d4ff;font-weight:700;">v' + (d.version || '?') + '.0</span>';
+        html += '<span style="font-size:10px;color:rgba(241,245,249,0.6);">' + ts + '</span>';
+        html += '<span style="font-size:9px;padding:1px 6px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:3px;color:rgba(241,245,249,0.7);">' + (d.change_type || r.action) + '</span>';
+        html += '</div>';
+        html += '<div style="font-size:10px;color:rgba(241,245,249,0.5);">By: ' + (r.user_email || 'system') + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += '<div style="margin-top:14px;text-align:right;"><button onclick="document.getElementById(\'ruleHistoryOverlay\').style.display=\'none\'" style="padding:8px 18px;border-radius:8px;border:1px solid rgba(0,212,255,0.3);background:rgba(0,212,255,0.08);color:#00d4ff;font-family:\'Sora\',sans-serif;font-size:12px;font-weight:600;cursor:pointer;">Close</button></div>';
+    // Show in overlay
+    var overlay = document.getElementById('ruleHistoryOverlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'ruleHistoryOverlay';
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;';
+      overlay.innerHTML = '<div id="ruleHistoryContent" style="background:rgba(8,12,24,0.97);border:1px solid rgba(0,212,255,0.18);border-radius:16px;padding:24px 28px;width:520px;max-width:95vw;max-height:70vh;overflow-y:auto;backdrop-filter:blur(12px);box-shadow:0 24px 80px rgba(0,0,0,0.6);"></div>';
+      document.body.appendChild(overlay);
+    } else {
+      overlay.style.display = 'flex';
+    }
+    document.getElementById('ruleHistoryContent').innerHTML = html;
+  } catch(e) { showToast('Failed to load history: ' + e.message, 'warn'); }
+}
+
 async function loadDetectionRulesLive() {
   console.log('[DetectionRules] Loading live rules from Elastic...');
   try {
@@ -25613,6 +25851,9 @@ async function loadDetectionRulesLive() {
     renderEmergingThreats();
     renderMitre();
     console.log('[DetectionRules] Loaded ' + rulesData.length + ' rules from Elastic');
+
+    // Sync rules to Supabase detection_rules table (fire-and-forget)
+    syncDetectionRulesToSupabase(rulesData);
   } catch (err) {
     console.error('[DetectionRules] Error:', err);
   }
@@ -25654,7 +25895,11 @@ function renderRules() {
     rows += '<td><span class="badge badge-' + (sevColor[r.severity] || 'blue') + '">' + r.severity + '</span></td>';
     rows += '<td style="max-width:140px;"><div style="display:flex;gap:3px;flex-wrap:wrap;">' + lsBadges + '</div></td>';
     rows += '<td><span class="author-badge ' + (authorClass[r.author] || 'dacta') + '" style="font-size:8px;">' + r.author + '</span></td>';
-    rows += '<td style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">' + r.ver + '</td>';
+    var displayVer = (_ruleVersionsLoaded && _ruleVersionCache[r.name]) ? 'v' + _ruleVersionCache[r.name].version + '.0' : r.ver;
+    var ruleIdForHistory = (_ruleVersionCache[r.name]) ? _ruleVersionCache[r.name].id : null;
+    rows += '<td style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);white-space:nowrap;">' + displayVer +
+      (ruleIdForHistory ? ' <button title="View version history" onclick="showRuleHistory(\'' + ruleIdForHistory + '\', \'' + (r.name||'').replace(/'/g,"\\'") + '\')" style="background:none;border:none;cursor:pointer;color:var(--cyan);font-size:10px;padding:0 2px;opacity:0.7;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">&#x1F4DC;</button>' : '') +
+      '</td>';
     rows += '<td><span class="badge badge-' + (statusColor[r.status] || 'green') + '" style="font-size:9px;">' + r.status + '</span></td>';
     rows += '<td style="font-family:var(--font-mono);font-size:11px;color:' + fpColor + ';">' + r.fp + '</td>';
     rows += '<td style="font-family:var(--font-mono);font-size:12px;font-weight:700;">' + r.hits + '</td>';
@@ -26082,7 +26327,10 @@ function renderIntegrations() {
 }
 
 function renderAuditLog() {
-  if (window._dactaMode === 'production') return;
+  if (window._dactaMode === 'production') {
+    loadLiveAuditLog();
+    return;
+  }
   const tbody = document.getElementById('auditLogBody');
   if (!tbody) return;
   const typeColors = { 'AI': 'purple', 'Response': 'red', 'Ticket': 'cyan', 'Config': 'amber', 'Auth': 'green' };
@@ -26097,6 +26345,108 @@ function renderAuditLog() {
       <td class="mono" style="color:var(--text-muted);font-size:10px;">${a.ip}</td>
     </tr>
   `).join('');
+}
+
+// Audit log auto-refresh timer
+var _auditRefreshTimer = null;
+var _auditAllRows = [];
+
+function filterAuditLog(searchText) {
+  var tbody = document.getElementById('auditLogBody');
+  if (!tbody) return;
+  var actionFilter = document.getElementById('auditActionFilter');
+  var actionVal = actionFilter ? actionFilter.value : '';
+  var search = (searchText || '').toLowerCase();
+  var filtered = _auditAllRows.filter(function(r) {
+    var matchAction = !actionVal || (r.action || '') === actionVal;
+    var matchSearch = !search ||
+      (r.user_email || '').toLowerCase().includes(search) ||
+      (r.action || '').toLowerCase().includes(search) ||
+      (r.resource_type || '').toLowerCase().includes(search) ||
+      (r.resource_id || '').toLowerCase().includes(search);
+    return matchAction && matchSearch;
+  });
+  tbody.innerHTML = _buildAuditRows(filtered);
+}
+
+function _buildAuditRows(rows) {
+  if (!rows || rows.length === 0) return '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);font-size:12px;">No entries match the current filter.</td></tr>';
+  var actionColors = {
+    'copilot_query': 'purple', 'ticket_close': 'green', 'ticket_escalate': 'red',
+    'rule_sync': 'amber', 'login': 'cyan', 'logout': 'gray'
+  };
+  return rows.map(function(r) {
+    var ts = r.created_at ? new Date(r.created_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+    var actionColor = actionColors[r.action] || 'blue';
+    var detailStr = '';
+    if (r.details) {
+      try {
+        var d = typeof r.details === 'string' ? JSON.parse(r.details) : r.details;
+        if (d.query) detailStr = 'Query: ' + String(d.query).substring(0, 60);
+        else if (d.rule_name) detailStr = 'Rule: ' + d.rule_name + ' v' + (d.version || 1);
+        else if (d.previous_status) detailStr = d.previous_status + ' \u2192 ' + d.new_status;
+        else detailStr = JSON.stringify(d).substring(0, 80);
+      } catch(e) { detailStr = String(r.details).substring(0, 80); }
+    }
+    return '<tr class="audit-row">' +
+      '<td class="mono" style="color:var(--text-muted);font-size:10px;white-space:nowrap;">' + ts + '</td>' +
+      '<td style="color:var(--text-primary);font-size:11px;">' + (r.user_email || '\u2014') + '</td>' +
+      '<td><span class="badge badge-' + actionColor + '" style="font-size:9px;">' + (r.resource_type || '\u2014') + '</span></td>' +
+      '<td style="color:var(--text-secondary);font-size:11px;">' + (r.action || '\u2014') + '</td>' +
+      '<td class="mono" style="color:var(--cyan);font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (r.resource_id || '\u2014') + '</td>' +
+      '<td style="color:var(--text-muted);font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + detailStr + '</td>' +
+      '<td class="mono" style="color:var(--text-muted);font-size:10px;">' + (r.ip_address || '\u2014') + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function exportAuditCSV() {
+  if (_auditAllRows.length === 0) { showToast('No data to export', 'warn'); return; }
+  var headers = ['Timestamp', 'User', 'Resource Type', 'Action', 'Resource ID', 'Details', 'IP'];
+  var csvRows = _auditAllRows.map(function(r) {
+    var ts = r.created_at || '';
+    var details = r.details ? JSON.stringify(r.details).replace(/"/g, '""') : '';
+    return [
+      '"' + ts + '"',
+      '"' + (r.user_email || '') + '"',
+      '"' + (r.resource_type || '') + '"',
+      '"' + (r.action || '') + '"',
+      '"' + (r.resource_id || '') + '"',
+      '"' + details + '"',
+      '"' + (r.ip_address || '') + '"'
+    ].join(',');
+  });
+  var csv = headers.join(',') + '\n' + csvRows.join('\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'dacta-audit-log-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('Exported ' + _auditAllRows.length + ' entries', 'success');
+}
+
+async function loadLiveAuditLog() {
+  if (!window._dactaSupabase) return;
+  var tbody = document.getElementById('auditLogBody');
+  if (!tbody) return;
+  try {
+    var res = await window._dactaSupabase.from('audit_log')
+      .select('created_at,user_email,action,resource_type,resource_id,details,ip_address')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    _auditAllRows = res.data || [];
+    if (_auditAllRows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);font-size:12px;">No audit log entries yet. Actions will appear here as analysts use the platform.</td></tr>';
+    } else {
+      tbody.innerHTML = _buildAuditRows(_auditAllRows);
+    }
+    // Update subtitle
+    var page = document.getElementById('page-audit');
+    if (page) {
+      var sub = page.querySelector('.page-subtitle');
+      if (sub) sub.innerHTML = _auditAllRows.length + ' recent entries \u00b7 <span style="color:var(--cyan);font-size:10px;">Live from Supabase</span> \u00b7 Auto-refreshes every 30s';
+    }
+  } catch(e) { console.warn('[AuditTrail] Load error:', e); }
 }
 
 // ============================================================
@@ -26843,7 +27193,33 @@ async function loadSettingsPage() {
 var _aiUsage = {"totalCalls":0,"totalTokensIn":0,"totalTokensOut":0,"calls":[],"byModel":{},"byDay":{}};
 sessionStorage.removeItem('dacta_ai_usage');
 
-function trackAIUsage(model, tokensIn, tokensOut, purpose) {
+// ============================================================
+//  SUPABASE COMPLIANCE HELPERS
+// ============================================================
+
+// Fire-and-forget insert to any Supabase table
+function logToSupabase(table, data) {
+  if (!window._dactaSupabase) return;
+  try {
+    window._dactaSupabase.from(table).insert(data).then(function(res) {
+      if (res.error) console.warn('[AuditLog] Insert error (' + table + '):', res.error.message);
+    });
+  } catch(e) { console.warn('[AuditLog] Error (' + table + '):', e); }
+}
+
+// Get current logged-in user email from Supabase session
+function _getCurrentUserEmail() {
+  try {
+    var emailEl = document.getElementById('userMenuEmail');
+    if (emailEl && emailEl.textContent) return emailEl.textContent.trim();
+  } catch(e) {}
+  return 'unknown';
+}
+
+// Generate a simple session ID for copilot sessions
+var _copilotSessionId = 'cs-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
+function trackAIUsage(model, tokensIn, tokensOut, purpose, latencyMs, sessionId) {
   _aiUsage.totalCalls++;
   _aiUsage.totalTokensIn += tokensIn;
   _aiUsage.totalTokensOut += tokensOut;
@@ -26860,6 +27236,19 @@ function trackAIUsage(model, tokensIn, tokensOut, purpose) {
   _aiUsage.calls.push({ ts: now.toISOString(), model: model, tokensIn: tokensIn, tokensOut: tokensOut, purpose: purpose });
   if (_aiUsage.calls.length > 100) _aiUsage.calls = _aiUsage.calls.slice(-100);
   try { sessionStorage.setItem('dacta_ai_usage', JSON.stringify(_aiUsage)); } catch(e) {}
+  // Persist to Supabase llm_usage_log (fire-and-forget)
+  logToSupabase('llm_usage_log', {
+    task_type: 'copilot_query',
+    model: model,
+    provider: 'dacta-siemless',
+    input_tokens: tokensIn,
+    output_tokens: tokensOut,
+    latency_ms: latencyMs || null,
+    estimated_cost_usd: 0,
+    fallback_used: false,
+    related_entity_type: 'copilot_session',
+    related_entity_id: sessionId || _copilotSessionId
+  });
 }
 
 async function loadAIUsagePage() {
@@ -27377,6 +27766,14 @@ function navigate(page) {
   if (page === 'warroom') setTimeout(initWarRoom2, 50);
   if (page === 'copilot') initCopilotPage();
   if (page === 'handover' && window._dactaMode === 'production') setTimeout(loadOpsCommandData, 200);
+  if (page === 'audit') {
+    // Clear old timer, load fresh, set 30s refresh
+    if (_auditRefreshTimer) clearInterval(_auditRefreshTimer);
+    setTimeout(renderAuditLog, 100);
+    if (window._dactaMode === 'production') {
+      _auditRefreshTimer = setInterval(loadLiveAuditLog, 30000);
+    }
+  }
 
   // Scroll to top
   document.getElementById('content-area').scrollTop = 0;
@@ -32364,6 +32761,7 @@ async function copilotAsk(text) {
   }
 
   var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  var elapsedMs = Date.now() - startTime;
 
   var think = document.getElementById('copilotThinkRow');
   if (think) think.remove();
@@ -32378,6 +32776,22 @@ async function copilotAsk(text) {
     '<div class="msg-bubble-copilot">' + responseHTML + '</div></div>';
   messages.appendChild(responseRow);
   messages.scrollTop = messages.scrollHeight;
+
+  // Log to Supabase audit_log (fire-and-forget)
+  var _responseSummary = responseHTML ? responseHTML.replace(/<[^>]+>/g, '').substring(0, 200) : '';
+  logToSupabase('audit_log', {
+    user_email: _getCurrentUserEmail(),
+    action: 'copilot_query',
+    resource_type: 'investigation',
+    resource_id: _copilotSessionId,
+    details: {
+      query: text,
+      domain: window._copilotDomain || 'all',
+      mode: window._copilotMode || 'guided',
+      response_summary: _responseSummary,
+      latency_ms: elapsedMs
+    }
+  });
 }
 
 function escapeHtml(s) {
@@ -33144,6 +33558,49 @@ function jiraLiveBadge() {
 
 // ── DASHBOARD LIVE DATA ─────────────────────────────────────
 
+// Dashboard time range state
+var _dashTimeRange = '24h';
+var _dashTimeLabels = {
+  '1h': { elastic: 'now-1h', short: '1H', label: '1h' },
+  '4h': { elastic: 'now-4h', short: '4H', label: '4h' },
+  '12h': { elastic: 'now-12h', short: '12H', label: '12h' },
+  '24h': { elastic: 'now-24h', short: '24H', label: '24h' },
+  '7d': { elastic: 'now-7d', short: '7D', label: '7d' },
+  '30d': { elastic: 'now-30d', short: '30D', label: '30d' }
+};
+
+function getDashElasticGte() {
+  return (_dashTimeLabels[_dashTimeRange] || _dashTimeLabels['24h']).elastic;
+}
+function getDashTimeShort() {
+  return (_dashTimeLabels[_dashTimeRange] || _dashTimeLabels['24h']).short;
+}
+function getDashTimeLabel() {
+  return (_dashTimeLabels[_dashTimeRange] || _dashTimeLabels['24h']).label;
+}
+
+function onDashTimeRangeChange() {
+  var sel = document.getElementById('dashTimeRange');
+  if (sel) _dashTimeRange = sel.value;
+  // Update metric unit labels dynamically
+  updateDashTimeLabels();
+  // Refresh data with new range
+  refreshDashboardData();
+}
+
+function updateDashTimeLabels() {
+  var shortLabel = getDashTimeShort();
+  var timeLabel = getDashTimeLabel();
+  // Update metric card units in command view (initial placeholder labels)
+  var metricCards = document.querySelectorAll('#commandView .cc-metric-card');
+  if (metricCards[0]) {
+    var l0 = metricCards[0].querySelector('.cc-metric-label');
+    if (l0 && l0.textContent.indexOf('Ingestion') !== -1) {
+      l0.textContent = l0.textContent.replace(/\([^)]*\)/, '(' + timeLabel + ')');
+    }
+  }
+}
+
 // Manual refresh button handler
 function refreshDashboardData() {
   if (window._dactaMode !== 'production') return;
@@ -33367,7 +33824,7 @@ function updateAllVisuals(vis) {
   if (metricCards[0]) {
     // Card 0 = Data Ingestion — only set label, DON'T overwrite value (loadDataIngestion owns it)
     var l0 = metricCards[0].querySelector('.cc-metric-label');
-    if (l0) l0.textContent = 'Data Ingestion (24h)';
+    if (l0) l0.textContent = 'Data Ingestion (' + getDashTimeLabel() + ')';
     // Re-trigger loadDataIngestion if value is still placeholder
     var v0 = metricCards[0].querySelector('.cc-metric-value');
     if (v0 && (v0.textContent === '0' || v0.textContent === '—' || v0.textContent === '…')) {
@@ -33423,9 +33880,10 @@ function updateAllVisuals(vis) {
 }
 
 // ============================================================
-//  DATA INGESTION METRIC — live 24h doc count from Elastic
+//  DATA INGESTION METRIC — live doc count from Elastic
 // ============================================================
 async function loadDataIngestion() {
+  var timeLabel = getDashTimeLabel();
   try {
     var resp = await fetch('/api/elastic', {
       method: 'POST',
@@ -33433,7 +33891,7 @@ async function loadDataIngestion() {
       body: JSON.stringify({
         action: 'count',
         index: 'logs-*',
-        body: { query: { range: { '@timestamp': { gte: 'now-24h' } } } }
+        body: { query: { range: { '@timestamp': { gte: getDashElasticGte() } } } }
       })
     });
     var data = await resp.json();
@@ -33443,7 +33901,7 @@ async function loadDataIngestion() {
       var v0 = metricCards[0].querySelector('.cc-metric-value');
       var u0 = metricCards[0].querySelector('.cc-metric-unit');
       var l0 = metricCards[0].querySelector('.cc-metric-label');
-      if (l0) l0.textContent = 'Data Ingestion (24h)';
+      if (l0) l0.textContent = 'Data Ingestion (' + timeLabel + ')';
       if (docCount !== null) {
         var millions = (docCount / 1000000).toFixed(1);
         if (v0) v0.textContent = millions + 'M';
@@ -33453,7 +33911,7 @@ async function loadDataIngestion() {
         if (u0) u0.textContent = 'EVENTS';
       }
     }
-    console.log('[DataIngestion] 24h doc count:', docCount);
+    console.log('[DataIngestion] ' + timeLabel + ' doc count:', docCount);
   } catch (err) {
     console.warn('[DataIngestion] Failed to load:', err);
     var metricCards = document.querySelectorAll('#commandView .cc-metric-card');
@@ -33461,7 +33919,7 @@ async function loadDataIngestion() {
       var v0 = metricCards[0].querySelector('.cc-metric-value');
       var u0 = metricCards[0].querySelector('.cc-metric-unit');
       var l0 = metricCards[0].querySelector('.cc-metric-label');
-      if (l0) l0.textContent = 'Data Ingestion (24h)';
+      if (l0) l0.textContent = 'Data Ingestion (' + timeLabel + ')';
       if (v0) v0.textContent = '—';
       if (u0) u0.textContent = 'EVENTS';
     }
@@ -33510,7 +33968,7 @@ async function populateLiveDashboard() {
         var metricCards = document.querySelectorAll('#commandView .cc-metric-card');
         if (metricCards[0]) {
           var l0t = metricCards[0].querySelector('.cc-metric-label');
-          if (l0t) l0t.textContent = 'Data Ingestion (24h)';
+          if (l0t) l0t.textContent = 'Data Ingestion (' + getDashTimeLabel() + ')';
           // Value will be filled by loadDataIngestion()
         }
         if (metricCards[1]) {
@@ -34128,17 +34586,158 @@ async function doBulkAssign(keys, accountId, name) {
   showToast(ok+' assigned'+(fail?', '+fail+' failed':''), fail?'warn':'success');
   rerenderTriageTable();
 }
+// ============================================================
+//  COMPLIANCE: Bulk Action Modal Logic
+// ============================================================
+var _bulkActionResolve = null;
+
+function _showBulkModal(actionType, count) {
+  return new Promise(function(resolve) {
+    _bulkActionResolve = resolve;
+    var overlay = document.getElementById('bulkActionModalOverlay');
+    var iconEl = document.getElementById('bulkActionModalIcon');
+    var titleEl = document.getElementById('bulkActionModalTitle');
+    var subtitleEl = document.getElementById('bulkActionModalSubtitle');
+    var justEl = document.getElementById('bulkActionJustification');
+    var radios = document.querySelectorAll('input[name="bulkDecisionType"]');
+    if (!overlay) { resolve({ confirmed: true, decisionType: 'analyst-decided', justification: '' }); return; }
+    // Reset
+    if (justEl) justEl.value = '';
+    radios.forEach(function(r) { r.checked = r.value === 'analyst-decided'; });
+    // Style and label based on action
+    if (actionType === 'close') {
+      iconEl.innerHTML = '&#x2705;';
+      iconEl.style.background = 'rgba(16,185,129,0.12)';
+      iconEl.style.border = '1px solid rgba(16,185,129,0.25)';
+      titleEl.textContent = 'Confirm Close — ' + count + ' ticket' + (count > 1 ? 's' : '');
+      document.getElementById('bulkActionConfirmBtn').style.color = '#10b981';
+      document.getElementById('bulkActionConfirmBtn').style.borderColor = 'rgba(16,185,129,0.4)';
+      document.getElementById('bulkActionConfirmBtn').style.background = 'rgba(16,185,129,0.1)';
+    } else {
+      iconEl.innerHTML = '&#x1F6A8;';
+      iconEl.style.background = 'rgba(239,68,68,0.12)';
+      iconEl.style.border = '1px solid rgba(239,68,68,0.25)';
+      titleEl.textContent = 'Confirm Escalate — ' + count + ' ticket' + (count > 1 ? 's' : '');
+      document.getElementById('bulkActionConfirmBtn').style.color = '#ef4444';
+      document.getElementById('bulkActionConfirmBtn').style.borderColor = 'rgba(239,68,68,0.4)';
+      document.getElementById('bulkActionConfirmBtn').style.background = 'rgba(239,68,68,0.1)';
+    }
+    subtitleEl.textContent = 'This action will be logged to the audit trail with attribution.';
+    overlay.style.display = 'flex';
+  });
+}
+
+function _closeBulkModal(confirmed) {
+  var overlay = document.getElementById('bulkActionModalOverlay');
+  if (overlay) overlay.style.display = 'none';
+  if (_bulkActionResolve) {
+    var decisionType = 'analyst-decided';
+    var radios = document.querySelectorAll('input[name="bulkDecisionType"]');
+    radios.forEach(function(r) { if (r.checked) decisionType = r.value; });
+    var justEl = document.getElementById('bulkActionJustification');
+    var justification = justEl ? justEl.value.trim() : '';
+    _bulkActionResolve({ confirmed: confirmed, decisionType: decisionType, justification: justification || null });
+    _bulkActionResolve = null;
+  }
+}
+
 async function bulkEscalate(keys) {
+  var modalResult = await _showBulkModal('escalate', keys.length);
+  if (!modalResult.confirmed) return;
+  var decisionType = modalResult.decisionType;
+  var justification = modalResult.justification;
   showToast('Escalating '+keys.length+' tickets...','info');
   var ok=0,fail=0;
-  for(var i=0;i<keys.length;i++){try{var d=await DactaJira.fetchTransitions(keys[i]);var esc=(d.transitions||[]).find(function(tr){return tr.name.toLowerCase().includes('escalat');});if(esc){await DactaJira.transitionIssue(keys[i],esc.id);var is=_triageCurrentIssues.find(function(t){return t.key===keys[i];});if(is)is.status='Escalated';ok++;}else{fail++;}}catch(e){fail++;}}
+  var currentUser = _getCurrentUserEmail();
+  for(var i=0;i<keys.length;i++){
+    try{
+      var previousStatus = 'Open';
+      var is = _triageCurrentIssues ? _triageCurrentIssues.find(function(t){return t.key===keys[i];}) : null;
+      if (is) previousStatus = is.status || 'Open';
+      var d=await DactaJira.fetchTransitions(keys[i]);
+      var esc=(d.transitions||[]).find(function(tr){return tr.name.toLowerCase().includes('escalat');});
+      if(esc){
+        await DactaJira.transitionIssue(keys[i],esc.id);
+        var newStatus = 'Escalated';
+        if(is) is.status = newStatus;
+        ok++;
+        // Log to audit_log
+        logToSupabase('audit_log', {
+          user_email: currentUser,
+          action: 'ticket_escalate',
+          resource_type: 'ticket',
+          resource_id: keys[i],
+          details: {
+            previous_status: previousStatus,
+            new_status: newStatus,
+            decision_type: decisionType,
+            justification: justification,
+            bulk_action: true,
+            batch_size: keys.length
+          }
+        });
+        // Log to ticket_timeline
+        logToSupabase('ticket_timeline', {
+          ticket_id: null,
+          event_type: 'status_change',
+          actor_name: currentUser,
+          old_value: previousStatus,
+          new_value: newStatus,
+          details: { source: 'siemless_triage', decision_type: decisionType, jira_key: keys[i], justification: justification }
+        });
+      } else { fail++; }
+    } catch(e) { fail++; }
+  }
   showToast(ok+' escalated'+(fail?', '+fail+' failed':''),fail?'warn':'success');
   rerenderTriageTable();
 }
 async function bulkClose(keys) {
+  var modalResult = await _showBulkModal('close', keys.length);
+  if (!modalResult.confirmed) return;
+  var decisionType = modalResult.decisionType;
+  var justification = modalResult.justification;
   showToast('Closing '+keys.length+' tickets...','info');
   var ok=0,fail=0;
-  for(var i=0;i<keys.length;i++){try{var d=await DactaJira.fetchTransitions(keys[i]);var cl=(d.transitions||[]).find(function(tr){var n=tr.name.toLowerCase();return n.includes('clos')||n.includes('complet');});if(cl){await DactaJira.transitionIssue(keys[i],cl.id);var is=_triageCurrentIssues.find(function(t){return t.key===keys[i];});if(is)is.status=cl.to?cl.to.name:'Closed';ok++;}else{fail++;}}catch(e){fail++;}}
+  var currentUser = _getCurrentUserEmail();
+  for(var i=0;i<keys.length;i++){
+    try{
+      var previousStatus = 'Open';
+      var is = _triageCurrentIssues ? _triageCurrentIssues.find(function(t){return t.key===keys[i];}) : null;
+      if (is) previousStatus = is.status || 'Open';
+      var d=await DactaJira.fetchTransitions(keys[i]);
+      var cl=(d.transitions||[]).find(function(tr){var n=tr.name.toLowerCase();return n.includes('clos')||n.includes('complet');});
+      if(cl){
+        await DactaJira.transitionIssue(keys[i],cl.id);
+        var newStatus = cl.to ? cl.to.name : 'Closed';
+        if(is) is.status = newStatus;
+        ok++;
+        // Log to audit_log
+        logToSupabase('audit_log', {
+          user_email: currentUser,
+          action: 'ticket_close',
+          resource_type: 'ticket',
+          resource_id: keys[i],
+          details: {
+            previous_status: previousStatus,
+            new_status: newStatus,
+            decision_type: decisionType,
+            justification: justification,
+            bulk_action: true,
+            batch_size: keys.length
+          }
+        });
+        // Log to ticket_timeline
+        logToSupabase('ticket_timeline', {
+          ticket_id: null,
+          event_type: 'status_change',
+          actor_name: currentUser,
+          old_value: previousStatus,
+          new_value: newStatus,
+          details: { source: 'siemless_triage', decision_type: decisionType, jira_key: keys[i], justification: justification }
+        });
+      } else { fail++; }
+    } catch(e) { fail++; }
+  }
   showToast(ok+' closed'+(fail?', '+fail+' failed':''),fail?'warn':'success');
   rerenderTriageTable();
 }
