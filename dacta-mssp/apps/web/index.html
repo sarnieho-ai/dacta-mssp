@@ -9629,10 +9629,13 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <canvas id="geoHeatMapCanvas" style="width:100%;height:260px;display:block;"></canvas>
             </div>
             <div class="cc-geomap-legend">
-              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:#10b981;box-shadow:0 0 6px #10b981;"></span>1–5</span>
-              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:#00d4ff;box-shadow:0 0 6px #00d4ff;"></span>6–20</span>
-              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:#f59e0b;box-shadow:0 0 6px #f59e0b;"></span>21–50</span>
-              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:#ef4444;box-shadow:0 0 6px #ef4444;"></span>50+</span>
+              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:rgba(200,200,210,0.6);box-shadow:0 0 3px rgba(200,200,210,0.3);"></span>N/A</span>
+              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:#3b82f6;box-shadow:0 0 6px #3b82f6;"></span>&lt;50</span>
+              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:#06b6d4;box-shadow:0 0 6px #06b6d4;"></span>50–500</span>
+              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:#22c55e;box-shadow:0 0 6px #22c55e;"></span>500–2K</span>
+              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:#eab308;box-shadow:0 0 6px #eab308;"></span>2K–5K</span>
+              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:#f97316;box-shadow:0 0 6px #f97316;"></span>5K–10K</span>
+              <span class="cc-geomap-legend-item"><span class="cc-geo-dot" style="background:#ef4444;box-shadow:0 0 6px #ef4444;"></span>10K+</span>
             </div>
           </div>
 
@@ -11420,6 +11423,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                 </thead>
                 <tbody id="drRepoTableBody"></tbody>
               </table>
+              <div id="drRepoPagination" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(15,23,42,0.5);border:1px solid rgba(0,212,255,0.08);border-top:none;border-radius:0 0 8px 8px;flex-wrap:wrap;gap:8px;"></div>
             </div>
           </div>
 
@@ -11576,7 +11580,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                 </div>
                 <div class="dr-ide-body">
                   <div class="dr-ide-lines" id="drIdeLines">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br>18<br>19<br>20<br>21<br>22<br>23<br>24<br>25<br>26<br>27<br>28<br>29<br>30<br>31<br>32<br>33<br>34<br>35</div>
-                  <div class="dr-ide-code" id="drIdeCode" contenteditable="true" spellcheck="false"><span class="field">title:</span> <span class="str">Suspicious LSASS Memory Access via Non-Standard Process</span>
+                  <div class="dr-ide-code" id="drIdeCode" contenteditable="true" spellcheck="false" style="opacity:0.45;transition:opacity 0.2s;" onfocus="this.style.opacity='1';this.dataset.edited='1';" onblur="if(!this.dataset.edited||this.dataset.edited==='0')this.style.opacity='0.45';"><span class="field">title:</span> <span class="str">Suspicious LSASS Memory Access via Non-Standard Process</span>
 <span class="field">id:</span> <span class="str">d8c9b2a1-4e7f-4a3b-8c1d-9f2e6b4a7d3c</span>
 <span class="field">status:</span> <span class="str">experimental</span>
 <span class="field">description:</span> <span class="str">|</span>
@@ -11735,7 +11739,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               </div>
 
               <div style="display:flex;gap:8px;margin-top:16px;">
-                <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="showToast('Rule saved and sent to testing pipeline')">
+                <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="saveAndTestRule()">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
                   Save &amp; Test
                 </button>
@@ -11758,7 +11762,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                 <div class="dr-pipe-icon draft">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 </div>
-                <div class="dr-pipe-count draft-c">14</div>
+                <div class="dr-pipe-count draft-c" id="drPipeCountDraft">—</div>
                 <div class="dr-pipe-label">Draft</div>
                 <div class="dr-pipe-sub">Authored / AI-generated</div>
               </div>
@@ -11766,7 +11770,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                 <div class="dr-pipe-icon test">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
                 </div>
-                <div class="dr-pipe-count test-c">8</div>
+                <div class="dr-pipe-count test-c" id="drPipeCountTest">—</div>
                 <div class="dr-pipe-label">Testing</div>
                 <div class="dr-pipe-sub">Backtested against logs</div>
               </div>
@@ -11790,7 +11794,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                 <div class="dr-pipe-icon prod">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
-                <div class="dr-pipe-count prod-c">2,817</div>
+                <div class="dr-pipe-count prod-c" id="drPipeCountProd">—</div>
                 <div class="dr-pipe-label">Production</div>
                 <div class="dr-pipe-sub">Active in client SIEMs</div>
               </div>
@@ -11799,67 +11803,11 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
           <!-- Rules in Pipeline -->
           <div class="card" style="margin-bottom:16px;">
-            <div class="card-header"><span class="card-title">Rules in Pipeline</span><span class="badge badge-amber">30 rules in transit</span></div>
+            <div class="card-header"><span class="card-title">Rules in Pipeline</span><span class="badge badge-amber" id="drPipelineBadge">Loading...</span></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Rule ID</th><th>Name</th><th>Author</th><th>Stage</th><th>FP Rate</th><th>Days in Stage</th><th>Target SIEMs</th><th>Actions</th></tr></thead>
-                <tbody>
-                  <tr>
-                    <td class="mono" style="color:var(--cyan);">RUL-2851</td>
-                    <td style="color:var(--text-primary);font-weight:500;">CVE-2026-21412 Kernel EoP Exploit</td>
-                    <td><span class="author-badge dacta">Dacta SOC</span></td>
-                    <td><span class="badge badge-amber">Testing</span></td>
-                    <td style="font-family:var(--font-mono);color:var(--green);">2%</td>
-                    <td style="font-family:var(--font-mono);">1d</td>
-                    <td style="font-size:10px;">All SOCaaS</td>
-                    <td><button class="btn btn-xs btn-primary" onclick="showToast('Promoted to Peer Review')">Promote</button></td>
-                  </tr>
-                  <tr>
-                    <td class="mono" style="color:var(--cyan);">RUL-2849</td>
-                    <td style="color:var(--text-primary);font-weight:500;">Black Basta RDP Tunnel Detection</td>
-                    <td><span class="author-badge community">Community</span></td>
-                    <td><span class="badge" style="background:rgba(167,139,250,0.15);color:#a78bfa;">Review</span></td>
-                    <td style="font-family:var(--font-mono);color:var(--green);">5%</td>
-                    <td style="font-family:var(--font-mono);">3d</td>
-                    <td style="font-size:10px;">All SOCaaS</td>
-                    <td><button class="btn btn-xs btn-primary" onclick="showToast('Promoted to Staging')">Promote</button></td>
-                  </tr>
-                  <tr>
-                    <td class="mono" style="color:var(--cyan);">RUL-2845</td>
-                    <td style="color:var(--text-primary);font-weight:500;">Abnormal M365 Mailbox Rule Creation</td>
-                    <td><span class="author-badge dacta">Dacta SOC</span></td>
-                    <td><span class="badge" style="background:rgba(251,191,36,0.15);color:#fbbf24;">Staging</span></td>
-                    <td style="font-family:var(--font-mono);color:var(--amber);">12%</td>
-                    <td style="font-family:var(--font-mono);">5d</td>
-                    <td style="font-size:10px;">Dacta Global, SPMT</td>
-                    <td>
-                      <div style="display:flex;gap:4px;">
-                        <button class="btn btn-xs btn-success" onclick="showToast('Rule deployed to production!')">Deploy</button>
-                        <button class="btn btn-xs btn-secondary" onclick="showToast('Sent back to testing for FP tuning')">Tune</button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="mono" style="color:var(--cyan);">RUL-2842</td>
-                    <td style="color:var(--text-primary);font-weight:500;">Scheduled Task via COM Handler Hijack</td>
-                    <td><span class="author-badge custom">Custom</span></td>
-                    <td><span class="badge" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Draft</span></td>
-                    <td style="font-family:var(--font-mono);color:var(--text-muted);">—</td>
-                    <td style="font-family:var(--font-mono);">2d</td>
-                    <td style="font-size:10px;">SPMT</td>
-                    <td><button class="btn btn-xs btn-secondary" onclick="showToast('Sent to backtest against 7-day logs')">Test</button></td>
-                  </tr>
-                  <tr>
-                    <td class="mono" style="color:var(--cyan);">RUL-2838</td>
-                    <td style="color:var(--text-primary);font-weight:500;">OPC UA Unauthorized Read Attempt</td>
-                    <td><span class="author-badge dacta">Dacta SOC</span></td>
-                    <td><span class="badge badge-amber">Testing</span></td>
-                    <td style="font-family:var(--font-mono);color:var(--amber);">18%</td>
-                    <td style="font-family:var(--font-mono);">4d</td>
-                    <td style="font-size:10px;">Naga World (OT)</td>
-                    <td><button class="btn btn-xs btn-secondary" onclick="showToast('Reviewing FP patterns...')">Tune</button></td>
-                  </tr>
-                </tbody>
+                <thead><tr><th>Rule ID</th><th>Name</th><th>Author</th><th>Stage</th><th>FP Rate</th><th>Log Sources</th><th>Actions</th></tr></thead>
+                <tbody id="drPipelineTableBody"></tbody>
               </table>
             </div>
           </div>
@@ -11914,10 +11862,10 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
           <!-- Coverage Stats -->
           <div class="dr-repo-stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
-            <div class="dr-stat-card green"><div class="val">78%</div><div class="lbl">IT ATT&CK Coverage</div></div>
-            <div class="dr-stat-card amber"><div class="val">29%</div><div class="lbl">ICS/OT Coverage</div></div>
-            <div class="dr-stat-card cyan"><div class="val">147</div><div class="lbl">Active Client Rules</div></div>
-            <div class="dr-stat-card red"><div class="val">34</div><div class="lbl">Blind Spots</div></div>
+            <div class="dr-stat-card green"><div class="val" id="covStatTotal">—</div><div class="lbl">Total Rules</div></div>
+            <div class="dr-stat-card amber"><div class="val" id="covStatLogSources">—</div><div class="lbl">Log Source Types</div></div>
+            <div class="dr-stat-card cyan"><div class="val" id="covStatProduction">—</div><div class="lbl">Production Rules</div></div>
+            <div class="dr-stat-card red"><div class="val" id="covStatCritical">—</div><div class="lbl">Critical Severity</div></div>
           </div>
 
           <!-- MITRE Heatmap -->
@@ -11980,7 +11928,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
             <div class="card">
               <div class="card-header"><span class="card-title">Log Source Coverage Matrix</span></div>
-              <div style="display:flex;flex-direction:column;gap:6px;">
+              <div id="drLogSourceMatrix" style="display:flex;flex-direction:column;gap:6px;">
                 <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
                   <span class="logsrc-tag windows" style="width:130px;">Windows Security</span>
                   <div style="flex:1;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;"><div style="width:94%;height:100%;background:var(--green);border-radius:4px;"></div></div>
@@ -12089,11 +12037,11 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
           <!-- Stats Row -->
           <div class="dr-repo-stats" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px;">
-            <div class="dr-stat-card" style="border-left:3px solid #a78bfa;"><div class="val" style="color:#a78bfa;">12</div><div class="lbl">New (Pending Review)</div></div>
-            <div class="dr-stat-card" style="border-left:3px solid var(--amber);"><div class="val" style="color:var(--amber);">8</div><div class="lbl">In Testing</div></div>
-            <div class="dr-stat-card" style="border-left:3px solid #22c55e;"><div class="val" style="color:#22c55e;">23</div><div class="lbl">Validated</div></div>
-            <div class="dr-stat-card" style="border-left:3px solid var(--red-bright);"><div class="val" style="color:var(--red-bright);">4</div><div class="lbl">Rejected</div></div>
-            <div class="dr-stat-card" style="border-left:3px solid var(--cyan);"><div class="val" style="color:var(--cyan);">47</div><div class="lbl">Total This Month</div></div>
+            <div class="dr-stat-card" style="border-left:3px solid #a78bfa;"><div class="val" id="etStatNew" style="color:#a78bfa;">—</div><div class="lbl">New (Pending Review)</div></div>
+            <div class="dr-stat-card" style="border-left:3px solid var(--amber);"><div class="val" id="etStatTesting" style="color:var(--amber);">—</div><div class="lbl">In Testing</div></div>
+            <div class="dr-stat-card" style="border-left:3px solid #22c55e;"><div class="val" id="etStatValidated" style="color:#22c55e;">—</div><div class="lbl">Production</div></div>
+            <div class="dr-stat-card" style="border-left:3px solid var(--red-bright);"><div class="val" id="etStatDraft" style="color:var(--red-bright);">—</div><div class="lbl">Draft</div></div>
+            <div class="dr-stat-card" style="border-left:3px solid var(--cyan);"><div class="val" id="etStatTotal" style="color:var(--cyan);">—</div><div class="lbl">Total Rules</div></div>
           </div>
 
           <!-- Filter -->
@@ -12109,294 +12057,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           </div>
 
           <!-- Emerging Threat Cards -->
-          <div id="etThreatList">
-
-            <!-- CARD 1: Critical - New -->
-            <div class="et-threat-card" data-et-status="new">
-              <div class="et-tc-header">
-                <div style="flex:1;">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                    <span class="et-status-badge new">New</span>
-                    <span class="badge badge-red" style="font-size:9px;">Critical</span>
-                    <span class="et-tc-cve">CVE-2026-1847</span>
-                  </div>
-                  <div class="et-tc-title">FortiOS SSL-VPN Heap Overflow — Active Exploitation in APAC</div>
-                  <div class="et-tc-date">Detected: 28 Feb 2026, 22:14 SGT · Source: DACTA TIP &larr; Mandiant + CrowdStrike</div>
-                </div>
-              </div>
-              <div class="et-tc-desc">
-                New heap-based buffer overflow in FortiOS SSL-VPN (7.4.x &lt; 7.4.5) allows unauthenticated remote code execution. Mandiant reports active exploitation by UNC3886 targeting APAC financial and maritime sectors. Correlated with DACTA client environments running FortiGate in production.
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Client Environment Correlation</div>
-              <div class="et-tc-context">
-                <span class="et-ctx-chip match">&#10003; SPMT — FortiGate 7.4.3 (Affected)</span>
-                <span class="et-ctx-chip match">&#10003; Naga World — FortiGate 7.4.2 (Affected)</span>
-                <span class="et-ctx-chip partial">&#x26A0; Dacta Global — FortiGate 7.2.8 (Unconfirmed)</span>
-                <span class="et-ctx-chip nodata">Global Advisor — No FortiGate</span>
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Auto-Generated Detection Rules (3)</div>
-              <div class="et-tc-rules">
-                <div class="rule-row">
-                  <span class="rule-type-badge sigma" style="font-size:9px;">Sigma</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">FortiOS SSL-VPN Heap Overflow Exploitation Attempt</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1190</span>
-                  <span class="badge badge-red" style="font-size:9px;">Critical</span>
-                </div>
-                <div class="rule-row">
-                  <span class="rule-type-badge correlation" style="font-size:9px;">Correlation</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">SSL-VPN Auth Anomaly + Suspicious Process Spawn Chain</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1190 &rarr; T1059</span>
-                  <span class="badge badge-red" style="font-size:9px;">Critical</span>
-                </div>
-                <div class="rule-row">
-                  <span class="rule-type-badge sigma" style="font-size:9px;">Sigma</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">UNC3886 Known IOC — C2 Callback Pattern</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1071.001</span>
-                  <span class="badge badge-amber" style="font-size:9px;">High</span>
-                </div>
-              </div>
-              <div class="et-tc-actions">
-                <button class="btn btn-secondary btn-xs" onclick="showToast('Opening rule YAML preview...')">Preview Rules</button>
-                <button class="btn btn-primary btn-xs" onclick="showToast('Sending 3 rules to Rule Testing Lab for validation...')">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-                  Send to Testing
-                </button>
-                <button class="btn btn-secondary btn-xs" onclick="showToast('Rules saved to Rule Repository as draft...')">Save to Repo</button>
-              </div>
-            </div>
-
-            <!-- CARD 2: High - Testing -->
-            <div class="et-threat-card" data-et-status="testing">
-              <div class="et-tc-header">
-                <div style="flex:1;">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                    <span class="et-status-badge testing">In Testing</span>
-                    <span class="badge badge-amber" style="font-size:9px;">High</span>
-                    <span class="et-tc-cve">CVE-2026-0193</span>
-                  </div>
-                  <div class="et-tc-title">Microsoft Exchange Server SSRF — Pre-Auth Remote Code Execution</div>
-                  <div class="et-tc-date">Detected: 27 Feb 2026, 08:31 SGT · Source: DACTA TIP &larr; Microsoft MSRC + AlienVault OTX</div>
-                </div>
-              </div>
-              <div class="et-tc-desc">
-                Server-Side Request Forgery vulnerability in Exchange Server 2019 CU14 allows unauthenticated attackers to achieve RCE via crafted HTTP requests. Active scanning detected from known APT28 infrastructure. Testing against client M365 hybrid configurations.
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Client Environment Correlation</div>
-              <div class="et-tc-context">
-                <span class="et-ctx-chip match">&#10003; Global Advisor — Exchange Hybrid (Affected)</span>
-                <span class="et-ctx-chip match">&#10003; ADV Partners — Exchange On-Prem (Affected)</span>
-                <span class="et-ctx-chip nodata">SPMT — M365 Cloud Only</span>
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Auto-Generated Detection Rules (2) — <span style="color:var(--amber);">Testing in Progress (1/2 passed)</span></div>
-              <div class="et-tc-rules">
-                <div class="rule-row">
-                  <span class="rule-type-badge sigma" style="font-size:9px;">Sigma</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">Exchange SSRF Exploitation — Suspicious HTTP Pattern</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1190</span>
-                  <span style="font-size:9px;color:#22c55e;font-weight:700;">&#10003; Passed</span>
-                </div>
-                <div class="rule-row">
-                  <span class="rule-type-badge correlation" style="font-size:9px;">Correlation</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">Exchange SSRF + W3wp.exe Child Process Anomaly</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1190 &rarr; T1059</span>
-                  <span style="font-size:9px;color:var(--amber);font-weight:700;">&#9881; Running...</span>
-                </div>
-              </div>
-              <div class="et-tc-actions">
-                <button class="btn btn-secondary btn-xs" onclick="showToast('Opening test results dashboard...')">View Test Results</button>
-                <button class="btn btn-secondary btn-xs" style="opacity:0.5;cursor:not-allowed;" disabled>Save to Repo (Awaiting Tests)</button>
-              </div>
-            </div>
-
-            <!-- CARD 3: High - Validated -->
-            <div class="et-threat-card" data-et-status="validated">
-              <div class="et-tc-header">
-                <div style="flex:1;">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                    <span class="et-status-badge validated">Validated</span>
-                    <span class="badge badge-amber" style="font-size:9px;">High</span>
-                  </div>
-                  <div class="et-tc-title">Lazarus Group — New Cryptocurrency Theft Toolkit via npm Supply Chain</div>
-                  <div class="et-tc-date">Detected: 25 Feb 2026, 15:42 SGT · Source: DACTA TIP &larr; Recorded Future + VirusTotal</div>
-                </div>
-              </div>
-              <div class="et-tc-desc">
-                Lazarus Group deploying trojanized npm packages targeting cryptocurrency exchanges and fintech platforms. Packages mimic popular libraries with typosquatting. Exfiltration via DNS tunneling to DPRK-linked C2 infrastructure. DACTA TIP identified 23 new IOCs.
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Client Environment Correlation</div>
-              <div class="et-tc-context">
-                <span class="et-ctx-chip match">&#10003; Dacta Global — Node.js Environments Detected</span>
-                <span class="et-ctx-chip partial">&#x26A0; SPMT — npm Used in Dev Pipeline</span>
-                <span class="et-ctx-chip nodata">Naga World — No Node.js</span>
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Auto-Generated Detection Rules (4) — <span style="color:#22c55e;">All Passed Testing</span></div>
-              <div class="et-tc-rules">
-                <div class="rule-row">
-                  <span class="rule-type-badge sigma" style="font-size:9px;">Sigma</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">Suspicious npm Install — Typosquatted Package Names</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1195.002</span>
-                  <span style="font-size:9px;color:#22c55e;font-weight:700;">&#10003; Passed</span>
-                </div>
-                <div class="rule-row">
-                  <span class="rule-type-badge ml" style="font-size:9px;">ML</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">DNS Beaconing — DPRK C2 Infrastructure Pattern</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1071.004</span>
-                  <span style="font-size:9px;color:#22c55e;font-weight:700;">&#10003; Passed</span>
-                </div>
-                <div class="rule-row">
-                  <span class="rule-type-badge sigma" style="font-size:9px;">Sigma</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">Lazarus IOC Match — Known C2 Domains/IPs</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1071.001</span>
-                  <span style="font-size:9px;color:#22c55e;font-weight:700;">&#10003; Passed</span>
-                </div>
-                <div class="rule-row">
-                  <span class="rule-type-badge yara" style="font-size:9px;">YARA</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">Lazarus Cryptocurrency Stealer — Binary Signature Match</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1005</span>
-                  <span style="font-size:9px;color:#22c55e;font-weight:700;">&#10003; Passed</span>
-                </div>
-              </div>
-              <div class="et-tc-actions">
-                <button class="btn btn-secondary btn-xs" onclick="showToast('Viewing all 4 test results...')">View Test Results</button>
-                <button class="btn btn-primary btn-xs" onclick="showToast('4 rules saved to Rule Repository and ready for bulk deployment...')">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-                  Save to Rule Repository
-                </button>
-              </div>
-            </div>
-
-            <!-- CARD 4: Medium - New -->
-            <div class="et-threat-card" data-et-status="new">
-              <div class="et-tc-header">
-                <div style="flex:1;">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                    <span class="et-status-badge new">New</span>
-                    <span class="badge badge-blue" style="font-size:9px;">Medium</span>
-                  </div>
-                  <div class="et-tc-title">Scattered Spider — New Social Engineering Playbook Targeting APAC Hospitality</div>
-                  <div class="et-tc-date">Detected: 28 Feb 2026, 11:05 SGT · Source: DACTA TIP &larr; CrowdStrike + OSINT</div>
-                </div>
-              </div>
-              <div class="et-tc-desc">
-                CrowdStrike reports updated TTPs from Scattered Spider (UNC3944) specifically targeting hospitality/gaming in APAC. New phishing kit bypasses MFA via real-time token relay. DACTA TIP correlated with 6 new phishing domains and updated attacker infrastructure.
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Client Environment Correlation</div>
-              <div class="et-tc-context">
-                <span class="et-ctx-chip match">&#10003; Naga World — Hospitality (Primary Target Sector)</span>
-                <span class="et-ctx-chip partial">&#x26A0; All Clients — MFA Token Relay Risk</span>
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Auto-Generated Detection Rules (2)</div>
-              <div class="et-tc-rules">
-                <div class="rule-row">
-                  <span class="rule-type-badge correlation" style="font-size:9px;">Correlation</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">MFA Token Relay — Real-Time Phishing Proxy Detection</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1621</span>
-                  <span class="badge badge-amber" style="font-size:9px;">High</span>
-                </div>
-                <div class="rule-row">
-                  <span class="rule-type-badge sigma" style="font-size:9px;">Sigma</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">Scattered Spider IOC — New Phishing Domain + C2 Infra</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1566.001</span>
-                  <span class="badge badge-amber" style="font-size:9px;">High</span>
-                </div>
-              </div>
-              <div class="et-tc-actions">
-                <button class="btn btn-secondary btn-xs" onclick="showToast('Opening rule YAML preview...')">Preview Rules</button>
-                <button class="btn btn-primary btn-xs" onclick="showToast('Sending 2 rules to Rule Testing Lab for validation...')">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-                  Send to Testing
-                </button>
-                <button class="btn btn-secondary btn-xs" onclick="showToast('Rules saved to Rule Repository as draft...')">Save to Repo</button>
-              </div>
-            </div>
-
-            <!-- CARD 5: Rejected -->
-            <div class="et-threat-card" data-et-status="rejected">
-              <div class="et-tc-header">
-                <div style="flex:1;">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                    <span class="et-status-badge rejected">Rejected</span>
-                    <span class="badge badge-blue" style="font-size:9px;">Medium</span>
-                  </div>
-                  <div class="et-tc-title">SolarWinds ARM Path Traversal — Limited Applicability</div>
-                  <div class="et-tc-date">Detected: 24 Feb 2026, 09:17 SGT · Source: DACTA TIP &larr; AlienVault OTX</div>
-                </div>
-              </div>
-              <div class="et-tc-desc">
-                Path traversal vulnerability in SolarWinds ARM 2024.1. AI-generated rule rejected during testing — no client environments run SolarWinds products. Rule archived for future reference if client landscape changes.
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Client Environment Correlation</div>
-              <div class="et-tc-context">
-                <span class="et-ctx-chip nodata">No Clients — SolarWinds Not Deployed</span>
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Auto-Generated Detection Rules (1) — <span style="color:var(--red-bright);">Rejected: No Applicable Environment</span></div>
-              <div class="et-tc-rules" style="opacity:0.5;">
-                <div class="rule-row">
-                  <span class="rule-type-badge sigma" style="font-size:9px;">Sigma</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">SolarWinds ARM Path Traversal Exploitation Attempt</span>
-                  <span class="mitre-tag" style="font-size:9px;">T1190</span>
-                  <span style="font-size:9px;color:var(--red-bright);font-weight:700;text-decoration:line-through;">Rejected</span>
-                </div>
-              </div>
-              <div class="et-tc-actions">
-                <button class="btn btn-secondary btn-xs" onclick="showToast('Re-evaluating rule against updated client inventory...')">Re-Evaluate</button>
-              </div>
-            </div>
-
-            <!-- CARD 6: New - OT Specific -->
-            <div class="et-threat-card" data-et-status="new">
-              <div class="et-tc-header">
-                <div style="flex:1;">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                    <span class="et-status-badge new">New</span>
-                    <span class="badge badge-red" style="font-size:9px;">Critical</span>
-                    <span class="et-tc-cve">CVE-2026-2103</span>
-                  </div>
-                  <div class="et-tc-title">Schneider Electric Modicon M580 — PLC Logic Manipulation via Modbus</div>
-                  <div class="et-tc-date">Detected: 1 Mar 2026, 02:30 SGT · Source: DACTA TIP &larr; ICS-CERT + Dragos</div>
-                </div>
-              </div>
-              <div class="et-tc-desc">
-                Critical vulnerability in Schneider Electric Modicon M580 PLCs allows unauthorized PLC logic modification via crafted Modbus TCP packets. Dragos reports reconnaissance activity from CHERNOVITE threat group targeting Asian maritime/port infrastructure. Immediate correlation with OT-monitored clients.
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Client Environment Correlation</div>
-              <div class="et-tc-context">
-                <span class="et-ctx-chip match">&#10003; SPMT — Modicon M580 PLCs in Port OT Network</span>
-                <span class="et-ctx-chip partial">&#x26A0; Naga World — Schneider BMSused (Diff Model)</span>
-                <span class="et-ctx-chip nodata">Dacta Global — No OT Assets</span>
-              </div>
-              <div style="font-size:10px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Auto-Generated Detection Rules (3)</div>
-              <div class="et-tc-rules">
-                <div class="rule-row">
-                  <span class="rule-type-badge sigma" style="font-size:9px;">Sigma</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">Modbus TCP — Unauthorized Write to PLC Holding Registers</span>
-                  <span class="mitre-tag" style="font-size:9px;">T0839</span>
-                  <span class="badge badge-red" style="font-size:9px;">Critical</span>
-                </div>
-                <div class="rule-row">
-                  <span class="rule-type-badge correlation" style="font-size:9px;">Correlation</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">OT Anomaly — PLC Logic Change + Unusual Source IP</span>
-                  <span class="mitre-tag" style="font-size:9px;">T0839 &rarr; T0831</span>
-                  <span class="badge badge-red" style="font-size:9px;">Critical</span>
-                </div>
-                <div class="rule-row">
-                  <span class="rule-type-badge sigma" style="font-size:9px;">Sigma</span>
-                  <span style="font-size:11px;color:var(--text-primary);flex:1;">CHERNOVITE IOC — Known Recon Scanner IP Ranges</span>
-                  <span class="mitre-tag" style="font-size:9px;">T0846</span>
-                  <span class="badge badge-amber" style="font-size:9px;">High</span>
-                </div>
-              </div>
-              <div class="et-tc-actions">
-                <button class="btn btn-secondary btn-xs" onclick="showToast('Opening rule YAML preview...')">Preview Rules</button>
-                <button class="btn btn-primary btn-xs" onclick="showToast('Sending 3 rules to Rule Testing Lab for validation...')">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-                  Send to Testing
-                </button>
-                <button class="btn btn-secondary btn-xs" onclick="showToast('Rules saved to Rule Repository as draft...')">Save to Repo</button>
-              </div>
-            </div>
-
-          </div>
+                    <div id="etThreatList"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">Loading emerging threats...</div></div>
         </div>
         <script>
           function switchDrTab(tabId) {
@@ -12410,7 +12071,40 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             btn.classList.add('active');
             showToast('Switched to ' + lang.toUpperCase() + ' view');
           }
+          function saveAndTestRule() {
+            var overlay = document.getElementById('saveTestModalOverlay');
+            if (overlay) overlay.style.display = 'flex';
+          }
+          function closeSaveTestModal() {
+            var overlay = document.getElementById('saveTestModalOverlay');
+            if (overlay) overlay.style.display = 'none';
+          }
+          function goToTestingLab() {
+            closeSaveTestModal();
+            switchDrTab('pipeline');
+            showToast('Rule queued in testing pipeline');
+          }
         </script>
+
+        <!-- ══════════════════════════════════════════════════════════
+             MODAL: SAVE & TEST CONFIRMATION
+             ══════════════════════════════════════════════════════════ -->
+        <div id="saveTestModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this)closeSaveTestModal()">
+          <div style="background:rgba(15,23,42,0.97);border:1px solid rgba(0,212,255,0.18);border-radius:14px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.6);">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+              <span style="font-size:15px;font-weight:700;color:var(--text-primary);">Rule Saved</span>
+            </div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-bottom:22px;line-height:1.6;">Rule saved to testing pipeline. Would you like to go to the <strong style="color:var(--cyan);">Rule Testing Lab</strong> now?</div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="goToTestingLab()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+                Go to Testing Lab
+              </button>
+              <button class="btn btn-secondary" style="flex:1;justify-content:center;" onclick="closeSaveTestModal()">Continue Editing</button>
+            </div>
+          </div>
+        </div>
 
 
         <!-- ══════════════════════════════════════════════════════════
@@ -25416,7 +25110,7 @@ async function loadDetectionRulesLive() {
         author: isDacta ? 'Dacta SOC' : 'Custom',
         ver: '1.0',
         status: 'Production',
-        fp: Math.floor(Math.random() * 8) + 1 + '%',
+        fp: '—',
         hits: b.doc_count
       });
       idx++;
@@ -25436,6 +25130,9 @@ async function loadDetectionRulesLive() {
     }
 
     renderRules();
+    renderPipeline();
+    renderCoverage();
+    renderEmergingThreats();
     renderMitre();
     console.log('[DetectionRules] Loaded ' + rulesData.length + ' rules from Elastic');
   } catch (err) {
@@ -25443,35 +25140,270 @@ async function loadDetectionRulesLive() {
   }
 }
 
+var _rulesPage = 1;
+var _rulesPerPage = 50;
+
 function renderRules() {
-  const tbody = document.getElementById('drRepoTableBody');
+  var tbody = document.getElementById('drRepoTableBody');
   if (!tbody) return;
-  const sevColor = { 'Critical':'red', 'High':'amber', 'Medium':'blue', 'Low':'gray', 'Informational':'gray' };
-  const typeClass = { 'Sigma':'sigma', 'YARA':'yara', 'Correlation':'correlation', 'Threshold':'threshold', 'ML':'ml', 'EQL':'eql' };
-  const authorClass = { 'Dacta SOC':'dacta', 'Community':'community', 'Custom':'custom' };
-  const statusColor = { 'Production':'green', 'Testing':'amber', 'Draft':'gray', 'Deprecated':'red' };
-  const lsClass = { 'windows':'windows', 'linux':'linux', 'firewall':'firewall', 'cloud':'cloud', 'edr':'edr', 'm365':'m365', 'network':'network', 'ot':'ot' };
-  tbody.innerHTML = rulesData.map(r => `
-    <tr>
-      <td class="mono" style="color:var(--cyan);font-size:11px;">${r.id}</td>
-      <td style="color:var(--text-primary);font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.name}</td>
-      <td><span class="rule-type-badge ${typeClass[r.type]||'sigma'}">${r.type}</span></td>
-      <td><span class="mitre-tag">${r.mitre}</span></td>
-      <td><span class="badge badge-${sevColor[r.severity]||'blue'}">${r.severity}</span></td>
-      <td style="max-width:140px;"><div style="display:flex;gap:3px;flex-wrap:wrap;">${(r.logSources||[]).map(ls => '<span class="logsrc-tag '+lsClass[ls]+'" style="font-size:8px;">'+ls+'</span>').join('')}</div></td>
-      <td><span class="author-badge ${authorClass[r.author]||'dacta'}" style="font-size:8px;">${r.author}</span></td>
-      <td style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">${r.ver}</td>
-      <td><span class="badge badge-${statusColor[r.status]||'green'}" style="font-size:9px;">${r.status}</span></td>
-      <td style="font-family:var(--font-mono);font-size:11px;color:${parseFloat(r.fp)>15?'var(--amber)':'var(--green)'};">${r.fp}</td>
-      <td style="font-family:var(--font-mono);font-size:12px;font-weight:700;">${r.hits}</td>
-      <td>
-        <div style="display:flex;gap:4px;">
-          <button class="btn btn-xs btn-secondary" onclick="switchDrTab('builder');showToast('Loading rule ${r.id} in editor...')">Edit</button>
-          <button class="btn btn-xs btn-secondary" onclick="navigate('rulelab');showToast('Testing ${r.id}...')">Test</button>
-        </div>
-      </td>
-    </tr>
-  `).join('');
+  var sevColor = { 'Critical':'red', 'High':'amber', 'Medium':'blue', 'Low':'gray', 'Informational':'gray' };
+  var typeClass = { 'Sigma':'sigma', 'YARA':'yara', 'Correlation':'correlation', 'Threshold':'threshold', 'ML':'ml', 'EQL':'eql' };
+  var authorClass = { 'Dacta SOC':'dacta', 'Community':'community', 'Custom':'custom' };
+  var statusColor = { 'Production':'green', 'Testing':'amber', 'Draft':'gray', 'Deprecated':'red' };
+  var lsClass = { 'windows':'windows', 'linux':'linux', 'firewall':'firewall', 'cloud':'cloud', 'edr':'edr', 'm365':'m365', 'network':'network', 'ot':'ot' };
+  var total = rulesData.length;
+  var totalPages = Math.max(1, Math.ceil(total / _rulesPerPage));
+  if (_rulesPage > totalPages) _rulesPage = totalPages;
+  if (_rulesPage < 1) _rulesPage = 1;
+  var start = (_rulesPage - 1) * _rulesPerPage;
+  var end = Math.min(start + _rulesPerPage, total);
+  var pageData = rulesData.slice(start, end);
+  var rows = '';
+  for (var i = 0; i < pageData.length; i++) {
+    var r = pageData[i];
+    var lsBadges = '';
+    var rls = r.logSources || [];
+    for (var j = 0; j < rls.length; j++) {
+      var ls = rls[j];
+      lsBadges += '<span class="logsrc-tag ' + (lsClass[ls] || '') + '" style="font-size:8px;">' + ls + '</span>';
+    }
+    var fpColor = parseFloat(r.fp) > 15 ? 'var(--amber)' : 'var(--green)';
+    rows += '<tr>';
+    rows += '<td class="mono" style="color:var(--cyan);font-size:11px;">' + r.id + '</td>';
+    rows += '<td style="color:var(--text-primary);font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + r.name + '</td>';
+    rows += '<td><span class="rule-type-badge ' + (typeClass[r.type] || 'sigma') + '">' + r.type + '</span></td>';
+    rows += '<td><span class="mitre-tag">' + r.mitre + '</span></td>';
+    rows += '<td><span class="badge badge-' + (sevColor[r.severity] || 'blue') + '">' + r.severity + '</span></td>';
+    rows += '<td style="max-width:140px;"><div style="display:flex;gap:3px;flex-wrap:wrap;">' + lsBadges + '</div></td>';
+    rows += '<td><span class="author-badge ' + (authorClass[r.author] || 'dacta') + '" style="font-size:8px;">' + r.author + '</span></td>';
+    rows += '<td style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">' + r.ver + '</td>';
+    rows += '<td><span class="badge badge-' + (statusColor[r.status] || 'green') + '" style="font-size:9px;">' + r.status + '</span></td>';
+    rows += '<td style="font-family:var(--font-mono);font-size:11px;color:' + fpColor + ';">' + r.fp + '</td>';
+    rows += '<td style="font-family:var(--font-mono);font-size:12px;font-weight:700;">' + r.hits + '</td>';
+    rows += '<td><div style="display:flex;gap:4px;">';
+    rows += '<button class="btn btn-xs btn-secondary" onclick="switchDrTab(\'builder\');showToast(\'Loading rule ' + r.id + ' in editor...\')">Edit</button>';
+    rows += '<button class="btn btn-xs btn-secondary" onclick="navigate(\'rulelab\');showToast(\'Testing ' + r.id + '...\')">Test</button>';
+    rows += '</div></td></tr>';
+  }
+  tbody.innerHTML = rows;
+  // Render pagination bar
+  var pbar = document.getElementById('drRepoPagination');
+  if (!pbar) return;
+  if (total === 0) { pbar.innerHTML = ''; return; }
+  var startDisp = start + 1;
+  var endDisp = end;
+  var pageBtns = '';
+  var maxBtns = 7;
+  var pageStart = Math.max(1, _rulesPage - 3);
+  var pageEnd = Math.min(totalPages, pageStart + maxBtns - 1);
+  if (pageEnd - pageStart < maxBtns - 1) pageStart = Math.max(1, pageEnd - maxBtns + 1);
+  for (var p = pageStart; p <= pageEnd; p++) {
+    var active = (p === _rulesPage) ? 'background:rgba(0,212,255,0.15);color:var(--cyan);border-color:rgba(0,212,255,0.4);' : '';
+    pageBtns += '<button class="btn btn-xs btn-secondary" style="min-width:28px;' + active + '" onclick="_rulesPage=' + p + ';renderRules();">' + p + '</button>';
+  }
+  var prevDis = _rulesPage <= 1 ? 'opacity:0.35;cursor:not-allowed;' : '';
+  var nextDis = _rulesPage >= totalPages ? 'opacity:0.35;cursor:not-allowed;' : '';
+  pbar.innerHTML = '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">Showing ' + startDisp + '–' + endDisp + ' of ' + total + '</span>'
+    + '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">'
+    + '<button class="btn btn-xs btn-secondary" style="' + prevDis + '" onclick="if(_rulesPage>1){_rulesPage--;renderRules();}">&#8592; Prev</button>'
+    + pageBtns
+    + '<button class="btn btn-xs btn-secondary" style="' + nextDis + '" onclick="if(_rulesPage<' + totalPages + '){_rulesPage++;renderRules();}">Next &#8594;</button>'
+    + '</div>';
+}
+
+function renderPipeline() {
+  var tbody = document.getElementById('drPipelineTableBody');
+  if (!tbody) return;
+  var authorClass = { 'Dacta SOC':'dacta', 'Community':'community', 'Custom':'custom' };
+  var inTesting = rulesData.filter(function(r) { return r.status === 'Testing'; });
+  var inDraft = rulesData.filter(function(r) { return r.status === 'Draft'; });
+  var inProd = rulesData.filter(function(r) { return r.status === 'Production'; });
+  // Update stage counters
+  var cd = document.getElementById('drPipeCountDraft');
+  var ct = document.getElementById('drPipeCountTest');
+  var cp = document.getElementById('drPipeCountProd');
+  if (cd) cd.textContent = inDraft.length;
+  if (ct) ct.textContent = inTesting.length;
+  if (cp) cp.textContent = inProd.length;
+  // Update badge
+  var badge = document.getElementById('drPipelineBadge');
+  var transitCount = inTesting.length + inDraft.length;
+  if (badge) badge.textContent = transitCount + ' rules in transit';
+  // Build rows — show in-testing first, then draft, limit to 20 rows
+  var display = inTesting.concat(inDraft).slice(0, 20);
+  if (display.length === 0 && rulesData.length > 0) {
+    // If no Testing/Draft, show first 10 rules as production sample
+    display = inProd.slice(0, 10);
+  }
+  if (display.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:16px;">No pipeline data available</td></tr>';
+    return;
+  }
+  var rows = '';
+  var stageMap = { 'Testing':'<span class="badge badge-amber">Testing</span>', 'Draft':'<span class="badge" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Draft</span>', 'Production':'<span class="badge badge-green">Production</span>' };
+  var actionMap = {
+    'Testing': '<button class="btn btn-xs btn-primary" onclick="showToast(\'Promoting to Peer Review...\')">Promote</button>',
+    'Draft': '<button class="btn btn-xs btn-secondary" onclick="showToast(\'Sent to backtest against 7-day logs\')">Test</button>',
+    'Production': '<button class="btn btn-xs btn-secondary" onclick="showToast(\'Viewing deployment details...\')">View</button>'
+  };
+  var lsClass = { 'windows':'windows', 'linux':'linux', 'firewall':'firewall', 'cloud':'cloud', 'edr':'edr', 'm365':'m365', 'network':'network', 'ot':'ot' };
+  for (var i = 0; i < display.length; i++) {
+    var r = display[i];
+    var lsBadges = '';
+    var rls = r.logSources || [];
+    for (var j = 0; j < rls.length; j++) {
+      lsBadges += '<span class="logsrc-tag ' + (lsClass[rls[j]] || '') + '" style="font-size:8px;">' + rls[j] + '</span>';
+    }
+    rows += '<tr>';
+    rows += '<td class="mono" style="color:var(--cyan);">' + r.id + '</td>';
+    rows += '<td style="color:var(--text-primary);font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + r.name + '</td>';
+    rows += '<td><span class="author-badge ' + (authorClass[r.author] || 'dacta') + '">' + r.author + '</span></td>';
+    rows += '<td>' + (stageMap[r.status] || '<span class="badge badge-gray">' + r.status + '</span>') + '</td>';
+    rows += '<td style="font-family:var(--font-mono);color:' + (r.fp === '\u2014' ? 'var(--text-muted)' : (parseFloat(r.fp) > 15 ? 'var(--amber)' : 'var(--green)')) + ';">' + r.fp + '</td>';
+    rows += '<td style="max-width:120px;"><div style="display:flex;gap:3px;flex-wrap:wrap;">' + lsBadges + '</div></td>';
+    rows += '<td>' + (actionMap[r.status] || '') + '</td>';
+    rows += '</tr>';
+  }
+  tbody.innerHTML = rows;
+}
+
+function renderCoverage() {
+  // Update top stat cards
+  var total = rulesData.length;
+  var prod = rulesData.filter(function(r) { return r.status === 'Production'; }).length;
+  var crit = rulesData.filter(function(r) { return r.severity === 'Critical'; }).length;
+  // Count unique log source types
+  var lsSet = {};
+  rulesData.forEach(function(r) {
+    (r.logSources || []).forEach(function(ls) { lsSet[ls] = (lsSet[ls] || 0) + 1; });
+  });
+  var lsTypes = Object.keys(lsSet).length;
+  var ct = document.getElementById('covStatTotal');
+  var cls = document.getElementById('covStatLogSources');
+  var cp = document.getElementById('covStatProduction');
+  var cc = document.getElementById('covStatCritical');
+  if (ct) ct.textContent = total;
+  if (cls) cls.textContent = lsTypes;
+  if (cp) cp.textContent = prod;
+  if (cc) cc.textContent = crit;
+  // Render log source matrix
+  var matrix = document.getElementById('drLogSourceMatrix');
+  if (matrix && total > 0) {
+    var lsNames = { 'windows':'Windows', 'm365':'Microsoft 365', 'cloud':'Cloud / Azure', 'firewall':'Firewall', 'edr':'EDR', 'linux':'Linux Auditd', 'network':'DNS / Network', 'ot':'OT / ICS' };
+    var lsTagClass = { 'windows':'windows', 'm365':'m365', 'cloud':'cloud', 'firewall':'firewall', 'edr':'edr', 'linux':'linux', 'network':'network', 'ot':'ot' };
+    var allLs = ['windows','m365','cloud','firewall','edr','linux','network','ot'];
+    var maxCount = 1;
+    allLs.forEach(function(k) { if ((lsSet[k] || 0) > maxCount) maxCount = lsSet[k]; });
+    var html = '';
+    allLs.forEach(function(k) {
+      var count = lsSet[k] || 0;
+      var pct = Math.round((count / maxCount) * 100);
+      var absRaw = total > 0 ? Math.round((count / total) * 100) : 0;
+      var barColor = pct >= 70 ? 'var(--green)' : (pct >= 40 ? 'var(--amber)' : 'var(--red-bright)');
+      var textColor = pct >= 70 ? 'var(--green)' : (pct >= 40 ? 'var(--amber)' : 'var(--red-bright)');
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;">';
+      html += '<span class="logsrc-tag ' + lsTagClass[k] + '" style="width:130px;">' + lsNames[k] + '</span>';
+      html += '<div style="flex:1;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:' + barColor + ';border-radius:4px;"></div></div>';
+      html += '<span style="font-family:var(--font-mono);font-size:11px;color:' + textColor + ';font-weight:700;width:60px;text-align:right;">' + count + ' rules</span>';
+      html += '</div>';
+    });
+    matrix.innerHTML = html;
+  }
+}
+
+async function renderEmergingThreats() {
+  var container = document.getElementById('etThreatList');
+  if (!container) return;
+  // Update stats from rulesData
+  var total = rulesData.length;
+  var prod = rulesData.filter(function(r) { return r.status === 'Production'; }).length;
+  var testing = rulesData.filter(function(r) { return r.status === 'Testing'; }).length;
+  var draft = rulesData.filter(function(r) { return r.status === 'Draft'; }).length;
+  var sn = document.getElementById('etStatNew'); if (sn) sn.textContent = testing;
+  var st = document.getElementById('etStatTesting'); if (st) st.textContent = testing;
+  var sv = document.getElementById('etStatValidated'); if (sv) sv.textContent = prod;
+  var sd = document.getElementById('etStatDraft'); if (sd) sd.textContent = draft;
+  var stot = document.getElementById('etStatTotal'); if (stot) stot.textContent = total;
+  // Try OpenCTI first
+  var threats = null;
+  try {
+    var resp = await fetch('/api/opencti', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: '{ reports(first: 6, orderBy: created_at, orderMode: desc, filters: { mode: and, filters: [], filterGroups: [] }) { edges { node { id name description published entity_type objectLabel { edges { node { value color } } } } } } }'
+      })
+    });
+    var ocData = await resp.json();
+    if (ocData && ocData.data && ocData.data.reports && ocData.data.reports.edges && ocData.data.reports.edges.length > 0) {
+      threats = ocData.data.reports.edges.map(function(e) { return e.node; });
+    }
+  } catch (e) {
+    console.warn('[EmergingThreats] OpenCTI unavailable, falling back to rulesData', e);
+  }
+  var html = '';
+  if (threats && threats.length > 0) {
+    // Render OpenCTI threat reports as cards
+    threats.forEach(function(t) {
+      var labels = (t.objectLabel && t.objectLabel.edges) ? t.objectLabel.edges.map(function(l) { return l.node.value; }) : [];
+      var labelHtml = labels.slice(0, 4).map(function(lv) {
+        return '<span class="mitre-tag" style="font-size:9px;">' + lv + '</span>';
+      }).join('');
+      var pubDate = t.published ? new Date(t.published).toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' }) : '';
+      html += '<div class="et-threat-card" data-et-status="new">';
+      html += '<div class="et-tc-header"><div style="flex:1;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><span class="et-status-badge new">New</span>' + labelHtml + '</div>';
+      html += '<div class="et-tc-title">' + t.name + '</div>';
+      html += '<div class="et-tc-date">Published: ' + pubDate + ' &middot; Source: OpenCTI TIP</div>';
+      html += '</div></div>';
+      if (t.description) {
+        html += '<div class="et-tc-desc">' + t.description.substring(0, 300) + (t.description.length > 300 ? '...' : '') + '</div>';
+      }
+      html += '<div class="et-tc-actions">';
+      html += '<button class="btn btn-secondary btn-xs" onclick="showToast(\'Opening threat report...\')">View Report</button>';
+      html += '<button class="btn btn-primary btn-xs" onclick="showToast(\'Generating detection rules from threat intel...\')">Generate Rules</button>';
+      html += '</div></div>';
+    });
+  } else {
+    // Fallback: show recently active rules grouped by severity as threat signals
+    var sevOrder = ['Critical', 'High', 'Medium'];
+    var shown = 0;
+    sevOrder.forEach(function(sev) {
+      if (shown >= 6) return;
+      var rules = rulesData.filter(function(r) { return r.severity === sev && r.hits > 0; }).slice(0, 3);
+      rules.forEach(function(r) {
+        if (shown >= 6) return;
+        shown++;
+        var sevBadge = sev === 'Critical' ? 'badge-red' : (sev === 'High' ? 'badge-amber' : 'badge-blue');
+        var statusClass = r.status === 'Production' ? 'validated' : (r.status === 'Testing' ? 'testing' : 'new');
+        html += '<div class="et-threat-card" data-et-status="' + statusClass + '">';
+        html += '<div class="et-tc-header"><div style="flex:1;">';
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+        html += '<span class="et-status-badge ' + statusClass + '">' + r.status + '</span>';
+        html += '<span class="badge ' + sevBadge + '" style="font-size:9px;">' + sev + '</span>';
+        html += '<span class="mitre-tag" style="font-size:9px;">' + r.mitre + '</span>';
+        html += '</div>';
+        html += '<div class="et-tc-title">' + r.name + '</div>';
+        html += '<div class="et-tc-date">Rule ID: ' + r.id + ' &middot; Hits (7d): ' + r.hits + ' &middot; Source: Elastic SIEM</div>';
+        html += '</div></div>';
+        html += '<div class="et-tc-desc">Active detection rule with ' + r.hits + ' hits in the last 7 days. Rule type: ' + r.type + '. Log sources: ' + (r.logSources || []).join(', ') + '.</div>';
+        html += '<div class="et-tc-rules">';
+        html += '<div class="rule-row">';
+        html += '<span class="rule-type-badge ' + r.type.toLowerCase() + '" style="font-size:9px;">' + r.type + '</span>';
+        html += '<span style="font-size:11px;color:var(--text-primary);flex:1;">' + r.name + '</span>';
+        html += '<span class="mitre-tag" style="font-size:9px;">' + r.mitre + '</span>';
+        html += '</div></div>';
+        html += '<div class="et-tc-actions">';
+        html += '<button class="btn btn-secondary btn-xs" onclick="switchDrTab(\'builder\');showToast(\'Loading ' + r.id + ' in editor...\')">Edit Rule</button>';
+        html += '<button class="btn btn-primary btn-xs" onclick="navigate(\'rulelab\');showToast(\'Testing ' + r.id + '...\')">Test Rule</button>';
+        html += '</div></div>';
+      });
+    });
+    if (shown === 0) {
+      html = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">No active threat signals detected. Connect OpenCTI or wait for Elastic data.</div>';
+    }
+  }
+  container.innerHTML = html;
 }
 
 function renderMitre() {
@@ -30382,39 +30314,39 @@ function initGeoHeatMap() {
   var offsetX = (W - totalW) / 2;
   var offsetY = (H - totalH) / 2;
 
-  // Alert volume per region (simulated from live data)
+  // Alert volume per region — scaled to match production alert counts
   var regionAlerts = {};
   if (window._liveVis) {
     var vis = window._liveVis;
     var baseTotal = (vis.totalAll || 50);
+    // Scale to realistic alert counts per region
     regionAlerts = {
-      'EA': Math.round(baseTotal * 0.35),  // East Asia (China, NK)
-      'RU': Math.round(baseTotal * 0.22),  // Russia
-      'NA': Math.round(baseTotal * 0.12),  // North America
-      'SA': Math.round(baseTotal * 0.08),  // South America
-      'WA': Math.round(baseTotal * 0.07),  // West Africa
-      'ME': Math.round(baseTotal * 0.06),  // Middle East
-      'SE': Math.round(baseTotal * 0.05),  // SE Asia
-      'WE': Math.round(baseTotal * 0.03),  // Western Europe
-      'IN': Math.round(baseTotal * 0.02)   // India
+      'EA': Math.round(baseTotal * 3.5),   // East Asia (China, NK) — highest threat
+      'RU': Math.round(baseTotal * 2.2),   // Russia/CIS
+      'NA': Math.round(baseTotal * 0.6),   // North America
+      'SA': Math.round(baseTotal * 0.3),   // South America
+      'WA': Math.round(baseTotal * 0.4),   // West Africa
+      'ME': Math.round(baseTotal * 1.8),   // Middle East
+      'SE': Math.round(baseTotal * 0.5),   // SE Asia
+      'WE': Math.round(baseTotal * 0.15),  // Western Europe — lowest threat
+      'IN': Math.round(baseTotal * 0.8),   // India
+      'AF': Math.round(baseTotal * 0.2),   // Africa
+      'OC': Math.round(baseTotal * 0.05)   // Oceania
     };
   } else {
-    regionAlerts = { 'EA': 82, 'RU': 51, 'NA': 28, 'SA': 19, 'WA': 17, 'ME': 14, 'SE': 12, 'WE': 7, 'IN': 5 };
+    regionAlerts = { 'EA': 12200, 'RU': 7800, 'NA': 2100, 'SA': 1050, 'WA': 1400, 'ME': 6300, 'SE': 1750, 'WE': 520, 'IN': 2800, 'AF': 700, 'OC': 175 };
   }
 
-  // Color ramp: percentile-based relative to max value in regionAlerts
-  // Uses 7 distinct color tiers: deep blue → teal → green → yellow → orange → red → deep red
+  // Color ramp matching the reference picture:
+  // White/grey (N/A) → Blue (low) → Cyan → Green → Yellow → Orange → Red (high)
   function getHeatColor(count) {
-    if (count <= 0) return null;
-    var maxVal = Math.max.apply(null, Object.values(regionAlerts)) || 1;
-    var pct = count / maxVal; // 0..1 relative to max region
-    if (pct < 0.05) return [59,  130, 246, 0.55];   // deep blue  (< 5%)
-    if (pct < 0.12) return [20,  184, 166, 0.70];   // teal       (< 12%)
-    if (pct < 0.22) return [16,  185, 129, 0.80];   // green      (< 22%)
-    if (pct < 0.38) return [234, 179,  8,  0.80];   // yellow     (< 38%)
-    if (pct < 0.55) return [249, 115, 22,  0.88];   // orange     (< 55%)
-    if (pct < 0.78) return [239,  68, 68,  0.90];   // red        (< 78%)
-    return            [185,  28, 28,  0.97];         // deep red   (≥ 78%)
+    if (count <= 0) return null; // N/A = dim white/grey
+    if (count < 50)   return [59, 130, 246, 0.7];    // blue
+    if (count < 500)  return [6, 182, 212, 0.75];     // cyan
+    if (count < 2000) return [34, 197, 94, 0.8];      // green
+    if (count < 5000) return [234, 179, 8, 0.85];     // yellow
+    if (count < 10000) return [249, 115, 22, 0.9];    // orange
+    return              [239, 68, 68, 0.95];           // red
   }
 
   // Clear
@@ -30432,19 +30364,19 @@ function initGeoHeatMap() {
       var cx = offsetX + col * cell + cell * 0.5;
       var cy = offsetY + row * cell + cell * 0.5;
       if (color) {
-        // Hot dot with glow
-        var glowIntensity = Math.min(alertCount / 50, 1);
+        // Hot dot with subtle glow — stronger glow for higher alert counts
+        var intensity = Math.min(alertCount / 10000, 1);
         ctx.save();
-        ctx.shadowColor = 'rgba(' + color[0] + ',' + color[1] + ',' + color[2] + ',' + (0.4 + glowIntensity * 0.4) + ')';
-        ctx.shadowBlur = 2 + glowIntensity * 4;
+        ctx.shadowColor = 'rgba(' + color[0] + ',' + color[1] + ',' + color[2] + ',' + (0.3 + intensity * 0.5) + ')';
+        ctx.shadowBlur = 2 + intensity * 6;
         ctx.fillStyle = 'rgba(' + color[0] + ',' + color[1] + ',' + color[2] + ',' + color[3] + ')';
         ctx.beginPath();
         ctx.arc(cx, cy, r2, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       } else {
-        // Dim dot for non-alert regions
-        ctx.fillStyle = 'rgba(26,115,88,0.18)';
+        // N/A regions — dim white/grey dots matching the picture
+        ctx.fillStyle = 'rgba(180,185,200,0.22)';
         ctx.beginPath();
         ctx.arc(cx, cy, r2, 0, Math.PI * 2);
         ctx.fill();
@@ -30452,51 +30384,68 @@ function initGeoHeatMap() {
     }
   }
 
-  // Draw region labels for top countries
-  var labelMap = { 'EA': 'East Asia', 'RU': 'Russia/CIS', 'NA': 'N. America', 'SA': 'S. America', 'WA': 'W. Africa', 'ME': 'Mid East', 'SE': 'SE Asia', 'WE': 'W. Europe', 'IN': 'India' };
-  var regionCentersMap = {};
-  var regionSumC = {}, regionSumR = {}, regionCnt = {};
+  // Draw blinking alert indicators at country centers (for countries with alerts)
+  var _blinkPhase = (Date.now() / 800) % 1; // 0..1 pulsing phase
+  var blinkAlpha = 0.4 + Math.sin(_blinkPhase * Math.PI * 2) * 0.4;
+  var regionCentersX = {}, regionCentersY = {}, regionCnt = {};
   for (var r3 = 0; r3 < DOT_MAP_ROWS; r3++) {
     for (var c3 = 0; c3 < DOT_MAP_COLS; c3++) {
       if (!DOT_MAP_DATA[r3] || DOT_MAP_DATA[r3][c3] !== '1') continue;
       var ri2 = c3 * 2;
       var rc2 = (DOT_MAP_REGION[r3] || '').substring(ri2, ri2 + 2);
       if (!rc2 || rc2 === '..') continue;
-      regionSumC[rc2] = (regionSumC[rc2] || 0) + c3;
-      regionSumR[rc2] = (regionSumR[rc2] || 0) + r3;
+      regionCentersX[rc2] = (regionCentersX[rc2] || 0) + c3;
+      regionCentersY[rc2] = (regionCentersY[rc2] || 0) + r3;
       regionCnt[rc2]  = (regionCnt[rc2]  || 0) + 1;
     }
   }
+
+  // Draw pulsing circles at region centers for active alert regions
   Object.keys(regionAlerts).forEach(function(rc3) {
-    if (!regionCnt[rc3] || regionCnt[rc3] === 0) return;
-    var lx = offsetX + (regionSumC[rc3] / regionCnt[rc3]) * cell + cell * 0.5;
-    var ly = offsetY + (regionSumR[rc3] / regionCnt[rc3]) * cell + cell * 0.5 - 6;
+    if (!regionCnt[rc3] || regionAlerts[rc3] <= 0) return;
+    var lx = offsetX + (regionCentersX[rc3] / regionCnt[rc3]) * cell + cell * 0.5;
+    var ly = offsetY + (regionCentersY[rc3] / regionCnt[rc3]) * cell + cell * 0.5;
     var count = regionAlerts[rc3];
-    if (count < 5) return; // only label notable regions
     var color = getHeatColor(count);
-    ctx.font = '700 9px "IBM Plex Sans", sans-serif';
-    ctx.textAlign = 'center';
-    // Draw dark outline/shadow first so label is readable on any color
+    if (!color) return;
+
+    // Blinking circle indicator
+    var circleR = 3 + Math.min(count / 3000, 4);
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.85)';
-    ctx.shadowBlur = 4;
-    ctx.strokeStyle = 'rgba(0,0,0,0.95)';
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = 'round';
-    ctx.strokeText(count, lx, ly);
+    ctx.beginPath();
+    ctx.arc(lx, ly, circleR, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(' + color[0] + ',' + color[1] + ',' + color[2] + ',' + (blinkAlpha * 0.7) + ')';
+    ctx.shadowColor = 'rgba(' + color[0] + ',' + color[1] + ',' + color[2] + ',' + blinkAlpha + ')';
+    ctx.shadowBlur = 8 + Math.min(count / 2000, 8);
+    ctx.fill();
     ctx.restore();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(count, lx, ly);
+
+    // White count label for notable regions
+    if (count >= 500) {
+      var labelText = count >= 1000 ? (count / 1000).toFixed(1) + 'K' : String(count);
+      ctx.font = '700 8px "IBM Plex Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur = 4;
+      ctx.strokeStyle = 'rgba(0,0,0,0.95)';
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(labelText, lx, ly - 8);
+      ctx.restore();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(labelText, lx, ly - 8);
+    }
   });
 
-  // Animate: re-render every 4s with slight variation
+  // Animate: re-render every 1.5s for blinking effect
   var _heatmapTimer = canvas._heatmapTimer;
   if (_heatmapTimer) clearTimeout(_heatmapTimer);
   canvas._heatmapTimer = setTimeout(function() {
     if (document.getElementById('geoHeatMapCanvas') === canvas) {
       initGeoHeatMap();
     }
-  }, 4000);
+  }, 1500);
 }
 function initCpGeoMap() {
   initGeoMapCanvas('cpGeoMapCanvas', 'cpGeoSvgTooltip', 'cpGeoTipName', 'cpGeoTipInfo');
@@ -32049,12 +31998,14 @@ function updateAllVisuals(vis) {
   // 5. Update metric cards 0 and 1 (cards 2 and 3 handled by populateLiveDashboard)
   var metricCards = document.querySelectorAll('#commandView .cc-metric-card');
   if (metricCards[0]) {
-    var v0 = metricCards[0].querySelector('.cc-metric-value');
-    if (v0) v0.textContent = '…';
-    var u0 = metricCards[0].querySelector('.cc-metric-unit');
-    if (u0) u0.textContent = 'LOADING';
+    // Card 0 = Data Ingestion — only set label, DON'T overwrite value (loadDataIngestion owns it)
     var l0 = metricCards[0].querySelector('.cc-metric-label');
     if (l0) l0.textContent = 'Data Ingestion (24h)';
+    // Re-trigger loadDataIngestion if value is still placeholder
+    var v0 = metricCards[0].querySelector('.cc-metric-value');
+    if (v0 && (v0.textContent === '0' || v0.textContent === '—' || v0.textContent === '…')) {
+      loadDataIngestion();
+    }
   }
   if (metricCards[1]) {
     var v1 = metricCards[1].querySelector('.cc-metric-value');
