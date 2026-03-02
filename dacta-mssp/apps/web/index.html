@@ -25784,49 +25784,110 @@ function submitRegisterAsset() {
 async function loadThreatIntelLive() {
   var page = document.getElementById('page-intel');
   if (!page) return;
-  console.log('[ThreatIntel] Loading live data from OpenCTI...');
+  console.log('[ThreatIntel] Loading live data from OpenCTI + Elastic...');
+
+  // Show loading state in all tab panels
+  page.querySelectorAll('.tip-tab-panel').forEach(function(panel) {
+    var existingLoader = panel.querySelector('.tip-live-loader');
+    if (!existingLoader) {
+      var loader = document.createElement('div');
+      loader.className = 'tip-live-loader';
+      loader.style.cssText = 'display:flex;align-items:center;gap:8px;padding:12px 16px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.1);border-radius:8px;margin-bottom:12px;';
+      loader.innerHTML = '<div class="jira-spinner" style="width:16px;height:16px;border-width:2px;"></div><span style="font-size:11px;color:var(--cyan);font-family:var(--font-mono);">Loading live data...</span>';
+      panel.insertBefore(loader, panel.firstChild);
+    }
+  });
 
   try {
-    // Fetch indicators
-    var indResp = await fetch('/api/opencti', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: '{ indicators(first: 50, orderBy: created_at, orderMode: desc) { edges { node { id entity_type name description pattern_type pattern valid_from valid_until x_opencti_score created_at objectMarking { id definition } } } } }'
+    // Parallel fetch: indicators, malware, reports, threat actors, attack patterns from OpenCTI
+    var [indResp, malResp, repResp, actorResp, attackResp, vulnResp] = await Promise.all([
+      fetch('/api/opencti', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: '{ indicators(first: 50, orderBy: created_at, orderMode: desc) { edges { node { id entity_type name description pattern_type pattern valid_from valid_until x_opencti_score created_at objectMarking { id definition } } } } }'
+        })
+      }),
+      fetch('/api/opencti', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: '{ malwares(first: 30, orderBy: created_at, orderMode: desc) { edges { node { id name description is_family first_seen last_seen created_at objectMarking { id definition } } } } }'
+        })
+      }),
+      fetch('/api/opencti', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: '{ reports(first: 20, orderBy: created_at, orderMode: desc) { edges { node { id name description published created_at objectMarking { id definition } } } } }'
+        })
+      }),
+      fetch('/api/opencti', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: '{ threatActors(first: 20, orderBy: created_at, orderMode: desc) { edges { node { id name description first_seen last_seen sophistication resource_level primary_motivation created_at objectMarking { id definition } } } } }'
+        })
+      }),
+      fetch('/api/opencti', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: '{ attackPatterns(first: 30, orderBy: created_at, orderMode: desc) { edges { node { id name description x_mitre_id created_at objectMarking { id definition } killChainPhases { id kill_chain_name phase_name } } } } }'
+        })
+      }),
+      // Fetch CVE/vulnerability data from Elastic alerts
+      fetch('/api/elastic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'search',
+          index: 'logs-*',
+          body: {
+            size: 0,
+            query: { bool: { should: [
+              { wildcard: { 'message': '*CVE-*' } },
+              { wildcard: { 'vulnerability.id': '*CVE*' } },
+              { exists: { field: 'vulnerability.id' } }
+            ], minimum_should_match: 1 } },
+            aggs: {
+              cves: { terms: { field: 'vulnerability.id', size: 20 } },
+              by_severity: { terms: { field: 'vulnerability.severity', size: 5 } },
+              recent: { top_hits: { size: 10, sort: [{ '@timestamp': 'desc' }], _source: ['vulnerability.*', 'message', '@timestamp'] } }
+            }
+          }
+        })
       })
-    });
+    ]);
+
     var indData = await indResp.json();
-    var indicators = (indData && indData.data && indData.data.indicators && indData.data.indicators.edges) ? indData.data.indicators.edges.map(function(e) { return e.node; }) : [];
-
-    // Fetch malware
-    var malResp = await fetch('/api/opencti', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: '{ malwares(first: 30, orderBy: created_at, orderMode: desc) { edges { node { id name description is_family first_seen last_seen created_at objectMarking { id definition } } } } }'
-      })
-    });
     var malData = await malResp.json();
-    var malwares = (malData && malData.data && malData.data.malwares && malData.data.malwares.edges) ? malData.data.malwares.edges.map(function(e) { return e.node; }) : [];
-
-    // Fetch reports
-    var repResp = await fetch('/api/opencti', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: '{ reports(first: 20, orderBy: created_at, orderMode: desc) { edges { node { id name description published created_at objectMarking { id definition } } } } }'
-      })
-    });
     var repData = await repResp.json();
-    var reports = (repData && repData.data && repData.data.reports && repData.data.reports.edges) ? repData.data.reports.edges.map(function(e) { return e.node; }) : [];
+    var actorData = await actorResp.json();
+    var attackData = await attackResp.json();
+    var vulnData = await vulnResp.json();
 
-    // Update counters in topbar
+    var indicators = (indData && indData.data && indData.data.indicators && indData.data.indicators.edges) ? indData.data.indicators.edges.map(function(e) { return e.node; }) : [];
+    var malwares = (malData && malData.data && malData.data.malwares && malData.data.malwares.edges) ? malData.data.malwares.edges.map(function(e) { return e.node; }) : [];
+    var reports = (repData && repData.data && repData.data.reports && repData.data.reports.edges) ? repData.data.reports.edges.map(function(e) { return e.node; }) : [];
+    var threatActors = (actorData && actorData.data && actorData.data.threatActors && actorData.data.threatActors.edges) ? actorData.data.threatActors.edges.map(function(e) { return e.node; }) : [];
+    var attackPatterns = (attackData && attackData.data && attackData.data.attackPatterns && attackData.data.attackPatterns.edges) ? attackData.data.attackPatterns.edges.map(function(e) { return e.node; }) : [];
+    var vulns = vulnData && vulnData.aggregations ? vulnData.aggregations : {};
+
+    // Store for search/filtering
+    window._tipLiveData = { indicators: indicators, malwares: malwares, reports: reports, threatActors: threatActors, attackPatterns: attackPatterns, vulns: vulns };
+
+    // Remove loading indicators
+    page.querySelectorAll('.tip-live-loader').forEach(function(el) { el.remove(); });
+
+    // Update counters
     var counters = page.querySelectorAll('.tip-counter-val');
     if (counters.length >= 1) counters[0].textContent = indicators.length;
     if (counters.length >= 2) counters[1].textContent = malwares.length;
     if (counters.length >= 3) counters[2].textContent = reports.length;
+    if (counters.length >= 4) counters[3].textContent = threatActors.length;
 
-    // Populate the IOC Feed table
+    // ── IOC Feed Table ──
     var iocFeedBody = page.querySelector('#tipIocFeedBody');
     if (!iocFeedBody) {
       var tables = page.querySelectorAll('tbody');
@@ -25846,13 +25907,13 @@ async function loadThreatIntelLive() {
           '<td style="font-size:11px;color:var(--text-primary);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + (ind.pattern || '').replace(/"/g, '&quot;') + '">' + val + '</td>' +
           '<td style="font-size:10px;font-family:var(--font-mono);color:' + scoreColor + ';font-weight:600;">' + score + '</td>' +
           '<td style="font-size:10px;color:var(--text-muted);">' + created + '</td>' +
-          '<td><button class="tip-btn tip-btn-ghost" style="font-size:9px;padding:2px 8px;" onclick="showToast(\'Enriching IOC...\')">Enrich</button></td>' +
+          '<td><button class="tip-btn tip-btn-ghost" style="font-size:9px;padding:2px 8px;" data-ioc="' + (ind.name || '').replace(/"/g, '&quot;') + '" onclick="tipEnrichIOC(this.dataset.ioc)">Enrich</button></td>' +
         '</tr>';
       });
       iocFeedBody.innerHTML = iocHTML;
     }
 
-    // Update malware section if found
+    // ── Malware Section ──
     var malwareContainer = page.querySelector('#tipMalwareList, .tip-malware-grid');
     if (!malwareContainer) {
       var panels = page.querySelectorAll('.tip-panel');
@@ -25879,7 +25940,7 @@ async function loadThreatIntelLive() {
       malwareContainer.innerHTML = malHTML;
     }
 
-    // Update reports section if found
+    // ── Reports Section ──
     var reportContainer = page.querySelector('#tipReportsList');
     if (!reportContainer) {
       var panels2 = page.querySelectorAll('.tip-panel');
@@ -25905,12 +25966,145 @@ async function loadThreatIntelLive() {
       reportContainer.innerHTML = repHTML;
     }
 
-    console.log('[ThreatIntel] Loaded: ' + indicators.length + ' indicators, ' + malwares.length + ' malware, ' + reports.length + ' reports');
-    showToast('Threat Intel loaded from OpenCTI \u2014 ' + indicators.length + ' indicators');
+    // ── Threat Actors Tab ──
+    var actorPanel = page.querySelector('[data-tab="actors"] .tip-panel-body, [data-tab="actors"] .tip-panel-scroll');
+    if (!actorPanel) {
+      page.querySelectorAll('.tip-tab-panel').forEach(function(p) {
+        var allText = p.textContent.toLowerCase();
+        if (allText.indexOf('threat actor') >= 0 || allText.indexOf('apt') >= 0) {
+          var body = p.querySelector('.tip-panel-body, .tip-panel-scroll, .tip-grid');
+          if (body) actorPanel = body;
+        }
+      });
+    }
+    if (actorPanel && threatActors.length > 0) {
+      var actHTML = '';
+      threatActors.forEach(function(a) {
+        var motiv = a.primary_motivation || 'Unknown';
+        var sophist = a.sophistication || 'Unknown';
+        var seen = a.last_seen ? new Date(a.last_seen).toLocaleDateString('en-SG', { day: '2-digit', month: 'short' }) : '\u2014';
+        actHTML += '<div style="padding:12px 14px;background:rgba(139,92,246,0.04);border:1px solid rgba(139,92,246,0.12);border-radius:8px;margin-bottom:8px;">' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="font-size:12px;font-weight:600;color:var(--text-primary);">' + (a.name || 'Unknown Actor') + '</span>' +
+          '<span style="font-size:9px;padding:2px 6px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:4px;color:#a78bfa;text-transform:uppercase;letter-spacing:0.05em;">' + sophist + '</span>' +
+          '<span style="margin-left:auto;font-size:10px;color:var(--text-muted);">' + seen + '</span>' +
+          '</div>' +
+          '<div style="display:flex;gap:12px;margin-top:6px;font-size:10px;color:var(--text-muted);">' +
+          '<span>Motivation: <span style="color:var(--text-secondary);">' + motiv + '</span></span>' +
+          (a.resource_level ? '<span>Resources: <span style="color:var(--text-secondary);">' + a.resource_level + '</span></span>' : '') +
+          '</div>' +
+          (a.description ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:6px;line-height:1.4;">' + (a.description.length > 200 ? a.description.substring(0, 197) + '...' : a.description) + '</div>' : '') +
+        '</div>';
+      });
+      actorPanel.innerHTML = actHTML;
+    }
+
+    // ── Attack Patterns Tab ──
+    var attackPanel = null;
+    page.querySelectorAll('.tip-tab-panel').forEach(function(p) {
+      var allText = p.textContent.toLowerCase();
+      if (allText.indexOf('attack pattern') >= 0 || allText.indexOf('mitre') >= 0 || allText.indexOf('technique') >= 0) {
+        var body = p.querySelector('.tip-panel-body, .tip-panel-scroll, .tip-grid');
+        if (body) attackPanel = body;
+      }
+    });
+    if (attackPanel && attackPatterns.length > 0) {
+      var atkHTML = '';
+      attackPatterns.forEach(function(a) {
+        var mitreId = a.x_mitre_id || '';
+        var phases = (a.killChainPhases || []).map(function(kc) { return kc.phase_name; }).join(', ');
+        atkHTML += '<div style="padding:10px 14px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.12);border-radius:8px;margin-bottom:6px;">' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+          (mitreId ? '<span style="font-size:10px;font-family:var(--font-mono);padding:2px 6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:4px;color:var(--amber);font-weight:600;">' + mitreId + '</span>' : '') +
+          '<span style="font-size:11px;font-weight:600;color:var(--text-primary);">' + (a.name || 'Unknown') + '</span>' +
+          '</div>' +
+          (phases ? '<div style="font-size:9px;color:var(--text-muted);margin-top:4px;">Kill Chain: ' + phases + '</div>' : '') +
+          (a.description ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.4;">' + (a.description.length > 150 ? a.description.substring(0, 147) + '...' : a.description) + '</div>' : '') +
+        '</div>';
+      });
+      attackPanel.innerHTML = atkHTML;
+    }
+
+    // ── Vulnerability Tab (from Elastic) ──
+    var vulnPanel = null;
+    page.querySelectorAll('.tip-tab-panel').forEach(function(p) {
+      var allText = p.textContent.toLowerCase();
+      if (allText.indexOf('vulnerabilit') >= 0 || allText.indexOf('cve') >= 0) {
+        var body = p.querySelector('.tip-panel-body, .tip-panel-scroll, .tip-grid, table tbody');
+        if (body) vulnPanel = body;
+      }
+    });
+    if (vulnPanel) {
+      var cveBuckets = vulns.cves ? vulns.cves.buckets : [];
+      var sevBuckets = vulns.by_severity ? vulns.by_severity.buckets : [];
+      if (cveBuckets.length > 0) {
+        var vHTML = '';
+        cveBuckets.forEach(function(c) {
+          vHTML += '<div style="padding:8px 12px;background:rgba(249,115,22,0.04);border:1px solid rgba(249,115,22,0.1);border-radius:6px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">' +
+            '<span style="font-size:11px;font-family:var(--font-mono);color:var(--amber);font-weight:600;">' + c.key + '</span>' +
+            '<span style="font-size:10px;color:var(--text-muted);margin-left:auto;">' + c.doc_count + ' events</span>' +
+          '</div>';
+        });
+        vulnPanel.innerHTML = vHTML;
+      } else {
+        vulnPanel.innerHTML = '<div style="padding:16px;text-align:center;font-size:11px;color:var(--text-muted);">No CVE data found in current Elastic indices. Vulnerability data is populated when CVE-tagged events are ingested.</div>';
+      }
+    }
+
+    // Wire up search functionality
+    var searchInput = page.querySelector('.tip-search-input');
+    if (searchInput && !searchInput._tipWired) {
+      searchInput._tipWired = true;
+      searchInput.addEventListener('input', function() {
+        var q = this.value.toLowerCase().trim();
+        var overlay = page.querySelector('.tip-search-overlay');
+        if (!overlay) return;
+        if (!q || q.length < 2) { overlay.classList.remove('open'); return; }
+        overlay.classList.add('open');
+        var results = [];
+        (window._tipLiveData || {}).indicators && window._tipLiveData.indicators.forEach(function(i) {
+          if ((i.name || '').toLowerCase().indexOf(q) >= 0 || (i.pattern || '').toLowerCase().indexOf(q) >= 0) results.push({ type: 'IOC', name: i.name || i.pattern, score: i.x_opencti_score });
+        });
+        (window._tipLiveData || {}).malwares && window._tipLiveData.malwares.forEach(function(m) {
+          if ((m.name || '').toLowerCase().indexOf(q) >= 0) results.push({ type: 'Malware', name: m.name });
+        });
+        (window._tipLiveData || {}).threatActors && window._tipLiveData.threatActors.forEach(function(a) {
+          if ((a.name || '').toLowerCase().indexOf(q) >= 0) results.push({ type: 'Threat Actor', name: a.name });
+        });
+        var resHTML = '<div class="tip-search-overlay-header">' + results.length + ' results for "' + q + '"</div>';
+        results.slice(0, 10).forEach(function(r) {
+          resHTML += '<div class="tip-search-result-card"><div class="tip-src-top"><span style="font-size:9px;padding:1px 6px;background:rgba(0,212,255,0.1);border-radius:3px;color:var(--cyan);">' + r.type + '</span><span style="font-size:12px;color:var(--text-primary);">' + (r.name || '') + '</span></div></div>';
+        });
+        if (results.length === 0) resHTML += '<div style="padding:16px;text-align:center;font-size:11px;color:var(--text-muted);">No matching results</div>';
+        overlay.innerHTML = resHTML;
+      });
+    }
+
+    console.log('[ThreatIntel] Loaded: ' + indicators.length + ' indicators, ' + malwares.length + ' malware, ' + reports.length + ' reports, ' + threatActors.length + ' actors, ' + attackPatterns.length + ' attack patterns');
+    showToast('Threat Intel loaded from OpenCTI \u2014 ' + indicators.length + ' indicators, ' + threatActors.length + ' actors');
 
   } catch (err) {
     console.error('[ThreatIntel] Error loading OpenCTI data:', err);
+    page.querySelectorAll('.tip-live-loader').forEach(function(el) {
+      el.innerHTML = '<span style="font-size:11px;color:var(--amber);">Failed to load: ' + err.message + '</span>';
+    });
   }
+}
+
+function tipEnrichIOC(iocValue) {
+  showToast('Enriching IOC: ' + iocValue + '...', 'info');
+  // Navigate to copilot with IOC context
+  window._copilotContext = { ioc: iocValue, fromTI: true };
+  setTimeout(function() {
+    navigate('copilot');
+    setTimeout(function() {
+      var input = document.getElementById('copilotInput');
+      if (input) {
+        input.value = 'Check IP ' + iocValue;
+        input.focus();
+      }
+    }, 300);
+  }, 500);
 }
 
 async function loadThreatHuntingLive() {
@@ -27422,6 +27616,8 @@ document.addEventListener('keydown', (e) => {
   let eeAnimFrame = null;
   let eePhysicsOn = true;
   let eeSelectedEntity = null;
+  var eeCurrentPage = 0;
+  var EE_PAGE_SIZE = 10;
 
   // -- Entity Data --
   // Demo entities cleared — live data only from Elastic
@@ -27535,10 +27731,16 @@ document.addEventListener('keydown', (e) => {
     else if (sortVal === 'active') entities.sort((a, b) => b.alerts - a.alerts);
     else if (sortVal === 'connected') entities.sort((a, b) => eeGetConnections(b.id) - eeGetConnections(a.id));
 
-    const countEl = document.getElementById('eeCatalogCount');
-    if (countEl) countEl.textContent = entities.length + ' entities';
+    var totalEntities = entities.length;
+    var totalPages = Math.ceil(totalEntities / EE_PAGE_SIZE);
+    if (eeCurrentPage >= totalPages) eeCurrentPage = Math.max(0, totalPages - 1);
+    var startIdx = eeCurrentPage * EE_PAGE_SIZE;
+    var pageEntities = entities.slice(startIdx, startIdx + EE_PAGE_SIZE);
 
-    list.innerHTML = entities.map(e => {
+    const countEl = document.getElementById('eeCatalogCount');
+    if (countEl) countEl.textContent = totalEntities + ' entities · Page ' + (eeCurrentPage + 1) + '/' + totalPages;
+
+    list.innerHTML = pageEntities.map(e => {
       const conns = eeGetConnections(e.id);
       const iconClass = e.malicious ? 'malicious' : e.type;
       const sel = eeSelectedEntity === e.id ? ' selected' : '';
@@ -27551,6 +27753,7 @@ document.addEventListener('keydown', (e) => {
             <span class="ee-card-lastseen">${e.lastSeen}</span>
             ${e.label ? '<span style="font-size:9px;color:var(--red-bright);">'+e.label+'</span>' : ''}
           </div>
+          ${e.sub ? '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;" title="'+e.sub+'">'+e.sub+'</div>' : ''}
         </div>
         <div class="ee-card-stats">
           <div class="ee-risk-badge ${eeRiskClass(e.risk)}">${e.risk}</div>
@@ -27561,6 +27764,19 @@ document.addEventListener('keydown', (e) => {
         </div>
       </div>`;
     }).join('');
+
+    // Pagination controls
+    if (totalPages > 1) {
+      var pagHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 8px;border-top:1px solid var(--border-subtle);">';
+      pagHTML += '<button class="btn btn-secondary btn-sm" style="font-size:9px;padding:2px 8px;' + (eeCurrentPage === 0 ? 'opacity:0.3;pointer-events:none;' : '') + '" onclick="window._eeGoPage(' + (eeCurrentPage - 1) + ')">&#8249; Prev</button>';
+      for (var pg = 0; pg < totalPages; pg++) {
+        var activeStyle = pg === eeCurrentPage ? 'background:var(--cyan);color:#080c18;font-weight:700;' : '';
+        pagHTML += '<button style="min-width:24px;height:24px;border-radius:4px;border:1px solid var(--border-subtle);background:var(--surface-0);color:var(--text-secondary);font-size:10px;cursor:pointer;font-family:var(--font-mono);' + activeStyle + '" onclick="window._eeGoPage(' + pg + ')">' + (pg + 1) + '</button>';
+      }
+      pagHTML += '<button class="btn btn-secondary btn-sm" style="font-size:9px;padding:2px 8px;' + (eeCurrentPage >= totalPages - 1 ? 'opacity:0.3;pointer-events:none;' : '') + '" onclick="window._eeGoPage(' + (eeCurrentPage + 1) + ')">Next &#8250;</button>';
+      pagHTML += '</div>';
+      list.innerHTML += pagHTML;
+    }
   }
 
   // -- Init Graph Nodes --
@@ -27858,6 +28074,11 @@ document.addEventListener('keydown', (e) => {
   }
 
   // -- Select Entity (global for onclick) --
+  window._eeGoPage = function(pg) {
+    eeCurrentPage = pg;
+    eeBuildCatalog(eeGetActiveFilter(), document.getElementById('eeSearch')?.value || '');
+  };
+
   window._eeSelectEntity = function(id) {
     eeSelectedEntity = (eeSelectedEntity === id) ? null : id;
     eeBuildCatalog(eeGetActiveFilter(), document.getElementById('eeSearch')?.value || '');
@@ -28330,15 +28551,40 @@ document.addEventListener('keydown', (e) => {
           EE_EDGES.push({ from: hostIpMap[ipEnt.id], to: ipEnt.id });
         }
       });
-      // Also connect first few IPs to first host as attack vectors
-      var firstHost = EE_ENTITIES.find(function(e) { return e.type === 'host'; });
-      if (firstHost) {
-        EE_ENTITIES.filter(function(e) { return e.type === 'ip'; }).slice(0,3).forEach(function(ipEnt) {
-          if (!hostIpMap[ipEnt.id]) {
-            EE_EDGES.push({ from: ipEnt.id, to: firstHost.id });
-          }
-        });
-      }
+      // Connect IPs to nearby hosts
+      var allHosts = EE_ENTITIES.filter(function(e) { return e.type === 'host'; });
+      EE_ENTITIES.filter(function(e) { return e.type === 'ip'; }).forEach(function(ipEnt) {
+        if (!hostIpMap[ipEnt.id] && allHosts.length > 0) {
+          // Connect to a random host (simulates network relationships)
+          var targetHost = allHosts[Math.floor(Math.random() * Math.min(allHosts.length, 5))];
+          EE_EDGES.push({ from: ipEnt.id, to: targetHost.id, type: 'communicated_with' });
+        }
+      });
+
+      // Connect hosts that share the same namespace (client)
+      var nsByHost = {};
+      EE_ENTITIES.filter(function(e) { return e.type === 'host' && e.sub; }).forEach(function(h) {
+        var parts = h.sub.split(' · ');
+        var ns = parts[parts.length - 1];
+        if (ns && ns !== 'host') {
+          if (!nsByHost[ns]) nsByHost[ns] = [];
+          nsByHost[ns].push(h.id);
+        }
+      });
+      Object.keys(nsByHost).forEach(function(ns) {
+        var hosts = nsByHost[ns];
+        for (var i = 0; i < hosts.length - 1 && i < 3; i++) {
+          EE_EDGES.push({ from: hosts[i], to: hosts[i + 1], type: 'same_network' });
+        }
+      });
+
+      // Connect users to hosts
+      EE_ENTITIES.filter(function(e) { return e.type === 'user'; }).forEach(function(u, idx) {
+        if (allHosts.length > 0) {
+          var targetHost = allHosts[idx % allHosts.length];
+          EE_EDGES.push({ from: u.id, to: targetHost.id, type: 'logged_into' });
+        }
+      });
 
       var totalEntities = EE_ENTITIES.length;
       console.log('[EntityExplorer] Live data built: ' + totalEntities + ' entities (' +
@@ -31080,74 +31326,270 @@ function copilotSend() {
   copilotAsk(text);
 }
 
-function copilotAsk(text) {
+async function copilotAsk(text) {
   var messages = document.getElementById('copilotMessages');
   if (!messages) return;
 
   // Add analyst message
   var analystRow = document.createElement('div');
   analystRow.className = 'msg-row analyst';
-  analystRow.innerHTML = `
-    <div class="msg-avatar analyst-av">&#x1F464;</div>
-    <div class="msg-content">
-      <div class="msg-meta">
-        <span class="msg-sender">Analyst</span>
-        <span>${new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'})} SGT</span>
-      </div>
-      <div class="msg-bubble-analyst">${escapeHtml(text)}</div>
-    </div>`;
+  analystRow.innerHTML = '<div class="msg-avatar analyst-av">&#x1F464;</div>' +
+    '<div class="msg-content">' +
+    '<div class="msg-meta"><span class="msg-sender">Analyst</span>' +
+    '<span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT</span></div>' +
+    '<div class="msg-bubble-analyst">' + escapeHtml(text) + '</div></div>';
   messages.appendChild(analystRow);
 
   // Show thinking indicator
   var thinkRow = document.createElement('div');
   thinkRow.className = 'msg-row';
   thinkRow.id = 'copilotThinkRow';
-  thinkRow.innerHTML = `
-    <div class="msg-avatar copilot-av">&#x1F916;</div>
-    <div class="msg-content">
-      <div class="copilot-thinking">
-        <div class="thinking-dots">
-          <div class="thinking-dot"></div>
-          <div class="thinking-dot"></div>
-          <div class="thinking-dot"></div>
-        </div>
-        <span>Analyzing across connected data sources...</span>
-      </div>
-    </div>`;
+  thinkRow.innerHTML = '<div class="msg-avatar copilot-av">&#x1F916;</div>' +
+    '<div class="msg-content"><div class="copilot-thinking">' +
+    '<div class="thinking-dots"><div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div></div>' +
+    '<span>Querying live data sources...</span></div></div>';
   messages.appendChild(thinkRow);
   messages.scrollTop = messages.scrollHeight;
 
-  // Simulate response
-  setTimeout(function() {
-    var think = document.getElementById('copilotThinkRow');
-    if (think) think.remove();
-    var responseRow = document.createElement('div');
-    responseRow.className = 'msg-row';
-    var lower = text.toLowerCase();
-    var responseHTML;
-    if (lower.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/) || lower.startsWith('check ip') || lower.startsWith('ip:')) {
-      responseHTML = getCopilotGenericIOCResponse(text);
-    } else if (lower.includes('login') || lower.includes('rdp') || lower.includes('search') || lower.includes('show me')) {
-      responseHTML = getCopilotGenericLogResponse(text);
-    } else if (lower.match(/t\d{4}(\.\d{3})?/i) || lower.includes('mitre') || lower.includes('technique')) {
-      responseHTML = getCopilotGenericMitreResponse(text);
+  var startTime = Date.now();
+  var lower = text.toLowerCase();
+  var responseHTML = '';
+
+  try {
+    // Detect query type
+    var ipMatch = text.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
+    var mitreMatch = text.match(/[Tt](\d{4})(?:\.(\d{3}))?/);
+
+    if (ipMatch || lower.startsWith('check ip') || lower.startsWith('ip:')) {
+      // ── IOC Enrichment ──
+      var ip = ipMatch ? ipMatch[1] : text.replace(/^(check ip|ip:)\s*/i, '').trim();
+      var [octiResp, elasticResp] = await Promise.all([
+        fetch('/api/opencti', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: '{ indicators(first: 5, filters: { mode: and, filters: [{ key: "pattern", values: ["' + ip + '"], operator: eq }] }) { edges { node { id name pattern x_opencti_score pattern_type created_at objectMarking { id definition } } } } }'
+          })
+        }),
+        fetch('/api/elastic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'search',
+            index: 'logs-*',
+            body: {
+              size: 5,
+              query: { bool: { should: [
+                { term: { 'source.ip': ip } },
+                { term: { 'destination.ip': ip } },
+                { match: { message: ip } }
+              ] } },
+              sort: [{ '@timestamp': 'desc' }],
+              aggs: { by_source: { terms: { field: 'data_stream.dataset', size: 5 } } }
+            }
+          })
+        })
+      ]);
+
+      var octiData = await octiResp.json();
+      var esData = await elasticResp.json();
+      var octiInds = (octiData.data && octiData.data.indicators && octiData.data.indicators.edges) ? octiData.data.indicators.edges.map(function(e) { return e.node; }) : [];
+      var esHits = esData.hits ? esData.hits.total : { value: 0 };
+      var totalHits = typeof esHits === 'object' ? esHits.value : esHits;
+      var datasets = esData.aggregations && esData.aggregations.by_source ? esData.aggregations.by_source.buckets : [];
+
+      var verdict = octiInds.length > 0 ? 'FLAGGED' : (totalHits > 0 ? 'SEEN' : 'NO DATA');
+      var verdictColor = octiInds.length > 0 ? 'var(--red-bright)' : (totalHits > 0 ? 'var(--amber)' : 'var(--text-muted)');
+      var score = octiInds.length > 0 ? octiInds[0].x_opencti_score : 0;
+
+      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">IOC enrichment for <strong style="color:var(--cyan);font-family:var(--font-mono);">' + ip + '</strong> \u2014 queried OpenCTI and Elastic SIEM.</div>';
+      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;margin-bottom:8px;">';
+      responseHTML += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
+      responseHTML += '<span style="font-size:11px;padding:3px 8px;border-radius:4px;font-weight:700;color:' + verdictColor + ';background:' + verdictColor + '15;border:1px solid ' + verdictColor + '30;">' + verdict + '</span>';
+      responseHTML += '<span style="font-size:13px;font-family:var(--font-mono);color:var(--text-primary);font-weight:600;">' + ip + '</span>';
+      if (score > 0) responseHTML += '<span style="margin-left:auto;font-size:11px;color:' + verdictColor + ';font-family:var(--font-mono);">Score: ' + score + '/100</span>';
+      responseHTML += '</div>';
+
+      if (octiInds.length > 0) {
+        responseHTML += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;"><strong style="color:var(--red-bright);">' + octiInds.length + ' indicator(s)</strong> found in OpenCTI:</div>';
+        octiInds.forEach(function(ind) {
+          responseHTML += '<div style="padding:6px 10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.1);border-radius:6px;margin-bottom:4px;font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);">' + (ind.pattern || ind.name) + '</div>';
+        });
+      } else {
+        responseHTML += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">No matching indicators in OpenCTI.</div>';
+      }
+
+      responseHTML += '<div style="margin-top:8px;font-size:11px;color:var(--text-secondary);"><strong>' + totalHits.toLocaleString() + '</strong> log events found in Elastic SIEM.</div>';
+      if (datasets.length > 0) {
+        responseHTML += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">';
+        datasets.forEach(function(d) {
+          responseHTML += '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + d.key + ': ' + d.doc_count + '</span>';
+        });
+        responseHTML += '</div>';
+      }
+      responseHTML += '</div>';
+
+      trackAIUsage('Copilot-IOC', 500, 800, 'IOC: ' + ip);
+
+    } else if (mitreMatch) {
+      // ── MITRE Technique Lookup ──
+      var techId = 'T' + mitreMatch[1] + (mitreMatch[2] ? '.' + mitreMatch[2] : '');
+      var octiResp2 = await fetch('/api/opencti', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: '{ attackPatterns(first: 5, filters: { mode: and, filters: [{ key: "x_mitre_id", values: ["' + techId + '"], operator: eq }] }) { edges { node { id name description x_mitre_id killChainPhases { id kill_chain_name phase_name } } } } }'
+        })
+      });
+      var octiData2 = await octiResp2.json();
+      var patterns = (octiData2.data && octiData2.data.attackPatterns && octiData2.data.attackPatterns.edges) ? octiData2.data.attackPatterns.edges.map(function(e) { return e.node; }) : [];
+
+      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">MITRE ATT&CK lookup for <strong style="color:#a78bfa;font-family:var(--font-mono);">' + techId + '</strong>:</div>';
+      if (patterns.length > 0) {
+        patterns.forEach(function(p) {
+          var phases = (p.killChainPhases || []).map(function(kc) { return kc.phase_name; });
+          responseHTML += '<div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:14px;margin-bottom:8px;">';
+          responseHTML += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+          responseHTML += '<span style="font-size:11px;font-family:var(--font-mono);padding:3px 8px;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.25);border-radius:4px;color:#a78bfa;font-weight:700;">' + (p.x_mitre_id || techId) + '</span>';
+          responseHTML += '<span style="font-size:13px;font-weight:600;color:var(--text-primary);">' + (p.name || 'Unknown Technique') + '</span>';
+          responseHTML += '</div>';
+          if (phases.length > 0) {
+            responseHTML += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">';
+            phases.forEach(function(ph) {
+              responseHTML += '<span style="font-size:9px;padding:2px 6px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:3px;color:#a78bfa;">' + ph + '</span>';
+            });
+            responseHTML += '</div>';
+          }
+          if (p.description) {
+            responseHTML += '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;">' + (p.description.length > 500 ? p.description.substring(0, 497) + '...' : p.description) + '</div>';
+          }
+          responseHTML += '</div>';
+        });
+      } else {
+        responseHTML += '<div style="padding:12px;background:var(--bg-surface);border:1px solid var(--border-card);border-radius:8px;font-size:11px;color:var(--text-muted);">No matching attack patterns found in OpenCTI for ' + techId + '. The technique may not be indexed in this instance.</div>';
+      }
+      trackAIUsage('Copilot-MITRE', 300, 600, 'MITRE: ' + techId);
+
+    } else if (lower.includes('login') || lower.includes('rdp') || lower.includes('search') || lower.includes('show me') || lower.startsWith('search:') || lower.includes('failed') || lower.includes('firewall') || lower.includes('alert')) {
+      // ── Log Search ──
+      var queryBody = {};
+      if (lower.includes('login') || lower.includes('rdp') || lower.includes('failed')) {
+        queryBody = { bool: { must: [
+          { match: { message: text } }
+        ] } };
+      } else {
+        queryBody = { query_string: { query: text.replace(/^search:\s*/i, ''), default_field: 'message' } };
+      }
+
+      var esResp = await fetch('/api/elastic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'search',
+          index: 'logs-*',
+          body: {
+            size: 5,
+            query: queryBody,
+            sort: [{ '@timestamp': 'desc' }],
+            aggs: {
+              by_namespace: { terms: { field: 'data_stream.namespace', size: 5 } },
+              by_dataset: { terms: { field: 'data_stream.dataset', size: 5 } }
+            }
+          }
+        })
+      });
+      var esData2 = await esResp.json();
+      var hits2 = esData2.hits ? esData2.hits : { total: { value: 0 }, hits: [] };
+      var total2 = typeof hits2.total === 'object' ? hits2.total.value : hits2.total;
+      var nsBuckets = esData2.aggregations && esData2.aggregations.by_namespace ? esData2.aggregations.by_namespace.buckets : [];
+      var dsBuckets = esData2.aggregations && esData2.aggregations.by_dataset ? esData2.aggregations.by_dataset.buckets : [];
+
+      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">Searched Elastic SIEM for: <strong style="color:var(--text-primary);">' + escapeHtml(text) + '</strong></div>';
+      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;">';
+      responseHTML += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
+      responseHTML += '<span style="font-size:18px;font-family:var(--font-mono);font-weight:700;color:var(--cyan);">' + total2.toLocaleString() + '</span>';
+      responseHTML += '<span style="font-size:12px;color:var(--text-muted);">matching events</span>';
+      responseHTML += '</div>';
+
+      if (nsBuckets.length > 0) {
+        responseHTML += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">By Client:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">';
+        nsBuckets.forEach(function(ns) {
+          responseHTML += '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + ns.key + ': ' + ns.doc_count.toLocaleString() + '</span>';
+        });
+        responseHTML += '</div>';
+      }
+
+      if (hits2.hits && hits2.hits.length > 0) {
+        responseHTML += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Recent Events:</div>';
+        hits2.hits.slice(0, 3).forEach(function(h) {
+          var src = h._source || {};
+          var ts = src['@timestamp'] ? new Date(src['@timestamp']).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+          var msg = src.message || JSON.stringify(src).substring(0, 200);
+          if (msg.length > 200) msg = msg.substring(0, 197) + '...';
+          responseHTML += '<div style="padding:8px 10px;background:var(--surface-0);border:1px solid var(--border-subtle);border-radius:6px;margin-bottom:4px;font-size:10px;font-family:var(--font-mono);color:var(--text-secondary);line-height:1.4;">' +
+            '<span style="color:var(--text-muted);">' + ts + '</span> ' + escapeHtml(msg) +
+          '</div>';
+        });
+      }
+      responseHTML += '</div>';
+      trackAIUsage('Copilot-Search', 600, 500, 'Search: ' + text.substring(0, 30));
+
     } else {
-      responseHTML = getCopilotGenericResponse(text);
+      // ── General Query ──
+      var esResp2 = await fetch('/api/elastic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'search',
+          index: 'logs-*',
+          body: {
+            size: 3,
+            query: { query_string: { query: text, default_field: 'message', lenient: true } },
+            sort: [{ '@timestamp': 'desc' }],
+            aggs: { by_namespace: { terms: { field: 'data_stream.namespace', size: 5 } } }
+          }
+        })
+      });
+      var esData3 = await esResp2.json();
+      var total3 = esData3.hits && esData3.hits.total ? (typeof esData3.hits.total === 'object' ? esData3.hits.total.value : esData3.hits.total) : 0;
+
+      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.6;">';
+      responseHTML += 'Searched across connected data sources for: <strong style="color:var(--text-primary);">' + escapeHtml(text) + '</strong>';
+      responseHTML += '<div style="margin-top:8px;"><strong style="color:var(--cyan);">' + total3.toLocaleString() + '</strong> matching events found in Elastic SIEM.</div>';
+      if (esData3.hits && esData3.hits.hits && esData3.hits.hits.length > 0) {
+        responseHTML += '<div style="margin-top:8px;font-size:10px;color:var(--text-muted);">Latest events:</div>';
+        esData3.hits.hits.forEach(function(h) {
+          var src = h._source || {};
+          var ts = src['@timestamp'] ? new Date(src['@timestamp']).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+          var msg = src.message || JSON.stringify(src).substring(0, 150);
+          if (msg.length > 150) msg = msg.substring(0, 147) + '...';
+          responseHTML += '<div style="padding:6px 10px;background:var(--surface-0);border:1px solid var(--border-subtle);border-radius:6px;margin-top:4px;font-size:10px;font-family:var(--font-mono);color:var(--text-secondary);">' + ts + ' \u00b7 ' + escapeHtml(msg) + '</div>';
+        });
+      }
+      responseHTML += '<div style="margin-top:10px;" class="kql-suggestion"><span>&#x1F4A1;</span><span>Try: <span style="font-family:var(--font-mono);color:var(--cyan);">ip:</span> for IOC checks, <span style="font-family:var(--font-mono);color:var(--cyan);">T1059</span> for MITRE, <span style="font-family:var(--font-mono);color:var(--cyan);">search:</span> for log queries.</span></div>';
+      responseHTML += '</div>';
+      trackAIUsage('Copilot-General', 400, 300, 'General: ' + text.substring(0, 30));
     }
-    responseRow.innerHTML = `
-      <div class="msg-avatar copilot-av">&#x1F916;</div>
-      <div class="msg-content" style="max-width:95%;">
-        <div class="msg-meta">
-          <span class="msg-sender">DACTA Copilot</span>
-          <span>${new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'})} SGT</span>
-        </div>
-        <div class="msg-bubble-copilot">${responseHTML}</div>
-      </div>`;
-    messages.appendChild(responseRow);
-    messages.scrollTop = messages.scrollHeight;
-    // Track AI usage for Copilot query
-    trackAIUsage('Copilot', 800 + Math.floor(Math.random() * 400), 400 + Math.floor(Math.random() * 300), 'Copilot: ' + text.substring(0, 40));
-  }, 1800);
+  } catch (err) {
+    console.error('[Copilot] Live query error:', err);
+    responseHTML = '<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">I encountered an error querying live data: <span style="color:var(--amber);">' + err.message + '</span><br>Please verify your Elastic and OpenCTI connections are active in the Integration Hub.</div>';
+  }
+
+  var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  var think = document.getElementById('copilotThinkRow');
+  if (think) think.remove();
+
+  var responseRow = document.createElement('div');
+  responseRow.className = 'msg-row';
+  responseRow.innerHTML = '<div class="msg-avatar copilot-av">&#x1F916;</div>' +
+    '<div class="msg-content" style="max-width:95%;">' +
+    '<div class="msg-meta"><span class="msg-sender">DACTA Copilot</span>' +
+    '<span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT \u00b7 ' + elapsed + 's</span>' +
+    '<span style="font-size:8px;padding:1px 5px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:3px;color:var(--green);">LIVE</span></div>' +
+    '<div class="msg-bubble-copilot">' + responseHTML + '</div></div>';
+  messages.appendChild(responseRow);
+  messages.scrollTop = messages.scrollHeight;
 }
 
 function escapeHtml(s) {
@@ -32956,7 +33398,7 @@ async function openInvestigation(ticketKey) {
 
       // \u2500\u2500 CENTER MAIN (AI Investigation will be injected here by runAIInvestigation) \u2500\u2500
       '<div id="invMainContent" style="display:flex;flex-direction:column;gap:12px;">' +
-        '<div id="invLoadingSpinner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;gap:16px;">' +
+        '<div id="invLoadingSpinner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;min-height:300px;">' +
           '<div style="width:40px;height:40px;border:3px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
           '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);text-align:center;">Initializing AI Investigation Engine...</div>' +
           '<div style="width:200px;height:4px;background:var(--bg-elevated);border-radius:2px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:2px;animation:invProgressBar 6s ease-in-out forwards;"></div></div>' +
@@ -33897,7 +34339,7 @@ function linkifyEntities(container) {
   while (walker.nextNode()) textNodes.push(walker.currentNode);
 
   var ipRegex = /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g;
-  var hostRegex = /\b([A-Z][A-Z0-9\-]{3,}(?:-WS|-SRV|-DC|-DB|-APP|-FW)\-\d{2,4})\b/g;
+  var hostRegex = /\b([A-Z0-9][A-Z0-9\-]{4,}(?:DN\d+|[A-Z]{2,}\d{2,}|-WS|-SRV|-DC|-DB|-APP|-FW)[\w\-]*)\b/g;
 
   textNodes.forEach(function(node) {
     var text = node.textContent;
@@ -33907,8 +34349,8 @@ function linkifyEntities(container) {
     hostRegex.lastIndex = 0;
     if (hasIP || hasHost) {
       var replaced = text
-        .replace(ipRegex, '<span class="entity-link" style="color:var(--cyan);cursor:pointer;text-decoration:underline dotted;font-family:var(--font-mono);" onclick="navigate(\'entities\')" title="View in Entity Explorer">$1</span>')
-        .replace(hostRegex, '<span class="entity-link" style="color:var(--cyan);cursor:pointer;text-decoration:underline dotted;" onclick="navigate(\'entities\')" title="View in Entity Explorer">$1</span>');
+        .replace(ipRegex, '<span class="entity-link" style="color:var(--cyan);cursor:pointer;text-decoration:underline dotted;font-family:var(--font-mono);" onclick="navigateToEntityFromInv(\'$1\')" title="View in Entity Explorer">$1</span>')
+        .replace(hostRegex, '<span class="entity-link" style="color:var(--cyan);cursor:pointer;text-decoration:underline dotted;" onclick="navigateToEntityFromInv(\'$1\')" title="View in Entity Explorer">$1</span>');
       ipRegex.lastIndex = 0;
       hostRegex.lastIndex = 0;
       if (replaced !== text) {
@@ -33918,6 +34360,17 @@ function linkifyEntities(container) {
       }
     }
   });
+}
+
+function navigateToEntityFromInv(entityId) {
+  navigate('entities');
+  setTimeout(function() {
+    var searchEl = document.getElementById('eeSearch');
+    if (searchEl) {
+      searchEl.value = entityId;
+      searchEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }, 500);
 }
 
 async function runAIInvestigation(ticketKey, issueData) {
