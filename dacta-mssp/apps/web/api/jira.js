@@ -389,8 +389,8 @@ export default async function handler(req, res) {
         countJql(`${B} AND priority = "P4 - Low"`),
         searchJql(`${B} ORDER BY created DESC`,
           ['created','priority','status','customfield_10002'], 200),
-        searchJql(`${B} AND created >= -7d ORDER BY created DESC`,
-          ['created'], 500)
+        searchJql(`${B} AND created >= -14d ORDER BY created DESC`,
+          ['created'], 1000)
       ]);
 
       // Process recent tickets for distributions
@@ -417,7 +417,7 @@ export default async function handler(req, res) {
       // 7-day heatmap (Mon=0 ... Sun=6, each has 24 hourly buckets)
       // Uses dedicated 7-day query (weekBatch) for full coverage
       const heatmap = Array.from({length: 7}, () => new Array(24).fill(0));
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+      const sevenDaysAgo = new Date(now.getTime() - 14 * 86400000);
       const weekIssues = (weekBatch.issues || []);
       weekIssues.forEach(iss => {
         const created = iss.fields?.created || '';
