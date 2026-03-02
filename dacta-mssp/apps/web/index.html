@@ -9054,8 +9054,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 28px;
+  gap: 8px;
+  margin-bottom: 24px;
 }
 .login-shield {
   width: 52px;
@@ -9087,12 +9087,12 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   margin-bottom: 4px;
 }
 .login-tagline {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 0;
   font-family: var(--font-mono);
-  letter-spacing: 0.5px;
+  letter-spacing: 1.5px;
 }
 .login-form {
   display: flex;
@@ -9216,15 +9216,10 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   <div class="login-grid-bg"></div>
   <div class="login-card">
     <div class="login-brand">
-      <svg class="login-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        <path d="M9 12l2 2 4-4" stroke-width="1.8"/>
-      </svg>
-      <div class="login-title">DACTA</div>
-      <div class="login-subtitle">Mission Control Center</div>
+      <img src="" id="loginLogoImg" alt="DACTA SIEMLess" style="height:48px;width:auto;filter:drop-shadow(0 0 12px rgba(0,212,255,0.3));">
+      <div class="login-tagline" style="margin-bottom:0;">For Blue Team, By Blue Team</div>
     </div>
     <div class="login-heading">Sign in to your account</div>
-    <div class="login-tagline">For Blue Team, By Blue Team</div>
     <div class="login-error" id="loginError"></div>
     <form class="login-form" id="loginForm" onsubmit="handleLogin(event)">
       <div class="login-field">
@@ -9243,8 +9238,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
       <button type="submit" class="login-btn" id="loginBtn">Sign In</button>
     </form>
     <div class="login-footer">
-      <div class="login-footer-line">Protected by DACTA MCC &middot; SOC Platform v2.0</div>
-      <div class="login-footer-line">&copy; 2026 DACTA &middot; Authorized Personnel Only</div>
+      <div class="login-footer-line">Protected by DACTA SIEMLess &middot; MSSP Platform v2.0</div>
+      <div class="login-footer-line">&copy; 2026 DACTA GLOBAL &middot; Authorized Personnel Only</div>
     </div>
   </div>
 </div>
@@ -26904,6 +26899,12 @@ function init() {
       if (overlay) {
         overlay.style.display = 'flex';
         overlay.classList.remove('fade-out');
+        // Set login logo from sidebar logo image
+        var loginLogo = document.getElementById('loginLogoImg');
+        var sidebarImg = document.querySelector('.sidebar-logo img');
+        if (loginLogo && sidebarImg && sidebarImg.src) {
+          loginLogo.src = sidebarImg.src;
+        }
       }
     }
 
