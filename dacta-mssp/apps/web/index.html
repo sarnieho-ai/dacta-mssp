@@ -32209,6 +32209,8 @@ function jiraLiveBadge() {
   var style = document.createElement('style');
   style.textContent = [
     '@keyframes jiraSpin { to { transform: rotate(360deg); } }',
+    '@keyframes spin { to { transform: rotate(360deg); } }',
+    '@keyframes invProgressBar { 0% { width:0%; } 30% { width:35%; } 60% { width:65%; } 85% { width:85%; } 100% { width:95%; } }',
     '.jira-spinner { width:18px;height:18px;border:2px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:jiraSpin 0.8s linear infinite; }',
     '@keyframes livePulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }',
     '.jira-loading-row td { background:rgba(0,212,255,0.02) !important; }'
@@ -33398,11 +33400,11 @@ async function openInvestigation(ticketKey) {
 
       // \u2500\u2500 CENTER MAIN (AI Investigation will be injected here by runAIInvestigation) \u2500\u2500
       '<div id="invMainContent" style="display:flex;flex-direction:column;gap:12px;">' +
-        '<div id="invLoadingSpinner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;min-height:300px;">' +
-          '<div style="width:40px;height:40px;border:3px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
-          '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);text-align:center;">Initializing AI Investigation Engine...</div>' +
-          '<div style="width:200px;height:4px;background:var(--bg-elevated);border-radius:2px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:2px;animation:invProgressBar 6s ease-in-out forwards;"></div></div>' +
-          '<div style="font-size:10px;color:var(--text-muted);">Running Elastic SIEM queries &middot; OpenCTI enrichment &middot; MITRE mapping</div>' +
+        '<div id="invLoadingSpinner" class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;min-height:350px;background:var(--bg-card);border:1px solid var(--border-card);border-radius:12px;">' +
+          '<div style="width:48px;height:48px;border:3px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
+          '<div style="font-size:13px;color:var(--cyan);font-family:var(--font-mono);text-align:center;font-weight:500;">Initializing AI Investigation Engine</div>' +
+          '<div style="width:240px;height:5px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:3px;animation:invProgressBar 8s ease-in-out forwards;"></div></div>' +
+          '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Running Elastic SIEM queries &middot; OpenCTI enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
         '</div>' +
       '</div>' +
 
