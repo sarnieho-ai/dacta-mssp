@@ -26665,9 +26665,9 @@ function showAddIntegrationModal() {
 
   function renderAddIntCard(i, btnLabel) {
     return '<div class="add-int-item" style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:8px;cursor:pointer;transition:all 0.2s;" ' +
-      'onmouseover="this.style.borderColor='' + i.color + '40';this.style.transform='translateY(-1px)'" ' +
-      'onmouseout="this.style.borderColor='var(--border-subtle)';this.style.transform='none'" ' +
-      'onclick="showToast('Integration request submitted for ' + i.name + '');document.getElementById('addIntegrationOverlay').remove();">' +
+      'onmouseover="this.style.borderColor=\x27' + i.color + '40\x27;this.style.transform=\x27translateY(-1px)\x27" ' +
+      'onmouseout="this.style.borderColor=\x27var(--border-subtle)\x27;this.style.transform=\x27none\x27" ' +
+      'onclick="showToast(\x27Integration request submitted for ' + i.name + '\x27);document.getElementById(\x27addIntegrationOverlay\x27).remove();">' +
       '<div style="width:36px;height:36px;border-radius:8px;background:' + i.color + '15;display:flex;align-items:center;justify-content:center;font-size:20px;">' + i.icon + '</div>' +
       '<div style="flex:1;">' +
         '<div style="font-size:12px;font-weight:600;color:var(--text-primary);">' + i.name + '</div>' +
@@ -26680,7 +26680,7 @@ function showAddIntegrationModal() {
   overlay.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:12px;width:620px;max-height:82vh;overflow:hidden;display:flex;flex-direction:column;">' +
     '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">' +
       '<div><div style="font-size:14px;font-weight:600;color:var(--text-primary);">Add Integration</div><div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Enable or connect a platform to the DACTA SIEMLess stack</div></div>' +
-      '<button onclick="document.getElementById('addIntegrationOverlay').remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">&times;</button>' +
+      '<button onclick="document.getElementById(\x27addIntegrationOverlay\x27).remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">&times;</button>' +
     '</div>' +
     '<div style="padding:16px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">' + cardsHTML + '</div>' +
   '</div>';
