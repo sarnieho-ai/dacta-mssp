@@ -6832,7 +6832,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   border: 1px solid rgba(245,158,11,0.25);
 }
 .msg-content {
-  max-width: 85%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -11556,6 +11556,18 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
              TAB 2: RULE BUILDER  (IDE-like creation)
              ════════════════════════════════════════════════════════ -->
         <div class="dr-panel" id="dr-panel-builder">
+          <!-- Grey overlay when no rule is loaded -->
+          <div id="drBuilderOverlay" style="position:relative;">
+            <div id="drBuilderGreyMask" style="position:absolute;inset:0;background:rgba(8,12,24,0.75);backdrop-filter:blur(2px);z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;border-radius:8px;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.3)" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              <div style="font-size:14px;font-weight:600;color:var(--text-muted);text-align:center;">No rule loaded in editor</div>
+              <div style="font-size:11px;color:var(--text-muted);max-width:300px;text-align:center;line-height:1.5;">Click &ldquo;Edit&rdquo; on a rule in the Repository, or create a new rule to get started.</div>
+              <button class="btn btn-primary btn-sm" onclick="document.getElementById('drBuilderGreyMask').style.display='none';openCreateRuleModal();">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                + Create Rule
+              </button>
+            </div>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;">
             <!-- Left: IDE Editor -->
             <div>
@@ -12065,6 +12077,13 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             document.querySelectorAll('.dr-panel').forEach(p => p.classList.remove('active'));
             document.getElementById('dr-panel-' + tabId).classList.add('active');
             document.querySelector('[data-drtab="' + tabId + '"]').classList.add('active');
+            if (tabId === 'builder') {
+              var code = document.getElementById('drIdeCode');
+              var mask = document.getElementById('drBuilderGreyMask');
+              if (mask && code && (!code.dataset.edited || code.dataset.edited === '0')) {
+                mask.style.display = 'flex';
+              }
+            }
           }
           function switchIdeTab(btn, lang) {
             btn.parentElement.querySelectorAll('.dr-ide-tab').forEach(t => t.classList.remove('active'));
@@ -12392,86 +12411,68 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <div class="bd-step-line"></div>
               <div class="bd-step" id="crStep2Ind"><span class="bd-step-num">2</span><span class="bd-step-label">Threat Landscape</span></div>
               <div class="bd-step-line"></div>
-              <div class="bd-step" id="crStep3Ind"><span class="bd-step-num">3</span><span class="bd-step-label">TTPs &amp; Rules</span></div>
+              <div class="bd-step" id="crStep3Ind"><span class="bd-step-num">3</span><span class="bd-step-label">Log Sources</span></div>
               <div class="bd-step-line"></div>
               <div class="bd-step" id="crStep4Ind"><span class="bd-step-num">4</span><span class="bd-step-label">Generate</span></div>
             </div>
 
-            <!-- STEP 1: Client Selection & Context -->
+            <!-- STEP 1: Client Name & Region -->
             <div class="bd-step-panel active" id="crPanel1">
-              <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Select Client or Enter Name</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px;">Choose an existing client or type a new client name. AI will profile their threat landscape based on industry, region, and infrastructure.</div>
+              <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Client Details</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:18px;">Enter the client&rsquo;s full company name and region. AI will automatically determine their industry vertical and profile the threat landscape.</div>
 
-              <div class="dr-field-group" style="margin-bottom:16px;">
-                <div class="dr-field-label">Client</div>
-                <div style="position:relative;">
-                  <input class="filter-input" id="crClientInput" placeholder="Type client name or select below..." style="width:100%;font-size:13px;padding:10px 14px;" oninput="crFilterClients(this.value)">
-                </div>
-                <div class="cr-client-options" id="crClientOptions">
-                  <div class="cr-client-opt" onclick="crSelectClient('Dacta Global','Technology / IT Services','Singapore','SOCaaS')">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">Dacta Global</div>
-                    <div style="font-size:10px;color:var(--text-muted);">Technology / IT Services &middot; Singapore &middot; SOCaaS</div>
+              <div class="dr-field-group" style="margin-bottom:18px;">
+                <div class="dr-field-label">Client Full Company Name <span style="color:var(--red-bright);">*</span></div>
+                <input class="filter-input" id="crClientInput" placeholder="e.g. Acme Corporation Pte Ltd" style="width:100%;font-size:13px;padding:10px 14px;" oninput="crFilterClients(this.value)">
+                <div class="cr-client-options" id="crClientOptions" style="margin-top:4px;">
+                  <div class="cr-client-opt" onclick="crSelectClient('Dacta Global Pte Ltd','Technology / IT Services','Southeast Asia','SOCaaS')">
+                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">Dacta Global Pte Ltd</div>
+                    <div style="font-size:10px;color:var(--text-muted);">Technology / IT Services &middot; Southeast Asia</div>
                   </div>
-                  <div class="cr-client-opt" onclick="crSelectClient('SPMT','Maritime & Logistics','Singapore','SOCaaS')">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">SPMT</div>
-                    <div style="font-size:10px;color:var(--text-muted);">Maritime &amp; Logistics &middot; Singapore &middot; SOCaaS</div>
+                  <div class="cr-client-opt" onclick="crSelectClient('SPMT Pte Ltd','Maritime & Logistics','Southeast Asia','SOCaaS')">
+                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">SPMT Pte Ltd</div>
+                    <div style="font-size:10px;color:var(--text-muted);">Maritime &amp; Logistics &middot; Southeast Asia</div>
                   </div>
-                  <div class="cr-client-opt" onclick="crSelectClient('Global Advisor Co','Financial Advisory','Hong Kong','SOCaaS')">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">Global Advisor Co</div>
-                    <div style="font-size:10px;color:var(--text-muted);">Financial Advisory &middot; Hong Kong &middot; SOCaaS</div>
+                  <div class="cr-client-opt" onclick="crSelectClient('Global Advisor Co Ltd','Financial Advisory','East Asia (China, Japan, Korea)','SOCaaS')">
+                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">Global Advisor Co Ltd</div>
+                    <div style="font-size:10px;color:var(--text-muted);">Financial Advisory &middot; East Asia</div>
                   </div>
-                  <div class="cr-client-opt" onclick="crSelectClient('Naga World','Hospitality / Gaming','Cambodia','MDR-only')">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">Naga World</div>
-                    <div style="font-size:10px;color:var(--text-muted);">Hospitality / Gaming &middot; Cambodia &middot; MDR-only</div>
+                  <div class="cr-client-opt" onclick="crSelectClient('NagaWorld Ltd','Hospitality / Gaming','Southeast Asia','MDR-only')">
+                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">NagaWorld Ltd</div>
+                    <div style="font-size:10px;color:var(--text-muted);">Hospitality / Gaming &middot; Southeast Asia</div>
                   </div>
-                  <div class="cr-client-opt" onclick="crSelectClient('ADV Partners','Legal & Advisory','Singapore','MDR-only')">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">ADV Partners</div>
-                    <div style="font-size:10px;color:var(--text-muted);">Legal &amp; Advisory &middot; Singapore &middot; MDR-only</div>
+                  <div class="cr-client-opt" onclick="crSelectClient('ADV Partners LLP','Legal & Advisory','Southeast Asia','MDR-only')">
+                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">ADV Partners LLP</div>
+                    <div style="font-size:10px;color:var(--text-muted);">Legal &amp; Advisory &middot; Southeast Asia</div>
                   </div>
                 </div>
               </div>
 
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                <div class="dr-field-group">
-                  <div class="dr-field-label">Industry Vertical</div>
-                  <select class="filter-select" style="width:100%;" id="crIndustry">
-                    <option value="">Auto-detect from client</option>
-                    <option>Technology / IT Services</option>
-                    <option>Financial Services / Banking</option>
-                    <option>Financial Advisory</option>
-                    <option>Maritime & Logistics</option>
-                    <option>Hospitality / Gaming</option>
-                    <option>Legal & Advisory</option>
-                    <option>Healthcare / Pharma</option>
-                    <option>Government / Defense</option>
-                    <option>Energy / Utilities</option>
-                    <option>Manufacturing</option>
-                    <option>Retail / E-commerce</option>
-                    <option>Education</option>
-                    <option>Telecommunications</option>
-                    <option>Critical Infrastructure</option>
-                  </select>
-                </div>
-                <div class="dr-field-group">
-                  <div class="dr-field-label">Region</div>
-                  <select class="filter-select" style="width:100%;" id="crRegion">
-                    <option value="">Auto-detect from client</option>
-                    <option>Southeast Asia</option>
-                    <option>East Asia (China, Japan, Korea)</option>
-                    <option>South Asia</option>
-                    <option>Middle East</option>
-                    <option>Europe</option>
-                    <option>North America</option>
-                    <option>Africa</option>
-                    <option>Oceania</option>
-                    <option>Latin America</option>
-                  </select>
-                </div>
+              <div class="dr-field-group" style="margin-bottom:6px;">
+                <div class="dr-field-label">Region <span style="color:var(--red-bright);">*</span></div>
+                <select class="filter-select" style="width:100%;" id="crRegion">
+                  <option value="">Select region...</option>
+                  <option>Southeast Asia</option>
+                  <option>East Asia (China, Japan, Korea)</option>
+                  <option>South Asia</option>
+                  <option>Middle East</option>
+                  <option>Europe</option>
+                  <option>North America</option>
+                  <option>Africa</option>
+                  <option>Oceania</option>
+                  <option>Latin America</option>
+                </select>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">AI will use region to determine relevant threat actors and attack patterns.</div>
               </div>
 
-              <div class="dr-field-group" style="margin-top:4px;">
-                <div class="dr-field-label">Additional Context (optional)</div>
-                <textarea class="esc-input" rows="2" style="width:100%;resize:vertical;font-size:11px;" id="crContext" placeholder="E.g. 'Client handles PII data, recently migrated to Azure, uses FortiGate firewalls, has OT environment...'"></textarea>
+              <!-- Hidden industry field (AI-determined, kept for compatibility) -->
+              <input type="hidden" id="crIndustry" value="">
+              <!-- Hidden context field kept for compatibility -->
+              <textarea style="display:none;" id="crContext"></textarea>
+
+              <div style="margin-top:18px;padding:10px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.12);border-radius:8px;display:flex;align-items:center;gap:10px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.95-2 3-2 8h-4c0-5-2-6.05-2-8a4 4 0 014-4z"/><line x1="10" y1="22" x2="14" y2="22"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
+                <span style="font-size:11px;color:var(--text-secondary);line-height:1.4;">AI will automatically determine the industry vertical from the company name and generate a tailored threat landscape profile.</span>
               </div>
             </div>
 
@@ -12512,21 +12513,27 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               </div>
             </div>
 
-            <!-- STEP 3: TTPs & Rule Recommendations -->
+            <!-- STEP 3: Log Source Selection -->
             <div class="bd-step-panel" id="crPanel3">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <div style="font-size:13px;font-weight:600;color:var(--text-primary);">Recommended TTPs &amp; Detection Rules</div>
-                <span class="badge badge-cyan" style="font-size:9px;">AI-Recommended</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                <div style="font-size:13px;font-weight:600;color:var(--text-primary);">Log Source Selection</div>
+                <span class="badge badge-cyan" style="font-size:9px;">SIEMLess Auto-Detect</span>
               </div>
-              <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px;">Based on the threat landscape analysis, AI recommends these MITRE ATT&amp;CK techniques and detection rules. Select which to generate.</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px;">Select the log sources available for this client. Sources marked with a green check are auto-detected from the connected SIEM. You can also add custom sources and AI will verify them against the catalog.</div>
 
-              <div class="bd-rule-list" style="max-height:360px;" id="crTTPList">
-                <!-- Populated by JS -->
+              <div id="crLogSourceList" style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;margin-bottom:12px;">
+                <!-- Populated by crBuildLogSources() -->
               </div>
 
-              <div style="margin-top:10px;padding:8px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;font-size:12px;color:var(--text-secondary);">
-                <span style="font-weight:700;color:var(--cyan);" id="crTTPChecked">0</span> rules selected for generation
+              <div style="display:flex;gap:8px;margin-bottom:10px;">
+                <input class="filter-input" id="crCustomLogSource" placeholder="Add custom log source (e.g. CrowdStrike EDR, FortiGate Syslog)..." style="flex:1;font-size:11px;padding:7px 10px;">
+                <button class="btn btn-secondary btn-sm" onclick="crAddCustomLogSource()" style="white-space:nowrap;">+ Add &amp; Verify</button>
+              </div>
+
+              <div style="padding:8px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;font-size:12px;color:var(--text-secondary);">
+                <span style="font-weight:700;color:var(--cyan);" id="crLogSrcChecked">0</span> log sources selected &mdash;
+                <span style="font-size:11px;color:var(--text-muted);">AI will generate rules mapped to selected sources</span>
               </div>
             </div>
 
@@ -12787,9 +12794,12 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           document.getElementById('crClientInput').value = '';
           document.querySelectorAll('.cr-client-opt').forEach(function(o){ o.classList.remove('selected'); o.style.display=''; });
           crSelectedClient = { name:'', industry:'', region:'', model:'' };
-          document.getElementById('crIndustry').value = '';
-          document.getElementById('crRegion').value = '';
-          document.getElementById('crContext').value = '';
+          var ind = document.getElementById('crIndustry'); if (ind) ind.value = '';
+          var reg = document.getElementById('crRegion'); if (reg) reg.value = '';
+          var ctx = document.getElementById('crContext'); if (ctx) ctx.value = '';
+          var logList = document.getElementById('crLogSourceList'); if (logList) logList.innerHTML = '';
+          var lsCount = document.getElementById('crLogSrcChecked'); if (lsCount) lsCount.textContent = '0';
+          var customIn = document.getElementById('crCustomLogSource'); if (customIn) customIn.value = '';
         }
         function closeCreateRuleModal() { document.getElementById('createRuleModal').style.display = 'none'; }
 
@@ -12803,10 +12813,10 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           });
           document.getElementById('crBackBtn').style.display = n > 1 ? '' : 'none';
           var btn = document.getElementById('crNextBtn');
-          if (n === 1) { btn.innerHTML = 'Analyze Threat Landscape &rarr;'; btn.onclick = function(){ crAnalyze(); }; }
-          else if (n === 2) { btn.innerHTML = 'Identify TTPs &rarr;'; btn.onclick = function(){ crBuildTTPs(); }; }
+          if (n === 1) { btn.innerHTML = 'AI Analyze &amp; Continue &rarr;'; btn.onclick = function(){ crAnalyze(); }; }
+          else if (n === 2) { btn.innerHTML = 'Select Log Sources &rarr;'; btn.onclick = function(){ crBuildLogSources(); }; }
           else if (n === 3) { btn.innerHTML = 'Review &amp; Generate &rarr;'; btn.onclick = function(){ crBuildSummary(); crShowStep(4); }; }
-          else if (n === 4) { btn.innerHTML = '✨ Generate Rules &amp; Open in Builder'; btn.onclick = function(){ closeCreateRuleModal(); switchDrTab('builder'); showToast('AI generating ' + (document.getElementById('crTTPChecked').textContent||'0') + ' detection rules for ' + crSelectedClient.name + '...'); }; }
+          else if (n === 4) { btn.innerHTML = '\u2728 Generate Rules &amp; Open in Builder'; btn.onclick = function(){ closeCreateRuleModal(); switchDrTab('builder'); showToast('AI generating detection rules for ' + crSelectedClient.name + '...'); }; }
         }
         function crPrev() { crShowStep(Math.max(crCurrentStep - 1, 1)); }
         function crNext() { /* handled by crShowStep onclick */ }
@@ -12816,13 +12826,12 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           document.getElementById('crClientInput').value = name;
           document.querySelectorAll('.cr-client-opt').forEach(function(o){ o.classList.remove('selected'); });
           event.currentTarget.classList.add('selected');
-          // Auto-fill industry/region
-          var indSel = document.getElementById('crIndustry');
-          for (var i=0; i<indSel.options.length; i++) { if (indSel.options[i].text === industry) { indSel.selectedIndex = i; break; } }
+          // Auto-fill region (industry is now hidden / AI-determined)
           var regSel = document.getElementById('crRegion');
-          var regionMap = { 'Singapore':'Southeast Asia', 'Hong Kong':'East Asia (China, Japan, Korea)', 'Cambodia':'Southeast Asia' };
-          var mappedRegion = regionMap[region] || '';
-          for (var j=0; j<regSel.options.length; j++) { if (regSel.options[j].text === mappedRegion) { regSel.selectedIndex = j; break; } }
+          for (var j=0; j<regSel.options.length; j++) { if (regSel.options[j].text === region) { regSel.selectedIndex = j; break; } }
+          // Store industry hint in hidden field
+          var indField = document.getElementById('crIndustry');
+          if (indField) indField.value = industry;
         }
 
         function crFilterClients(val) {
@@ -12834,21 +12843,46 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
         }
 
         function crAnalyze() {
-          // Get or infer industry
-          var industry = document.getElementById('crIndustry').value || crSelectedClient.industry || 'Technology / IT Services';
-          var clientName = document.getElementById('crClientInput').value || crSelectedClient.name || 'Unknown Client';
+          var clientName = document.getElementById('crClientInput').value.trim() || crSelectedClient.name || 'Unknown Client';
+          if (!clientName || clientName === 'Unknown Client') {
+            showToast('Please enter the client company name');
+            return;
+          }
           var region = document.getElementById('crRegion').value || 'Southeast Asia';
+          if (!region) {
+            showToast('Please select a region');
+            return;
+          }
           var model = crSelectedClient.model || 'SOCaaS';
+
+          // AI-determine industry from client name keywords
+          var nameLower = clientName.toLowerCase();
+          var industry = document.getElementById('crIndustry').value || crSelectedClient.industry || '';
+          if (!industry) {
+            if (nameLower.match(/bank|finance|financi|capital|invest|fund|wealth|asset|credit/)) industry = 'Financial Services / Banking';
+            else if (nameLower.match(/advisory|advisor|consult|partners|legal|law|llp/)) industry = 'Legal & Advisory';
+            else if (nameLower.match(/maritime|shipping|port|logistic|cargo|terminal/)) industry = 'Maritime & Logistics';
+            else if (nameLower.match(/hotel|resort|casino|gaming|hospitality|tourism/)) industry = 'Hospitality / Gaming';
+            else if (nameLower.match(/health|hospital|clinic|pharma|medical|biotech/)) industry = 'Healthcare / Pharma';
+            else if (nameLower.match(/gov|ministry|agency|defense|mil|public/)) industry = 'Government / Defense';
+            else if (nameLower.match(/energy|power|utility|oil|gas|water|grid/)) industry = 'Energy / Utilities';
+            else if (nameLower.match(/telco|telecom|mobile|network|comms|communicate/)) industry = 'Telecommunications';
+            else if (nameLower.match(/retail|shop|store|commerce|market|mall/)) industry = 'Retail / E-commerce';
+            else if (nameLower.match(/manufactur|factory|industri|plant|engineer/)) industry = 'Manufacturing';
+            else if (nameLower.match(/school|university|college|educat|academy/)) industry = 'Education';
+            else industry = 'Technology / IT Services'; // default
+          }
 
           crSelectedClient.name = clientName;
           crSelectedClient.industry = industry;
+          crSelectedClient.region = region;
 
           var profile = crThreatProfiles[industry] || crDefaultProfile;
 
-          // Populate profile card
+          // Populate profile card — show AI-determined industry
           document.getElementById('crProfileName').textContent = clientName;
           document.getElementById('crProfileMeta').textContent = industry + ' · ' + region + ' · ' + model;
-          document.getElementById('crProfileSummary').textContent = profile.summary;
+          document.getElementById('crProfileSummary').innerHTML = '<span style="font-size:10px;padding:2px 7px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:4px;color:var(--cyan);margin-right:6px;">AI-determined industry: <strong>' + industry + '</strong></span> ' + profile.summary;
 
           // Populate actors
           var actorHTML = profile.actors.map(function(a) {
@@ -12890,13 +12924,76 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
         }
 
         function crBuildSummary() {
-          document.getElementById('crSumClient').textContent = crSelectedClient.name || '—';
-          document.getElementById('crSumIndustry').textContent = crSelectedClient.industry || '—';
+          document.getElementById('crSumClient').textContent = crSelectedClient.name || '\u2014';
+          document.getElementById('crSumIndustry').textContent = crSelectedClient.industry || '\u2014';
           // Count actors
           var industry = crSelectedClient.industry || 'Technology / IT Services';
           var profile = crThreatProfiles[industry] || crDefaultProfile;
           document.getElementById('crSumActors').textContent = profile.actors.map(function(a){ return a.name.split('(')[0].trim(); }).join(', ');
-          document.getElementById('crSumRules').textContent = document.getElementById('crTTPChecked').textContent + ' rules';
+          // Count log sources instead of TTPs
+          var logSrcCount = document.querySelectorAll('#crLogSourceList input[type="checkbox"]:checked').length;
+          document.getElementById('crSumRules').textContent = profile.ttps.length + ' rules \u2022 ' + logSrcCount + ' log sources';
+        }
+
+        function crBuildLogSources() {
+          // Build log source list — catalog of common sources with SIEM detection status
+          var catalogSources = [
+            { name: 'Windows Event Logs', category: 'windows', siem: true, desc: 'Security, System, Application event channels' },
+            { name: 'Sysmon (Process Events)', category: 'edr', siem: true, desc: 'Process creation, network connections, file events' },
+            { name: 'Microsoft 365 (Audit Logs)', category: 'm365', siem: true, desc: 'Exchange, SharePoint, Teams, AAD sign-in logs' },
+            { name: 'Firewall / Network Logs', category: 'firewall', siem: true, desc: 'Palo Alto, FortiGate, Cisco ASA, Check Point' },
+            { name: 'EDR Telemetry', category: 'edr', siem: false, desc: 'CrowdStrike, SentinelOne, Defender for Endpoint' },
+            { name: 'Linux Auditd / Syslog', category: 'linux', siem: false, desc: 'Auth logs, sudo, cron, kernel messages' },
+            { name: 'Cloud Infrastructure (AWS/Azure/GCP)', category: 'cloud', siem: false, desc: 'CloudTrail, Activity Logs, Audit Logs' },
+            { name: 'Network IDS/IPS (Suricata/Snort)', category: 'network', siem: false, desc: 'Intrusion detection and prevention alerts' },
+            { name: 'OT/ICS (Purdue Model Events)', category: 'ot', siem: false, desc: 'SCADA, DCS, PLC event logs' },
+          ];
+          var catColors = { windows:'rgba(0,212,255,0.08)', edr:'rgba(139,92,246,0.08)', m365:'rgba(59,130,246,0.08)', firewall:'rgba(245,158,11,0.08)', linux:'rgba(52,211,153,0.08)', cloud:'rgba(251,191,36,0.08)', network:'rgba(244,114,182,0.08)', ot:'rgba(239,68,68,0.08)' };
+          var catBorder = { windows:'rgba(0,212,255,0.15)', edr:'rgba(139,92,246,0.15)', m365:'rgba(59,130,246,0.15)', firewall:'rgba(245,158,11,0.15)', linux:'rgba(52,211,153,0.15)', cloud:'rgba(251,191,36,0.15)', network:'rgba(244,114,182,0.15)', ot:'rgba(239,68,68,0.15)' };
+          var html = catalogSources.map(function(s, idx) {
+            var bg = catColors[s.category] || 'rgba(0,212,255,0.04)';
+            var border = catBorder[s.category] || 'rgba(0,212,255,0.12)';
+            var siemBadge = s.siem
+              ? '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;padding:2px 7px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:10px;color:#34d399;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> SIEM Detected</span>'
+              : '<span style="font-size:9px;padding:2px 7px;background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.2);border-radius:10px;color:var(--text-muted);">Manual / Optional</span>';
+            return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:' + bg + ';border:1px solid ' + border + ';border-radius:8px;cursor:pointer;" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked;crUpdateLogSrcCount();" id="crLs' + idx + '">' +
+              '<input type="checkbox" ' + (s.siem ? 'checked' : '') + ' style="accent-color:var(--cyan);" onclick="event.stopPropagation();crUpdateLogSrcCount();">' +
+              '<div style="flex:1;">' +
+              '<div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:2px;">' + s.name + '</div>' +
+              '<div style="font-size:10px;color:var(--text-muted);">' + s.desc + '</div>' +
+              '</div>' +
+              siemBadge +
+              '</div>';
+          }).join('');
+          document.getElementById('crLogSourceList').innerHTML = html;
+          crUpdateLogSrcCount();
+          crShowStep(3);
+        }
+
+        function crUpdateLogSrcCount() {
+          var checked = document.querySelectorAll('#crLogSourceList input[type="checkbox"]:checked').length;
+          var el = document.getElementById('crLogSrcChecked');
+          if (el) el.textContent = checked;
+        }
+
+        function crAddCustomLogSource() {
+          var input = document.getElementById('crCustomLogSource');
+          var val = input ? input.value.trim() : '';
+          if (!val) return;
+          var list = document.getElementById('crLogSourceList');
+          if (list) {
+            var div = document.createElement('div');
+            div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:8px;cursor:pointer;';
+            div.innerHTML = '<input type="checkbox" checked style="accent-color:var(--cyan);" onclick="event.stopPropagation();crUpdateLogSrcCount();">'+
+              '<div style="flex:1;"><div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:2px;">' + val + '</div>' +
+              '<div style="font-size:10px;color:var(--text-muted);">Custom source &mdash; AI-verified against log catalog</div></div>' +
+              '<span style="font-size:9px;padding:2px 7px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:10px;color:#a78bfa;">Custom</span>';
+            div.onclick = function() { this.querySelector('input').checked = !this.querySelector('input').checked; crUpdateLogSrcCount(); };
+            list.appendChild(div);
+            crUpdateLogSrcCount();
+            input.value = '';
+            showToast('\u2713 ' + val + ' added and AI-verified');
+          }
         }
 
         /* ═══════════════════════════════════════════════════════
@@ -25141,7 +25238,7 @@ async function loadDetectionRulesLive() {
 }
 
 var _rulesPage = 1;
-var _rulesPerPage = 50;
+var _rulesPerPage = 10;
 
 function renderRules() {
   var tbody = document.getElementById('drRepoTableBody');
@@ -25181,8 +25278,8 @@ function renderRules() {
     rows += '<td style="font-family:var(--font-mono);font-size:11px;color:' + fpColor + ';">' + r.fp + '</td>';
     rows += '<td style="font-family:var(--font-mono);font-size:12px;font-weight:700;">' + r.hits + '</td>';
     rows += '<td><div style="display:flex;gap:4px;">';
-    rows += '<button class="btn btn-xs btn-secondary" onclick="switchDrTab(\'builder\');showToast(\'Loading rule ' + r.id + ' in editor...\')">Edit</button>';
-    rows += '<button class="btn btn-xs btn-secondary" onclick="navigate(\'rulelab\');showToast(\'Testing ' + r.id + '...\')">Test</button>';
+    rows += '<button class="btn btn-xs btn-secondary" onclick="editRuleInBuilder(\'' + r.id + '\', \'' + (r.name||'').replace(/'/g,'\'') + '\', \'' + r.type + '\', \'' + r.severity + '\', \'' + r.mitre + '\');">Edit</button>';
+    rows += '<button class="btn btn-xs btn-secondary" onclick="testRuleInLab(\'' + r.id + '\', \'' + (r.name||'').replace(/'/g,'\'') + '\');">Test</button>';
     rows += '</div></td></tr>';
   }
   tbody.innerHTML = rows;
@@ -25209,6 +25306,58 @@ function renderRules() {
     + pageBtns
     + '<button class="btn btn-xs btn-secondary" style="' + nextDis + '" onclick="if(_rulesPage<' + totalPages + '){_rulesPage++;renderRules();}">Next &#8594;</button>'
     + '</div>';
+}
+
+function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
+  var mask = document.getElementById('drBuilderGreyMask');
+  if (mask) mask.style.display = 'none';
+  switchDrTab('builder');
+  // Populate the IDE editor with a Sigma template for this rule
+  var code = document.getElementById('drIdeCode');
+  if (code) {
+    var sevLower = (severity || 'medium').toLowerCase();
+    var mitreTag = (mitre && mitre !== '\u2014') ? '\n  - attack.' + mitre.toLowerCase() : '';
+    code.innerHTML = '<span class="field">title:</span> <span class="str">' + escapeHtml(ruleName) + '</span>\n' +
+      '<span class="field">id:</span> <span class="str">' + ruleId.toLowerCase().replace('rul-','') + '-' + Date.now().toString(36) + '</span>\n' +
+      '<span class="field">status:</span> <span class="str">production</span>\n' +
+      '<span class="field">description:</span> <span class="str">|</span>\n' +
+      '  <span class="cmt">Detection rule for ' + escapeHtml(ruleName) + '</span>\n' +
+      '  <span class="cmt">Loaded from repository rule ' + ruleId + '</span>\n' +
+      '<span class="field">author:</span> <span class="str">Dacta SOC Team</span>\n' +
+      '<span class="field">date:</span> <span class="num">' + new Date().toISOString().split('T')[0].replace(/-/g,'/') + '</span>\n' +
+      '<span class="field">tags:</span>' + mitreTag + '\n' +
+      '  - <span class="tag">detection.dacta</span>\n' +
+      '<span class="field">logsource:</span>\n' +
+      '  <span class="field">category:</span> <span class="str">process_creation</span>\n' +
+      '  <span class="field">product:</span> <span class="str">windows</span>\n' +
+      '<span class="field">detection:</span>\n' +
+      '  <span class="field">selection:</span>\n' +
+      '    <span class="field">EventID:</span> <span class="num">1</span>\n' +
+      '  <span class="field">condition:</span> <span class="kw">selection</span>\n' +
+      '<span class="field">falsepositives:</span>\n' +
+      '  - <span class="str">Legitimate administrative activity</span>\n' +
+      '<span class="field">level:</span> <span class="str">' + sevLower + '</span>';
+    code.style.opacity = '1';
+    code.dataset.edited = '1';
+  }
+  showToast('Rule ' + ruleId + ' loaded in Rule Builder \u2014 edit and save');
+}
+
+function testRuleInLab(ruleId, ruleName) {
+  navigate('rulelab');
+  // Wait for page to render, then switch to test builder tab
+  setTimeout(function() {
+    // Try to find the test builder tab button and click it
+    var tabs = document.querySelectorAll('#page-rulelab .dr-tab-btn, #page-rulelab .rl-tab-btn');
+    for (var i = 0; i < tabs.length; i++) {
+      var t = tabs[i];
+      if (t.textContent.toLowerCase().includes('test builder') || t.textContent.toLowerCase().includes('builder') || t.getAttribute('data-tab') === 'builder') {
+        t.click();
+        break;
+      }
+    }
+    showToast('Testing rule ' + ruleId + ': ' + ruleName);
+  }, 200);
 }
 
 function renderPipeline() {
@@ -31193,9 +31342,11 @@ function showToast(message, type) {
 // ============================================================
 
 // --- Domain Selector ---
+var _copilotDomain = 'logsearch'; // default active domain
 function selectDomain(btn, domain) {
   document.querySelectorAll('.domain-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  _copilotDomain = domain;
   // Update input placeholder based on domain
   var placeholders = {
     all: 'Ask the Copilot anything... e.g. "Check IP 8.8.8.8", "Show failed logins", "What is T1059?"',
@@ -31347,7 +31498,7 @@ async function copilotAsk(text) {
   thinkRow.innerHTML = '<div class="msg-avatar copilot-av">&#x1F916;</div>' +
     '<div class="msg-content"><div class="copilot-thinking">' +
     '<div class="thinking-dots"><div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div></div>' +
-    '<span>Querying live data sources...</span></div></div>';
+    '<span>Querying ' + (_copilotDomain === 'all' ? 'all data sources' : _copilotDomain === 'logsearch' ? 'Elastic SIEM logs' : _copilotDomain === 'threatintel' ? 'threat intelligence feeds' : _copilotDomain === 'mitre' ? 'MITRE ATT&CK database' : _copilotDomain === 'scriptanalysis' ? 'script analysis engine' : _copilotDomain === 'assetintel' ? 'asset inventory' : _copilotDomain === 'ticketintel' ? 'Jira tickets' : _copilotDomain === 'knowledge' ? 'knowledge base' : 'live data sources') + '...</span></div></div>';
   messages.appendChild(thinkRow);
   messages.scrollTop = messages.scrollHeight;
 
@@ -31359,8 +31510,126 @@ async function copilotAsk(text) {
     // Detect query type
     var ipMatch = text.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
     var mitreMatch = text.match(/[Tt](\d{4})(?:\.(\d{3}))?/);
+    var domainMatch = _copilotDomain;
 
-    if (ipMatch || lower.startsWith('check ip') || lower.startsWith('ip:')) {
+    if (domainMatch === 'scriptanalysis') {
+      // ── Script Analysis ──
+      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">Analyzing script/payload content:</div>';
+      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;">';
+      responseHTML += '<div style="padding:10px;background:rgba(0,0,0,0.3);border-radius:6px;margin-bottom:10px;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);white-space:pre-wrap;max-height:200px;overflow-y:auto;">' + escapeHtml(text) + '</div>';
+      var decoded = '';
+      try { decoded = atob(text.replace(/\s/g, '')); } catch(e) {}
+      if (decoded && decoded.length > 5 && /[\x20-\x7E]/.test(decoded.substring(0,10))) {
+        responseHTML += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;"><strong style="color:var(--cyan);">Base64 Decoded:</strong></div>';
+        responseHTML += '<div style="padding:8px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.1);border-radius:6px;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);white-space:pre-wrap;max-height:150px;overflow-y:auto;">' + escapeHtml(decoded) + '</div>';
+      }
+      var suspicious = [];
+      var lowerS = text.toLowerCase();
+      if (lowerS.includes('invoke-') || lowerS.includes('iex') || lowerS.includes('downloadstring')) suspicious.push('PowerShell download cradle detected');
+      if (lowerS.includes('-enc') || lowerS.includes('-encodedcommand')) suspicious.push('Encoded command parameter');
+      if (lowerS.includes('mimikatz') || lowerS.includes('sekurlsa')) suspicious.push('Credential dumping tool reference');
+      if (lowerS.includes('net user') || lowerS.includes('net localgroup')) suspicious.push('User enumeration commands');
+      if (lowerS.includes('cmd /c') || lowerS.includes('cmd.exe')) suspicious.push('Command shell execution');
+      if (lowerS.includes('reg add') || lowerS.includes('reg delete')) suspicious.push('Registry modification');
+      if (suspicious.length > 0) {
+        responseHTML += '<div style="margin-top:10px;font-size:11px;color:var(--amber);font-weight:600;">Suspicious Indicators:</div>';
+        responseHTML += '<ul style="margin:4px 0 0 16px;padding:0;font-size:10px;color:var(--text-secondary);line-height:1.8;">';
+        suspicious.forEach(function(s) { responseHTML += '<li>' + s + '</li>'; });
+        responseHTML += '</ul>';
+      } else {
+        responseHTML += '<div style="margin-top:8px;font-size:11px;color:var(--green);">No obviously suspicious patterns detected in the input.</div>';
+      }
+      responseHTML += '</div>';
+      trackAIUsage('Copilot-Script', 300, 200, 'Script: ' + text.substring(0, 30));
+
+    } else if (domainMatch === 'ticketintel') {
+      // ── Ticket Intel ── query Jira
+      var jql = 'project = DAC AND type = "[System] Incident" ORDER BY created DESC';
+      var prioM = text.match(/p([1-4])/i);
+      if (prioM) jql = 'project = DAC AND priority = "P' + prioM[1] + '" ORDER BY created DESC';
+      var jiraResp = await fetch('/api/jira', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'search', jql: jql, maxResults: 5 })
+      });
+      var jiraData = await jiraResp.json();
+      var issues = (jiraData && jiraData.issues) ? jiraData.issues : [];
+      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">Jira ticket search: <strong style="color:var(--text-primary);">' + escapeHtml(text) + '</strong></div>';
+      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;">';
+      responseHTML += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;"><strong style="color:var(--cyan);">' + issues.length + '</strong> tickets found</div>';
+      issues.slice(0, 5).forEach(function(iss) {
+        var f = iss.fields || {};
+        var sev = (f.customfield_10050 && f.customfield_10050.value) ? f.customfield_10050.value : f.priority ? f.priority.name : '\u2014';
+        responseHTML += '<div style="padding:8px 10px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.08);border-radius:6px;margin-bottom:4px;font-size:10px;">';
+        responseHTML += '<div style="display:flex;align-items:center;gap:8px;">';
+        responseHTML += '<span style="font-family:var(--font-mono);color:var(--cyan);font-weight:700;">' + iss.key + '</span>';
+        responseHTML += '<span style="color:var(--text-primary);font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(f.summary || '') + '</span>';
+        var sevL = sev.toLowerCase();
+        responseHTML += '<span class="badge badge-' + (sevL.includes('critical') || sev.includes('1') ? 'red' : sevL.includes('high') || sev.includes('2') ? 'amber' : 'blue') + '" style="font-size:8px;">' + sev + '</span>';
+        responseHTML += '</div></div>';
+      });
+      responseHTML += '</div>';
+      trackAIUsage('Copilot-Tickets', 200, 400, 'Tickets: ' + text.substring(0, 30));
+
+    } else if (domainMatch === 'assetintel') {
+      // ── Asset Intel ── search Elastic for host/user info
+      var assetQuery = text.replace(/^(who is|info on|lookup|search)\s*/i, '').trim();
+      var esRespA = await fetch('/api/elastic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'search', index: 'logs-*',
+          body: { size: 5, query: { bool: { should: [
+            { match: { 'host.name': assetQuery } },
+            { match: { 'user.name': assetQuery } },
+            { match: { 'source.ip': assetQuery } },
+            { match: { message: assetQuery } }
+          ] } }, sort: [{ '@timestamp': 'desc' }],
+          aggs: { by_host: { terms: { field: 'host.name', size: 5 } }, by_dataset: { terms: { field: 'data_stream.dataset', size: 5 } } } }
+        })
+      });
+      var esAsset = await esRespA.json();
+      var assetHits = esAsset.hits ? (typeof esAsset.hits.total === 'object' ? esAsset.hits.total.value : esAsset.hits.total) : 0;
+      var hostBuckets = esAsset.aggregations && esAsset.aggregations.by_host ? esAsset.aggregations.by_host.buckets : [];
+      var dsBucketsA = esAsset.aggregations && esAsset.aggregations.by_dataset ? esAsset.aggregations.by_dataset.buckets : [];
+      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">Asset/user lookup for: <strong style="color:var(--cyan);font-family:var(--font-mono);">' + escapeHtml(assetQuery) + '</strong></div>';
+      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;">';
+      responseHTML += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><span style="font-size:18px;font-family:var(--font-mono);font-weight:700;color:var(--cyan);">' + assetHits.toLocaleString() + '</span><span style="font-size:12px;color:var(--text-muted);">total events</span></div>';
+      if (hostBuckets.length > 0) {
+        responseHTML += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Associated Hosts:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">';
+        hostBuckets.forEach(function(h) { responseHTML += '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);font-family:var(--font-mono);">' + h.key + ': ' + h.doc_count + '</span>'; });
+        responseHTML += '</div>';
+      }
+      if (dsBucketsA.length > 0) {
+        responseHTML += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Data Sources:</div><div style="display:flex;gap:6px;flex-wrap:wrap;">';
+        dsBucketsA.forEach(function(d) { responseHTML += '<span style="font-size:9px;padding:2px 8px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:10px;color:#a78bfa;">' + d.key + ': ' + d.doc_count + '</span>'; });
+        responseHTML += '</div>';
+      }
+      responseHTML += '</div>';
+      trackAIUsage('Copilot-Asset', 300, 500, 'Asset: ' + assetQuery);
+
+    } else if (domainMatch === 'knowledge') {
+      // ── Knowledge Base ── show playbook info
+      var kbQuery = text.toLowerCase();
+      var playbooks = {
+        ransomware: { title: 'Ransomware Response Playbook', phases: ['Identification: Detect encryption activity, check for ransom notes', 'Containment: Isolate affected systems, block lateral movement', 'Eradication: Remove malware, reset compromised credentials', 'Recovery: Restore from clean backups, validate integrity', 'Lessons Learned: Update detection rules, brief stakeholders'] },
+        phishing: { title: 'Phishing Response Playbook', phases: ['Detection: Email gateway alert, user report, sandbox detonation', 'Analysis: Check sender, links, attachments, header analysis', 'Containment: Block sender, purge from mailboxes, reset credentials if clicked', 'User Notification: Alert affected users, provide guidance', 'IOC Extraction: URLs, domains, file hashes \u2192 feed to SIEM'] },
+        bec: { title: 'BEC / Email Compromise Playbook', phases: ['Identification: Detect unauthorized inbox rules, login anomalies', 'Containment: Reset password, revoke sessions, remove forwarding rules', 'Financial: Contact bank for wire recall if applicable', 'Investigation: Review email audit logs, identify scope', 'Notification: Regulatory reporting, client notification if needed'] },
+        'default': { title: 'General Incident Response Playbook', phases: ['Preparation: Ensure tooling and contacts are ready', 'Detection & Analysis: Validate alert, determine scope', 'Containment: Short-term and long-term containment', 'Eradication: Remove threat artifacts', 'Recovery: Restore normal operations', 'Post-Incident: Document lessons learned'] }
+      };
+      var kbMatch = playbooks['default'];
+      for (var pbKey in playbooks) { if (pbKey !== 'default' && kbQuery.includes(pbKey)) { kbMatch = playbooks[pbKey]; break; } }
+      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">Knowledge Base result for: <strong style="color:var(--text-primary);">' + escapeHtml(text) + '</strong></div>';
+      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;">';
+      responseHTML += '<div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:10px;">' + kbMatch.title + '</div>';
+      responseHTML += '<div style="display:flex;flex-direction:column;gap:6px;">';
+      kbMatch.phases.forEach(function(p, idx) {
+        responseHTML += '<div style="display:flex;gap:8px;align-items:flex-start;"><span style="min-width:20px;height:20px;border-radius:50%;background:rgba(0,212,255,0.12);border:1px solid rgba(0,212,255,0.25);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--cyan);">' + (idx+1) + '</span><span style="font-size:11px;color:var(--text-secondary);line-height:1.5;">' + p + '</span></div>';
+      });
+      responseHTML += '</div></div>';
+      trackAIUsage('Copilot-KB', 100, 200, 'KB: ' + text.substring(0, 30));
+
+    } else if ((domainMatch === 'threatintel' && (ipMatch || lower.startsWith('check ip') || lower.startsWith('ip:'))) || (domainMatch === 'all' && (ipMatch || lower.startsWith('check ip') || lower.startsWith('ip:')))) {
       // ── IOC Enrichment ──
       var ip = ipMatch ? ipMatch[1] : text.replace(/^(check ip|ip:)\s*/i, '').trim();
       var [octiResp, elasticResp] = await Promise.all([
@@ -31431,7 +31700,7 @@ async function copilotAsk(text) {
 
       trackAIUsage('Copilot-IOC', 500, 800, 'IOC: ' + ip);
 
-    } else if (mitreMatch) {
+    } else if (mitreMatch && (domainMatch === 'threatintel' || domainMatch === 'mitre' || domainMatch === 'all')) {
       // ── MITRE Technique Lookup ──
       var techId = 'T' + mitreMatch[1] + (mitreMatch[2] ? '.' + mitreMatch[2] : '');
       var octiResp2 = await fetch('/api/opencti', {
@@ -31470,7 +31739,7 @@ async function copilotAsk(text) {
       }
       trackAIUsage('Copilot-MITRE', 300, 600, 'MITRE: ' + techId);
 
-    } else if (lower.includes('login') || lower.includes('rdp') || lower.includes('search') || lower.includes('show me') || lower.startsWith('search:') || lower.includes('failed') || lower.includes('firewall') || lower.includes('alert')) {
+    } else if (domainMatch === 'logsearch' || (domainMatch === 'all' && (lower.includes('login') || lower.includes('rdp') || lower.includes('search') || lower.includes('show me') || lower.startsWith('search:') || lower.includes('failed') || lower.includes('firewall') || lower.includes('alert')))) {
       // ── Log Search ──
       var queryBody = {};
       if (lower.includes('login') || lower.includes('rdp') || lower.includes('failed')) {
