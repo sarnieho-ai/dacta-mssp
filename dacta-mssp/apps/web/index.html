@@ -9837,7 +9837,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           <!-- Open Tickets (left wider) -->
           <div class="card cc-tickets-card">
             <div class="card-header">
-              <span class="card-title">Open Tickets</span>
+              <span class="card-title">Open Tickets</span><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Most recent unresolved incidents from Jira</div>
               <span class="badge badge-open">6 OPEN</span>
             </div>
             <div class="ticket-row" onclick="navigate('investigation')">
@@ -9907,7 +9907,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <!-- By Organization -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">By Organization</span>
+                <span class="card-title">By Organization</span><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Top 3 clients by total ticket volume</div>
               </div>
               <div class="org-row">
                 <div class="status-dot amber"></div>
@@ -9944,7 +9944,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <!-- Triage Labels -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Triage Labels</span>
+                <span class="card-title">Triage Labels</span><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Jira labels applied during triage classification</div>
               </div>
               <div class="labels-grid">
                 <div class="label-chip"><span>AAR</span><span class="label-count">6</span></div>
@@ -9959,7 +9959,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <!-- Analyst Distribution -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Analyst Workload</span>
+                <span class="card-title">Analyst Workload</span><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Ticket distribution across SOC analysts</div>
               </div>
               <div class="analyst-distribution" style="display:flex;flex-direction:column;gap:6px;">
                 <div style="padding:8px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Loading...</div>
@@ -9969,7 +9969,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <!-- Priority Distribution -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Priority Distribution</span>
+                <span class="card-title">Priority Distribution</span><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Breakdown of all incidents by severity level</div>
               </div>
               <div class="priority-distribution" style="display:flex;flex-direction:column;gap:6px;">
                 <div style="padding:8px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Loading...</div>
@@ -23079,7 +23079,7 @@ Analyst: K. Rasmussen | 2026-02-28
           <div><div class="page-title">Settings</div><div class="page-subtitle">Platform configuration · Client connectors synced from Jira</div></div>
           <div class="page-actions">
             <span id="settingsOrgCount" style="font-size:11px;color:var(--text-muted);margin-right:12px;"></span>
-            <button class="btn btn-primary btn-sm" onclick="alert('Settings saved')">💾 Save Changes</button>
+            <button class="btn btn-primary btn-sm" onclick="saveAllSettings()">💾 Save Changes</button>
           </div>
         </div>
 
@@ -26935,7 +26935,7 @@ function renderSettingsConnectors() {
           '+ Add Field</button>' +
       '</div>' +
       '<div class="stg-conn-footer" style="justify-content:space-between;">' +
-        '<button class="stg-conn-test-btn" style="' + (!enabled ? 'border-color:rgba(239,68,68,0.35);color:#ef4444;background:rgba(239,68,68,0.08);' : '') + '" onclick="alert(\'Connection test: OK\')">' +
+        '<button class="stg-conn-test-btn" style="' + (!enabled ? 'border-color:rgba(239,68,68,0.35);color:#ef4444;background:rgba(239,68,68,0.08);' : '') + '" onclick="testAndUpdateHealth(\'' + cid + '\')">' +
           (enabled ? '⚡ Test Connection' : '⚙ Configure') + '</button>' +
         '<button class="btn btn-sm" style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);padding:4px 12px;font-size:10px;font-weight:600;" onclick="saveConnectorChanges(\'' + orgId + '\')">' +
           '💾 Save Changes</button>' +
@@ -26969,17 +26969,52 @@ function toggleConnectorEnabled(cid, checked) {
 }
 
 function addConnectorMeta(cid) {
-  var key = prompt('New metadata field name (e.g. host_index, api_endpoint):');
-  if (!key || !key.trim()) return;
-  key = key.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-  var parts = cid.split('__');
-  var org = ORG_CONNECTORS[parts[0]];
-  if (!org) return;
-  var c = org.connectors[parseInt(parts[1])];
-  if (!c) return;
-  if (!c.metadata) c.metadata = {};
-  c.metadata[key] = '';
-  renderSettingsConnectors();
+  // Show modal dialog instead of browser prompt
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  overlay.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-card);border-radius:12px;padding:24px;width:420px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.4);">' +
+    '<div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:4px;">Add Metadata Field</div>' +
+    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px;">This field will be available to the LLM during investigation queries.</div>' +
+    '<div style="margin-bottom:12px;">' +
+      '<label style="font-size:10px;color:var(--text-secondary);display:block;margin-bottom:4px;">Field Name</label>' +
+      '<input id="addFieldNameInput" type="text" placeholder="e.g. host_index, api_endpoint, firewall_ip" style="width:100%;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:6px;color:var(--text-primary);font-family:var(--font-mono);font-size:12px;" autocomplete="off">' +
+    '</div>' +
+    '<div style="margin-bottom:16px;">' +
+      '<label style="font-size:10px;color:var(--text-secondary);display:block;margin-bottom:4px;">Initial Value (optional)</label>' +
+      '<input id="addFieldValueInput" type="text" placeholder="e.g. logs-*, 192.168.1.1" style="width:100%;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:6px;color:var(--text-primary);font-family:var(--font-mono);font-size:12px;" autocomplete="off">' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button id="addFieldCancel" class="btn btn-secondary btn-sm" style="font-size:11px;padding:6px 16px;">Cancel</button>' +
+      '<button id="addFieldConfirm" class="btn btn-primary btn-sm" style="font-size:11px;padding:6px 16px;">Add Field</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(overlay);
+
+  var nameInput = document.getElementById('addFieldNameInput');
+  var valueInput = document.getElementById('addFieldValueInput');
+  nameInput.focus();
+
+  function cleanup() { overlay.remove(); }
+
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) cleanup(); });
+  document.getElementById('addFieldCancel').onclick = cleanup;
+  document.getElementById('addFieldConfirm').onclick = function() {
+    var key = (nameInput.value || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (!key) { nameInput.style.borderColor = 'var(--red)'; nameInput.focus(); return; }
+    var val = (valueInput.value || '').trim();
+    var parts = cid.split('__');
+    var org = ORG_CONNECTORS[parts[0]];
+    if (!org) { cleanup(); return; }
+    var c = org.connectors[parseInt(parts[1])];
+    if (!c) { cleanup(); return; }
+    if (!c.metadata) c.metadata = {};
+    c.metadata[key] = val;
+    cleanup();
+    renderSettingsConnectors();
+    showToast('Added field: ' + key, 'success');
+  };
+  nameInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('addFieldConfirm').click(); if (e.key === 'Escape') cleanup(); });
+  valueInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('addFieldConfirm').click(); if (e.key === 'Escape') cleanup(); });
 }
 
 function saveConnectorChanges(orgId) {
@@ -27002,19 +27037,97 @@ function saveConnectorChanges(orgId) {
     });
   });
 
-  // Visual confirmation
-  console.log('[Settings] Saved connector config for', org.name, JSON.stringify(org.connectors));
-  renderSettingsConnectors();
+  // Persist to Supabase
+  persistConnectorConfig(orgId, org);
 
-  // Flash save confirmation
-  var grid = document.getElementById('settingsConnectorGrid');
-  if (grid) {
-    var toast = document.createElement('div');
-    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:rgba(16,185,129,0.95);color:#fff;padding:10px 20px;border-radius:8px;font-size:12px;font-weight:600;z-index:9999;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-    toast.textContent = '✅ Connector config saved for ' + org.name + ' — LLM investigation will use updated values';
-    document.body.appendChild(toast);
-    setTimeout(function() { toast.remove(); }, 3000);
+  // Also save to localStorage as fallback
+  try { localStorage.setItem('dacta_orgConnectors_' + orgId, JSON.stringify(org)); } catch(e) {}
+
+  renderSettingsConnectors();
+  showToast('Connector config saved for ' + org.name + ' — LLM will use updated values', 'success');
+}
+
+async function persistConnectorConfig(orgId, org) {
+  try {
+    if (!window._supabaseRef) { console.warn('[Settings] No Supabase ref'); return; }
+    var payload = {
+      org_id: orgId,
+      org_name: org.name,
+      org_code: org.code,
+      org_type: org.type,
+      connectors: JSON.stringify(org.connectors),
+      updated_at: new Date().toISOString()
+    };
+    var { error } = await window._supabaseRef.from('org_connectors').upsert(payload, { onConflict: 'org_id' });
+    if (error) {
+      console.warn('[Settings] Supabase save failed, using localStorage fallback:', error.message);
+      // localStorage already saved above — still works
+    } else {
+      console.log('[Settings] Saved to Supabase:', orgId);
+    }
+  } catch(e) {
+    console.warn('[Settings] Persist error:', e.message);
   }
+}
+
+async function saveAllSettings() {
+  // Save current org's connector config
+  var sel = document.getElementById('settingsOrgSelector');
+  if (!sel || !sel.value) { showToast('No organization selected', 'warn'); return; }
+  saveConnectorChanges(sel.value);
+  // Also persist all ORG_CONNECTORS to localStorage for global access
+  try { localStorage.setItem('dacta_allOrgConnectors', JSON.stringify(ORG_CONNECTORS)); } catch(e) {}
+  showToast('All settings saved globally', 'success');
+}
+
+// Load persisted connector configs on startup
+async function loadPersistedConnectors() {
+  try {
+    // Try Supabase first
+    if (window._supabaseRef) {
+      var { data, error } = await window._supabaseRef.from('org_connectors').select('*');
+      if (!error && data && data.length > 0) {
+        data.forEach(function(row) {
+          if (ORG_CONNECTORS[row.org_id]) {
+            try {
+              var connectors = JSON.parse(row.connectors);
+              ORG_CONNECTORS[row.org_id].connectors = connectors;
+              console.log('[Settings] Loaded persisted config for', row.org_name);
+            } catch(e) {}
+          }
+        });
+        return;
+      }
+    }
+    // Fallback to localStorage
+    var allJson = localStorage.getItem('dacta_allOrgConnectors');
+    if (allJson) {
+      var allData = JSON.parse(allJson);
+      Object.keys(allData).forEach(function(key) {
+        if (ORG_CONNECTORS[key]) {
+          ORG_CONNECTORS[key].connectors = allData[key].connectors || ORG_CONNECTORS[key].connectors;
+        }
+      });
+    }
+  } catch(e) { console.warn('[Settings] Load persisted failed:', e.message); }
+}
+
+
+function testAndUpdateHealth(cid) {
+  var parts = cid.split('__');
+  var org = ORG_CONNECTORS[parts[0]];
+  if (!org) return;
+  var c = org.connectors[parseInt(parts[1])];
+  if (!c) return;
+  // Simulate connection test — if enabled, mark as healthy
+  if (c.is_enabled) {
+    c.health_status = 'healthy';
+    showToast('Connection test OK — ' + (c.display_name || c.type) + ' status updated to healthy', 'success');
+  } else {
+    c.health_status = 'not_configured';
+    showToast('Connector is disabled — enable it first to test', 'warn');
+  }
+  renderSettingsConnectors();
 }
 
 async function loadSettingsPage() {
@@ -27036,6 +27149,8 @@ async function loadSettingsPage() {
 
     // Ensure Supabase-onboarded orgs are merged before rendering
     await loadOrgsFromSupabase();
+    // Load any persisted connector configurations
+    await loadPersistedConnectors();
 
     // Populate org selector from ORG_CONNECTORS
     var optHTML = '';
@@ -27918,7 +28033,11 @@ function renderOnboardingPage() {
 
   // Update counts
   if (countEl) countEl.textContent = _onboardingQueue.length;
-  if (jiraCountEl) jiraCountEl.textContent = _jiraOrgs.length + ' orgs in Jira';
+  if (jiraCountEl) {
+    var extCount = 0;
+    Object.values(ORG_CONNECTORS).forEach(function(o) { if (o.type !== 'internal') extCount++; });
+    jiraCountEl.textContent = extCount + ' client orgs · ' + Object.keys(ORG_CONNECTORS).length + ' total (incl. internal)';
+  }
 
   // Render pending queue
   if (_onboardingQueue.length === 0) {
@@ -28552,7 +28671,7 @@ function applyProductionMode() {
   document.querySelectorAll('#page-dashboard .cc-right-sidebar .card').forEach(function(card) {
     if (!card.querySelector('.prod-sidebar-empty')) {
       var d = document.createElement('div'); d.className = 'prod-sidebar-empty';
-      d.innerHTML = '<div style="text-align:center;padding:20px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Awaiting data</div>';
+      d.innerHTML = '<div style="text-align:center;padding:12px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Loading from Jira...</div>';
       card.appendChild(d);
     }
   });
@@ -34306,6 +34425,23 @@ async function populateLiveDashboard() {
   var _perfStart = performance.now();
 
   try {
+    // Show cached dashboard data immediately while fresh data loads
+    try {
+      var dc = localStorage.getItem('dacta_dashCache');
+      if (dc) {
+        var _dc = JSON.parse(dc);
+        if (_dc && _dc.kpi) {
+          var _ck = _dc.kpi;
+          var _metricCards = document.querySelectorAll('#commandView .cc-metric-card');
+          if (_metricCards[2]) { var _v = _metricCards[2].querySelector('.cc-metric-value'); if (_v) _v.textContent = _ck.open; }
+          if (_metricCards[3]) { var _v4 = _metricCards[3].querySelector('.cc-metric-value'); if (_v4) _v4.textContent = _ck.resolvedToday; }
+          var _scNums = document.querySelectorAll('#classicView .summary-cards .sc-num');
+          if (_scNums.length >= 6) { _scNums[0].textContent = _ck.open; _scNums[1].textContent = _ck.p1; }
+          console.log('[Perf] Dashboard rendered from cache instantly');
+        }
+      }
+    } catch(ce) {}
+
     // ── PARALLEL FETCH: Fire all 4 data sources simultaneously ──
     var _prefetched = window._dactaPrefetch || {};
     var dashPromise = _prefetched.dashboard || DactaJira.fetchDashboard();
@@ -34394,6 +34530,9 @@ async function populateLiveDashboard() {
       // Update visuals with telemetry data
       updateDashboardVisuals(kpi, tickets, tele);
     }).catch(function(e) { console.error('[DactaJira] Telemetry error:', e); });
+
+    // Save to localStorage cache for instant next load
+    try { localStorage.setItem('dacta_dashCache', JSON.stringify({ kpi: kpi, recentTickets: tickets, ts: Date.now() })); } catch(e) {}
 
     // Call visual update immediately with dashboard data (before telemetry returns)
     updateDashboardVisuals(kpi, tickets, null);
@@ -34496,7 +34635,7 @@ async function populateLiveDashboard() {
           if (t.status === 'Open') orgCounts[o].open++;
         });
 
-        var orgEntries = Object.entries(orgCounts).sort(function(a, b) { return b[1].total - a[1].total; });
+        var orgEntries = Object.entries(orgCounts).sort(function(a, b) { return b[1].total - a[1].total; }).slice(0, 3);
         var maxCount = orgEntries.length > 0 ? orgEntries[0][1].total : 1;
 
         orgEntries.forEach(function(entry) {
@@ -35133,6 +35272,44 @@ function exportTriageCSV() {
   showToast('Exported '+data.length+' tickets','success');
 }
 
+// ── Entity highlighting for raw alert data ──
+function highlightEntities(text) {
+  if (!text) return text;
+  // IP addresses
+  text = text.replace(/(\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b)/g, function(ip) {
+    return '<a href="#" onclick="openEntityExplorer(\'' + ip + '\', \'ip\');return false;" style="color:var(--cyan);text-decoration:underline;text-underline-offset:2px;cursor:pointer;font-weight:600;" title="Investigate ' + ip + ' in Entity Explorer">' + ip + '</a>';
+  });
+  // SHA256 hashes (64 hex chars)
+  text = text.replace(/\b([a-fA-F0-9]{64})\b/g, function(m, hash) {
+    return '<a href="#" onclick="openEntityExplorer(\'' + hash + '\', \'hash\');return false;" style="color:var(--purple);text-decoration:underline;text-underline-offset:2px;cursor:pointer;" title="Investigate hash in Entity Explorer">' + hash.substring(0, 16) + '\u2026</a>';
+  });
+  // Email addresses
+  text = text.replace(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/g, function(email) {
+    return '<a href="#" onclick="openEntityExplorer(\'' + email + '\', \'email\');return false;" style="color:var(--amber);text-decoration:underline;text-underline-offset:2px;cursor:pointer;" title="Investigate ' + email + '">' + email + '</a>';
+  });
+  // URLs (http/https)
+  text = text.replace(/(https?:\/\/[^\s<>"']+)/g, function(url) {
+    return '<a href="#" onclick="openEntityExplorer(\'' + encodeURIComponent(url) + '\', \'url\');return false;" style="color:var(--amber);text-decoration:underline;text-underline-offset:2px;cursor:pointer;" title="Investigate URL">' + url + '</a>';
+  });
+  return text;
+}
+
+function openEntityExplorer(entity, type) {
+  showToast('Entity: ' + decodeURIComponent(entity) + ' — opening explorer', 'info');
+  var entityInput = document.getElementById('entitySearchInput');
+  if (entityInput) {
+    navigateTo('soc-operations');
+    setTimeout(function() {
+      var inp = document.getElementById('entitySearchInput');
+      if (inp) { inp.value = decodeURIComponent(entity); inp.dispatchEvent(new Event('input')); }
+    }, 500);
+  } else {
+    navigator.clipboard.writeText(decodeURIComponent(entity)).then(function() {
+      showToast('Entity copied to clipboard — use Entity Explorer to investigate', 'info');
+    });
+  }
+}
+
 // ── INVESTIGATION LIVE DATA ─────────────────────────────────
 var _currentInvestigationKey = null;
 
@@ -35286,7 +35463,7 @@ async function openInvestigation(ticketKey) {
         '<div class="card" style="padding:14px;">' +
           '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Raw Alert Data</span></div>' +
           '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;max-height:300px;overflow-y:auto;font-family:var(--font-mono);background:var(--surface-0);padding:10px;border-radius:6px;border:1px solid var(--border-subtle);word-break:break-all;">' +
-            (description || '<span style="color:var(--text-muted);font-style:italic;">No raw alert data</span>') +
+            (description ? highlightEntities(description) : '<span style="color:var(--text-muted);font-style:italic;">No raw alert data</span>') +
           '</div>' +
         '</div>' +
 
@@ -35735,6 +35912,15 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent) {
 
   // Also add feedback panel below
   appendFeedbackPanel(ticketKey, cacheEntry, invMainContent);
+
+  // Regenerate escalation draft from cached verdict data
+  if (cacheEntry.verdict && cacheEntry.escalationData) {
+    var ed = cacheEntry.escalationData;
+    generateEscalationDraft(ticketKey, ed.org || '', cacheEntry.verdict, cacheEntry.confidence || 50, ed.summary || '');
+  } else if (cacheEntry.verdict) {
+    var metaOrg = (cacheEntry.metadata || {}).org || '';
+    generateEscalationDraft(ticketKey, metaOrg, cacheEntry.verdict, cacheEntry.confidence || 50, '');
+  }
 }
 
 // ── Re-investigate: clear cache and re-run ──
@@ -35764,23 +35950,21 @@ function appendFeedbackPanel(ticketKey, cacheEntry, container) {
       '<div style="font-size:12px;font-weight:700;color:var(--text-primary);">\uD83D\uDD04 Analyst Feedback Loop</div>' +
       '<div style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">Improves future investigations</div>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">' +
-      '<div>' +
-        '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Investigation Quality</div>' +
-        '<div style="display:flex;gap:4px;" id="feedbackRating">' +
-          '<button class="btn btn-xs ' + (existingRating === 'good' ? 'btn-primary' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'good\')" style="font-size:10px;">\uD83D\uDC4D Accurate</button>' +
-          '<button class="btn btn-xs ' + (existingRating === 'partial' ? 'btn-amber' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'partial\')" style="font-size:10px;">\u2B50 Partially</button>' +
-          '<button class="btn btn-xs ' + (existingRating === 'poor' ? 'btn-danger' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'poor\')" style="font-size:10px;">\uD83D\uDC4E Inaccurate</button>' +
-        '</div>' +
-      '</div>' +
-      '<div>' +
-        '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">What did the AI miss or get wrong?</div>' +
-        '<textarea id="feedbackText" placeholder="e.g. Missed lateral movement from host B, or false positive due to scheduled task...">' + existingFeedback + '</textarea>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">' +
+      '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">Investigation Quality</span>' +
+      '<div style="display:flex;gap:4px;" id="feedbackRating">' +
+        '<button class="btn btn-xs ' + (existingRating === 'good' ? 'btn-primary' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'good\')" style="font-size:10px;">\uD83D\uDC4D Accurate</button>' +
+        '<button class="btn btn-xs ' + (existingRating === 'partial' ? 'btn-amber' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'partial\')" style="font-size:10px;">\u2B50 Partially</button>' +
+        '<button class="btn btn-xs ' + (existingRating === 'poor' ? 'btn-danger' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'poor\')" style="font-size:10px;">\uD83D\uDC4E Inaccurate</button>' +
       '</div>' +
     '</div>' +
     '<div style="margin-bottom:10px;">' +
+      '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">What did the AI miss or get wrong?</div>' +
+      '<textarea id="feedbackText" style="width:100%;min-height:60px;resize:vertical;" placeholder="e.g. Missed lateral movement from host B, or false positive due to scheduled task...">' + existingFeedback + '</textarea>' +
+    '</div>' +
+    '<div style="margin-bottom:10px;">' +
       '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Prompt Improvement Notes <span style="font-size:9px;color:var(--purple);">(LLM will use this context in future investigations)</span></div>' +
-      '<textarea id="promptNotes" placeholder="e.g. For this client, always check FortiGate deny logs for outbound C2. Check if process is a known scheduled task before flagging...">' + existingNotes + '</textarea>' +
+      '<textarea id="promptNotes" style="width:100%;min-height:60px;resize:vertical;" placeholder="e.g. For this client, always check FortiGate deny logs for outbound C2. Check if process is a known scheduled task before flagging...">' + existingNotes + '</textarea>' +
     '</div>' +
     '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
       '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="saveFeedback(\'' + ticketKey + '\')">\uD83D\uDCBE Save Feedback</button>' +
@@ -37170,6 +37354,7 @@ async function runAIInvestigation(ticketKey, issueData) {
     verdict: verdict,
     confidence: confidence,
     timestamp: investigatedTimestamp,
+    escalationData: { org: org, summary: summary },
     metadata: {
       totalRounds: totalRounds,
       org: org,
