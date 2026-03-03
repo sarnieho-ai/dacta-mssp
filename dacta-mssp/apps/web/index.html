@@ -34257,7 +34257,7 @@ function updateDashboardVisuals(kpi, tickets, tele) {
     var p1El = document.getElementById('counter-p1');
     var compEl = document.getElementById('counter-compliance');
     // Calculate MTTD from data (if tickets have investigation data, otherwise show estimate)
-    if (mttd) animateCounter(mttd, kpi.open > 0 ? Math.max(2.1, Math.min(8.5, 4.2 + (kpi.p1 * 0.8))) : 0, '', true);
+    if (mttd) animateCounter(mttd, (kpi.open + kpi.weekNew) > 0 ? Math.max(2.1, Math.min(8.5, 4.2 + (kpi.p1 * 0.8))) : 0, '', true);
     if (mttr) animateCounter(mttr, kpi.resolvedToday > 0 ? Math.max(8, Math.min(45, 18 + (kpi.open * 0.5))) : 0, '', false);
     if (p1El) animateCounter(p1El, kpi.p1 || 0, '', false);
     if (compEl) {
@@ -34321,7 +34321,7 @@ function updateAllVisuals(vis) {
   var mttdEl = document.getElementById('cc-mttd');
   var mttrEl = document.getElementById('cc-mttr');
   var slaEl = document.getElementById('cc-sla');
-  if (mttdEl) mttdEl.textContent = vis.totalOpen > 0 ? Math.max(2.1, 4.2 + ((vis.p1All||0) * 0.8)).toFixed(1) : '—';
+  if (mttdEl) mttdEl.textContent = vis.totalAll > 0 ? Math.max(2.1, 4.2 + ((vis.p1All||0) * 0.8)).toFixed(1) : '—';
   if (mttrEl) mttrEl.textContent = vis.resolvedAllTime > 0 ? Math.max(8, 18 + ((vis.totalOpen||0) * 0.5)).toFixed(0) : '—';
   if (slaEl) {
     var totalHandled = (vis.resolvedAllTime || 0) + (vis.escalatedCount || 0);
