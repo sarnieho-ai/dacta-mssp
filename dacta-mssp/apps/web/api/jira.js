@@ -101,15 +101,15 @@ export default async function handler(req, res) {
     // ─── ACTION: dashboard ────────────────────────────────────
     if (action === 'dashboard') {
       // Time range mapping for JQL
-      const timeRange = url.searchParams.get('timeRange') || '24h';
+      const timeRange = req.query.timeRange || '24h';
       const timeRangeMap = {
         '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': 'startOfDay()',
         '7d': 'startOfWeek()', '30d': '-30d'
       };
       const recentJql = timeRangeMap[timeRange] || 'startOfDay()';
       const isRelative = recentJql.startsWith('-');
-      const createdFilter = isRelative ? `created >= "${recentJql}"` : `created >= ${recentJql}`;
-      const updatedFilter = isRelative ? `updated >= "${recentJql}"` : `updated >= ${recentJql}`;
+      const createdFilter = isRelative ? ('created >= "' + recentJql + '"') : ('created >= ' + recentJql);
+      const updatedFilter = isRelative ? ('updated >= "' + recentJql + '"') : ('updated >= ' + recentJql);
 
       // Check server-side cache (keyed by time range)
       var cached = _getCached('dashboard_' + timeRange);
