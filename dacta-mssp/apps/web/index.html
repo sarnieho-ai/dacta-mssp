@@ -35561,19 +35561,25 @@ function highlightEntities(text) {
 }
 
 function openEntityExplorer(entity, type) {
-  showToast('Entity: ' + decodeURIComponent(entity) + ' — opening explorer', 'info');
-  var entityInput = document.getElementById('entitySearchInput');
-  if (entityInput) {
-    navigateTo('soc-operations');
-    setTimeout(function() {
-      var inp = document.getElementById('entitySearchInput');
-      if (inp) { inp.value = decodeURIComponent(entity); inp.dispatchEvent(new Event('input')); }
-    }, 500);
-  } else {
-    navigator.clipboard.writeText(decodeURIComponent(entity)).then(function() {
-      showToast('Entity copied to clipboard — use Entity Explorer to investigate', 'info');
-    });
-  }
+  var entityId = decodeURIComponent(entity);
+  showToast('Opening Entity Explorer for ' + entityId + '...', 'info');
+  navigate('entities');
+  setTimeout(function() {
+    var searchEl = document.getElementById('eeSearch');
+    if (searchEl) {
+      searchEl.value = entityId;
+      searchEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    // Try to select entity in graph + detail panel
+    if (typeof window._eeSelectEntity === 'function') {
+      window._eeSelectEntity(entityId);
+    } else if (typeof window._eeDynamicAddEntity === 'function') {
+      window._eeDynamicAddEntity(entityId);
+      setTimeout(function() {
+        if (typeof window._eeSelectEntity === 'function') window._eeSelectEntity(entityId);
+      }, 300);
+    }
+  }, 600);
 }
 
 // ── INVESTIGATION LIVE DATA ─────────────────────────────────
