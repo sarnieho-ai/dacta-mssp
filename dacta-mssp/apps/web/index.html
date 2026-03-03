@@ -27911,6 +27911,46 @@ function loadOnboardingPage() {
   syncJiraOrgs();
 }
 
+// Load orgs from Supabase into ORG_CONNECTORS on startup
+// Merges Supabase orgs with hardcoded ones — Supabase is the persistence layer
+async function loadOrgsFromSupabase() {
+  try {
+    if (!window._supabaseRef) return;
+    var resp = await window._supabaseRef.from('organizations').select('*').eq('status', 'active');
+    var rows = (resp.data || []);
+    console.log('[Onboarding] Loaded ' + rows.length + ' orgs from Supabase');
+    rows.forEach(function(row) {
+      // Check if this org is already in ORG_CONNECTORS by ID or name
+      if (ORG_CONNECTORS[row.id]) return; // already present by ID
+      var nameMatch = Object.values(ORG_CONNECTORS).some(function(o) {
+        var oName = o.name.toLowerCase().trim();
+        var rName = row.name.toLowerCase().trim();
+        return oName === rName || oName.indexOf(rName) === 0 || rName.indexOf(oName) === 0;
+      });
+      if (nameMatch) return; // already present by name
+
+      // New org from Supabase — add it with default connectors
+      var ns = (row.metadata && row.metadata.namespace) || row.short_name.toLowerCase();
+      ORG_CONNECTORS[row.id] = {
+        code: row.short_name || row.name.substring(0,2).toUpperCase(),
+        name: row.name,
+        type: row.service_model || 'socaas',
+        namespace: ns,
+        connectors: [
+          { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'pending', metadata: { namespace: ns, index_pattern: ns + '-*' } },
+          { connector_type: 'edr', vendor: 'Pending', display_name: 'EDR — Pending Config', is_enabled: false, health_status: 'not_configured', metadata: { notes: 'Configure after onboarding' } },
+          { connector_type: 'firewall', vendor: 'Pending', display_name: 'Firewall — Pending Config', is_enabled: false, health_status: 'not_configured', metadata: { notes: 'Configure after onboarding' } },
+          { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
+          { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
+        ]
+      };
+      console.log('[Onboarding] Merged from Supabase:', row.name);
+    });
+  } catch(e) {
+    console.error('[Onboarding] Failed to load orgs from Supabase:', e);
+  }
+}
+
 // ============================================================
 //  SUPABASE AUTHENTICATION
 // ============================================================
@@ -27940,6 +27980,9 @@ function loadOnboardingPage() {
     var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window._dactaSupabase = _supabase;
     window._supabaseRef = _supabase;
+
+    // Load any orgs from Supabase that aren't in the hardcoded ORG_CONNECTORS
+    loadOrgsFromSupabase();
 
     var overlay = document.getElementById('loginOverlay');
 
