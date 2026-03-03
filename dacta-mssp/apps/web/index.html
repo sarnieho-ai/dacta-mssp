@@ -26740,30 +26740,45 @@ function renderSettingsConnectors() {
   '</div>';
 }
 
-async function loadSettingsPage() {
-  var page = document.getElementById('page-settings');
-  if (!page) return;
+function loadSettingsPage() {
+  try {
+    console.log('[Settings] loadSettingsPage called');
+    var page = document.getElementById('page-settings');
+    if (!page) { console.log('[Settings] page-settings not found'); return; }
 
-  var sel = document.getElementById('settingsOrgSelector');
-  var countEl = document.getElementById('settingsOrgCount');
-  if (!sel) return;
+    var sel = document.getElementById('settingsOrgSelector');
+    var countEl = document.getElementById('settingsOrgCount');
+    if (!sel) { console.log('[Settings] settingsOrgSelector not found'); return; }
 
-  // Populate org selector from ORG_CONNECTORS
-  var optHTML = '';
-  var orgCount = 0;
-  for (var id in ORG_CONNECTORS) {
-    var o = ORG_CONNECTORS[id];
-    var typeTag = o.type === 'internal' ? '(Internal)' : o.type === 'mdr' ? '(MDR)' : '(SOCaaS)';
-    optHTML += '<option value="' + id + '">' + o.name + ' [' + o.code + '] ' + typeTag + '</option>';
-    orgCount++;
+    // Check ORG_CONNECTORS is ready
+    if (typeof ORG_CONNECTORS === 'undefined' || !ORG_CONNECTORS) {
+      console.log('[Settings] ORG_CONNECTORS not ready, retrying in 500ms');
+      setTimeout(loadSettingsPage, 500);
+      return;
+    }
+
+    // Populate org selector from ORG_CONNECTORS
+    var optHTML = '';
+    var orgCount = 0;
+    var keys = Object.keys(ORG_CONNECTORS);
+    for (var i = 0; i < keys.length; i++) {
+      var id = keys[i];
+      var o = ORG_CONNECTORS[id];
+      var typeTag = o.type === 'internal' ? '(Internal)' : o.type === 'mdr' ? '(MDR)' : '(SOCaaS)';
+      optHTML += '<option value="' + id + '">' + o.name + ' [' + o.code + '] ' + typeTag + '</option>';
+      orgCount++;
+    }
+    console.log('[Settings] Generated ' + orgCount + ' org options');
+    sel.innerHTML = optHTML;
+    if (countEl) countEl.textContent = orgCount + ' organizations registered';
+
+    // Render first org's connectors
+    renderSettingsConnectors();
+
+    console.log('[Settings] Live connector registry loaded: ' + orgCount + ' orgs');
+  } catch(err) {
+    console.error('[Settings] Error in loadSettingsPage:', err.message, err.stack);
   }
-  sel.innerHTML = optHTML;
-  if (countEl) countEl.textContent = orgCount + ' organizations registered';
-
-  // Render first org's connectors
-  renderSettingsConnectors();
-
-  console.log('[Settings] Live connector registry loaded: ' + orgCount + ' orgs');
 }
 
 // ============================================================
