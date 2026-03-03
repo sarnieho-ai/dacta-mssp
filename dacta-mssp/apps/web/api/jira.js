@@ -375,18 +375,18 @@ export default async function handler(req, res) {
           result.source = 'jsm';
         }
       } catch(e) { /* fallback below */ }
-      // Also try issue fields for request participants (customfield_10010)
+      // Also try issue fields for request participants (customfield_10039)
       if (result.participants.length === 0) {
         try {
-          const r2 = await fetch(`${baseUrl}/rest/api/3/issue/${key}?fields=customfield_10010,customfield_10002,reporter`, {
+          const r2 = await fetch(`${baseUrl}/rest/api/3/issue/${key}?fields=customfield_10039,customfield_10002,reporter`, {
             headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
           });
           if (r2.status < 400) {
             const issueData = await r2.json();
             const fields = issueData.fields || {};
-            // customfield_10010 = Request participants (array of user objects)
-            if (fields.customfield_10010 && Array.isArray(fields.customfield_10010)) {
-              result.participants = fields.customfield_10010.map(p => ({
+            // customfield_10039 = Request participants (array of user objects)
+            if (fields.customfield_10039 && Array.isArray(fields.customfield_10039)) {
+              result.participants = fields.customfield_10039.map(p => ({
                 accountId: p.accountId || '',
                 displayName: p.displayName || p.name || '',
                 emailAddress: p.emailAddress || ''
@@ -408,6 +408,42 @@ export default async function handler(req, res) {
           }
         } catch(e2) { /* continue */ }
       }
+
+      // ── Resolve null emails via per-participant user lookup (GDPR workaround) ──
+      if (result.participants.length > 0) {
+        const resolvedParticipants = await Promise.all(
+          result.participants.map(async (p) => {
+            if (p.emailAddress && p.emailAddress.indexOf('@') !== -1) return p; // already has email
+            if (!p.accountId) return p;
+            try {
+              const userResp = await fetch(`${baseUrl}/rest/api/3/user?accountId=${encodeURIComponent(p.accountId)}`, {
+                headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+              });
+              if (userResp.status === 200) {
+                const userData = await userResp.json();
+                if (userData.emailAddress) {
+                  p.emailAddress = userData.emailAddress;
+                }
+              }
+            } catch(ue) { /* skip failed lookups */ }
+            return p;
+          })
+        );
+        result.participants = resolvedParticipants;
+      }
+      // Also resolve reporter email if null
+      if (result.reporter && !result.reporter.emailAddress && result.reporter.accountId) {
+        try {
+          const rptResp = await fetch(`${baseUrl}/rest/api/3/user?accountId=${encodeURIComponent(result.reporter.accountId)}`, {
+            headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+          });
+          if (rptResp.status === 200) {
+            const rptData = await rptResp.json();
+            if (rptData.emailAddress) result.reporter.emailAddress = rptData.emailAddress;
+          }
+        } catch(re) { /* skip */ }
+      }
+
       return res.status(200).json(result);
     }
 

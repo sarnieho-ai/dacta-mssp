@@ -1292,6 +1292,74 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   transition: border-color var(--transition);
 }
 .esc-textarea:focus { outline: none; border-color: rgba(0,212,255,0.4); background: rgba(0,212,255,0.03); }
+/* Rich text toolbar for escalation modal */
+.esc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border-card);
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+  flex-wrap: wrap;
+}
+.esc-toolbar-btn {
+  width: 28px; height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+  font-family: var(--font-mono);
+}
+.esc-toolbar-btn:hover { background: rgba(0,212,255,0.08); border-color: rgba(0,212,255,0.15); color: var(--text-primary); }
+.esc-toolbar-btn.active { background: rgba(0,212,255,0.12); border-color: rgba(0,212,255,0.25); color: var(--cyan); }
+.esc-toolbar-sep { width: 1px; height: 18px; background: var(--border-subtle); margin: 0 4px; }
+.esc-toolbar select {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 3px 6px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+.esc-toolbar select:hover { border-color: rgba(0,212,255,0.25); }
+.esc-richtext {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-card);
+  border-radius: 0 0 7px 7px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  min-height: 180px;
+  max-height: 45vh;
+  overflow-y: auto;
+  line-height: 1.6;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color var(--transition);
+  outline: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.esc-richtext:focus { border-color: rgba(0,212,255,0.4); background: rgba(0,212,255,0.03); }
+.esc-richtext table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+.esc-richtext table td, .esc-richtext table th {
+  border: 1px solid var(--border-subtle);
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.esc-richtext ul, .esc-richtext ol { padding-left: 20px; margin: 4px 0; }
+.esc-richtext blockquote { border-left: 3px solid var(--cyan); padding-left: 10px; margin: 6px 0; color: var(--text-muted); }
+.esc-richtext a { color: var(--cyan); text-decoration: underline; }
 .esc-modal-footer {
   padding: 14px 20px;
   border-top: 1px solid rgba(0,212,255,0.1);
@@ -30130,9 +30198,9 @@ document.addEventListener('keydown', (e) => {
     profileItems.push(['Last Seen', entity.lastSeen]);
     profileEl.innerHTML = profileItems.map(([k, v]) => `<div class="ee-profile-item"><div class="ee-profile-label">${k}</div><div class="ee-profile-value">${v}</div></div>`).join('');
 
-    // Alerts
+    // Alerts — now from entity.alertList (populated by Jira IOC extraction)
     const alertsEl = document.getElementById('eeDetailAlerts');
-    const alerts = EE_ALERTS[entity.id] || [];
+    const alerts = entity.alertList || [];
     if (alerts.length === 0) {
       alertsEl.innerHTML = '<div style="font-size:11px;color:var(--text-muted);">No alerts associated</div>';
     } else {
@@ -30140,6 +30208,20 @@ document.addEventListener('keydown', (e) => {
         const sevColor = a.sev === 'critical' ? 'var(--red)' : (a.sev === 'high' ? 'var(--orange)' : 'var(--amber)');
         return `<div class="ee-alert-row"><div class="ee-alert-sev" style="background:${sevColor};"></div><span class="ee-alert-name">${a.name}</span><span class="ee-alert-time">${a.time}</span></div>`;
       }).join('');
+    }
+
+    // Jira Ticket References
+    if (entity.jiraTickets && entity.jiraTickets.length > 0) {
+      alertsEl.innerHTML += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border-subtle);">' +
+        '<div style="font-size:9px;font-weight:700;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;">Referenced in Jira Tickets</div>' +
+        entity.jiraTickets.map(function(t) {
+          return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;">' +
+            '<span style="font-size:9px;font-weight:700;color:var(--cyan);cursor:pointer;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + t.key + '\', \'_blank\')">' + t.key + '</span>' +
+            '<span style="font-size:9px;color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + t.summary + '</span>' +
+            '<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:rgba(255,255,255,0.04);color:var(--text-muted);">' + t.priority + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>';
     }
 
     // Sparkline
@@ -30434,28 +30516,82 @@ document.addEventListener('keydown', (e) => {
   }
 
 
-  // -- Live Data: Build EE_ENTITIES and EE_EDGES from Elastic, then init canvas --
+  // -- Live Data: Build EE_ENTITIES and EE_EDGES from Elastic + Jira IOCs --
   async function loadLiveEntityData() {
     // Show loading message in catalog
     var catalogList = document.getElementById('eeCatalogList');
     if (catalogList) {
       catalogList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--cyan);font-size:11px;">' +
         '<div class="jira-spinner" style="margin:0 auto 8px;"></div>' +
-        'Loading entities from Elastic...' +
+        'Loading entities from Elastic + Jira...' +
         '</div>';
     }
 
     try {
-      var [hostData, ipData] = await Promise.all([loadEntityData(), loadEntityIPs()]);
+      // Fetch Elastic host & IP data AND recent Jira tickets in parallel
+      var [hostData, ipData, jiraData] = await Promise.all([
+        loadEntityData(),
+        loadEntityIPs(),
+        fetchJiraTicketsForEntities()
+      ]);
 
-      // Reset arrays (reassignable since `let`)
+      // Reset arrays
       EE_ENTITIES.length = 0;
       EE_EDGES.length = 0;
 
+      // ── Track entity alert counts from Jira ──
+      var entityAlertMap = {}; // entityId -> { count, tickets: [{key, summary, priority}], riskScore }
+      var entityEdgeSet = new Set();
+
+      if (jiraData && jiraData.issues) {
+        jiraData.issues.forEach(function(issue) {
+          var f = issue.fields || {};
+          var desc = '';
+          if (f.description && f.description.content) {
+            try { desc = extractADFText(f.description); } catch(e) { desc = ''; }
+          } else if (typeof f.description === 'string') { desc = f.description; }
+          var summary = f.summary || '';
+          var fullText = summary + ' ' + desc.replace(/<[^>]+>/g, ' ');
+          var iocs = extractIOCs(fullText);
+          var priority = f.priority ? f.priority.name : 'Medium';
+          var pNum = priority.indexOf('1') !== -1 ? 95 : priority.indexOf('2') !== -1 ? 75 : priority.indexOf('3') !== -1 ? 45 : 20;
+
+          var ticketEntities = [];
+          // Collect all entities from this ticket
+          (iocs.ips || []).forEach(function(ip) { ticketEntities.push({ id: ip, type: 'ip' }); });
+          (iocs.hosts || []).forEach(function(h) { ticketEntities.push({ id: h, type: 'host' }); });
+          (iocs.users || []).forEach(function(u) { ticketEntities.push({ id: u, type: 'user' }); });
+          (iocs.files || []).forEach(function(fItem) { ticketEntities.push({ id: fItem, type: 'process' }); });
+          (iocs.hashes || []).slice(0, 3).forEach(function(h) { ticketEntities.push({ id: h, type: 'hash' }); });
+
+          ticketEntities.forEach(function(ent) {
+            if (!entityAlertMap[ent.id]) {
+              entityAlertMap[ent.id] = { count: 0, tickets: [], riskScore: 0, type: ent.type };
+            }
+            entityAlertMap[ent.id].count++;
+            entityAlertMap[ent.id].riskScore = Math.max(entityAlertMap[ent.id].riskScore, pNum);
+            if (entityAlertMap[ent.id].tickets.length < 5) {
+              entityAlertMap[ent.id].tickets.push({ key: issue.key, summary: summary.substring(0, 60), priority: priority });
+            }
+          });
+
+          // Build edges between entities in same ticket
+          for (var i = 0; i < ticketEntities.length; i++) {
+            for (var j = i + 1; j < ticketEntities.length && j < i + 5; j++) {
+              var edgeKey = [ticketEntities[i].id, ticketEntities[j].id].sort().join('|');
+              if (!entityEdgeSet.has(edgeKey)) {
+                entityEdgeSet.add(edgeKey);
+                EE_EDGES.push({ from: ticketEntities[i].id, to: ticketEntities[j].id, type: 'communicated_with' });
+              }
+            }
+          }
+        });
+      }
+
+      // ── Build host entities from Elastic ──
       var hostBuckets = (hostData && hostData.aggregations && hostData.aggregations.hosts)
         ? hostData.aggregations.hosts.buckets : [];
 
-      // Build host entities
       hostBuckets.forEach(function(bucket, idx) {
         var hit = (bucket.latest && bucket.latest.hits && bucket.latest.hits.hits && bucket.latest.hits.hits[0])
           ? bucket.latest.hits.hits[0]._source : {};
@@ -30466,24 +30602,29 @@ document.addEventListener('keydown', (e) => {
         var os = cs.os_version || (hostObj.os ? hostObj.os.name : '') || 'Unknown OS';
         var status = cs.status || 'normal';
         var ns = (hit.data_stream && hit.data_stream.namespace) || '';
-        var risk = status === 'contained' ? 'high' : (status === 'normal' ? 'low' : 'medium');
+
+        var jiraInfo = entityAlertMap[hostname] || { count: 0, tickets: [], riskScore: 0 };
+        var riskNum = jiraInfo.riskScore || (status === 'contained' ? 85 : (status === 'normal' ? 15 : 40));
 
         EE_ENTITIES.push({
           id: hostname,
           type: 'host',
-          label: '',
+          label: jiraInfo.count > 0 ? jiraInfo.count + ' alerts' : '',
           icon: '\uD83D\uDDA5',
           sub: (ip ? ip + ' \u00b7 ' : '') + (os ? os.substring(0,20) : 'host') + (ns ? ' \u00b7 ' + ns : ''),
-          risk: risk,
-          malicious: (status === 'contained'),
-          alerts: (EE_ALERTS[hostname] || []).length,
-          alertList: EE_ALERTS[hostname] || [],
+          risk: riskNum,
+          malicious: (status === 'contained' || riskNum >= 80),
+          alerts: jiraInfo.count,
+          alertList: jiraInfo.tickets.map(function(t) { return { name: t.summary, sev: t.priority.toLowerCase().indexOf('1') !== -1 ? 'critical' : t.priority.toLowerCase().indexOf('2') !== -1 ? 'high' : 'medium', time: t.key }; }),
           lastSeen: cs.last_seen ? new Date(cs.last_seen).toLocaleTimeString() : 'recent',
-          ip: ip
+          ip: ip,
+          jiraTickets: jiraInfo.tickets
         });
+
+        delete entityAlertMap[hostname]; // Mark as processed
       });
 
-      // Build IP + user entities from alert data
+      // ── Build IP + user entities from Elastic alert data ──
       var liveIPs = [];
       var liveUsers = [];
       if (ipData && ipData.aggregations) {
@@ -30504,61 +30645,85 @@ document.addEventListener('keydown', (e) => {
       }
 
       liveIPs.forEach(function(ipObj) {
+        var jiraInfo = entityAlertMap[ipObj.ip] || { count: 0, tickets: [], riskScore: 0 };
+        var riskNum = jiraInfo.riskScore || (ipObj.count > 100 ? 60 : 30);
         EE_ENTITIES.push({
           id: ipObj.ip,
           type: 'ip',
-          label: '',
+          label: jiraInfo.count > 0 ? jiraInfo.count + ' alerts' : '',
           icon: '\uD83C\uDF10',
           sub: 'ip address \u00b7 ' + ipObj.count + ' events',
-          risk: 'medium',
-          malicious: false,
-          alerts: (EE_ALERTS[ipObj.ip] || []).length,
-          alertList: EE_ALERTS[ipObj.ip] || [],
-          lastSeen: 'recent'
+          risk: riskNum,
+          malicious: riskNum >= 80,
+          alerts: jiraInfo.count,
+          alertList: jiraInfo.tickets.map(function(t) { return { name: t.summary, sev: t.priority.toLowerCase().indexOf('1') !== -1 ? 'critical' : 'medium', time: t.key }; }),
+          lastSeen: 'recent',
+          jiraTickets: jiraInfo.tickets
         });
+        delete entityAlertMap[ipObj.ip];
       });
 
       liveUsers.forEach(function(uObj) {
+        var jiraInfo = entityAlertMap[uObj.key] || { count: 0, tickets: [], riskScore: 0 };
+        var riskNum = jiraInfo.riskScore || 20;
         EE_ENTITIES.push({
           id: uObj.key,
           type: 'user',
-          label: '',
+          label: jiraInfo.count > 0 ? jiraInfo.count + ' alerts' : '',
           icon: '\uD83D\uDC64',
           sub: 'user \u00b7 ' + uObj.doc_count + ' events',
-          risk: 'low',
+          risk: riskNum,
           malicious: false,
-          alerts: (EE_ALERTS[uObj.key] || []).length,
-          alertList: EE_ALERTS[uObj.key] || [],
-          lastSeen: 'recent'
+          alerts: jiraInfo.count,
+          alertList: jiraInfo.tickets.map(function(t) { return { name: t.summary, sev: 'medium', time: t.key }; }),
+          lastSeen: 'recent',
+          jiraTickets: jiraInfo.tickets
+        });
+        delete entityAlertMap[uObj.key];
+      });
+
+      // ── Add remaining Jira-only entities not found in Elastic ──
+      Object.keys(entityAlertMap).forEach(function(entId) {
+        var info = entityAlertMap[entId];
+        if (EE_ENTITIES.find(function(e) { return e.id === entId; })) return;
+        var type = info.type || 'host';
+        var icons = { ip: '\uD83C\uDF10', user: '\uD83D\uDC64', host: '\uD83D\uDDA5', process: '\u2699\uFE0F', hash: '#', domain: '\uD83D\uDD17' };
+        EE_ENTITIES.push({
+          id: entId,
+          type: type,
+          label: info.count + ' alerts',
+          icon: icons[type] || '?',
+          sub: 'from Jira tickets',
+          risk: info.riskScore,
+          malicious: info.riskScore >= 80,
+          alerts: info.count,
+          alertList: info.tickets.map(function(t) { return { name: t.summary, sev: t.priority.toLowerCase().indexOf('1') !== -1 ? 'critical' : 'medium', time: t.key }; }),
+          lastSeen: 'recent',
+          jiraTickets: info.tickets
         });
       });
 
-      // Build edges: connect host to its IPs (source IPs from alerts that match host IPs)
+      // ── Build remaining edges: host-to-IP from Elastic, user-to-host ──
       var hostIpMap = {};
       EE_ENTITIES.filter(function(e) { return e.type === 'host' && e.ip; }).forEach(function(h) {
         hostIpMap[h.ip] = h.id;
       });
       EE_ENTITIES.filter(function(e) { return e.type === 'ip'; }).forEach(function(ipEnt) {
         if (hostIpMap[ipEnt.id]) {
-          EE_EDGES.push({ from: hostIpMap[ipEnt.id], to: ipEnt.id });
-        }
-      });
-      // Connect IPs to nearby hosts
-      var allHosts = EE_ENTITIES.filter(function(e) { return e.type === 'host'; });
-      EE_ENTITIES.filter(function(e) { return e.type === 'ip'; }).forEach(function(ipEnt) {
-        if (!hostIpMap[ipEnt.id] && allHosts.length > 0) {
-          // Connect to a random host (simulates network relationships)
-          var targetHost = allHosts[Math.floor(Math.random() * Math.min(allHosts.length, 5))];
-          EE_EDGES.push({ from: ipEnt.id, to: targetHost.id, type: 'communicated_with' });
+          var ek = [hostIpMap[ipEnt.id], ipEnt.id].sort().join('|');
+          if (!entityEdgeSet.has(ek)) {
+            entityEdgeSet.add(ek);
+            EE_EDGES.push({ from: hostIpMap[ipEnt.id], to: ipEnt.id, type: 'has_ip' });
+          }
         }
       });
 
-      // Connect hosts that share the same namespace (client)
+      // Connect hosts sharing namespace
       var nsByHost = {};
       EE_ENTITIES.filter(function(e) { return e.type === 'host' && e.sub; }).forEach(function(h) {
-        var parts = h.sub.split(' · ');
+        var parts = h.sub.split(' \u00b7 ');
         var ns = parts[parts.length - 1];
-        if (ns && ns !== 'host') {
+        if (ns && ns !== 'host' && ns.length > 2) {
           if (!nsByHost[ns]) nsByHost[ns] = [];
           nsByHost[ns].push(h.id);
         }
@@ -30566,22 +30731,16 @@ document.addEventListener('keydown', (e) => {
       Object.keys(nsByHost).forEach(function(ns) {
         var hosts = nsByHost[ns];
         for (var i = 0; i < hosts.length - 1 && i < 3; i++) {
-          EE_EDGES.push({ from: hosts[i], to: hosts[i + 1], type: 'same_network' });
-        }
-      });
-
-      // Connect users to hosts
-      EE_ENTITIES.filter(function(e) { return e.type === 'user'; }).forEach(function(u, idx) {
-        if (allHosts.length > 0) {
-          var targetHost = allHosts[idx % allHosts.length];
-          EE_EDGES.push({ from: u.id, to: targetHost.id, type: 'logged_into' });
+          var ek = [hosts[i], hosts[i + 1]].sort().join('|');
+          if (!entityEdgeSet.has(ek)) {
+            entityEdgeSet.add(ek);
+            EE_EDGES.push({ from: hosts[i], to: hosts[i + 1], type: 'same_network' });
+          }
         }
       });
 
       var totalEntities = EE_ENTITIES.length;
-      console.log('[EntityExplorer] Live data built: ' + totalEntities + ' entities (' +
-        hostBuckets.length + ' hosts, ' + liveIPs.length + ' IPs, ' + liveUsers.length + ' users), ' +
-        EE_EDGES.length + ' edges');
+      console.log('[EntityExplorer] Live data built: ' + totalEntities + ' entities, ' + EE_EDGES.length + ' edges (incl. Jira IOC correlations)');
 
       // (Re-)initialize the canvas/catalog with live data
       eeInitNodes();
@@ -30600,11 +30759,22 @@ document.addEventListener('keydown', (e) => {
 
     } catch (err) {
       console.error('[EntityExplorer] loadLiveEntityData error:', err);
-      // Show error in catalog
       var catalogListErr = document.getElementById('eeCatalogList');
       if (catalogListErr) {
         catalogListErr.innerHTML = '<div style="padding:20px;text-align:center;color:var(--amber);font-size:11px;">Failed to load live entity data. ' + err.message + '</div>';
       }
+    }
+  }
+
+  // -- Fetch recent Jira tickets for IOC extraction --
+  async function fetchJiraTicketsForEntities() {
+    try {
+      var resp = await fetch('/api/jira?action=search&jql=' + encodeURIComponent('project = DAC ORDER BY created DESC') + '&maxResults=50&fields=summary,description,priority,status,created');
+      if (resp.status >= 400) return { issues: [] };
+      return await resp.json();
+    } catch(e) {
+      console.warn('[EntityExplorer] Jira fetch error:', e);
+      return { issues: [] };
     }
   }
 
@@ -34112,13 +34282,20 @@ function showEscModal(ticketKey) {
   if (titleEl) titleEl.innerHTML = '&#x270F;&#xFE0F; Edit Escalation Draft \u2014 ' + key;
 
   var inputs = overlay.querySelectorAll('.esc-input');
-  var textarea = overlay.querySelector('.esc-textarea');
+  var richText = document.getElementById('escRichText');
   // inputs[0] = To, inputs[1] = CC, inputs[2] = BCC, inputs[3] = Subject
   if (inputs[0]) inputs[0].value = draft.to || '';
   if (inputs[1]) inputs[1].value = draft.cc || '';
   if (inputs[2]) inputs[2].value = draft.bcc || '';
   if (inputs[3]) inputs[3].value = draft.subject || '';
-  if (textarea) textarea.value = draft.body || '';
+  if (richText) {
+    // If body contains HTML tags, set innerHTML directly; otherwise convert newlines to <br>
+    if (draft.body && (draft.body.indexOf('<') !== -1 && draft.body.indexOf('>') !== -1)) {
+      richText.innerHTML = draft.body;
+    } else {
+      richText.innerHTML = (draft.body || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    }
+  }
 
   // Store the ticket key on the modal for Save/Send to reference
   overlay.dataset.ticketKey = key;
@@ -34136,14 +34313,14 @@ function saveEscDraft() {
   var key = overlay.dataset.ticketKey || '';
 
   var inputs = overlay.querySelectorAll('.esc-input');
-  var textarea = overlay.querySelector('.esc-textarea');
+  var richText = document.getElementById('escRichText');
 
   // Read modal field values
   var to = inputs[0] ? inputs[0].value : '';
   var cc = inputs[1] ? inputs[1].value : '';
   var bcc = inputs[2] ? inputs[2].value : '';
   var subject = inputs[3] ? inputs[3].value : '';
-  var body = textarea ? textarea.value : '';
+  var body = richText ? richText.innerHTML : '';
 
   // Update the global draft store
   _currentEscalationDraft = Object.assign(_currentEscalationDraft || {}, {
@@ -34158,8 +34335,7 @@ function saveEscDraft() {
     // Update body preview
     var previewEl = document.getElementById('escalationBodyPreview');
     if (previewEl) {
-      var escaped = body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-      previewEl.innerHTML = escaped;
+      previewEl.innerHTML = body;
     }
   }
 
@@ -34178,6 +34354,60 @@ async function sendEscModalToJira() {
   // Delegate to submitEscalationToJira (which reads from escalationDraftContent)
   await submitEscalationToJira(key);
   closeEscModal();
+}
+
+/* ==============================================================
+   RICH TEXT TOOLBAR FUNCTIONS
+   ============================================================== */
+function escExecCmd(cmd, val) {
+  var richText = document.getElementById('escRichText');
+  if (!richText) return;
+  richText.focus();
+  document.execCommand(cmd, false, val || null);
+}
+
+function escInsertLink() {
+  var url = prompt('Enter URL:', 'https://');
+  if (url) {
+    escExecCmd('createLink', url);
+  }
+}
+
+function escInsertTable() {
+  var rows = prompt('Rows:', '3');
+  var cols = prompt('Columns:', '3');
+  if (!rows || !cols) return;
+  rows = parseInt(rows) || 3;
+  cols = parseInt(cols) || 3;
+  var html = '<table>';
+  for (var r = 0; r < rows; r++) {
+    html += '<tr>';
+    for (var c = 0; c < cols; c++) {
+      html += '<td>&nbsp;</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</table>';
+  escExecCmd('insertHTML', html);
+}
+
+function escInsertHR() {
+  escExecCmd('insertHTML', '<hr style="border:none;border-top:1px solid rgba(0,212,255,0.2);margin:8px 0;">');
+}
+
+var _escSourceMode = false;
+function escToggleSource() {
+  var richText = document.getElementById('escRichText');
+  if (!richText) return;
+  if (_escSourceMode) {
+    // Switch from source back to rich text
+    richText.innerHTML = richText.innerText;
+    _escSourceMode = false;
+  } else {
+    // Switch to source view
+    richText.innerText = richText.innerHTML;
+    _escSourceMode = true;
+  }
 }
 
 /* ==============================================================
@@ -36102,6 +36332,367 @@ function openEntityExplorer(entity, type) {
 // ── INVESTIGATION LIVE DATA ─────────────────────────────────
 var _currentInvestigationKey = null;
 
+// ── Alert Graph (Chronicle-style force-directed entity graph) ──
+var _agNodes = [];
+var _agEdges = [];
+var _agAnimFrame = null;
+var _agCanvas = null;
+var _agCtx = null;
+var _agHovered = null;
+var _agDrag = { active: false, node: null, pan: false, sx: 0, sy: 0, cx: 0, cy: 0 };
+var _agCam = { x: 0, y: 0, zoom: 1 };
+var _agTime = 0;
+
+var AG_COLORS = {
+  alert: '#ef4444', host: '#00d4ff', ip: '#8b5cf6',
+  user: '#10b981', domain: '#f59e0b', file: '#f97316', hash: '#f97316',
+  port: '#6366f1', path: '#ec4899'
+};
+
+function initAlertGraph(ticketKey, ticketData) {
+  _agCanvas = document.getElementById('invAlertGraphCanvas');
+  if (!_agCanvas) return;
+  _agCtx = _agCanvas.getContext('2d');
+  _agNodes = [];
+  _agEdges = [];
+  _agHovered = null;
+  if (_agAnimFrame) { cancelAnimationFrame(_agAnimFrame); _agAnimFrame = null; }
+
+  // Extract IOCs from ticket
+  var f = ticketData || {};
+  var desc = '';
+  if (f.description && f.description.content) desc = extractADFText(f.description);
+  else if (typeof f.description === 'string') desc = f.description;
+  var summary = f.summary || '';
+  var fullText = summary + ' ' + desc.replace(/<[^>]+>/g, ' ');
+  var iocs = extractIOCs(fullText);
+
+  // Center alert node
+  _agNodes.push({ id: ticketKey, type: 'alert', label: ticketKey, x: 0, y: 0, vx: 0, vy: 0, size: 22, pinned: true, color: AG_COLORS.alert });
+
+  var idx = 0;
+  var totalEntities = (iocs.hosts||[]).length + (iocs.ips||[]).length + (iocs.users||[]).length +
+    (iocs.files||[]).length + (iocs.hashes||[]).length;
+  if (totalEntities === 0) totalEntities = 1;
+
+  function addEntity(id, type) {
+    if (!id || _agNodes.find(function(n) { return n.id === id; })) return;
+    var angle = (idx / Math.max(totalEntities, 1)) * Math.PI * 2;
+    var radius = 100 + Math.random() * 40;
+    _agNodes.push({
+      id: id, type: type, label: id,
+      x: Math.cos(angle) * radius + (Math.random() - 0.5) * 30,
+      y: Math.sin(angle) * radius + (Math.random() - 0.5) * 30,
+      vx: 0, vy: 0, size: 14, pinned: false,
+      color: AG_COLORS[type] || '#888'
+    });
+    _agEdges.push({ from: ticketKey, to: id });
+    idx++;
+  }
+
+  (iocs.hosts || []).forEach(function(h) { addEntity(h, 'host'); });
+  (iocs.ips || []).forEach(function(ip) { addEntity(ip, 'ip'); });
+  (iocs.users || []).forEach(function(u) { addEntity(u, 'user'); });
+  (iocs.files || []).forEach(function(f) { addEntity(f, 'file'); });
+  (iocs.hashes || []).slice(0, 5).forEach(function(h) { addEntity(h.substring(0, 12) + '...', 'hash'); });
+
+  // Cross-link entities that appear related (IPs to hosts, users to hosts)
+  (iocs.ips || []).forEach(function(ip) {
+    (iocs.hosts || []).forEach(function(h) {
+      if (fullText.indexOf(ip) !== -1 && fullText.indexOf(h) !== -1) {
+        var dist = Math.abs(fullText.indexOf(ip) - fullText.indexOf(h));
+        if (dist < 200) _agEdges.push({ from: ip, to: h, secondary: true });
+      }
+    });
+  });
+  (iocs.users || []).forEach(function(u) {
+    (iocs.hosts || []).forEach(function(h) {
+      if (fullText.indexOf(u) !== -1 && fullText.indexOf(h) !== -1) {
+        var dist = Math.abs(fullText.indexOf(u) - fullText.indexOf(h));
+        if (dist < 200) _agEdges.push({ from: u, to: h, secondary: true });
+      }
+    });
+  });
+
+  // Setup canvas events
+  agSetupEvents();
+  agAnimate();
+
+  // Update entity count in card badge
+  var countNodes = _agNodes.length - 1; // exclude alert node
+  var badge = document.querySelector('#alertGraphCard .badge');
+  if (badge) badge.textContent = countNodes + ' Entities';
+}
+
+function agPhysicsStep() {
+  var repulsion = 5000;
+  var attraction = 0.01;
+  var centerPull = 0.0005;
+  var damping = 0.9;
+
+  for (var i = 0; i < _agNodes.length; i++) {
+    if (_agNodes[i].pinned) continue;
+    var fx = 0, fy = 0;
+    for (var j = 0; j < _agNodes.length; j++) {
+      if (i === j) continue;
+      var dx = _agNodes[i].x - _agNodes[j].x;
+      var dy = _agNodes[i].y - _agNodes[j].y;
+      var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      var force = repulsion / (dist * dist);
+      fx += (dx / dist) * force;
+      fy += (dy / dist) * force;
+    }
+    fx -= _agNodes[i].x * centerPull;
+    fy -= _agNodes[i].y * centerPull;
+    _agNodes[i].vx = (_agNodes[i].vx + fx) * damping;
+    _agNodes[i].vy = (_agNodes[i].vy + fy) * damping;
+  }
+
+  _agEdges.forEach(function(e) {
+    var fromN = _agNodes.find(function(n) { return n.id === e.from; });
+    var toN = _agNodes.find(function(n) { return n.id === e.to; });
+    if (!fromN || !toN) return;
+    var dx = toN.x - fromN.x;
+    var dy = toN.y - fromN.y;
+    var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ideal = e.secondary ? 120 : 90;
+    var force = (dist - ideal) * attraction;
+    if (!fromN.pinned) { fromN.vx += (dx / dist) * force; fromN.vy += (dy / dist) * force; }
+    if (!toN.pinned) { toN.vx -= (dx / dist) * force; toN.vy -= (dy / dist) * force; }
+  });
+
+  _agNodes.forEach(function(n) {
+    if (n.pinned) return;
+    n.x += n.vx;
+    n.y += n.vy;
+  });
+}
+
+function agDraw() {
+  if (!_agCanvas || !_agCtx) return;
+  var container = _agCanvas.parentElement;
+  if (!container) return;
+  var dpr = window.devicePixelRatio || 1;
+  var w = container.clientWidth;
+  var h = container.clientHeight;
+  if (_agCanvas.width !== w * dpr || _agCanvas.height !== h * dpr) {
+    _agCanvas.width = w * dpr;
+    _agCanvas.height = h * dpr;
+    _agCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  var ctx = _agCtx;
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.translate(w / 2 + _agCam.x * _agCam.zoom, h / 2 + _agCam.y * _agCam.zoom);
+  ctx.scale(_agCam.zoom, _agCam.zoom);
+  _agTime += 0.02;
+
+  // Draw grid
+  ctx.strokeStyle = 'rgba(0,212,255,0.03)';
+  ctx.lineWidth = 0.5;
+  for (var gx = -300; gx <= 300; gx += 40) {
+    ctx.beginPath(); ctx.moveTo(gx, -300); ctx.lineTo(gx, 300); ctx.stroke();
+  }
+  for (var gy = -300; gy <= 300; gy += 40) {
+    ctx.beginPath(); ctx.moveTo(-300, gy); ctx.lineTo(300, gy); ctx.stroke();
+  }
+
+  // Draw edges
+  _agEdges.forEach(function(e) {
+    var fromN = _agNodes.find(function(n) { return n.id === e.from; });
+    var toN = _agNodes.find(function(n) { return n.id === e.to; });
+    if (!fromN || !toN) return;
+    ctx.beginPath();
+    ctx.moveTo(fromN.x, fromN.y);
+    ctx.lineTo(toN.x, toN.y);
+    ctx.strokeStyle = e.secondary ? 'rgba(255,255,255,0.06)' : 'rgba(0,212,255,0.18)';
+    ctx.lineWidth = e.secondary ? 0.5 : 1;
+    if (e.secondary) ctx.setLineDash([3, 3]);
+    else ctx.setLineDash([]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Animated particle along edge
+    if (!e.secondary) {
+      var t = (_agTime * 0.5 + (e.from.charCodeAt(0) || 0) * 0.1) % 1;
+      var px = fromN.x + (toN.x - fromN.x) * t;
+      var py = fromN.y + (toN.y - fromN.y) * t;
+      ctx.beginPath();
+      ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,212,255,0.5)';
+      ctx.fill();
+    }
+  });
+
+  // Draw nodes
+  _agNodes.forEach(function(n) {
+    var isHov = _agHovered === n.id;
+    var s = n.size;
+
+    // Glow for alert node
+    if (n.type === 'alert') {
+      var glowAlpha = 0.15 + Math.sin(_agTime * 2) * 0.08;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, s + 8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(239,68,68,' + glowAlpha + ')';
+      ctx.fill();
+    }
+
+    // Node circle
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, s, 0, Math.PI * 2);
+    var grad = ctx.createRadialGradient(n.x - s * 0.3, n.y - s * 0.3, s * 0.1, n.x, n.y, s);
+    grad.addColorStop(0, n.color);
+    grad.addColorStop(1, n.color + '88');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    if (isHov) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Icon/label
+    ctx.fillStyle = '#fff';
+    ctx.font = (n.type === 'alert' ? 'bold 10px' : '9px') + ' var(--font-mono), monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (n.type === 'alert') {
+      ctx.fillText('\u26A0', n.x, n.y);
+    } else {
+      var icon = { host: '\uD83D\uDDA5', ip: '\uD83C\uDF10', user: '\uD83D\uDC64', domain: '\uD83D\uDD17', file: '\uD83D\uDCC4', hash: '#', port: ':', path: '\uD83D\uDCC2' };
+      ctx.fillText(icon[n.type] || '?', n.x, n.y);
+    }
+
+    // Label below node
+    ctx.fillStyle = isHov ? '#fff' : 'rgba(255,255,255,0.6)';
+    ctx.font = '8px var(--font-mono), monospace';
+    var truncLabel = n.label.length > 18 ? n.label.substring(0, 15) + '...' : n.label;
+    ctx.fillText(truncLabel, n.x, n.y + s + 10);
+  });
+
+  ctx.restore();
+}
+
+function agAnimate() {
+  agPhysicsStep();
+  agDraw();
+  _agAnimFrame = requestAnimationFrame(agAnimate);
+}
+
+function agGetNodeAt(mx, my) {
+  var container = _agCanvas.parentElement;
+  var w = container.clientWidth;
+  var h = container.clientHeight;
+  var worldX = (mx - w / 2 - _agCam.x * _agCam.zoom) / _agCam.zoom;
+  var worldY = (my - h / 2 - _agCam.y * _agCam.zoom) / _agCam.zoom;
+  for (var i = _agNodes.length - 1; i >= 0; i--) {
+    var dx = _agNodes[i].x - worldX;
+    var dy = _agNodes[i].y - worldY;
+    if (dx * dx + dy * dy < (_agNodes[i].size + 4) * (_agNodes[i].size + 4)) return _agNodes[i];
+  }
+  return null;
+}
+
+function agSetupEvents() {
+  if (!_agCanvas) return;
+  // Remove old listeners by replacing canvas (simple approach)
+  var newCanvas = _agCanvas.cloneNode(true);
+  _agCanvas.parentElement.replaceChild(newCanvas, _agCanvas);
+  _agCanvas = newCanvas;
+  _agCtx = _agCanvas.getContext('2d');
+
+  _agCanvas.addEventListener('mousemove', function(e) {
+    var rect = _agCanvas.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    if (_agDrag.active && _agDrag.node) {
+      var container = _agCanvas.parentElement;
+      var w = container.clientWidth, h = container.clientHeight;
+      _agDrag.node.x = (mx - w / 2 - _agCam.x * _agCam.zoom) / _agCam.zoom;
+      _agDrag.node.y = (my - h / 2 - _agCam.y * _agCam.zoom) / _agCam.zoom;
+      _agDrag.node.vx = 0; _agDrag.node.vy = 0;
+      return;
+    }
+    if (_agDrag.pan) {
+      _agCam.x = _agDrag.cx + (mx - _agDrag.sx) / _agCam.zoom;
+      _agCam.y = _agDrag.cy + (my - _agDrag.sy) / _agCam.zoom;
+      return;
+    }
+    var node = agGetNodeAt(mx, my);
+    _agHovered = node ? node.id : null;
+    _agCanvas.style.cursor = node ? 'pointer' : 'grab';
+    var tip = document.getElementById('invAGTooltip');
+    if (tip) {
+      if (node) {
+        tip.style.display = 'block';
+        tip.style.left = (mx + 12) + 'px';
+        tip.style.top = (my - 10) + 'px';
+        var conns = _agEdges.filter(function(e) { return e.from === node.id || e.to === node.id; }).length;
+        tip.innerHTML = '<div style="font-weight:700;color:' + node.color + ';">' + node.type.toUpperCase() + '</div>' +
+          '<div style="color:var(--text-primary);margin-top:2px;">' + node.label + '</div>' +
+          '<div style="color:var(--text-muted);margin-top:2px;">' + conns + ' connections</div>';
+      } else {
+        tip.style.display = 'none';
+      }
+    }
+  });
+
+  _agCanvas.addEventListener('mousedown', function(e) {
+    var rect = _agCanvas.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var node = agGetNodeAt(mx, my);
+    if (node) {
+      _agDrag.active = true;
+      _agDrag.node = node;
+      node.pinned = true;
+      _agCanvas.style.cursor = 'grabbing';
+    } else {
+      _agDrag.pan = true;
+      _agDrag.sx = mx; _agDrag.sy = my;
+      _agDrag.cx = _agCam.x; _agDrag.cy = _agCam.y;
+    }
+  });
+
+  _agCanvas.addEventListener('mouseup', function(e) {
+    if (_agDrag.active && _agDrag.node) {
+      if (_agDrag.node.type !== 'alert') _agDrag.node.pinned = false;
+      // On click (minimal drag) — show entity info
+      var rect = _agCanvas.getBoundingClientRect();
+      var mx = e.clientX - rect.left;
+      var infoEl = document.getElementById('invAGEntityInfo');
+      if (infoEl && _agDrag.node) {
+        var n = _agDrag.node;
+        var conns = _agEdges.filter(function(ed) { return ed.from === n.id || ed.to === n.id; });
+        var connNames = conns.map(function(ed) { return ed.from === n.id ? ed.to : ed.from; });
+        infoEl.style.display = 'block';
+        infoEl.innerHTML = '<div style="font-weight:700;color:' + n.color + ';font-size:11px;">' + n.type.toUpperCase() + ': ' + n.label + '</div>' +
+          '<div style="color:var(--text-muted);margin-top:4px;">Connected to: ' + connNames.join(', ') + '</div>' +
+          (n.type !== 'alert' ? '<button class="btn btn-sm" style="margin-top:6px;font-size:9px;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);" onclick="navigateToEntityFromInv(\'' + n.label.replace(/'/g, "\\'") + '\')">View in Entity Explorer</button>' : '');
+      }
+    }
+    _agDrag.active = false;
+    _agDrag.node = null;
+    _agDrag.pan = false;
+    _agCanvas.style.cursor = 'grab';
+  });
+
+  _agCanvas.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    var delta = e.deltaY > 0 ? 0.92 : 1.08;
+    _agCam.zoom = Math.max(0.4, Math.min(3, _agCam.zoom * delta));
+  }, { passive: false });
+
+  _agCanvas.addEventListener('mouseleave', function() {
+    _agDrag.active = false; _agDrag.node = null; _agDrag.pan = false;
+    _agHovered = null;
+    var tip = document.getElementById('invAGTooltip');
+    if (tip) tip.style.display = 'none';
+  });
+}
+
 // ── Collapsible Panel Init ──
 function initCollapsiblePanels() {
   document.querySelectorAll('.inv-collapsible-header').forEach(function(header) {
@@ -36567,6 +37158,29 @@ async function openInvestigation(ticketKey) {
           '<div style="width:240px;height:5px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:3px;animation:invProgressBar 8s ease-in-out forwards;"></div></div>' +
           '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Querying log sources &middot; OpenCTI enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
         '</div>' +
+        // ── Alert Graph (Chronicle-style force-directed graph) ──
+        '<div class="card" style="padding:14px;border-color:rgba(0,212,255,0.15);" id="alertGraphCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;">' +
+            '<span class="card-title">Alert Graph</span>' +
+            '<span class="badge" style="font-size:8px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);">Entities</span>' +
+            '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span>' +
+          '</div>' +
+          '<div class="inv-collapsible-body" id="alertGraphBody">' +
+            '<div style="position:relative;width:100%;height:320px;background:rgba(0,0,0,0.2);border-radius:8px;overflow:hidden;border:1px solid var(--border-subtle);">' +
+              '<canvas id="invAlertGraphCanvas" style="width:100%;height:100%;"></canvas>' +
+              '<div id="invAGTooltip" style="display:none;position:absolute;background:rgba(8,13,26,0.95);border:1px solid rgba(0,212,255,0.25);border-radius:6px;padding:8px 10px;font-size:10px;color:var(--text-primary);pointer-events:none;z-index:10;max-width:200px;"></div>' +
+            '</div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;" id="invAGLegend">' +
+              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;"></span>Alert</span>' +
+              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#00d4ff;display:inline-block;"></span>Host</span>' +
+              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#8b5cf6;display:inline-block;"></span>IP</span>' +
+              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;"></span>User</span>' +
+              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>Domain</span>' +
+              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#f97316;display:inline-block;"></span>File/Hash</span>' +
+            '</div>' +
+            '<div id="invAGEntityInfo" style="margin-top:8px;display:none;padding:8px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.1);border-radius:6px;font-size:10px;"></div>' +
+          '</div>' +
+        '</div>' +
         // Client Escalation Draft (just above Analyst Feedback Loop)
         '<div class="card" style="padding:14px;border-color:rgba(0,212,255,0.2);" id="clientEscalationCard">' +
           '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Client Escalation Draft</span><span class="badge badge-cyan" style="font-size:9px;">AI Generated</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
@@ -36579,6 +37193,9 @@ async function openInvestigation(ticketKey) {
 
     // ── Initialize collapsible panels ──
     initCollapsiblePanels();
+    
+    // ── Initialize Alert Graph with ticket IOCs ──
+    setTimeout(function() { initAlertGraph(ticketKey, f); }, 300);
     
     // ── Fetch and display SLA data from Jira API ──
     fetchAndDisplaySLA(ticketKey, f);
@@ -39538,38 +40155,43 @@ console.log('[Security] Platform hardening active: auth guard, rate limiter, XSS
       </div>
       <div class="esc-field">
         <div class="esc-field-label">Message Body</div>
-        <textarea class="esc-textarea">Dear D. Sok and NagaWorld Security Team,
-
-Dacta SG SOC has detected a CRITICAL security incident on your environment requiring immediate attention.
-
-INCIDENT REFERENCE: DAC-18158
-SEVERITY: P1 CRITICAL
-TIMESTAMP: 2026-02-27 13:21:44 SGT
-
-SUMMARY:
-Ransomware-like file encryption activity has been detected on host DACTASG-WS-047 (Finance Department). 847 files have been renamed with .enc extension within a 43-second window. The activity is associated with a suspicious PowerShell process (T1059.001) and correlates with earlier lateral movement indicators across 4 additional hosts.
-
-AFFECTED ASSETS:
-- Host: DACTASG-WS-047 (Windows 11 Pro, Finance Dept, 10.0.4.47)
-- User: john.santos@dactaglobal.com (Domain Admin — account disabled)
-- Potential blast radius: 12 hosts accessible via compromised credentials
-
-ACTIONS TAKEN:
-1. Host DACTASG-WS-047 isolation initiated via Elastic Endpoint Agent
-2. Account john.santos disabled pending full investigation
-3. IOC hash a3f4b8c2d9e1f0a7 blocked at EDR layer
-
-IMMEDIATE ACTIONS REQUIRED FROM YOUR TEAM:
-- Notify your executive team and legal/compliance department
-- Activate your internal IR plan
-- Do NOT power off or reboot affected systems without coordination
-
-Please contact your assigned Dacta Incident Commander immediately.
-War Room: WR-2026-003 | Emergency: +65 6xxx xxxx
-
-Regards,
-Dacta SG SOC Team
-reference: DAC-18158</textarea>
+        <div class="esc-toolbar" id="escToolbar">
+          <button class="esc-toolbar-btn" onclick="escExecCmd('bold')" title="Bold (Ctrl+B)"><b>B</b></button>
+          <button class="esc-toolbar-btn" onclick="escExecCmd('italic')" title="Italic (Ctrl+I)"><i>I</i></button>
+          <button class="esc-toolbar-btn" onclick="escExecCmd('underline')" title="Underline (Ctrl+U)"><u>U</u></button>
+          <button class="esc-toolbar-btn" onclick="escExecCmd('strikeThrough')" title="Strikethrough"><s>S</s></button>
+          <div class="esc-toolbar-sep"></div>
+          <select onchange="escExecCmd('formatBlock',this.value);this.selectedIndex=0;" title="Heading">
+            <option value="">Heading</option>
+            <option value="h2">H2</option>
+            <option value="h3">H3</option>
+            <option value="h4">H4</option>
+            <option value="p">Normal</option>
+          </select>
+          <select onchange="escExecCmd('fontSize',this.value);this.selectedIndex=0;" title="Font Size">
+            <option value="">Size</option>
+            <option value="1">Small</option>
+            <option value="3">Normal</option>
+            <option value="4">Large</option>
+            <option value="5">X-Large</option>
+          </select>
+          <div class="esc-toolbar-sep"></div>
+          <button class="esc-toolbar-btn" onclick="escExecCmd('insertUnorderedList')" title="Bullet List">&#8226;</button>
+          <button class="esc-toolbar-btn" onclick="escExecCmd('insertOrderedList')" title="Numbered List">1.</button>
+          <button class="esc-toolbar-btn" onclick="escExecCmd('outdent')" title="Outdent">&#8676;</button>
+          <button class="esc-toolbar-btn" onclick="escExecCmd('indent')" title="Indent">&#8677;</button>
+          <div class="esc-toolbar-sep"></div>
+          <button class="esc-toolbar-btn" onclick="escExecCmd('justifyLeft')" title="Align Left">&#9776;</button>
+          <button class="esc-toolbar-btn" onclick="escExecCmd('justifyCenter')" title="Align Center">&#9776;</button>
+          <div class="esc-toolbar-sep"></div>
+          <button class="esc-toolbar-btn" onclick="escInsertLink()" title="Insert Link">&#128279;</button>
+          <button class="esc-toolbar-btn" onclick="escInsertTable()" title="Insert Table">&#9638;</button>
+          <button class="esc-toolbar-btn" onclick="escInsertHR()" title="Horizontal Rule">&mdash;</button>
+          <div class="esc-toolbar-sep"></div>
+          <button class="esc-toolbar-btn" onclick="escExecCmd('removeFormat')" title="Clear Formatting">&#10006;</button>
+          <button class="esc-toolbar-btn" onclick="escToggleSource()" title="View HTML Source">&lt;/&gt;</button>
+        </div>
+        <div class="esc-richtext" id="escRichText" contenteditable="true">Draft will be populated after investigation...</div>
       </div>
     </div>
     <div class="esc-modal-footer">
