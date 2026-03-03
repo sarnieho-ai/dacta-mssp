@@ -27019,7 +27019,7 @@ function addConnectorMeta(cid) {
 
 function saveConnectorChanges(orgId) {
   var org = ORG_CONNECTORS[orgId];
-  if (!org) return;
+  if (!org) { showToast('Organization not found: ' + orgId, 'error'); return; }
 
   // Read all inputs for this org's connectors
   org.connectors.forEach(function(c, idx) {
@@ -27042,8 +27042,9 @@ function saveConnectorChanges(orgId) {
 
   // Also save to localStorage as fallback
   try { localStorage.setItem('dacta_orgConnectors_' + orgId, JSON.stringify(org)); } catch(e) {}
+  // Also update the global backup
+  try { localStorage.setItem('dacta_allOrgConnectors', JSON.stringify(ORG_CONNECTORS)); } catch(e) {}
 
-  renderSettingsConnectors();
   showToast('Connector config saved for ' + org.name + ' — LLM will use updated values', 'success');
 }
 
@@ -27147,10 +27148,11 @@ async function loadSettingsPage() {
       return;
     }
 
-    // Ensure Supabase-onboarded orgs are merged before rendering
-    await loadOrgsFromSupabase();
-    // Load any persisted connector configurations
-    await loadPersistedConnectors();
+    // Ensure Supabase-onboarded orgs are merged before rendering (parallel)
+    await Promise.all([
+      loadOrgsFromSupabase().catch(function(e) { console.warn('[Settings] loadOrgs error:', e.message); }),
+      loadPersistedConnectors().catch(function(e) { console.warn('[Settings] loadConnectors error:', e.message); })
+    ]);
 
     // Populate org selector from ORG_CONNECTORS
     var optHTML = '';
@@ -28153,6 +28155,13 @@ function approveOnboardOrg(idx) {
   dnl = dnl.filter(function(n) { return n.toLowerCase().trim() !== onLower; });
   localStorage.setItem('deletedOrgNames', JSON.stringify(dnl));
 
+  // Persist approved orgs to localStorage for reload persistence
+  try {
+    var approvedOrgs = JSON.parse(localStorage.getItem('dacta_approvedOrgs') || '{}');
+    approvedOrgs[newId] = ORG_CONNECTORS[newId];
+    localStorage.setItem('dacta_approvedOrgs', JSON.stringify(approvedOrgs));
+  } catch(lsErr) { console.warn('[Onboarding] localStorage save failed:', lsErr.message); }
+
   renderOnboardingPage();
 
   // Also try to create in Supabase
@@ -28317,6 +28326,22 @@ async function loadOnboardingPage() {
 // Load orgs from Supabase into ORG_CONNECTORS on startup
 // Merges Supabase orgs with hardcoded ones — Supabase is the persistence layer
 async function loadOrgsFromSupabase() {
+  // Load approved orgs from localStorage first (instant, reliable)
+  try {
+    var approvedOrgs = JSON.parse(localStorage.getItem('dacta_approvedOrgs') || '{}');
+    Object.keys(approvedOrgs).forEach(function(key) {
+      if (ORG_CONNECTORS[key]) return; // already present by ID
+      var rName = approvedOrgs[key].name.toLowerCase().trim();
+      var nameMatch = Object.values(ORG_CONNECTORS).some(function(o) {
+        var oName = o.name.toLowerCase().trim();
+        return oName === rName || oName.indexOf(rName) === 0 || rName.indexOf(oName) === 0;
+      });
+      if (nameMatch) return;
+      ORG_CONNECTORS[key] = approvedOrgs[key];
+      console.log('[Onboarding] Restored from localStorage:', approvedOrgs[key].name);
+    });
+  } catch(lsErr) { /* ignore */ }
+
   try {
     if (!window._supabaseRef) return;
     var resp = await window._supabaseRef.from('organizations').select('*').eq('status', 'active');
@@ -28671,7 +28696,7 @@ function applyProductionMode() {
   document.querySelectorAll('#page-dashboard .cc-right-sidebar .card').forEach(function(card) {
     if (!card.querySelector('.prod-sidebar-empty')) {
       var d = document.createElement('div'); d.className = 'prod-sidebar-empty';
-      d.innerHTML = '<div style="text-align:center;padding:12px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Loading from Jira...</div>';
+      d.innerHTML = '<div style="text-align:center;padding:12px;"><div class="jira-spinner" style="width:16px;height:16px;margin:0 auto 6px;"></div><div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Fetching data...</div></div>';
       card.appendChild(d);
     }
   });
@@ -28689,7 +28714,7 @@ function applyProductionMode() {
   if (triagePage) {
     // Subtitle
     var tSub = triagePage.querySelector('.page-subtitle');
-    if (tSub) tSub.textContent = '0 tickets — awaiting Jira data source';
+    if (tSub) tSub.textContent = '0 tickets — loading...';
 
     // Metric strip values
     triagePage.querySelectorAll('.tq-metric-value').forEach(function(el) { el.textContent = '0'; });
@@ -28933,7 +28958,7 @@ function applyProductionMode() {
       container.style.position = 'relative';
       var o = document.createElement('div'); o.className = 'prod-overlay';
       o.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
-      o.innerHTML = '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">Loading from Jira...</div>';
+      o.innerHTML = '<div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);display:flex;align-items:center;gap:6px;"><div class="jira-spinner" style="width:12px;height:12px;"></div>Fetching data...</div>';
       container.appendChild(o);
     }
   });
@@ -33873,12 +33898,14 @@ window.DactaJira = {
 
   async fetchDashboard() {
     var now = Date.now();
-    if (this._cache.dashboard && (now - this._cacheTime.dashboard) < this._CACHE_TTL) {
-      return this._cache.dashboard;
+    var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '24h';
+    var cacheKey = 'dashboard_' + tr;
+    if (this._cache[cacheKey] && (now - (this._cacheTime[cacheKey] || 0)) < this._CACHE_TTL) {
+      return this._cache[cacheKey];
     }
-    var data = await this._fetch('/api/jira?action=dashboard');
-    this._cache.dashboard = data;
-    this._cacheTime.dashboard = now;
+    var data = await this._fetch('/api/jira?action=dashboard&timeRange=' + encodeURIComponent(tr));
+    this._cache[cacheKey] = data;
+    this._cacheTime[cacheKey] = now;
     return data;
   },
 
@@ -34097,6 +34124,10 @@ function updateDashTimeLabels() {
 function refreshDashboardData() {
   if (window._dactaMode !== 'production') return;
   _dashboardLoading = false;
+  // Clear all time-range-specific caches
+  Object.keys(DactaJira._cache).forEach(function(k) {
+    if (k.startsWith('dashboard_')) delete DactaJira._cache[k];
+  });
   DactaJira._cache.dashboard = null;
   DactaJira._cache.telemetry = null;
   DactaJira._cache.dashvisuals = null;
@@ -34365,6 +34396,35 @@ function updateAllVisuals(vis) {
     }
   }
 
+  // 7. Re-render org sidebar using orgDist from dashvisuals (all tickets)
+  if (vis.orgDist && Object.keys(vis.orgDist).length > 0) {
+    var rightSidebar = document.querySelector('#page-dashboard .cc-right-sidebar');
+    if (rightSidebar) {
+      var orgCard = rightSidebar.querySelector('.card');
+      if (orgCard) {
+        orgCard.querySelectorAll('.org-row').forEach(function(r) { r.remove(); });
+        var emptyEl = orgCard.querySelector('.prod-sidebar-empty');
+        if (emptyEl) emptyEl.remove();
+
+        var orgEntries = Object.entries(vis.orgDist).filter(function(e) { return e[0] !== '\u2014'; }).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 3);
+        var maxCount = orgEntries.length > 0 ? orgEntries[0][1] : 1;
+
+        orgEntries.forEach(function(entry) {
+          var name = entry[0], total = entry[1];
+          var pct = Math.round((total / maxCount) * 100);
+          var dotColor = total > 10 ? 'amber' : total > 3 ? 'cyan' : 'green';
+          var row = document.createElement('div');
+          row.className = 'org-row';
+          row.innerHTML = '<div class="status-dot ' + dotColor + '"></div>' +
+            '<span class="org-name">' + name + '</span>' +
+            '<div class="org-bar"><div class="org-fill" style="width:' + pct + '%;' + (dotColor === 'cyan' ? 'background:var(--cyan);' : dotColor === 'green' ? 'background:var(--green);' : '') + '"></div></div>' +
+            '<span class="org-count">' + total + '</span>';
+          orgCard.appendChild(row);
+        });
+      }
+    }
+  }
+
   console.log('[DactaJira] All visuals updated with live data:', {
     totalAll: vis.totalAll, totalOpen: vis.totalOpen, escalated: vis.escalatedCount,
     resolvedWeek: vis.resolvedWeek, issueCount: vis.issueCount
@@ -34626,17 +34686,42 @@ async function populateLiveDashboard() {
         var prodSideEmpty = orgCard.querySelector('.prod-sidebar-empty');
         if (prodSideEmpty) prodSideEmpty.remove();
 
-        // Count orgs from recent tickets
+        // Count orgs from dashvisuals.orgDist (all tickets) instead of limited recentTickets
         var orgCounts = {};
-        tickets.forEach(function(t) {
-          var o = t.org || '—';
-          if (!orgCounts[o]) orgCounts[o] = { total: 0, open: 0 };
-          orgCounts[o].total++;
-          if (t.status === 'Open') orgCounts[o].open++;
-        });
+        var liveOrgDist = window._liveVis && window._liveVis.orgDist ? window._liveVis.orgDist : null;
+        if (liveOrgDist && Object.keys(liveOrgDist).length > 0) {
+          // Use orgDist from dashvisuals API (covers ALL tickets, not just 20 recent)
+          Object.entries(liveOrgDist).forEach(function(entry) {
+            orgCounts[entry[0]] = { total: entry[1], open: Math.ceil(entry[1] * 0.4) };
+          });
+          // Refine open counts from recentTickets where we have actual status
+          tickets.forEach(function(t) {
+            var o = t.org || '\u2014';
+            if (orgCounts[o] && t.status === 'Open') {
+              if (!orgCounts[o]._openCounted) { orgCounts[o].open = 0; orgCounts[o]._openCounted = true; }
+              orgCounts[o].open++;
+            }
+          });
+        } else {
+          // Fallback to recentTickets if dashvisuals not loaded yet
+          tickets.forEach(function(t) {
+            var o = t.org || '\u2014';
+            if (!orgCounts[o]) orgCounts[o] = { total: 0, open: 0 };
+            orgCounts[o].total++;
+            if (t.status === 'Open') orgCounts[o].open++;
+          });
+        }
 
-        var orgEntries = Object.entries(orgCounts).sort(function(a, b) { return b[1].total - a[1].total; }).slice(0, 3);
+        var orgEntries = Object.entries(orgCounts).filter(function(e) { return e[0] !== '\u2014'; }).sort(function(a, b) { return b[1].total - a[1].total; }).slice(0, 3);
         var maxCount = orgEntries.length > 0 ? orgEntries[0][1].total : 1;
+
+        if (orgEntries.length === 0) {
+          // Show "awaiting data" instead of blank
+          var emptyRow = document.createElement('div');
+          emptyRow.className = 'prod-sidebar-empty';
+          emptyRow.innerHTML = '<div style="text-align:center;padding:12px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Awaiting organization data...</div>';
+          orgCard.appendChild(emptyRow);
+        }
 
         orgEntries.forEach(function(entry) {
           var name = entry[0];
@@ -35910,6 +35995,11 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent) {
   container.innerHTML = bannerHTML + overrideBanner + (cacheEntry.html || '<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:11px;">Cached investigation data unavailable. Click Re-investigate to run a fresh analysis.</div>');
   invMainContent.appendChild(container);
 
+  // Apply collapsible behavior to round cards in cached content
+  setTimeout(function() {
+    applyCollapsibleSections(invMainContent);
+  }, 200);
+
   // Also add feedback panel below
   appendFeedbackPanel(ticketKey, cacheEntry, invMainContent);
 
@@ -35920,6 +36010,76 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent) {
   } else if (cacheEntry.verdict) {
     var metaOrg = (cacheEntry.metadata || {}).org || '';
     generateEscalationDraft(ticketKey, metaOrg, cacheEntry.verdict, cacheEntry.confidence || 50, '');
+  }
+}
+
+// ── Helper: Apply collapsible behavior to investigation sections ──
+function applyCollapsibleSections(container) {
+  if (!container) return;
+  // Find all round cards (aiRound1, aiRound2, aiRound3) and verdict-banner
+  var roundCards = container.querySelectorAll('[id^="aiRound"]');
+  roundCards.forEach(function(roundCard) {
+    var children = roundCard.children;
+    if (children.length < 2) return;
+    var headerEl = children[0];
+    var contentEl = children[children.length - 1];
+    if (!contentEl || !headerEl) return;
+
+    // Collapse by default
+    contentEl.style.maxHeight = '0px';
+    contentEl.style.overflow = 'hidden';
+    contentEl.style.transition = 'max-height 0.3s ease, padding 0.3s ease';
+    contentEl.style.marginTop = '0';
+    headerEl.style.marginBottom = '0';
+    headerEl.style.cursor = 'pointer';
+
+    // Add toggle arrow if not already added
+    if (!headerEl.querySelector('.inv-round-toggle')) {
+      var arrow = document.createElement('span');
+      arrow.className = 'inv-round-toggle';
+      arrow.style.cssText = 'margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s ease;display:inline-block;';
+      arrow.textContent = '\u25BA';
+      headerEl.appendChild(arrow);
+    }
+    headerEl.onclick = (function(cEl, hEl) {
+      return function() {
+        var isOpen = cEl.style.maxHeight !== '0px';
+        cEl.style.maxHeight = isOpen ? '0px' : '2000px';
+        cEl.style.overflow = isOpen ? 'hidden' : 'visible';
+        cEl.style.marginTop = isOpen ? '0' : '10px';
+        var arr = hEl.querySelector('.inv-round-toggle');
+        if (arr) arr.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+      };
+    })(contentEl, headerEl);
+  });
+
+  // Also make the pipeline panel collapsible
+  var pipelinePanel = container.querySelector('.inv-pipeline-panel');
+  if (pipelinePanel) {
+    var pipeHeader = pipelinePanel.querySelector('.inv-pipeline-header');
+    var pipeFlow = pipelinePanel.querySelector('.inv-pipeline-flow');
+    var pipeSummary = pipelinePanel.querySelector('.inv-pipeline-summary');
+    if (pipeHeader && pipeFlow) {
+      pipeHeader.style.cursor = 'pointer';
+      if (!pipeHeader.querySelector('.inv-round-toggle')) {
+        var pArr = document.createElement('span');
+        pArr.className = 'inv-round-toggle';
+        pArr.style.cssText = 'margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s ease;display:inline-block;';
+        pArr.textContent = '\u25BA';
+        pipeHeader.appendChild(pArr);
+      }
+      // Default collapsed
+      pipeFlow.style.maxHeight = '0px';
+      pipeFlow.style.overflow = 'hidden';
+      pipeFlow.style.transition = 'max-height 0.3s ease';
+      pipeHeader.onclick = function() {
+        var isOpen = pipeFlow.style.maxHeight !== '0px';
+        pipeFlow.style.maxHeight = isOpen ? '0px' : '600px';
+        pipeFlow.style.overflow = isOpen ? 'hidden' : 'visible';
+        var arr = pipeHeader.querySelector('.inv-round-toggle');
+        if (arr) arr.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+      };
+    }
   }
 }
 
@@ -37188,42 +37348,8 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   // Collapse all round detail sections after verdict is complete
   setTimeout(function() {
-    for (var ci = 1; ci <= totalRounds; ci++) {
-      var roundCard = document.getElementById('aiRound' + ci);
-      if (roundCard) {
-        // The content div is the LAST child div (header is first child div)
-        var children = roundCard.children;
-        var headerEl = children.length > 0 ? children[0] : null;
-        var contentEl = children.length > 1 ? children[children.length - 1] : null;
-        if (contentEl) {
-          contentEl.style.maxHeight = '0px';
-          contentEl.style.overflow = 'hidden';
-          contentEl.style.transition = 'max-height 0.3s ease, padding 0.3s ease';
-          contentEl.style.marginTop = '0';
-        }
-        if (headerEl) {
-          headerEl.style.marginBottom = '0';
-          headerEl.style.cursor = 'pointer';
-          // Add toggle arrow if not already added
-          if (!headerEl.querySelector('.inv-round-toggle')) {
-            var arrow = document.createElement('span');
-            arrow.className = 'inv-round-toggle';
-            arrow.style.cssText = 'margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s ease;display:inline-block;';
-            arrow.textContent = '\u25BA';
-            headerEl.appendChild(arrow);
-          }
-          headerEl.onclick = (function(cEl, aEl) {
-            return function() {
-              var isOpen = cEl.style.maxHeight !== '0px';
-              cEl.style.maxHeight = isOpen ? '0px' : '2000px';
-              cEl.style.overflow = isOpen ? 'hidden' : 'visible';
-              cEl.style.marginTop = isOpen ? '0' : '10px';
-              aEl.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
-            };
-          })(contentEl, headerEl.querySelector('.inv-round-toggle'));
-        }
-      }
-    }
+    var invMainContent = document.getElementById('invMainContent');
+    applyCollapsibleSections(invMainContent);
   }, 500);
 
   // Populate Enrichment Summary card

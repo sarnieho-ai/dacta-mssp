@@ -100,8 +100,19 @@ export default async function handler(req, res) {
 
     // ─── ACTION: dashboard ────────────────────────────────────
     if (action === 'dashboard') {
-      // Check server-side cache first
-      var cached = _getCached('dashboard');
+      // Time range mapping for JQL
+      const timeRange = url.searchParams.get('timeRange') || '24h';
+      const timeRangeMap = {
+        '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': 'startOfDay()',
+        '7d': 'startOfWeek()', '30d': '-30d'
+      };
+      const recentJql = timeRangeMap[timeRange] || 'startOfDay()';
+      const isRelative = recentJql.startsWith('-');
+      const createdFilter = isRelative ? `created >= "${recentJql}"` : `created >= ${recentJql}`;
+      const updatedFilter = isRelative ? `updated >= "${recentJql}"` : `updated >= ${recentJql}`;
+
+      // Check server-side cache (keyed by time range)
+      var cached = _getCached('dashboard_' + timeRange);
       if (cached) {
         res.setHeader('X-Cache', 'HIT');
         return res.status(200).json(cached);
@@ -117,10 +128,10 @@ export default async function handler(req, res) {
         countJql(`${B} AND status="Open" AND priority="P2 - High"`),
         countJql(`${B} AND status="Open" AND priority="P3 - Medium"`),
         countJql(`${B} AND status="Open" AND priority="P4 - Low"`),
-        countJql(`${B} AND status="Closed" AND updated >= startOfDay()`),
-        countJql(`${B} AND status="Canceled" AND updated >= startOfDay()`),
-        countJql(`${B} AND status="Completed" AND updated >= startOfDay()`),
-        countJql(`${B} AND created >= startOfDay()`),
+        countJql(`${B} AND status="Closed" AND ${updatedFilter}`),
+        countJql(`${B} AND status="Canceled" AND ${updatedFilter}`),
+        countJql(`${B} AND status="Completed" AND ${updatedFilter}`),
+        countJql(`${B} AND ${createdFilter}`),
         countJql(`${B} AND created >= startOfWeek()`),
         searchJql(`${B} AND status="Open" ORDER BY created DESC`, [
           'summary','status','priority','assignee','created','updated','issuetype',
@@ -138,7 +149,7 @@ export default async function handler(req, res) {
         },
         recentTickets: (recentData.issues || []).map(normalizeIssue)
       };
-      _setCache('dashboard', dashResult);
+      _setCache('dashboard_' + timeRange, dashResult);
       return res.status(200).json(dashResult);
     }
 
