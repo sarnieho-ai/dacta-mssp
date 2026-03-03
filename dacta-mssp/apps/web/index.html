@@ -30103,6 +30103,38 @@ document.addEventListener('keydown', (e) => {
     }
   }
 
+  // -- Dynamic Entity Injection (for navigateToEntityFromInv) --
+  window._eeDynamicAddEntity = function(entityId) {
+    // Check if already exists
+    if (EE_ENTITIES.find(function(e) { return e.id === entityId; })) return;
+
+    // Infer type from entityId
+    var type = 'host';
+    var icon = '\uD83D\uDDA5';
+    // IP address pattern
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(entityId)) { type = 'ip'; icon = '\uD83C\uDF10'; }
+    // User pattern (contains @ or backslash)
+    else if (entityId.indexOf('@') !== -1 || entityId.indexOf('\\') !== -1) { type = 'user'; icon = '\uD83D\uDC64'; }
+    // Domain pattern
+    else if (entityId.indexOf('.') !== -1 && !entityId.match(/^[A-Z0-9-]+$/i)) { type = 'domain'; icon = '\uD83D\uDD17'; }
+
+    var newEntity = {
+      id: entityId,
+      label: entityId,
+      type: type,
+      icon: icon,
+      risk: 50,
+      status: 'unknown',
+      alerts: 0,
+      malicious: false
+    };
+    EE_ENTITIES.push(newEntity);
+
+    // Rebuild nodes and catalog
+    if (typeof eeInitNodes === 'function') eeInitNodes();
+    eeBuildCatalog(eeGetActiveFilter(), entityId);
+  };
+
   // -- Main Init --
   window.initEntityExplorer = async function() {
     if (eeInitialized) return;
@@ -33547,11 +33579,100 @@ function exportSessionIOCs() {
 /* ==============================================================
    TASK 2: ESCALATION MODAL
    ============================================================== */
-function showEscModal() {
-  document.getElementById('escModalOverlay').classList.add('open');
+function showEscModal(ticketKey) {
+  var overlay = document.getElementById('escModalOverlay');
+  if (!overlay) return;
+
+  // Use passed ticketKey or fall back to current draft / investigation key
+  var key = ticketKey || (_currentEscalationDraft && _currentEscalationDraft.ticketKey) || _currentInvestigationKey || '';
+
+  // Get draft data — prefer _currentEscalationDraft, fall back to reading the card preview
+  var draft = (_currentEscalationDraft && _currentEscalationDraft.ticketKey) ? _currentEscalationDraft : null;
+
+  // If no draft data yet (e.g. opened before investigation), try reading from the preview
+  if (!draft) {
+    var previewEl = document.getElementById('escalationBodyPreview');
+    draft = {
+      ticketKey: key,
+      to: '',
+      cc: 'soc-lead@dacta.global',
+      bcc: '',
+      subject: '[Security Alert] ' + key,
+      body: previewEl ? (previewEl.innerText || previewEl.textContent) : ''
+    };
+  }
+
+  // Populate modal fields
+  var titleEl = overlay.querySelector('.esc-modal-title');
+  if (titleEl) titleEl.innerHTML = '&#x270F;&#xFE0F; Edit Escalation Draft \u2014 ' + key;
+
+  var inputs = overlay.querySelectorAll('.esc-input');
+  var textarea = overlay.querySelector('.esc-textarea');
+  // inputs[0] = To, inputs[1] = CC, inputs[2] = BCC, inputs[3] = Subject
+  if (inputs[0]) inputs[0].value = draft.to || '';
+  if (inputs[1]) inputs[1].value = draft.cc || '';
+  if (inputs[2]) inputs[2].value = draft.bcc || '';
+  if (inputs[3]) inputs[3].value = draft.subject || '';
+  if (textarea) textarea.value = draft.body || '';
+
+  // Store the ticket key on the modal for Save/Send to reference
+  overlay.dataset.ticketKey = key;
+
+  overlay.classList.add('open');
 }
+
 function closeEscModal() {
   document.getElementById('escModalOverlay').classList.remove('open');
+}
+
+function saveEscDraft() {
+  var overlay = document.getElementById('escModalOverlay');
+  if (!overlay) return;
+  var key = overlay.dataset.ticketKey || '';
+
+  var inputs = overlay.querySelectorAll('.esc-input');
+  var textarea = overlay.querySelector('.esc-textarea');
+
+  // Read modal field values
+  var to = inputs[0] ? inputs[0].value : '';
+  var cc = inputs[1] ? inputs[1].value : '';
+  var bcc = inputs[2] ? inputs[2].value : '';
+  var subject = inputs[3] ? inputs[3].value : '';
+  var body = textarea ? textarea.value : '';
+
+  // Update the global draft store
+  _currentEscalationDraft = Object.assign(_currentEscalationDraft || {}, {
+    ticketKey: key, to: to, cc: cc, bcc: bcc, subject: subject, body: body
+  });
+
+  // Update the card preview
+  var content = document.getElementById('escalationDraftContent');
+  if (content) {
+    // Update To/CC/Subj spans if present
+    var headerDiv = content.querySelector('div > div:nth-child(2)');
+    // Update body preview
+    var previewEl = document.getElementById('escalationBodyPreview');
+    if (previewEl) {
+      var escaped = body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+      previewEl.innerHTML = escaped;
+    }
+  }
+
+  closeEscModal();
+  showToast('Draft saved', 'success');
+}
+
+async function sendEscModalToJira() {
+  var overlay = document.getElementById('escModalOverlay');
+  if (!overlay) return;
+  var key = overlay.dataset.ticketKey || _currentInvestigationKey || '';
+
+  // Save latest edits first
+  saveEscDraft();
+
+  // Delegate to submitEscalationToJira (which reads from escalationDraftContent)
+  await submitEscalationToJira(key);
+  closeEscModal();
 }
 
 /* ==============================================================
@@ -36042,10 +36163,13 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent) {
   // Regenerate escalation draft from cached verdict data
   if (cacheEntry.verdict && cacheEntry.escalationData) {
     var ed = cacheEntry.escalationData;
-    generateEscalationDraft(ticketKey, ed.org || '', cacheEntry.verdict, cacheEntry.confidence || 50, ed.summary || '');
+    var cachedPriority = (cacheEntry.metadata || {}).priority || 'P3';
+    var cachedTicketData = ed.ticketData || null;
+    generateEscalationDraft(ticketKey, ed.org || '', cacheEntry.verdict, cacheEntry.confidence || 50, ed.summary || '', cachedPriority, cachedTicketData);
   } else if (cacheEntry.verdict) {
     var metaOrg = (cacheEntry.metadata || {}).org || '';
-    generateEscalationDraft(ticketKey, metaOrg, cacheEntry.verdict, cacheEntry.confidence || 50, '');
+    var metaPriority = (cacheEntry.metadata || {}).priority || 'P3';
+    generateEscalationDraft(ticketKey, metaOrg, cacheEntry.verdict, cacheEntry.confidence || 50, '', metaPriority, null);
   }
 }
 
@@ -37017,12 +37141,45 @@ function linkifyEntities(container) {
 function navigateToEntityFromInv(entityId) {
   navigate('entities');
   setTimeout(function() {
+    // Set search input
     var searchEl = document.getElementById('eeSearch');
     if (searchEl) {
       searchEl.value = entityId;
       searchEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
-  }, 500);
+
+    // Try to select the entity in Entity Explorer
+    // EE_ENTITIES and eeNodes live inside the IIFE scope — exposed via window._eeSelectEntity
+    // First check if entity exists in EE_ENTITIES (accessed via the catalog search result)
+    // We use _eeSelectEntity which handles eeSelectedEntity + eeUpdateDetail + canvas centering
+    if (typeof window._eeSelectEntity === 'function') {
+      // Check if entity is already in catalog by seeing if the catalog has a matching card
+      var catalogEl = document.getElementById('eeCatalogList');
+      if (catalogEl) {
+        var existingCard = catalogEl.querySelector('[data-eid="' + CSS.escape(entityId) + '"]');
+        if (existingCard) {
+          window._eeSelectEntity(entityId);
+          return;
+        }
+      }
+
+      // Entity not in static list — dynamically inject it then select
+      if (typeof window._eeDynamicAddEntity === 'function') {
+        window._eeDynamicAddEntity(entityId);
+        // Rebuild catalog then select
+        setTimeout(function() {
+          if (searchEl) {
+            searchEl.value = entityId;
+            searchEl.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          window._eeSelectEntity(entityId);
+        }, 200);
+      } else {
+        // Fallback: just try selecting (will no-op if not found)
+        window._eeSelectEntity(entityId);
+      }
+    }
+  }, 600);
 }
 
 async function runAIInvestigation(ticketKey, issueData) {
@@ -37515,7 +37672,7 @@ async function runAIInvestigation(ticketKey, issueData) {
     verdict: verdict,
     confidence: confidence,
     timestamp: investigatedTimestamp,
-    escalationData: { org: org, summary: summary },
+    escalationData: { org: org, summary: summary, ticketData: f },
     metadata: {
       totalRounds: totalRounds,
       org: org,
@@ -37535,8 +37692,27 @@ async function runAIInvestigation(ticketKey, issueData) {
     appendFeedbackPanel(ticketKey, cacheEntry, invMainContent);
   }
 
+  // ═══════════════════════════════════════════════
+  // ATTACK PATH VISUALIZATION (Task 3)
+  // ═══════════════════════════════════════════════
+  var invMainContentAP = document.getElementById('invMainContent');
+  if (invMainContentAP) {
+    var attackPathHTML = buildAttackPathHTML(ticketKey, techniques, summary);
+    if (attackPathHTML) {
+      var attackPathEl = document.createElement('div');
+      attackPathEl.innerHTML = attackPathHTML;
+      // Insert before escalation draft card
+      var escCard = document.getElementById('clientEscalationCard');
+      if (escCard) {
+        invMainContentAP.insertBefore(attackPathEl.firstChild, escCard);
+      } else {
+        invMainContentAP.appendChild(attackPathEl.firstChild);
+      }
+    }
+  }
+
   // Generate client escalation draft
-  generateEscalationDraft(ticketKey, org, verdict, confidence, summary);
+  generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, f);
 
   } catch (aiErr) {
     console.error('[AI Investigation] Error:', aiErr);
@@ -37551,43 +37727,324 @@ async function runAIInvestigation(ticketKey, issueData) {
   }
 }
 
+// ── Attack Path Visualization Builder ──
+function buildAttackPathHTML(ticketKey, techniques, summary) {
+  if (!techniques || techniques.length === 0) return '';
+
+  // Filter out EDR-BLOCK meta-technique for display
+  var displayTechniques = techniques.filter(function(t) { return t.id !== 'EDR-BLOCK'; });
+  if (displayTechniques.length === 0) return '';
+
+  // Map MITRE tactic order for positioning
+  var tacticOrder = [
+    'Initial Access', 'Execution', 'Persistence', 'Privilege Escalation',
+    'Defense Evasion', 'Credential Access', 'Discovery', 'Lateral Movement',
+    'Collection', 'Command & Control', 'Exfiltration', 'Impact', 'Detection', 'Execution + C2'
+  ];
+
+  // Sort techniques by tactic order
+  displayTechniques.sort(function(a, b) {
+    var ai = tacticOrder.indexOf(a.tactic);
+    var bi = tacticOrder.indexOf(b.tactic);
+    if (ai === -1) ai = 99;
+    if (bi === -1) bi = 99;
+    return ai - bi;
+  });
+
+  // Deduplicate by tactic (keep first per tactic)
+  var seen = {};
+  displayTechniques = displayTechniques.filter(function(t) {
+    if (seen[t.tactic]) return false;
+    seen[t.tactic] = true;
+    return true;
+  });
+
+  // Limit to 8 nodes max
+  if (displayTechniques.length > 8) displayTechniques = displayTechniques.slice(0, 8);
+
+  var total = displayTechniques.length;
+
+  // Determine current/active stage (last tactic that's not Impact, or last one)
+  var currentIdx = total - 1;
+  var impactIdx = displayTechniques.findIndex(function(t) {
+    return t.tactic === 'Impact' || t.id === 'T1486' || t.id === 'T1485';
+  });
+  if (impactIdx !== -1 && impactIdx === total - 1 && total > 1) {
+    currentIdx = total - 2; // If impact is last, "you are here" is one before
+  } else if (impactIdx !== -1) {
+    currentIdx = impactIdx;
+  }
+
+  // Check if we have EDR block (contained)
+  var hasEdrBlock = techniques.some(function(t) { return t.id === 'EDR-BLOCK'; });
+
+  // Node color logic
+  function getNodeClass(idx, t) {
+    // Green: stages before current (contained)
+    if (idx < currentIdx) return 'ap-green';
+    // Current: amber + pulsing
+    if (idx === currentIdx) return 'ap-amber ap-current';
+    // Impact: red
+    if (t.tactic === 'Impact' || t.id === 'T1486' || t.id === 'T1485') return 'ap-red';
+    // Orange: stages after current
+    return 'ap-orange';
+  }
+
+  // Tactic icons
+  var tacticIcons = {
+    'Initial Access': '\uD83D\uDCE7',
+    'Execution': '\u26A1',
+    'Persistence': '\uD83D\uDD11',
+    'Privilege Escalation': '\uD83D\uDEE1\uFE0F',
+    'Defense Evasion': '\uD83D\uDC7B',
+    'Credential Access': '\uD83D\uDD13',
+    'Discovery': '\uD83D\uDD0D',
+    'Lateral Movement': '\uD83C\uDF10',
+    'Collection': '\uD83D\uDDC2\uFE0F',
+    'Command & Control': '\uD83D\uDCE1',
+    'Execution + C2': '\uD83D\uDCE1',
+    'Exfiltration': '\uD83D\uDCE4',
+    'Impact': '\uD83D\uDC80',
+    'Detection': '\uD83D\uDEAB'
+  };
+
+  // Progress %
+  var progressPct = Math.round(((currentIdx + 1) / total) * 100);
+  var stageLabel = (currentIdx + 1) + '/' + total + ' stages';
+
+  // Build nodes HTML
+  var nodesHTML = '';
+  displayTechniques.forEach(function(t, idx) {
+    var nodeClass = getNodeClass(idx, t);
+    var isCurrent = idx === currentIdx;
+    var icon = tacticIcons[t.tactic] || '\uD83D\uDD35';
+    var badgeHTML = isCurrent
+      ? '<div class="ap-node-badge current">\u25CF YOU ARE HERE</div>'
+      : (hasEdrBlock && idx < currentIdx ? '<div class="ap-node-badge" style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);">\u2713 Contained</div>' : '');
+
+    // Truncate long technique names
+    var techName = t.name.length > 22 ? t.name.slice(0, 20) + '\u2026' : t.name;
+    var techParts = techName.split(':');
+    var techDisplay = techParts.length > 1
+      ? techParts[0].trim() + '<br>' + techParts[1].trim()
+      : techName.replace(/[/ ]+/, '<br>');
+
+    nodesHTML += '<div class="ap-node ' + nodeClass + '">' +
+      badgeHTML +
+      '<div class="ap-node-icon">' + icon + '</div>' +
+      '<div class="ap-node-tactic">' + escapeHtml(t.tactic) + '</div>' +
+      '<div class="ap-node-technique">' + techDisplay + '</div>' +
+      '<div class="ap-node-mitre">' + escapeHtml(t.id) + '</div>' +
+    '</div>';
+
+    // Add connector between nodes
+    if (idx < total - 1) {
+      nodesHTML += '<div class="ap-connector"><div class="ap-connector-line"></div></div>';
+    }
+  });
+
+  // Determine threat badge
+  var isHighImpact = displayTechniques.some(function(t) {
+    return t.tactic === 'Impact' || t.id === 'T1486';
+  });
+  var threatBadge = isHighImpact
+    ? '<span class="badge badge-red" style="animation:pulse-red 2s ease-in-out infinite;">ACTIVE THREAT</span>'
+    : '<span class="badge badge-amber">UNDER INVESTIGATION</span>';
+
+  return '<div class="attack-path-section">' +
+    '<div class="attack-path-header">' +
+      '<div>' +
+        '<div class="attack-path-title">⚔ Attack Path \u2014 ' + escapeHtml(ticketKey) + '</div>' +
+        '<div class="attack-path-subtitle">MITRE ATT&amp;CK &middot; ' + total + ' stage' + (total !== 1 ? 's' : '') + ' identified &middot; Stage ' + (currentIdx + 1) + ' active</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;align-items:center;">' +
+        threatBadge +
+        '<span class="badge badge-amber">Stage ' + (currentIdx + 1) + ' of ' + total + '</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="attack-path-flow">' + nodesHTML + '</div>' +
+    '<div class="attack-path-legend">' +
+      '<div class="ap-legend-item"><div class="ap-legend-dot" style="background:#10b981;"></div>Safe / Contained</div>' +
+      '<div class="ap-legend-item"><div class="ap-legend-dot" style="background:#f59e0b;"></div>Active Stage</div>' +
+      '<div class="ap-legend-item"><div class="ap-legend-dot" style="background:#ef4444;"></div>High Impact</div>' +
+      '<div style="flex:1;"></div>' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span style="font-size:10px;color:var(--text-muted);">Attack progress</span>' +
+        '<div class="ap-progress-bar"><div class="ap-progress-fill" style="width:' + progressPct + '%;"></div></div>' +
+        '<span style="font-size:10px;color:var(--amber);font-weight:700;">' + stageLabel + '</span>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 // ── Client Escalation Draft Generator ──
-function generateEscalationDraft(ticketKey, org, verdict, confidence, summary) {
+// Global store for current escalation draft data (used by modal)
+var _currentEscalationDraft = {};
+
+function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData) {
   var card = document.getElementById('clientEscalationCard');
   if (!card) return;
   var content = document.getElementById('escalationDraftContent');
   if (!content) return;
 
+  // ── Resolve org info ──
   var orgObj = Object.values(ORG_CONNECTORS).find(function(o) {
-    return o.name.toLowerCase().indexOf(org.toLowerCase()) === 0 || org.toLowerCase().indexOf(o.name.toLowerCase()) === 0;
+    return o.name.toLowerCase().indexOf((org || '').toLowerCase()) === 0 ||
+           (org || '').toLowerCase().indexOf(o.name.toLowerCase()) === 0;
   });
-  var orgName = orgObj ? orgObj.name : org;
-  var isThreat = verdict.toLowerCase().indexOf('true positive') !== -1;
-  var severity = isThreat ? 'HIGH' : 'LOW';
-  var action = isThreat ? 'Immediate action recommended' : 'No action required at this time';
+  var orgName = orgObj ? orgObj.name : (org || 'Client');
 
-  var draftHTML = '<div style="display:flex;flex-direction:column;gap:8px;">' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
-      '<span class="badge ' + (isThreat ? 'badge-p1' : 'badge-green') + '" style="font-size:9px;">' + verdict.split('\u2014')[0].trim() + '</span>' +
-      '<span style="font-size:10px;color:var(--text-muted);">Confidence: ' + confidence + '%</span>' +
-    '</div>' +
-    '<div style="padding:10px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.1);border-radius:8px;font-size:10px;">' +
-      '<div style="display:flex;gap:6px;margin-bottom:4px;"><span style="color:var(--text-muted);width:36px;">To:</span><span style="color:var(--text-primary);font-family:var(--font-mono);">security@' + orgName.toLowerCase().replace(/\s+/g,'') + '.com</span></div>' +
-      '<div style="display:flex;gap:6px;margin-bottom:4px;"><span style="color:var(--text-muted);width:36px;">CC:</span><span style="color:var(--text-secondary);font-family:var(--font-mono);">soc-lead@dacta.global</span></div>' +
-      '<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);width:36px;">Subj:</span><span style="color:var(--amber);font-weight:600;">[' + severity + '] Security Alert \u2014 ' + ticketKey + '</span></div>' +
-    '</div>' +
-    '<div style="font-size:10px;color:var(--text-secondary);line-height:1.6;padding:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:6px;">' +
-      '<p style="margin:0 0 6px;">Dear ' + orgName + ' Security Team,</p>' +
-      '<p style="margin:0 0 6px;">Our SOC has completed an investigation of alert <strong style="color:var(--cyan);">' + ticketKey + '</strong>: <em>' + escapeHtml(summary) + '</em></p>' +
-      '<p style="margin:0 0 6px;"><strong>AI Verdict:</strong> ' + verdict + ' (' + confidence + '% confidence)</p>' +
-      '<p style="margin:0 0 6px;"><strong>Recommended Action:</strong> ' + action + '</p>' +
-      '<p style="margin:0;">Full investigation details are available in the DACTA SIEMLess portal. Please respond if you require additional context.</p>' +
-    '</div>' +
-    '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px;">' +
-      '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="copyEscalationDraft(\'' + ticketKey + '\')">\uD83D\uDCCB Copy</button>' +
-      '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.25);" onclick="submitEscalationToJira(\'' + ticketKey + '\')">\uD83D\uDCE8 Submit to Jira</button>' +
-    '</div>' +
-  '</div>';
+  // ── Severity from priority ──
+  var pShort = (priority || 'P3').toUpperCase().split(' - ')[0].split(' ')[0];
+  var severityMap = { 'P1': 'CRITICAL', 'P2': 'HIGH', 'P3': 'MEDIUM', 'P4': 'LOW' };
+  var severity = severityMap[pShort] || 'MEDIUM';
+
+  // ── Verdict flags ──
+  var isThreat = verdict.toLowerCase().indexOf('true positive') !== -1;
+  var isEscalate = isThreat || verdict.toLowerCase().indexOf('escalat') !== -1;
+  var badgeClass = pShort === 'P1' ? 'badge-p1' : pShort === 'P2' ? 'badge-p2' : isThreat ? 'badge-amber' : 'badge-green';
+
+  // ── Extract entities from ticket data ──
+  var f = ticketData || {};
+  var description = '';
+  if (f.description && f.description.content) description = extractADFText(f.description);
+  else if (typeof f.description === 'string') description = f.description;
+  var cleanDesc = description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  var fullText = (summary || '') + ' ' + cleanDesc;
+  var iocs = extractIOCs(fullText);
+
+  // ── Timestamp from ticket creation ──
+  var createdRaw = f.created || f.updated || null;
+  var timestampStr = 'Unknown';
+  if (createdRaw) {
+    try {
+      var d = new Date(createdRaw);
+      timestampStr = d.toISOString().replace('T', ' ').slice(0, 19) + ' SGT';
+    } catch(e) { timestampStr = createdRaw; }
+  }
+
+  // ── Build To/CC from org connectors ──
+  var toEmail = 'security@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
+  var ccEmail = 'soc-lead@dacta.global';
+  // If org has a ticketing connector, try to build a more accurate email
+  if (orgObj && orgObj.connectors) {
+    var tickConnector = orgObj.connectors.find(function(c) { return c.connector_type === 'ticketing'; });
+    // Use org code for a cleaner domain
+    if (orgObj.code) {
+      toEmail = 'security@' + orgName.toLowerCase().replace(/\s+/g, '') + '.com';
+    }
+  }
+
+  // ── Build subject ──
+  var subject = '[' + pShort + '] [' + severity + '] Security Alert \u2014 ' + ticketKey;
+
+  // ── Build affected assets section ──
+  var assetsLines = [];
+  if (iocs.hosts && iocs.hosts.length > 0) {
+    iocs.hosts.slice(0, 5).forEach(function(h) {
+      var ipStr = '';
+      if (iocs.ips && iocs.ips.length > 0) ipStr = ' (' + iocs.ips[0] + ')';
+      assetsLines.push('- Host: ' + h + ipStr);
+    });
+  }
+  if (iocs.users && iocs.users.length > 0) {
+    iocs.users.slice(0, 3).forEach(function(u) { assetsLines.push('- User: ' + u); });
+  }
+  if (iocs.ips && iocs.ips.length > 0 && assetsLines.length === 0) {
+    iocs.ips.slice(0, 3).forEach(function(ip) { assetsLines.push('- IP: ' + ip); });
+  }
+  if (assetsLines.length === 0) assetsLines.push('- Refer to ticket ' + ticketKey + ' for affected asset details');
+  var assetsText = assetsLines.join('\n');
+
+  // ── Build actions taken ──
+  var actionsTaken = [];
+  if (isThreat) {
+    actionsTaken.push('1. Alert triaged and escalated by Dacta SG SOC');
+    if (iocs.hosts && iocs.hosts.length > 0) actionsTaken.push('2. Affected host(s) flagged for isolation review');
+    if (iocs.users && iocs.users.length > 0) actionsTaken.push('3. Affected user account(s) flagged for review');
+    actionsTaken.push((actionsTaken.length + 1) + '. IOC enrichment via OpenCTI and threat intelligence feeds completed');
+  } else {
+    actionsTaken.push('1. Alert triaged by Dacta SG SOC');
+    actionsTaken.push('2. AI investigation completed — ' + verdict.split('\u2014')[0].trim());
+    actionsTaken.push('3. Ticket closed / no further action required from client');
+  }
+
+  // ── Immediate actions ──
+  var immediateActions = isThreat
+    ? 'Please review the affected assets and confirm whether isolation is appropriate.\nActivate your incident response plan if not already done.\nDo NOT power off affected systems without coordinating with Dacta SOC.'
+    : 'No immediate action required. Alert classified as ' + verdict.split('\u2014')[0].trim() + '.';
+
+  // ── Full email body text (stored for modal) ──
+  var emailBodyText =
+    'Dear ' + orgName + ' Security Team,\n\n' +
+    'Dacta SG SOC has completed an investigation of the following security alert on your environment.\n\n' +
+    'INCIDENT REFERENCE: ' + ticketKey + '\n' +
+    'SEVERITY: ' + pShort + ' ' + severity + '\n' +
+    'TIMESTAMP: ' + timestampStr + '\n\n' +
+    'SUMMARY:\n' + (summary || 'See ticket details.') + '\n\n' +
+    'AFFECTED ASSETS:\n' + assetsText + '\n\n' +
+    'ACTIONS TAKEN:\n' + actionsTaken.join('\n') + '\n\n' +
+    'IMMEDIATE ACTIONS REQUIRED FROM YOUR TEAM:\n' + immediateActions + '\n\n' +
+    'Full investigation details are available in the DACTA SIEMLess portal.\n' +
+    'Please contact your assigned Dacta Incident Commander for further assistance.\n\n' +
+    'Regards,\nDacta SG SOC Team\nreference: ' + ticketKey;
+
+  // ── Store draft data globally for modal use ──
+  _currentEscalationDraft = {
+    ticketKey: ticketKey,
+    to: toEmail,
+    cc: ccEmail,
+    bcc: '',
+    subject: subject,
+    body: emailBodyText,
+    verdict: verdict,
+    confidence: confidence,
+    severity: severity,
+    pShort: pShort,
+    isThreat: isThreat
+  };
+
+  // ── Render card with email preview ──
+  var emailBodyHtml = emailBodyText
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+
+  var draftHTML =
+    '<div style="display:flex;flex-direction:column;gap:8px;">' +
+      // Status badges row
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">' +
+        '<span class="badge ' + badgeClass + '" style="font-size:9px;">' + verdict.split('\u2014')[0].trim() + '</span>' +
+        '<span class="badge" style="font-size:9px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);">' + pShort + ' ' + severity + '</span>' +
+        '<span style="font-size:10px;color:var(--text-muted);margin-left:auto;">Confidence: ' + confidence + '%</span>' +
+      '</div>' +
+      // To/CC/Subject header
+      '<div style="padding:10px 12px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.12);border-radius:8px;font-size:10px;">' +
+        '<div style="display:flex;gap:6px;margin-bottom:4px;align-items:baseline;">' +
+          '<span style="color:var(--text-muted);min-width:38px;font-size:9px;text-transform:uppercase;letter-spacing:0.06em;">To:</span>' +
+          '<span style="color:var(--text-primary);font-family:var(--font-mono);">' + escapeHtml(toEmail) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;margin-bottom:4px;align-items:baseline;">' +
+          '<span style="color:var(--text-muted);min-width:38px;font-size:9px;text-transform:uppercase;letter-spacing:0.06em;">CC:</span>' +
+          '<span style="color:var(--text-secondary);font-family:var(--font-mono);">' + escapeHtml(ccEmail) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;align-items:baseline;">' +
+          '<span style="color:var(--text-muted);min-width:38px;font-size:9px;text-transform:uppercase;letter-spacing:0.06em;">Subj:</span>' +
+          '<span style="color:var(--amber);font-weight:600;">' + escapeHtml(subject) + '</span>' +
+        '</div>' +
+      '</div>' +
+      // Email body (contenteditable preview)
+      '<div contenteditable="true" id="escalationBodyPreview" style="font-size:10px;color:var(--text-secondary);line-height:1.7;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:6px;font-family:var(--font-mono);white-space:pre-wrap;outline:none;min-height:80px;">' +
+        emailBodyHtml +
+      '</div>' +
+      // Action buttons
+      '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px;flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="showToast(\'📎 Artifact attached\', \'info\')">\uD83D\uDCCE Attach Artifacts</button>' +
+        '<div style="flex:1;"></div>' +
+        '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="showEscModal(\'' + ticketKey + '\')">\u270F Edit Draft</button>' +
+        '<button class="btn btn-sm" style="font-size:10px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(139,92,246,0.15));color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="submitEscalationToJira(\'' + ticketKey + '\')">\uD83D\uDCE4 Send Escalation</button>' +
+      '</div>' +
+    '</div>';
+
   content.innerHTML = draftHTML;
 }
 
@@ -38241,10 +38698,10 @@ reference: DAC-18158</textarea>
       </div>
     </div>
     <div class="esc-modal-footer">
-      <button class="btn btn-secondary btn-sm" onclick="showToast('Artifact attached')">&#x1F4CE; Attach Artifacts</button>
+      <button class="btn btn-secondary btn-sm" onclick="showToast('&#x1F4CE; Artifact attached', 'info')">&#x1F4CE; Attach Artifacts</button>
       <div class="spacer"></div>
-      <button class="btn btn-secondary btn-sm" onclick="showToast('Draft saved');closeEscModal();">Save Draft</button>
-      <button class="btn btn-primary btn-sm" onclick="showToast('Escalation sent to d.sok@nagaworld.com');closeEscModal();">&#x1F4E4; Send Escalation</button>
+      <button class="btn btn-secondary btn-sm" onclick="saveEscDraft()">Save Draft</button>
+      <button class="btn btn-primary btn-sm" onclick="sendEscModalToJira()">&#x1F4E4; Send Escalation</button>
       <button class="btn btn-secondary btn-sm" onclick="closeEscModal()">Cancel</button>
     </div>
   </div>
