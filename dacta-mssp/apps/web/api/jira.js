@@ -355,6 +355,62 @@ export default async function handler(req, res) {
       return res.status(200).json(result);
     }
 
+    // ─── ACTION: requestParticipants (fetch JSM request participants) ───
+    if (action === 'requestParticipants') {
+      const key = req.query.key;
+      if (!key) return res.status(400).json({ error: 'Missing key parameter' });
+      const result = { participants: [], source: 'none' };
+      // Try JSM Service Desk API for request participants
+      try {
+        const r = await fetch(`${baseUrl}/rest/servicedesc/1/servicedesk/request/${key}/participant`, {
+          headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+        });
+        if (r.status === 200) {
+          const data = await r.json();
+          result.participants = (data.values || []).map(p => ({
+            accountId: p.accountId,
+            displayName: p.displayName || p.name || '',
+            emailAddress: p.emailAddress || ''
+          }));
+          result.source = 'jsm';
+        }
+      } catch(e) { /* fallback below */ }
+      // Also try issue fields for request participants (customfield_10010)
+      if (result.participants.length === 0) {
+        try {
+          const r2 = await fetch(`${baseUrl}/rest/api/3/issue/${key}?fields=customfield_10010,customfield_10002,reporter`, {
+            headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+          });
+          if (r2.status < 400) {
+            const issueData = await r2.json();
+            const fields = issueData.fields || {};
+            // customfield_10010 = Request participants (array of user objects)
+            if (fields.customfield_10010 && Array.isArray(fields.customfield_10010)) {
+              result.participants = fields.customfield_10010.map(p => ({
+                accountId: p.accountId || '',
+                displayName: p.displayName || p.name || '',
+                emailAddress: p.emailAddress || ''
+              }));
+              result.source = 'fields';
+            }
+            // Also include reporter as fallback
+            if (fields.reporter) {
+              result.reporter = {
+                accountId: fields.reporter.accountId || '',
+                displayName: fields.reporter.displayName || '',
+                emailAddress: fields.reporter.emailAddress || ''
+              };
+            }
+            // Include organizations
+            if (fields.customfield_10002 && Array.isArray(fields.customfield_10002)) {
+              result.organizations = fields.customfield_10002.map(o => o.name || '');
+            }
+          }
+        } catch(e2) { /* continue */ }
+      }
+      return res.status(200).json(result);
+    }
+
     // ─── ACTION: replyCustomer (JSM visible to customer) ──────
     if (action === 'replyCustomer') {
       const body = req.body || {};

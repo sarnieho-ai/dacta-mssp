@@ -10724,7 +10724,6 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <div style="display:flex;gap:8px;margin-top:10px;">
                 <button class="btn btn-primary btn-sm" onclick="showEscModal()">&#x270F; Edit Draft</button>
                 <button class="btn btn-success btn-sm" onclick="showEscModal()">&#x1F4E4; Send Escalation</button>
-                <button class="btn btn-secondary btn-sm" style="margin-left:auto;">&#x1F4CE; Attach Artifacts</button>
               </div>
             </div>
 
@@ -36270,9 +36269,10 @@ async function openInvestigation(ticketKey) {
           '</div>' +
         '</div>' +
 
-        // Activity Timeline
-        '<div class="card" style="padding:14px;max-height:400px;overflow-y:auto;">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span></div>' +
+        // Activity Timeline — collapsible but OPEN by default
+        '<div class="card" style="padding:14px;">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="max-height:400px;overflow-y:auto;">' +
           (timelineItems.length === 0
             ? '<div style="text-align:center;padding:16px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">No activity recorded</div>'
             : '<div style="display:flex;flex-direction:column;gap:0;">' +
@@ -36298,6 +36298,7 @@ async function openInvestigation(ticketKey) {
               }).join('') +
             '</div>'
           ) +
+          '</div>' +
         '</div>' +
 
         // ── Panels below Timeline (collapsed by default) ──
@@ -38470,7 +38471,7 @@ function buildAttackPathHTML(ticketKey, techniques, summary) {
 // Global store for current escalation draft data (used by modal)
 var _currentEscalationDraft = {};
 
-function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData) {
+async function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData) {
   var card = document.getElementById('clientEscalationCard');
   if (!card) return;
   var content = document.getElementById('escalationDraftContent');
@@ -38512,16 +38513,35 @@ function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, p
     } catch(e) { timestampStr = createdRaw; }
   }
 
-  // ── Build To/CC from org connectors ──
-  var toEmail = 'security@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
+  // ── Build To/CC from Jira request participants ──
+  var toEmail = '';
   var ccEmail = 'soc-lead@dacta.global';
-  // If org has a ticketing connector, try to build a more accurate email
-  if (orgObj && orgObj.connectors) {
-    var tickConnector = orgObj.connectors.find(function(c) { return c.connector_type === 'ticketing'; });
-    // Use org code for a cleaner domain
-    if (orgObj.code) {
-      toEmail = 'security@' + orgName.toLowerCase().replace(/\s+/g, '') + '.com';
+  
+  // Try fetching actual request participants from Jira
+  try {
+    var participantsResp = await fetch('/api/jira?action=requestParticipants&key=' + encodeURIComponent(ticketKey));
+    var participantsData = await participantsResp.json();
+    
+    if (participantsData.participants && participantsData.participants.length > 0) {
+      // Use participant emails — filter out empty/internal
+      var participantEmails = participantsData.participants
+        .map(function(p) { return p.emailAddress; })
+        .filter(function(e) { return e && e.indexOf('@') !== -1; });
+      if (participantEmails.length > 0) {
+        toEmail = participantEmails.join(', ');
+      }
     }
+    // If no participants found, try reporter email
+    if (!toEmail && participantsData.reporter && participantsData.reporter.emailAddress) {
+      toEmail = participantsData.reporter.emailAddress;
+    }
+  } catch(pErr) {
+    console.warn('[Escalation] Failed to fetch request participants:', pErr);
+  }
+  
+  // Fallback: construct email from org name if no participants found
+  if (!toEmail) {
+    toEmail = 'security@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
   }
 
   // ── Build subject ──
@@ -38661,8 +38681,6 @@ function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, p
       '</div>' +
       // Action buttons
       '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px;flex-wrap:wrap;">' +
-        '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="showToast(\'📎 Artifact attached\', \'info\')">\uD83D\uDCCE Attach Artifacts</button>' +
-        '<div style="flex:1;"></div>' +
         '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="showEscModal(\'' + ticketKey + '\')">\u270F Edit Draft</button>' +
         '<button class="btn btn-sm" style="font-size:10px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(139,92,246,0.15));color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="submitEscalationToJira(\'' + ticketKey + '\')">\uD83D\uDCE4 Send Escalation</button>' +
       '</div>' +
@@ -39353,7 +39371,6 @@ reference: DAC-18158</textarea>
       </div>
     </div>
     <div class="esc-modal-footer">
-      <button class="btn btn-secondary btn-sm" onclick="showToast('&#x1F4CE; Artifact attached', 'info')">&#x1F4CE; Attach Artifacts</button>
       <div class="spacer"></div>
       <button class="btn btn-secondary btn-sm" onclick="saveEscDraft()">Save Draft</button>
       <button class="btn btn-primary btn-sm" onclick="sendEscModalToJira()">&#x1F4E4; Send Escalation</button>
