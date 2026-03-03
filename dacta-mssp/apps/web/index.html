@@ -25972,8 +25972,8 @@ function toggleRuleDetail(row, dbId) {
     + '<div><div style="font-size:10px;color:var(--text-muted);">Targets</div><div style="font-size:11px;color:var(--text-primary);">' + targets + '</div></div>'
     + '</div>'
     + '<div style="display:flex;gap:6px;">'
-    + '<button class="btn btn-xs btn-primary" onclick="editRuleInBuilder(\'' + r.id + '\',\'' + (r.name||'').replace(/'/g,\"\\'\"  ) + '\',\'' + r.type + '\',\'' + r.severity + '\',\'' + r.mitre + '\')">Edit in Builder</button>'
-    + (r._dbId ? '<button class="btn btn-xs btn-secondary" style="color:var(--cyan);" onclick="showPlaybook(\'' + r._dbId + '\',\'' + (r.name||'').replace(/'/g,\"\\'\" ) + '\')">View Playbook</button>' : '')
+    + '<button class="btn btn-xs btn-primary" onclick="editRuleInBuilder(\'' + r.id + '\',\'' + (r.name||'').replace(/'/g,"\\'") + '\',\'' + r.type + '\',\'' + r.severity + '\',\'' + r.mitre + '\')">Edit in Builder</button>'
+    + (r._dbId ? '<button class="btn btn-xs btn-secondary" style="color:var(--cyan);" onclick="showPlaybook(\'' + r._dbId + '\',\'' + (r.name||'').replace(/'/g,"\\'") + '\')">View Playbook</button>' : '')
     + '<button class="btn btn-xs btn-secondary" onclick="toggleRuleEnabled(\'' + r._dbId + '\', ' + r._isEnabled + ', this);">' + (r._isEnabled ? '\ud83d\udfe2 Enabled' : '\ud83d\udd34 Disabled') + '</button>'
     + '</div></div></div></td>';
   row.parentElement.insertBefore(detailRow, row.nextSibling);
