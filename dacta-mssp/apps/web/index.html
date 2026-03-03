@@ -28933,7 +28933,7 @@ function applyProductionMode() {
       container.style.position = 'relative';
       var o = document.createElement('div'); o.className = 'prod-overlay';
       o.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
-      o.innerHTML = '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">Awaiting data</div>';
+      o.innerHTML = '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">Loading from Jira...</div>';
       container.appendChild(o);
     }
   });
