@@ -10724,6 +10724,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <div style="display:flex;gap:8px;margin-top:10px;">
                 <button class="btn btn-primary btn-sm" onclick="showEscModal()">&#x270F; Edit Draft</button>
                 <button class="btn btn-success btn-sm" onclick="showEscModal()">&#x1F4E4; Send Escalation</button>
+                <button class="btn btn-secondary btn-sm" style="margin-left:auto;">&#x1F4CE; Attach Artifacts</button>
               </div>
             </div>
 
@@ -11463,7 +11464,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="page-subtitle">Loading rules... · Sigma-first, cross-platform detection-as-code</div>
           </div>
           <div class="page-actions">
-            <button class="btn btn-secondary btn-sm" onclick="showToast('Syncing rule repository from upstream...')">
+            <button class="btn btn-secondary btn-sm" onclick="loadDetectionRulesLive(); showToast('Syncing rule repository from Supabase...', 'info');">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
               Sync Repository
             </button>
@@ -11510,12 +11511,12 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
           <!-- Stats Row -->
           <div class="dr-repo-stats">
-            <div class="dr-stat-card cyan"><div class="val">2,847</div><div class="lbl">Total Rules</div></div>
-            <div class="dr-stat-card green"><div class="val">1,923</div><div class="lbl">Sigma Rules</div></div>
-            <div class="dr-stat-card purple"><div class="val">412</div><div class="lbl">Correlation</div></div>
-            <div class="dr-stat-card amber"><div class="val">186</div><div class="lbl">Threshold</div></div>
-            <div class="dr-stat-card red"><div class="val">98</div><div class="lbl">YARA Rules</div></div>
-            <div class="dr-stat-card blue"><div class="val">228</div><div class="lbl">EQL/ML</div></div>
+            <div class="dr-stat-card cyan"><div class="val" id="drStatTotal">0</div><div class="lbl">Total Rules</div></div>
+            <div class="dr-stat-card green"><div class="val" id="drStatActive">0</div><div class="lbl">Active</div></div>
+            <div class="dr-stat-card purple"><div class="val" id="drStatEDR">0</div><div class="lbl">EDR Rules</div></div>
+            <div class="dr-stat-card amber"><div class="val" id="drStatFirewall">0</div><div class="lbl">Firewall</div></div>
+            <div class="dr-stat-card red"><div class="val" id="drStatCritical">0</div><div class="lbl">Critical</div></div>
+            <div class="dr-stat-card blue"><div class="val" id="drStatCloud">0</div><div class="lbl">Cloud/Identity</div></div>
           </div>
 
           <!-- Filter Bar -->
@@ -11540,20 +11541,18 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             </select>
             <select class="filter-select" id="drLogSourceFilter">
               <option value="">All Log Sources</option>
-              <option>Windows Security</option>
               <option>Windows Sysmon</option>
-              <option>Linux Auditd</option>
-              <option>Microsoft 365</option>
-              <option>Azure AD</option>
-              <option>FortiGate</option>
-              <option>Cisco ASA</option>
-              <option>AWS CloudTrail</option>
-              <option>GCP Audit</option>
+              <option>Windows Security</option>
               <option>CrowdStrike</option>
-              <option>Trend Vision One</option>
-              <option>DNS Logs</option>
-              <option>Proxy/Web</option>
-              <option>Modbus/OPC UA</option>
+              <option>Fortinet</option>
+              <option>Palo Alto Networks</option>
+              <option>Sophos</option>
+              <option>AWS</option>
+              <option>Microsoft Azure</option>
+              <option>Google Cloud Platform</option>
+              <option>Okta</option>
+              <option>SentinelOne</option>
+              <option>Cisco</option>
             </select>
             <select class="filter-select" id="drAuthorFilter">
               <option value="">All Authors</option>
@@ -11575,9 +11574,9 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="card-header">
               <span class="card-title">Detection Rule Repository</span>
               <div style="display:flex;gap:8px;align-items:center;">
-                <span class="badge badge-cyan">2,847 rules</span>
-                <span class="badge badge-green">48 log sources</span>
-                <button class="btn btn-xs btn-secondary" onclick="showToast('Exporting rule pack as Sigma YAML bundle...')">Export Pack</button>
+                <span class="badge badge-cyan" id="drBadgeTotal">0 rules</span>
+                <span class="badge badge-green" id="drBadgeVendors">0 vendors</span>
+                <button class="btn btn-xs btn-secondary" onclick="exportRulePack()">Export Pack</button>
               </div>
             </div>
             <div class="table-wrap">
@@ -11590,6 +11589,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                     <th style="width:100px;">MITRE</th>
                     <th style="width:70px;">Severity</th>
                     <th>Log Sources</th>
+                    <th style="width:120px;">Source Type</th>
                     <th style="width:70px;">Author</th>
                     <th style="width:50px;">Ver</th>
                     <th style="width:70px;">Status</th>
@@ -11609,7 +11609,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="card-header">
               <span class="card-title">Rules with Updated Syntax</span>
               <div style="display:flex;gap:8px;align-items:center;">
-                <span class="badge badge-amber" style="font-size:9px;">7 RULES OUTDATED</span>
+                <span class="badge badge-amber" style="font-size:9px;" id="drOutdatedBadge">CHECKING...</span>
                 <span style="font-size:10px;color:var(--text-muted);">AI scans global vendor log schema changes daily · Last scan: 2 hrs ago</span>
               </div>
             </div>
@@ -25518,7 +25518,7 @@ async function loadDetectionRulesFromSupabase() {
     var hasMore = true;
     while (hasMore) {
       var res = await window._dactaSupabase.from('detection_rules')
-        .select('id,name,description,syntax,severity,status,mitre_tactic,mitre_technique_id,mitre_technique_name,data_sources,tags,author,version,avg_daily_hits,false_positive_rate,vendor,platform,rule_category,batch_id,is_enabled,rule_content,detection_logic,deployment_targets,confidence_score')
+        .select('id,name,description,syntax,severity,status,mitre_tactic,mitre_technique_id,mitre_technique_name,data_sources,tags,author,version,avg_daily_hits,false_positive_rate,vendor,platform,rule_category,batch_id,is_enabled,rule_content,detection_logic,deployment_targets,confidence_score,source_type,log_source_product,log_source_service,log_source_category')
         .range(offset, offset + pageSize - 1)
         .order('created_at', { ascending: false });
       if (res.error) { console.warn('[DetectionRules] Supabase query error:', res.error); break; }
@@ -25533,8 +25533,7 @@ async function loadDetectionRulesFromSupabase() {
     var syntaxMap = { 'sigma': 'Sigma', 'yara': 'YARA', 'threshold': 'Threshold', 'ml': 'ML', 'eql': 'EQL', 'correlation': 'Correlation', 'kql': 'Sigma', 'spl': 'Sigma' };
     var statusMap = { 'testing': 'Testing', 'active': 'Production', 'disabled': 'Deprecated' };
     return allRules.map(function(r, idx) {
-      var logSources = (r.data_sources && Array.isArray(r.data_sources)) ? r.data_sources : [];
-      if (logSources.length === 0 && r.rule_category) logSources = [r.rule_category];
+      var logSources = r.log_source_product ? [r.log_source_product] : ((r.data_sources && Array.isArray(r.data_sources)) ? r.data_sources : []);
       return {
         id: r.id.substring(0, 8).toUpperCase(),
         _dbId: r.id,
@@ -25557,7 +25556,10 @@ async function loadDetectionRulesFromSupabase() {
         _deploymentTargets: r.deployment_targets || [],
         _confidenceScore: r.confidence_score || 0,
         _description: r.description || '',
-        _syntax: r.syntax || 'sigma'
+        _syntax: r.syntax || 'sigma',
+        _sourceType: r.source_type || '',
+        _logSourceProduct: r.log_source_product || '',
+        _logSourceCategory: r.log_source_category || ''
       };
     });
   } catch(e) { console.warn('[DetectionRules] Supabase load error:', e); return []; }
@@ -25737,16 +25739,24 @@ async function loadDetectionRulesLive() {
     var repoOnlyRules = supabaseRules.filter(function(r) { return !elasticNames.has(r.name); });
 
     rulesData = elasticRules.concat(repoOnlyRules);
+    window._allRulesData = rulesData.slice();
     console.log('[DetectionRules] Combined: ' + elasticRules.length + ' from Elastic + ' + repoOnlyRules.length + ' from Supabase repo = ' + rulesData.length + ' total');
 
     // Update stats cards
     var page = document.getElementById('page-rules');
     if (page) {
-      var statVals = page.querySelectorAll('.dr-stat-card .val');
-      if (statVals.length >= 1) statVals[0].textContent = rulesData.length;
-      if (statVals.length >= 2) statVals[1].textContent = rulesData.filter(function(r) { return r.status === 'Production'; }).length;
-      if (statVals.length >= 3) statVals[2].textContent = rulesData.filter(function(r) { return r.status === 'Testing'; }).length;
-      if (statVals.length >= 4) statVals[4].textContent = rulesData.filter(function(r) { return r.severity === 'Critical'; }).length;
+      var eT = document.getElementById('drStatTotal');
+      var eA = document.getElementById('drStatActive');
+      var eE = document.getElementById('drStatEDR');
+      var eF = document.getElementById('drStatFirewall');
+      var eC = document.getElementById('drStatCritical');
+      var eCl = document.getElementById('drStatCloud');
+      if (eT) eT.textContent = rulesData.length;
+      if (eA) eA.textContent = rulesData.filter(function(r) { return r.status === 'Production'; }).length;
+      if (eE) eE.textContent = rulesData.filter(function(r) { return r._logSourceCategory === 'edr' || r._logSourceCategory === 'process_creation' || r._logSourceCategory === 'security'; }).length;
+      if (eF) eF.textContent = rulesData.filter(function(r) { return r._logSourceCategory === 'firewall'; }).length;
+      if (eC) eC.textContent = rulesData.filter(function(r) { return r.severity === 'Critical'; }).length;
+      if (eCl) eCl.textContent = rulesData.filter(function(r) { return r._logSourceCategory === 'cloud' || r._logSourceCategory === 'identity'; }).length;
       // Update page subtitle
       var sub = page.querySelector('.page-subtitle');
       if (sub) {
@@ -25790,11 +25800,15 @@ function renderRules() {
   // Update tab count badge
   var tabCount = document.getElementById('repoTabCount');
   if (tabCount) tabCount.textContent = rulesData.length.toLocaleString();
+  var bTotal = document.getElementById('drBadgeTotal');
+  if (bTotal) bTotal.textContent = rulesData.length + ' rules';
+  var bVendors = document.getElementById('drBadgeVendors');
+  if (bVendors) { var vs = {}; rulesData.forEach(function(r) { if (r._logSourceProduct) vs[r._logSourceProduct] = 1; }); bVendors.textContent = Object.keys(vs).length + ' vendors'; }
   var sevColor = { 'Critical':'red', 'High':'amber', 'Medium':'blue', 'Low':'gray', 'Informational':'gray' };
   var typeClass = { 'Sigma':'sigma', 'YARA':'yara', 'Correlation':'correlation', 'Threshold':'threshold', 'ML':'ml', 'EQL':'eql' };
   var authorClass = { 'Dacta SOC':'dacta', 'Community':'community', 'Custom':'custom' };
   var statusColor = { 'Production':'green', 'Testing':'amber', 'Draft':'gray', 'Deprecated':'red' };
-  var lsClass = { 'windows':'windows', 'linux':'linux', 'firewall':'firewall', 'cloud':'cloud', 'edr':'edr', 'm365':'m365', 'network':'network', 'ot':'ot' };
+  var lsClassMap = {'Windows Sysmon':'windows','Windows Security':'windows','CrowdStrike':'edr','SentinelOne':'edr','Fortinet':'firewall','Palo Alto Networks':'firewall','Sophos':'firewall','Cisco':'firewall','AWS':'cloud','Microsoft Azure':'cloud','Google Cloud Platform':'cloud','Okta':'edr','windows':'windows','linux':'linux','firewall':'firewall','cloud':'cloud','edr':'edr','m365':'m365','network':'network','ot':'ot'};
   var total = rulesData.length;
   var totalPages = Math.max(1, Math.ceil(total / _rulesPerPage));
   if (_rulesPage > totalPages) _rulesPage = totalPages;
@@ -25809,16 +25823,21 @@ function renderRules() {
     var rls = r.logSources || [];
     for (var j = 0; j < rls.length; j++) {
       var ls = rls[j];
-      lsBadges += '<span class="logsrc-tag ' + (lsClass[ls] || '') + '" style="font-size:8px;">' + ls + '</span>';
+      lsBadges += '<span class="logsrc-tag ' + (lsClassMap[ls] || '') + '" style="font-size:8px;">' + ls + '</span>';
     }
     var fpColor = parseFloat(r.fp) > 15 ? 'var(--amber)' : 'var(--green)';
-    rows += '<tr>';
-    rows += '<td class="mono" style="color:var(--cyan);font-size:11px;">' + r.id + '</td>';
+    var sevBorderColor = {'Critical':'rgba(239,68,68,0.6)','High':'rgba(245,158,11,0.5)','Medium':'rgba(96,165,250,0.4)','Low':'rgba(100,116,139,0.3)','Informational':'rgba(100,116,139,0.2)'};
+    rows += '<tr style="border-left:3px solid ' + (sevBorderColor[r.severity]||'transparent') + ';">';
+    rows += '<td class="mono" style="color:var(--cyan);font-size:11px;cursor:pointer;" onclick="toggleRuleDetail(this.parentElement,\'' + (r._dbId||'') + '\')">' + r.id + '</td>';
     rows += '<td style="color:var(--text-primary);font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + r.name + '</td>';
     rows += '<td><span class="rule-type-badge ' + (typeClass[r.type] || 'sigma') + '">' + r.type + '</span></td>';
     rows += '<td><span class="mitre-tag">' + r.mitre + '</span></td>';
     rows += '<td><span class="badge badge-' + (sevColor[r.severity] || 'blue') + '">' + r.severity + '</span></td>';
     rows += '<td style="max-width:140px;"><div style="display:flex;gap:3px;flex-wrap:wrap;">' + lsBadges + '</div></td>';
+    var stColor = {'edr':'#a78bfa','firewall':'#f472b6','cloud':'#60a5fa','identity':'#fbbf24','process_creation':'#34d399','security':'#fb923c'};
+    var stBg = {'edr':'rgba(167,139,250,0.1)','firewall':'rgba(244,114,182,0.1)','cloud':'rgba(96,165,250,0.1)','identity':'rgba(251,191,36,0.1)','process_creation':'rgba(52,211,153,0.1)','security':'rgba(251,146,60,0.1)'};
+    var cat = r._logSourceCategory || '';
+    rows += '<td><span style="font-size:9px;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap;background:' + (stBg[cat]||'rgba(255,255,255,0.04)') + ';color:' + (stColor[cat]||'var(--text-secondary)') + ';border:1px solid ' + (stColor[cat]||'var(--border-subtle)') + '22;">' + (r._sourceType || '\u2014') + '</span></td>';
     rows += '<td><span class="author-badge ' + (authorClass[r.author] || 'dacta') + '" style="font-size:8px;">' + r.author + '</span></td>';
     var displayVer = (_ruleVersionsLoaded && _ruleVersionCache[r.name]) ? 'v' + _ruleVersionCache[r.name].version + '.0' : r.ver;
     var ruleIdForHistory = (_ruleVersionCache[r.name]) ? _ruleVersionCache[r.name].id : null;
@@ -25859,6 +25878,130 @@ function renderRules() {
     + pageBtns
     + '<button class="btn btn-xs btn-secondary" style="' + nextDis + '" onclick="if(_rulesPage<' + totalPages + '){_rulesPage++;renderRules();}">Next &#8594;</button>'
     + '</div>';
+}
+
+// ── Filter Event Listeners ──
+(function wireFilters() {
+  function applyFilters() {
+    var search = (document.getElementById('drRuleSearch') || {}).value || '';
+    var typeF = (document.getElementById('drTypeFilter') || {}).value || '';
+    var sevF = (document.getElementById('drSeverityFilter') || {}).value || '';
+    var lsF = (document.getElementById('drLogSourceFilter') || {}).value || '';
+    var authF = (document.getElementById('drAuthorFilter') || {}).value || '';
+    var statF = (document.getElementById('drStatusFilter') || {}).value || '';
+    search = search.toLowerCase();
+    
+    // Store original data if not stored
+    if (!window._allRulesData) window._allRulesData = rulesData.slice();
+    
+    var filtered = window._allRulesData.filter(function(r) {
+      if (search && r.name.toLowerCase().indexOf(search) < 0 && r.mitre.toLowerCase().indexOf(search) < 0 && (r._description||'').toLowerCase().indexOf(search) < 0 && (r._sourceType||'').toLowerCase().indexOf(search) < 0) return false;
+      if (typeF && r.type !== typeF) return false;
+      if (sevF && r.severity !== sevF) return false;
+      if (lsF && (r.logSources||[]).join(',').toLowerCase().indexOf(lsF.toLowerCase()) < 0 && (r._vendor||'').toLowerCase().indexOf(lsF.toLowerCase()) < 0 && (r._logSourceProduct||'').toLowerCase().indexOf(lsF.toLowerCase()) < 0) return false;
+      if (authF) {
+        if (authF === 'Dacta SOC' && r.author !== 'Dacta SOC') return false;
+        if (authF === 'Community (Sigma HQ)' && r.author !== 'Community') return false;
+        if (authF === 'Custom / Client' && r.author !== 'Custom') return false;
+      }
+      if (statF && r.status !== statF) return false;
+      return true;
+    });
+    rulesData = filtered;
+    _rulesPage = 1;
+    renderRules();
+  }
+  
+  function resetFilters() {
+    if (window._allRulesData) rulesData = window._allRulesData.slice();
+    _rulesPage = 1;
+    renderRules();
+  }
+  
+  // Debounced search
+  var searchTimer = null;
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+      var els = ['drRuleSearch','drTypeFilter','drSeverityFilter','drLogSourceFilter','drAuthorFilter','drStatusFilter'];
+      els.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        if (id === 'drRuleSearch') {
+          el.addEventListener('input', function() { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 300); });
+        } else {
+          el.addEventListener('change', applyFilters);
+        }
+      });
+    }, 2000);
+  });
+  
+  window._applyRuleFilters = applyFilters;
+  window._resetRuleFilters = resetFilters;
+})();
+
+
+
+function toggleRuleDetail(row, dbId) {
+  var existing = row.nextElementSibling;
+  if (existing && existing.classList.contains('rule-detail-row')) { existing.remove(); return; }
+  // Remove any other open detail rows
+  document.querySelectorAll('.rule-detail-row').forEach(function(el) { el.remove(); });
+  var r = rulesData.find(function(x) { return x._dbId === dbId; });
+  if (!r) return;
+  var detailRow = document.createElement('tr');
+  detailRow.className = 'rule-detail-row';
+  var pb = _playbookCache[dbId];
+  var pbSummary = pb ? '<span style="color:var(--green);">\u2713 ' + (pb.playbook_name||'Playbook attached') + '</span> \u00b7 <span style="color:var(--text-muted);">' + (pb.estimated_time_minutes||30) + 'min \u00b7 ' + (pb.difficulty||'intermediate') + '</span>' : '<span style="color:var(--text-muted);">No playbook attached</span>';
+  var confColor = r._confidenceScore >= 80 ? 'var(--green)' : r._confidenceScore >= 50 ? 'var(--amber)' : 'var(--red-bright)';
+  var targets = (r._deploymentTargets && r._deploymentTargets.length > 0) ? r._deploymentTargets.join(', ') : 'Not deployed';
+  var logic = (r._detectionLogic || '').substring(0, 200);
+  detailRow.innerHTML = '<td colspan="13" style="padding:12px 16px;background:rgba(0,212,255,0.02);border-left:3px solid var(--cyan);">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">'
+    + '<div>'
+    + '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Description</div>'
+    + '<div style="font-size:11px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px;">' + (r._description || 'No description') + '</div>'
+    + '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Detection Logic</div>'
+    + '<div style="font-size:10px;font-family:var(--font-mono);color:var(--text-secondary);background:rgba(0,0,0,0.2);padding:8px;border-radius:6px;max-height:80px;overflow:hidden;">' + (logic || 'See rule content') + '</div>'
+    + '</div>'
+    + '<div>'
+    + '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Playbook</div>'
+    + '<div style="font-size:11px;margin-bottom:12px;">' + pbSummary + '</div>'
+    + '<div style="display:flex;gap:12px;margin-bottom:12px;">'
+    + '<div><div style="font-size:10px;color:var(--text-muted);">Confidence</div><div style="font-size:14px;font-weight:700;color:' + confColor + ';">' + (r._confidenceScore||0) + '%</div></div>'
+    + '<div><div style="font-size:10px;color:var(--text-muted);">Vendor</div><div style="font-size:11px;color:var(--text-primary);">' + (r._vendor||'\u2014') + '</div></div>'
+    + '<div><div style="font-size:10px;color:var(--text-muted);">Targets</div><div style="font-size:11px;color:var(--text-primary);">' + targets + '</div></div>'
+    + '</div>'
+    + '<div style="display:flex;gap:6px;">'
+    + '<button class="btn btn-xs btn-primary" onclick="editRuleInBuilder(\'' + r.id + '\',\'' + (r.name||'').replace(/'/g,\"\\'\"  ) + '\',\'' + r.type + '\',\'' + r.severity + '\',\'' + r.mitre + '\')">Edit in Builder</button>'
+    + (r._dbId ? '<button class="btn btn-xs btn-secondary" style="color:var(--cyan);" onclick="showPlaybook(\'' + r._dbId + '\',\'' + (r.name||'').replace(/'/g,\"\\'\" ) + '\')">View Playbook</button>' : '')
+    + '<button class="btn btn-xs btn-secondary" onclick="toggleRuleEnabled(\'' + r._dbId + '\', ' + r._isEnabled + ', this);">' + (r._isEnabled ? '\ud83d\udfe2 Enabled' : '\ud83d\udd34 Disabled') + '</button>'
+    + '</div></div></div></td>';
+  row.parentElement.insertBefore(detailRow, row.nextSibling);
+}
+
+
+async function toggleRuleEnabled(ruleId, currentState, btn) {
+  if (!window._dactaSupabase || !ruleId) { showToast('Cannot update rule state', 'warn'); return; }
+  var newState = !currentState;
+  try {
+    var res = await window._dactaSupabase.from('detection_rules').update({ is_enabled: newState }).eq('id', ruleId);
+    if (res.error) throw res.error;
+    btn.innerHTML = newState ? '\ud83d\udfe2 Enabled' : '\ud83d\udd34 Disabled';
+    // Update local data
+    for (var i = 0; i < rulesData.length; i++) { if (rulesData[i]._dbId === ruleId) { rulesData[i]._isEnabled = newState; break; } }
+    if (window._allRulesData) { for (var j = 0; j < window._allRulesData.length; j++) { if (window._allRulesData[j]._dbId === ruleId) { window._allRulesData[j]._isEnabled = newState; break; } } }
+    showToast('Rule ' + (newState ? 'enabled' : 'disabled'));
+  } catch(e) { showToast('Failed to update: ' + e.message, 'warn'); }
+}
+
+function exportRulePack() {
+  if (!rulesData || rulesData.length === 0) { showToast('No rules to export', 'warn'); return; }
+  var exportData = rulesData.map(function(r) { return { id: r._dbId || r.id, name: r.name, type: r.type, severity: r.severity, mitre: r.mitre, vendor: r._vendor, source_type: r._sourceType, log_source: r._logSourceProduct, status: r.status, rule_content: r._ruleContent }; });
+  var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url; a.download = 'dacta_rules_export_' + new Date().toISOString().split('T')[0] + '.json'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported ' + exportData.length + ' rules as JSON');
 }
 
 function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
@@ -26035,13 +26178,13 @@ function renderPipeline() {
     'Draft': '<button class="btn btn-xs btn-secondary" onclick="showToast(\'Sent to backtest against 7-day logs\')">Test</button>',
     'Production': '<button class="btn btn-xs btn-secondary" onclick="showToast(\'Viewing deployment details...\')">View</button>'
   };
-  var lsClass = { 'windows':'windows', 'linux':'linux', 'firewall':'firewall', 'cloud':'cloud', 'edr':'edr', 'm365':'m365', 'network':'network', 'ot':'ot' };
+  var lsClassMap = {'Windows Sysmon':'windows','Windows Security':'windows','CrowdStrike':'edr','SentinelOne':'edr','Fortinet':'firewall','Palo Alto Networks':'firewall','Sophos':'firewall','Cisco':'firewall','AWS':'cloud','Microsoft Azure':'cloud','Google Cloud Platform':'cloud','Okta':'edr','windows':'windows','linux':'linux','firewall':'firewall','cloud':'cloud','edr':'edr','m365':'m365','network':'network','ot':'ot'};
   for (var i = 0; i < display.length; i++) {
     var r = display[i];
     var lsBadges = '';
     var rls = r.logSources || [];
     for (var j = 0; j < rls.length; j++) {
-      lsBadges += '<span class="logsrc-tag ' + (lsClass[rls[j]] || '') + '" style="font-size:8px;">' + rls[j] + '</span>';
+      lsBadges += '<span class="logsrc-tag ' + (lsClassMap[rls[j]] || '') + '" style="font-size:8px;">' + rls[j] + '</span>';
     }
     rows += '<tr>';
     rows += '<td class="mono" style="color:var(--cyan);">' + r.id + '</td>';
@@ -36269,10 +36412,9 @@ async function openInvestigation(ticketKey) {
           '</div>' +
         '</div>' +
 
-        // Activity Timeline — collapsible but OPEN by default
-        '<div class="card" style="padding:14px;">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="max-height:400px;overflow-y:auto;">' +
+        // Activity Timeline
+        '<div class="card" style="padding:14px;max-height:400px;overflow-y:auto;">' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span></div>' +
           (timelineItems.length === 0
             ? '<div style="text-align:center;padding:16px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">No activity recorded</div>'
             : '<div style="display:flex;flex-direction:column;gap:0;">' +
@@ -36298,7 +36440,6 @@ async function openInvestigation(ticketKey) {
               }).join('') +
             '</div>'
           ) +
-          '</div>' +
         '</div>' +
 
         // ── Panels below Timeline (collapsed by default) ──
@@ -38471,7 +38612,7 @@ function buildAttackPathHTML(ticketKey, techniques, summary) {
 // Global store for current escalation draft data (used by modal)
 var _currentEscalationDraft = {};
 
-async function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData) {
+function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData) {
   var card = document.getElementById('clientEscalationCard');
   if (!card) return;
   var content = document.getElementById('escalationDraftContent');
@@ -38513,35 +38654,16 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
     } catch(e) { timestampStr = createdRaw; }
   }
 
-  // ── Build To/CC from Jira request participants ──
-  var toEmail = '';
+  // ── Build To/CC from org connectors ──
+  var toEmail = 'security@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
   var ccEmail = 'soc-lead@dacta.global';
-  
-  // Try fetching actual request participants from Jira
-  try {
-    var participantsResp = await fetch('/api/jira?action=requestParticipants&key=' + encodeURIComponent(ticketKey));
-    var participantsData = await participantsResp.json();
-    
-    if (participantsData.participants && participantsData.participants.length > 0) {
-      // Use participant emails — filter out empty/internal
-      var participantEmails = participantsData.participants
-        .map(function(p) { return p.emailAddress; })
-        .filter(function(e) { return e && e.indexOf('@') !== -1; });
-      if (participantEmails.length > 0) {
-        toEmail = participantEmails.join(', ');
-      }
+  // If org has a ticketing connector, try to build a more accurate email
+  if (orgObj && orgObj.connectors) {
+    var tickConnector = orgObj.connectors.find(function(c) { return c.connector_type === 'ticketing'; });
+    // Use org code for a cleaner domain
+    if (orgObj.code) {
+      toEmail = 'security@' + orgName.toLowerCase().replace(/\s+/g, '') + '.com';
     }
-    // If no participants found, try reporter email
-    if (!toEmail && participantsData.reporter && participantsData.reporter.emailAddress) {
-      toEmail = participantsData.reporter.emailAddress;
-    }
-  } catch(pErr) {
-    console.warn('[Escalation] Failed to fetch request participants:', pErr);
-  }
-  
-  // Fallback: construct email from org name if no participants found
-  if (!toEmail) {
-    toEmail = 'security@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
   }
 
   // ── Build subject ──
@@ -38681,6 +38803,8 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
       '</div>' +
       // Action buttons
       '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px;flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="showToast(\'📎 Artifact attached\', \'info\')">\uD83D\uDCCE Attach Artifacts</button>' +
+        '<div style="flex:1;"></div>' +
         '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="showEscModal(\'' + ticketKey + '\')">\u270F Edit Draft</button>' +
         '<button class="btn btn-sm" style="font-size:10px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(139,92,246,0.15));color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="submitEscalationToJira(\'' + ticketKey + '\')">\uD83D\uDCE4 Send Escalation</button>' +
       '</div>' +
@@ -39371,6 +39495,7 @@ reference: DAC-18158</textarea>
       </div>
     </div>
     <div class="esc-modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="showToast('&#x1F4CE; Artifact attached', 'info')">&#x1F4CE; Attach Artifacts</button>
       <div class="spacer"></div>
       <button class="btn btn-secondary btn-sm" onclick="saveEscDraft()">Save Draft</button>
       <button class="btn btn-primary btn-sm" onclick="sendEscModalToJira()">&#x1F4E4; Send Escalation</button>
