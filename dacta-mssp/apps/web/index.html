@@ -9461,6 +9461,10 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
             <span class="nav-label">User Management</span>
           </div>
+          <div class="nav-item" data-page="onboarding">
+            <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></span>
+            <span class="nav-label">Client Onboarding</span>
+          </div>
           <div class="nav-item" data-page="settings">
             <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
             <span class="nav-label">Settings</span>
@@ -22933,11 +22937,70 @@ Analyst: K. Rasmussen | 2026-02-28
 
 
       <!-- =====================================================
+           PAGE: CLIENT ONBOARDING
+           ===================================================== -->
+      <div class="page" id="page-onboarding">
+        <div class="page-header">
+          <div><div class="page-title">Client Onboarding</div><div class="page-subtitle">Jira-sourced organization discovery &middot; Admin approval workflow</div></div>
+          <div class="page-actions" style="display:flex;align-items:center;gap:12px;">
+            <span id="onboardJiraCount" style="font-size:11px;color:var(--text-muted);"></span>
+            <button id="onboardSyncBtn" class="btn btn-primary btn-sm" onclick="syncJiraOrgs()">&#x1F504; Sync from Jira</button>
+          </div>
+        </div>
+
+        <!-- Pending Onboarding Queue -->
+        <div class="card" style="margin-bottom:24px;">
+          <div class="card-header" style="margin-bottom:16px;">
+            <div>
+              <span class="card-title">Pending Onboarding</span>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">New organizations detected in Jira but not yet registered in SIEMLess &mdash; review &amp; approve to onboard</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:10px;color:var(--text-muted);">Pending:</span>
+              <span id="onboardPendingCount" class="badge badge-amber" style="font-size:11px;padding:3px 10px;">0</span>
+            </div>
+          </div>
+          <div id="onboardQueue">
+            <div style="text-align:center;padding:40px 20px;">
+              <div style="font-size:11px;color:var(--text-muted);">Click &#x201C;Sync from Jira&#x201D; to check for new organizations</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Onboarded Clients -->
+        <div class="card">
+          <div class="card-header" style="margin-bottom:16px;">
+            <div>
+              <span class="card-title">Registered Clients</span>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Organizations approved &amp; active in SIEMLess &mdash; sourced from Jira JSM Organizations</div>
+            </div>
+            <span class="badge badge-green" style="font-size:10px;">Live</span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="da-table" style="width:100%;">
+              <thead>
+                <tr>
+                  <th>Organization</th>
+                  <th>Code</th>
+                  <th>Service Model</th>
+                  <th>Namespace</th>
+                  <th style="text-align:center;">Jira Tickets</th>
+                  <th>Status</th>
+                  <th style="text-align:center;">Config</th>
+                </tr>
+              </thead>
+              <tbody id="onboardedTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================================================
            PAGE 18: SETTINGS
            ===================================================== -->
       <div class="page" id="page-settings">
         <div class="page-header">
-          <div><div class="page-title">Settings</div><div class="page-subtitle">Platform configuration · Client connectors loaded from registry</div></div>
+          <div><div class="page-title">Settings</div><div class="page-subtitle">Platform configuration · Client connectors synced from Jira</div></div>
           <div class="page-actions">
             <span id="settingsOrgCount" style="font-size:11px;color:var(--text-muted);margin-right:12px;"></span>
             <button class="btn btn-primary btn-sm" onclick="alert('Settings saved')">💾 Save Changes</button>
@@ -27354,6 +27417,7 @@ function navigate(page) {
   if (page === 'assets') setTimeout(loadAssetManagement, 100);
   if (page === 'users') setTimeout(loadUserManagement, 100);
   if (page === 'integrations') setTimeout(loadIntegrationHub, 100);
+  if (page === 'onboarding') setTimeout(loadOnboardingPage, 200);
   if (page === 'settings') setTimeout(loadSettingsPage, 200);
   if (page === 'aiusage') setTimeout(loadAIUsagePage, 150);
   if (page === 'clientportal') resetClientPortalSplash();
@@ -27566,6 +27630,182 @@ function getOrgConnector(ns, connType) {
   return org.connectors.find(function(c) { return c.connector_type === connType; }) || null;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// CLIENT ONBOARDING — Jira is single source of truth
+// ═══════════════════════════════════════════════════════════════
+var _jiraOrgs = [];
+var _onboardingQueue = [];
+
+async function syncJiraOrgs() {
+  var btn = document.getElementById('onboardSyncBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Syncing...'; }
+
+  try {
+    var resp = await fetch('/api/jira?action=organizations', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    var data = await resp.json();
+    _jiraOrgs = data.organizations || [];
+
+    // Compare with ORG_CONNECTORS to find new orgs
+    var knownNames = Object.values(ORG_CONNECTORS).map(function(o) { return o.name.toLowerCase(); });
+    _onboardingQueue = _jiraOrgs.filter(function(jo) {
+      return !knownNames.includes(jo.name.toLowerCase());
+    });
+
+    renderOnboardingPage();
+  } catch(e) {
+    console.error('[Onboarding] Sync failed:', e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Sync from Jira'; }
+  }
+}
+
+function renderOnboardingPage() {
+  var queueEl = document.getElementById('onboardQueue');
+  var tableEl = document.getElementById('onboardedTable');
+  var countEl = document.getElementById('onboardPendingCount');
+  var jiraCountEl = document.getElementById('onboardJiraCount');
+
+  if (!queueEl || !tableEl) return;
+
+  // Update counts
+  if (countEl) countEl.textContent = _onboardingQueue.length;
+  if (jiraCountEl) jiraCountEl.textContent = _jiraOrgs.length + ' orgs in Jira';
+
+  // Render pending queue
+  if (_onboardingQueue.length === 0) {
+    queueEl.innerHTML = '<div style="text-align:center;padding:40px 20px;">' +
+      '<div style="font-size:32px;margin-bottom:12px;">✅</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">All Caught Up</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);">No new organizations pending onboarding. All Jira orgs are registered.</div>' +
+    '</div>';
+  } else {
+    var html = '';
+    _onboardingQueue.forEach(function(org, idx) {
+      var suggestedNs = org.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      var suggestedCode = org.name.substring(0,2).toUpperCase();
+      var ticketDate = org.latest_ticket_date ? new Date(org.latest_ticket_date).toLocaleDateString('en-SG', {day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+      html += '<div class="card" style="margin-bottom:12px;border-left:3px solid var(--amber);">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">' +
+          '<div>' +
+            '<div style="font-size:14px;font-weight:700;color:var(--text-primary);">' + org.name + '</div>' +
+            '<div style="font-size:10px;color:var(--text-muted);margin-top:3px;">Jira Org ID: ' + org.jira_org_id + ' · ' + org.ticket_count + ' tickets · Latest: ' + ticketDate + '</div>' +
+          '</div>' +
+          '<span class="badge badge-amber" style="font-size:9px;">Pending</span>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">' +
+          '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Namespace</div><input class="filter-input" id="onb-ns-' + idx + '" value="' + suggestedNs + '" style="width:100%;font-size:11px;"></div>' +
+          '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Short Code</div><input class="filter-input" id="onb-code-' + idx + '" value="' + suggestedCode + '" style="width:100%;font-size:11px;"></div>' +
+          '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Service Model</div><select class="filter-select" id="onb-type-' + idx + '" style="width:100%;font-size:11px;"><option value="socaas" selected>SOCaaS</option><option value="mdr">MDR</option><option value="internal">Internal</option></select></div>' +
+          '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">SLA Tier</div><select class="filter-select" id="onb-sla-' + idx + '" style="width:100%;font-size:11px;"><option value="gold" selected>Gold</option><option value="platinum">Platinum</option><option value="silver">Silver</option></select></div>' +
+          '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Industry</div><input class="filter-input" id="onb-ind-' + idx + '" value="" placeholder="e.g. Technology" style="width:100%;font-size:11px;"></div>' +
+          '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Region</div><select class="filter-select" id="onb-reg-' + idx + '" style="width:100%;font-size:11px;"><option value="SEA" selected>SEA</option><option value="APAC">APAC</option><option value="EMEA">EMEA</option><option value="NA">NA</option></select></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+          '<button class="btn btn-sm" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2);" onclick="dismissOnboardOrg(' + idx + ')">❌ Dismiss</button>' +
+          '<button class="btn btn-sm" style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);" onclick="approveOnboardOrg(' + idx + ')">✅ Approve &amp; Onboard</button>' +
+        '</div>' +
+      '</div>';
+    });
+    queueEl.innerHTML = html;
+  }
+
+  // Render onboarded table
+  var thtml = '';
+  var orgKeys = Object.keys(ORG_CONNECTORS);
+  orgKeys.forEach(function(id) {
+    var org = ORG_CONNECTORS[id];
+    var jiraMatch = _jiraOrgs.find(function(jo) { return jo.name.toLowerCase() === org.name.toLowerCase(); });
+    var typeLabel = org.type === 'internal' ? 'Internal' : org.type === 'mdr' ? 'MDR' : 'SOCaaS';
+    var typeBadge = org.type === 'internal' ? 'badge-cyan' : org.type === 'mdr' ? 'badge-amber' : 'badge-green';
+
+    thtml += '<tr>' +
+      '<td style="font-weight:600;color:var(--text-primary);">' + org.name + '</td>' +
+      '<td><span style="color:var(--cyan);font-family:var(--font-mono);font-size:11px;">' + org.code + '</span></td>' +
+      '<td><span class="badge ' + typeBadge + '" style="font-size:9px;padding:2px 7px;">' + typeLabel + '</span></td>' +
+      '<td style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);">' + org.namespace + '</td>' +
+      '<td style="text-align:center;">' + (jiraMatch ? jiraMatch.ticket_count : '<span style="color:var(--text-muted);">0</span>') + '</td>' +
+      '<td><span class="badge badge-green" style="font-size:9px;padding:2px 7px;">Active</span></td>' +
+      '<td style="text-align:center;"><button class="btn btn-sm" style="padding:3px 8px;font-size:10px;" onclick="navigate(\'settings\')">⚙️</button></td>' +
+    '</tr>';
+  });
+  tableEl.innerHTML = thtml;
+}
+
+function approveOnboardOrg(idx) {
+  var org = _onboardingQueue[idx];
+  if (!org) return;
+
+  var ns = (document.getElementById('onb-ns-' + idx) || {}).value || org.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  var code = (document.getElementById('onb-code-' + idx) || {}).value || org.name.substring(0,2).toUpperCase();
+  var type = (document.getElementById('onb-type-' + idx) || {}).value || 'socaas';
+  var sla = (document.getElementById('onb-sla-' + idx) || {}).value || 'gold';
+  var industry = (document.getElementById('onb-ind-' + idx) || {}).value || '';
+  var region = (document.getElementById('onb-reg-' + idx) || {}).value || 'SEA';
+
+  // Generate a UUID-like ID
+  var newId = 'ob-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
+  // Add to ORG_CONNECTORS (runtime — won't persist across page reload without backend)
+  ORG_CONNECTORS[newId] = {
+    code: code,
+    name: org.name,
+    type: type,
+    namespace: ns,
+    jira_org_id: org.jira_org_id,
+    onboarded_at: new Date().toISOString(),
+    connectors: [
+      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'pending', metadata: { namespace: ns, index_pattern: ns + '-*' } },
+      { connector_type: 'edr', vendor: 'Pending', display_name: 'EDR — Pending Config', is_enabled: false, health_status: 'not_configured', metadata: { notes: 'Configure after onboarding' } },
+      { connector_type: 'firewall', vendor: 'Pending', display_name: 'Firewall — Pending Config', is_enabled: false, health_status: 'not_configured', metadata: { notes: 'Configure after onboarding' } },
+      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
+      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
+    ]
+  };
+
+  // Remove from queue
+  _onboardingQueue.splice(idx, 1);
+  renderOnboardingPage();
+
+  // Also try to create in Supabase
+  createOrgInSupabase(org.name, code, type, ns, sla, industry, region);
+}
+
+async function createOrgInSupabase(name, code, type, ns, sla, industry, region) {
+  try {
+    if (typeof _supabaseRef !== 'undefined' && _supabaseRef) {
+      var resp = await _supabaseRef.from('organizations').insert({
+        name: name,
+        short_name: code,
+        service_model: type,
+        contract_type: type === 'internal' ? 'internal' : 'mssp',
+        status: 'active',
+        sla_tier: sla,
+        industry: industry || null,
+        region: region || 'SEA',
+        timezone: 'Asia/Singapore',
+        data_residency: 'SG',
+        endpoints_count: 0,
+        auto_response_enabled: false,
+        auto_response_policy: {},
+        metadata: { namespace: ns, jira_synced: true }
+      });
+      console.log('[Onboarding] Supabase insert:', resp);
+    }
+  } catch(e) {
+    console.error('[Onboarding] Supabase insert failed:', e);
+  }
+}
+
+function dismissOnboardOrg(idx) {
+  _onboardingQueue.splice(idx, 1);
+  renderOnboardingPage();
+}
+
+function loadOnboardingPage() {
+  syncJiraOrgs();
+}
+
 // ============================================================
 //  SUPABASE AUTHENTICATION
 // ============================================================
@@ -27594,6 +27834,7 @@ function getOrgConnector(ns, connType) {
 
     var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window._dactaSupabase = _supabase;
+    window._supabaseRef = _supabase;
 
     var overlay = document.getElementById('loginOverlay');
 

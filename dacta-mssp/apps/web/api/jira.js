@@ -552,7 +552,46 @@ export default async function handler(req, res) {
       return res.status(r.status >= 400 ? r.status : 200).json(result);
     }
 
-    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts, transitions, transition, assign, addcomment, assignable, createticket, opsdata, dashvisuals' });
+    // ─── ACTION: organizations ───────────────────────────────
+    if (action === 'organizations') {
+      // Get all unique JSM organizations from DAC project tickets
+      let allOrgs = {};
+      let npt = null;
+      let page = 0;
+      while (page < 50) {
+        const payload = { 
+          jql: 'project = DAC ORDER BY created DESC', 
+          fields: ['customfield_10002', 'created'],
+          maxResults: 100 
+        };
+        if (npt) payload.nextPageToken = npt;
+        const r = await fetch(`${baseUrl}/rest/api/3/search/jql`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        for (const issue of (d.issues || [])) {
+          const orgs = issue.fields?.customfield_10002 || [];
+          const created = issue.fields?.created || '';
+          for (const org of orgs) {
+            if (!allOrgs[org.id]) {
+              allOrgs[org.id] = { jira_org_id: org.id, name: org.name, ticket_count: 0, latest_ticket_date: created };
+            }
+            allOrgs[org.id].ticket_count++;
+            if (created > allOrgs[org.id].latest_ticket_date) {
+              allOrgs[org.id].latest_ticket_date = created;
+            }
+          }
+        }
+        page++;
+        if (d.isLast || !d.nextPageToken) break;
+        npt = d.nextPageToken;
+      }
+      return res.status(200).json({ organizations: Object.values(allOrgs) });
+    }
+
+    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts, transitions, transition, assign, addcomment, assignable, createticket, opsdata, dashvisuals, organizations' });
 
   } catch (err) {
     console.error('Jira proxy error:', err);
