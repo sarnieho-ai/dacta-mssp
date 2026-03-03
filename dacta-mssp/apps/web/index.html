@@ -2534,6 +2534,12 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 .inv-collapse-arrow { transition: transform 0.3s ease; }
 .inv-collapse-arrow.collapsed { transform: rotate(-90deg); }
 
+/* ── Left sidebar scrollbar (investigation workspace) ── */
+.prod-investigation-live > div:first-child::-webkit-scrollbar { width: 4px; }
+.prod-investigation-live > div:first-child::-webkit-scrollbar-track { background: transparent; }
+.prod-investigation-live > div:first-child::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.15); border-radius: 2px; }
+.prod-investigation-live > div:first-child::-webkit-scrollbar-thumb:hover { background: rgba(0,212,255,0.3); }
+
 /* ── Cache banner on investigation page ── */
 .inv-cache-banner {
   display:flex; align-items:center; gap:12px; padding:12px 16px;
@@ -35881,6 +35887,15 @@ function initCollapsiblePanels() {
   document.querySelectorAll('.inv-collapsible-header').forEach(function(header) {
     if (header._collapsibleInit) return;
     header._collapsibleInit = true;
+    // Check initial state — if body starts hidden, rotate arrow
+    var initBody = header.nextElementSibling;
+    if (!initBody || !initBody.classList.contains('inv-collapsible-body')) {
+      initBody = header.parentElement.querySelector('.inv-collapsible-body');
+    }
+    if (initBody && initBody.style.display === 'none') {
+      var initArrow = header.querySelector('.inv-collapse-arrow');
+      if (initArrow) initArrow.classList.add('collapsed');
+    }
     header.addEventListener('click', function() {
       var body = header.nextElementSibling;
       if (!body || !body.classList.contains('inv-collapsible-body')) {
@@ -35895,22 +35910,159 @@ function initCollapsiblePanels() {
   });
 }
 
-// ── Fetch and display SLA data from Jira ──
+// ── Fetch and display SLA data from Jira API ──
 async function fetchAndDisplaySLA(ticketKey, ticketFields) {
   var slaPanel = document.getElementById('invSLAContent');
   if (!slaPanel) return;
   
+  // Helper for SLA progress bar row
+  function slaRow(label, elapsed, target, breached, remaining) {
+    var elMin = elapsed || 0;
+    var tgtMin = target || 240;
+    var isBr = breached || false;
+    var pct = tgtMin > 0 ? Math.min((elMin / tgtMin) * 100, 100) : 100;
+    var col = isBr ? '#ef4444' : (pct > 75 ? '#f59e0b' : '#10b981');
+    var rgba = isBr ? '239,68,68' : (pct > 75 ? '245,158,11' : '16,185,129');
+    
+    // Format elapsed
+    var eH = Math.floor(elMin / 60), eM = Math.round(elMin % 60);
+    var eStr = (eH > 0 ? eH + 'h ' : '') + eM + 'm';
+    
+    // Format target
+    var tH = Math.floor(tgtMin / 60), tM = tgtMin % 60;
+    var tStr = (tH > 0 ? tH + 'h' : '') + (tM > 0 ? (tH > 0 ? ' ' : '') + tM + 'm' : '');
+    
+    // Format remaining/breached
+    var rStr = '';
+    if (remaining !== undefined && remaining !== null) {
+      if (isBr) {
+        var absR = Math.abs(remaining);
+        var rH = Math.floor(absR / 60), rM = Math.round(absR % 60);
+        rStr = 'BREACHED ' + (rH > 0 ? rH + 'h ' : '') + rM + 'm ago';
+      } else {
+        var rH2 = Math.floor(remaining / 60), rM2 = Math.round(remaining % 60);
+        rStr = (rH2 > 0 ? rH2 + 'h ' : '') + rM2 + 'm remaining';
+      }
+    } else {
+      var rem = tgtMin - elMin;
+      if (rem <= 0) {
+        var abs2 = Math.abs(rem);
+        rStr = 'BREACHED ' + (Math.floor(abs2/60) > 0 ? Math.floor(abs2/60) + 'h ' : '') + (abs2%60) + 'm ago';
+        isBr = true;
+        col = '#ef4444';
+        rgba = '239,68,68';
+      } else {
+        rStr = (Math.floor(rem/60) > 0 ? Math.floor(rem/60) + 'h ' : '') + (rem%60) + 'm remaining';
+      }
+    }
+    
+    return '<div style="padding:8px 10px;background:rgba(' + rgba + ',0.04);border:1px solid rgba(' + rgba + ',0.15);border-radius:8px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+        '<span style="font-size:11px;font-weight:600;color:var(--text-primary);">' + label + '</span>' +
+        '<span style="font-size:10px;font-weight:600;color:' + col + ';">' + (isBr ? '\u26A0 ' : '\u2705 ') + rStr + '</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<div style="flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + pct + '%;background:' + col + ';border-radius:2px;transition:width 0.5s;"></div>' +
+        '</div>' +
+        '<span style="font-size:9px;color:var(--text-muted);white-space:nowrap;">' + eStr + ' / ' + tStr + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+  
+  // Attempt to fetch SLA from Jira API
+  try {
+    var resp = await fetch('/api/jira?action=sla&key=' + encodeURIComponent(ticketKey));
+    var slaData = await resp.json();
+    
+    var slaHTML = '';
+    var slaSource = 'Jira';
+    
+    // Parse JSM SLA response (values array with completedCycles / ongoingCycle)
+    if (slaData.jsmSLA && slaData.jsmSLA.values && slaData.jsmSLA.values.length > 0) {
+      slaSource = 'Jira Service Management';
+      slaData.jsmSLA.values.forEach(function(sla) {
+        var name = sla.name || 'SLA';
+        var cycle = sla.ongoingCycle || (sla.completedCycles && sla.completedCycles.length > 0 ? sla.completedCycles[sla.completedCycles.length - 1] : null);
+        if (cycle) {
+          var isBr = cycle.breached || false;
+          var elapsedMs = cycle.elapsedTime ? cycle.elapsedTime.millis : 0;
+          var remainMs = cycle.remainingTime ? cycle.remainingTime.millis : 0;
+          var goalMs = cycle.goalDuration ? cycle.goalDuration.millis : (elapsedMs + Math.abs(remainMs));
+          var elMin = Math.round(elapsedMs / 60000);
+          var tgtMin = Math.round(goalMs / 60000);
+          var remMin = isBr ? -Math.round(Math.abs(remainMs) / 60000) : Math.round(remainMs / 60000);
+          slaHTML += slaRow(name, elMin, tgtMin, isBr, remMin);
+        }
+      });
+    }
+    
+    // Also try Dacta custom SLA fields (customfield_10472/10473/10573)
+    if (slaData.fields) {
+      var cf = slaData.fields;
+      var customSLAs = [
+        { field: 'customfield_10472', label: 'Time to First Response' },
+        { field: 'customfield_10473', label: 'Time to Resolution' },
+        { field: 'customfield_10573', label: 'Time to Close' }
+      ];
+      customSLAs.forEach(function(cs) {
+        var val = cf[cs.field];
+        if (val && typeof val === 'object') {
+          // JSM SLA field format: { ongoingCycle: {...}, completedCycles: [...] }
+          var cycle = val.ongoingCycle || (val.completedCycles && val.completedCycles.length > 0 ? val.completedCycles[val.completedCycles.length - 1] : null);
+          if (cycle) {
+            var isBr = cycle.breached || false;
+            var elMs = cycle.elapsedTime ? cycle.elapsedTime.millis : 0;
+            var remMs = cycle.remainingTime ? cycle.remainingTime.millis : 0;
+            var goalMs = cycle.goalDuration ? cycle.goalDuration.millis : (elMs + Math.abs(remMs));
+            var elMin = Math.round(elMs / 60000);
+            var tgtMin = Math.round(goalMs / 60000);
+            var remMin = isBr ? -Math.round(Math.abs(remMs) / 60000) : Math.round(remMs / 60000);
+            // Avoid duplicates if JSM SLA already has this
+            if (slaHTML.indexOf(cs.label) === -1) {
+              slaHTML += slaRow(cs.label, elMin, tgtMin, isBr, remMin);
+            }
+          }
+        } else if (val && typeof val === 'string') {
+          // Simple string value — display as-is
+          slaHTML += '<div style="padding:6px 10px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;">' +
+            '<span style="font-size:11px;font-weight:600;color:var(--text-primary);">' + cs.label + ':</span> ' +
+            '<span style="font-size:10px;color:var(--text-secondary);">' + val + '</span></div>';
+        }
+      });
+    }
+    
+    if (slaHTML) {
+      slaPanel.style.fontFamily = 'inherit';
+      slaPanel.style.fontSize = 'inherit';
+      slaPanel.style.color = 'inherit';
+      slaPanel.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px;">' + slaHTML +
+        '<div style="font-size:9px;color:var(--text-muted);text-align:right;margin-top:2px;">Source: ' + slaSource + '</div>' +
+      '</div>';
+    } else {
+      // No SLA data from API — fall back to local calculation
+      fallbackLocalSLA(slaPanel, ticketFields);
+    }
+  } catch(err) {
+    console.warn('[SLA] API call failed, falling back to local calc:', err);
+    fallbackLocalSLA(slaPanel, ticketFields);
+  }
+  
+  // Refresh every 60s
+  if (window._slaInterval) clearInterval(window._slaInterval);
+  window._slaInterval = setInterval(function() {
+    fetchAndDisplaySLA(ticketKey, ticketFields);
+  }, 60000);
+}
+
+// Fallback: calculate SLA locally from ticket creation time if API fails
+function fallbackLocalSLA(slaPanel, ticketFields) {
   var created = ticketFields ? (ticketFields.created || ticketFields.updated) : null;
   var createdDate = created ? new Date(created) : new Date();
   var now = new Date();
-  var elapsedMs = now - createdDate;
-  var elapsedMin = Math.floor(elapsedMs / 60000);
-  var elapsedHrs = Math.floor(elapsedMin / 60);
-  var elapsedMinRem = elapsedMin % 60;
-  
+  var elapsedMin = Math.floor((now - createdDate) / 60000);
   var priority = ticketFields && ticketFields.priority ? ticketFields.priority.name : 'P3';
   var pShort = (priority.split(' - ')[0] || 'P3').toUpperCase().trim();
-  
   var slaTargets = {
     'P1': { ack: 15, respond: 60, investigate: 60 },
     'P2': { ack: 30, respond: 120, investigate: 120 },
@@ -35919,38 +36071,30 @@ async function fetchAndDisplaySLA(ticketKey, ticketFields) {
   };
   var targets = slaTargets[pShort] || slaTargets['P3'];
   
-  function fmtCD(elMin, tgtMin) {
+  function fmtCD(elMin, tgtMin, label) {
     var rem = tgtMin - elMin;
     var breached = rem <= 0;
     var abs = Math.abs(rem);
     var h = Math.floor(abs / 60), m = abs % 60;
+    var pct = Math.min((elMin / tgtMin) * 100, 100);
+    var col = breached ? '#ef4444' : (pct > 75 ? '#f59e0b' : '#10b981');
+    var rgba = breached ? '239,68,68' : (pct > 75 ? '245,158,11' : '16,185,129');
+    var rStr = breached ? 'BREACHED ' + (h > 0 ? h + 'h ' : '') + m + 'm ago' : (h > 0 ? h + 'h ' : '') + m + 'm remaining';
     var eH = Math.floor(Math.min(elMin, tgtMin) / 60);
     var eM = Math.min(elMin, tgtMin) % 60;
     var eStr = (eH > 0 ? eH + 'h ' : '') + eM + 'm';
     var tH = Math.floor(tgtMin / 60);
     var tStr = (tH > 0 ? tH + 'h' : '') + (tgtMin % 60 > 0 ? (tH > 0 ? ' ' : '') + (tgtMin % 60) + 'm' : '');
-    var rStr = breached ? 'BREACHED ' + (h > 0 ? h + 'h ' : '') + m + 'm ago' : (h > 0 ? h + 'h ' : '') + m + 'm remaining';
-    var pct = Math.min((elMin / tgtMin) * 100, 100);
-    var col = breached ? '#ef4444' : (pct > 75 ? '#f59e0b' : '#10b981');
-    return { eStr: eStr, tStr: tStr, rStr: rStr, pct: pct, col: col, br: breached };
-  }
-  
-  var ack = fmtCD(elapsedMin, targets.ack);
-  var resp = fmtCD(elapsedMin, targets.respond);
-  var inv = fmtCD(elapsedMin, targets.investigate);
-  
-  function slaRow(label, d, tgtLabel) {
-    var rgba = d.br ? '239,68,68' : (d.pct > 75 ? '245,158,11' : '16,185,129');
     return '<div style="padding:8px 10px;background:rgba(' + rgba + ',0.04);border:1px solid rgba(' + rgba + ',0.15);border-radius:8px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
         '<span style="font-size:11px;font-weight:600;color:var(--text-primary);">' + label + '</span>' +
-        '<span style="font-size:10px;font-weight:600;color:' + d.col + ';">' + (d.br ? '\u26A0 ' : '\u2705 ') + d.rStr + '</span>' +
+        '<span style="font-size:10px;font-weight:600;color:' + col + ';">' + (breached ? '\u26A0 ' : '\u2705 ') + rStr + '</span>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:8px;">' +
         '<div style="flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;">' +
-          '<div style="height:100%;width:' + d.pct + '%;background:' + d.col + ';border-radius:2px;transition:width 0.5s;"></div>' +
+          '<div style="height:100%;width:' + pct + '%;background:' + col + ';border-radius:2px;transition:width 0.5s;"></div>' +
         '</div>' +
-        '<span style="font-size:9px;color:var(--text-muted);white-space:nowrap;">' + d.eStr + ' / ' + tgtLabel + '</span>' +
+        '<span style="font-size:9px;color:var(--text-muted);white-space:nowrap;">' + eStr + ' / ' + tStr + '</span>' +
       '</div>' +
     '</div>';
   }
@@ -35959,16 +36103,11 @@ async function fetchAndDisplaySLA(ticketKey, ticketFields) {
   slaPanel.style.fontSize = 'inherit';
   slaPanel.style.color = 'inherit';
   slaPanel.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px;">' +
-    slaRow('Time to Acknowledge', ack, 'within ' + targets.ack + 'm') +
-    slaRow('Time to Respond', resp, 'within ' + (targets.respond >= 60 ? (targets.respond / 60) + 'h' : targets.respond + 'm')) +
-    slaRow('Time to Investigate', inv, 'within ' + (targets.investigate >= 60 ? (targets.investigate / 60) + 'h' : targets.investigate + 'm')) +
-    '<div style="font-size:9px;color:var(--text-muted);text-align:right;margin-top:2px;">SLA targets based on ' + pShort + ' priority | Elapsed: ' + (elapsedHrs > 0 ? elapsedHrs + 'h ' : '') + elapsedMinRem + 'm</div>' +
+    fmtCD(elapsedMin, targets.ack, 'Time to Acknowledge') +
+    fmtCD(elapsedMin, targets.respond, 'Time to Respond') +
+    fmtCD(elapsedMin, targets.investigate, 'Time to Investigate') +
+    '<div style="font-size:9px;color:var(--text-muted);text-align:right;margin-top:2px;">Fallback: calculated from ticket creation | ' + pShort + '</div>' +
   '</div>';
-  
-  if (window._slaInterval) clearInterval(window._slaInterval);
-  window._slaInterval = setInterval(function() {
-    fetchAndDisplaySLA(ticketKey, ticketFields);
-  }, 60000);
 }
 
 async function openInvestigation(ticketKey) {
@@ -36090,10 +36229,10 @@ async function openInvestigation(ticketKey) {
       ? labels.map(function(l) { return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + l + '</span>'; }).join('')
       : '<span style="color:var(--text-muted);font-size:11px;">None</span>';
 
-    livePanel.innerHTML = '<div style="display:grid;grid-template-columns:280px 1fr;gap:12px;margin-top:4px;">' +
+    livePanel.innerHTML = '<div style="display:grid;grid-template-columns:320px 1fr;gap:12px;margin-top:4px;">' +
 
-      // ── LEFT SIDEBAR (Ticket Details + Raw Alert + Timeline) ──
-      '<div style="display:flex;flex-direction:column;gap:12px;">' +
+      // ── LEFT SIDEBAR (Ticket Details + SLA + Raw Alert + Timeline + Enrichment/Correlated/Actions/Playbook) ──
+      '<div style="display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 120px);overflow-y:auto;padding-right:4px;">' +
         // Ticket Details card
         '<div class="card" style="padding:14px;">' +
           '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Ticket Details</span></div>' +
@@ -36117,15 +36256,21 @@ async function openInvestigation(ticketKey) {
           (labels.length > 0 ? '<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">' + labels.map(function(l) { return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + l + '</span>'; }).join('') + '</div>' : '') +
         '</div>' +
 
+        // SLA Details — below Ticket Details, collapsible, pulls from Jira API
+        '<div id="invSLAPanel" class="card" style="padding:14px;border-color:rgba(245,158,11,0.2);">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">\u23F1 SLA Details</span><span class="badge" style="font-size:8px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);margin-left:6px;">Jira</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" id="invSLAContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Loading SLA data from Jira...</div>' +
+        '</div>' +
+
         // Raw Alert card (from description)
         '<div class="card" style="padding:14px;">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Raw Alert</span></div>' +
-          '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;max-height:300px;overflow-y:auto;font-family:var(--font-mono);background:var(--surface-0);padding:10px;border-radius:6px;border:1px solid var(--border-subtle);word-break:break-all;">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Raw Alert</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="font-size:11px;color:var(--text-secondary);line-height:1.5;max-height:300px;overflow-y:auto;font-family:var(--font-mono);background:var(--surface-0);padding:10px;border-radius:6px;border:1px solid var(--border-subtle);word-break:break-all;">' +
             (description ? highlightEntities(description) : '<span style="color:var(--text-muted);font-style:italic;">No raw alert data</span>') +
           '</div>' +
         '</div>' +
 
-        // Activity Timeline (moved from right sidebar to match demo)
+        // Activity Timeline
         '<div class="card" style="padding:14px;max-height:400px;overflow-y:auto;">' +
           '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span></div>' +
           (timelineItems.length === 0
@@ -36155,13 +36300,36 @@ async function openInvestigation(ticketKey) {
           ) +
         '</div>' +
 
+        // ── Panels below Timeline (collapsed by default) ──
+
+        // Enrichment Summary — collapsed by default
+        '<div class="card" style="padding:14px;" id="enrichmentSummaryCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Enrichment data will appear after investigation...</div>' +
+        '</div>' +
+        // Correlated Alerts — collapsed by default
+        '<div class="card" style="padding:14px;" id="correlatedAlertsCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Correlated Alerts</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Alert correlation data will appear after investigation...</div>' +
+        '</div>' +
+        // AI Recommended Actions — collapsed by default
+        '<div class="card" style="padding:14px;" id="recommendedActionsCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">AI Recommended Actions</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Actions will appear after investigation...</div>' +
+        '</div>' +
+        // Playbook Actions — collapsed by default
+        '<div class="card" style="padding:14px;" id="playbookActionsCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Playbook Actions</span><span class="badge" style="font-size:8px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);">Detection Rules</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Playbook steps will appear after investigation...</div>' +
+        '</div>' +
+
         // Quick actions
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button class="btn btn-secondary btn-sm" style="flex:1;font-size:10px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\', \'_blank\')">Open in Jira \u2197</button>' +
         '</div>' +
       '</div>' +
 
-      // ── CENTER MAIN (All panels in single column, matching demo layout) ──
+      // ── RIGHT MAIN CONTENT (Investigation Controls + AI spinner + Escalation Draft + Feedback) ──
       '<div id="invMainContent" style="display:flex;flex-direction:column;gap:12px;">' +
         // Re-investigate button (always visible for ALL tickets — fresh + cached)
         '<div id="invReInvestigateBar" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;">' +
@@ -36172,37 +36340,12 @@ async function openInvestigation(ticketKey) {
           '</div>' +
           '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="reInvestigate(\'' + ticketKey + '\')">\uD83D\uDD04 Re-investigate</button>' +
         '</div>' +
-        // SLA Details and Countdown
-        '<div id="invSLAPanel" class="card" style="padding:14px;border-color:rgba(245,158,11,0.2);">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">\u23F1 SLA Details</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" id="invSLAContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Loading SLA data...</div>' +
-        '</div>' +
         // AI Investigation loading spinner
         '<div id="invLoadingSpinner" class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;min-height:350px;background:var(--bg-card);border:1px solid var(--border-card);border-radius:12px;">' +
           '<div style="width:48px;height:48px;border:3px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
           '<div style="font-size:13px;color:var(--cyan);font-family:var(--font-mono);text-align:center;font-weight:500;">Initializing AI Investigation Engine</div>' +
           '<div style="width:240px;height:5px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:3px;animation:invProgressBar 8s ease-in-out forwards;"></div></div>' +
           '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Querying log sources &middot; OpenCTI enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
-        '</div>' +
-        // Enrichment Summary
-        '<div class="card" style="padding:14px;" id="enrichmentSummaryCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="font-size:10px;color:var(--text-muted);font-style:italic;">Enrichment data will appear after investigation...</div>' +
-        '</div>' +
-        // Correlated Alerts
-        '<div class="card" style="padding:14px;" id="correlatedAlertsCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Correlated Alerts</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="font-size:10px;color:var(--text-muted);font-style:italic;">Alert correlation data will appear after investigation...</div>' +
-        '</div>' +
-        // AI Recommended Actions
-        '<div class="card" style="padding:14px;" id="recommendedActionsCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">AI Recommended Actions</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="font-size:10px;color:var(--text-muted);font-style:italic;">Actions will appear after investigation...</div>' +
-        '</div>' +
-        // Playbook Actions
-        '<div class="card" style="padding:14px;" id="playbookActionsCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Playbook Actions</span><span class="badge" style="font-size:8px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);">Detection Rules</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="font-size:10px;color:var(--text-muted);font-style:italic;">Playbook steps will appear after investigation...</div>' +
         '</div>' +
         // Client Escalation Draft (just above Analyst Feedback Loop)
         '<div class="card" style="padding:14px;border-color:rgba(0,212,255,0.2);" id="clientEscalationCard">' +
@@ -36217,7 +36360,7 @@ async function openInvestigation(ticketKey) {
     // ── Initialize collapsible panels ──
     initCollapsiblePanels();
     
-    // ── Fetch and display SLA data ──
+    // ── Fetch and display SLA data from Jira API ──
     fetchAndDisplaySLA(ticketKey, f);
 
         // ── Check investigation cache before running LLM ──

@@ -327,24 +327,32 @@ export default async function handler(req, res) {
     if (action === 'sla') {
       const key = req.query.key;
       if (!key) return res.status(400).json({ error: 'Missing key parameter' });
+      const result = { source: 'none', jsmSLA: null, fields: null };
       // Try fetching SLA info from JSM Service Desk API
       try {
         const r = await fetch(`${baseUrl}/rest/servicedesc/1/servicedesk/request/${key}/sla`, {
           headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
         });
         if (r.status === 200) {
-          return res.status(200).json(await r.json());
+          result.jsmSLA = await r.json();
+          result.source = 'jsm';
         }
       } catch(e) { /* fallback below */ }
-      // Fallback: Try the issue fields approach (customfield_10020 is commonly SLA)
+      // Also fetch Dacta SLA custom fields (customfield_10472, 10473, 10573)
       try {
-        const r2 = await fetch(`${baseUrl}/rest/api/3/issue/${key}?fields=customfield_10020,customfield_10010`, {
+        const r2 = await fetch(`${baseUrl}/rest/api/3/issue/${key}?fields=customfield_10472,customfield_10473,customfield_10573,customfield_10020,customfield_10010,priority,created`, {
           headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
         });
-        return res.status(r2.status).json(await r2.json());
-      } catch(e2) {
+        if (r2.status < 400) {
+          const issueData = await r2.json();
+          result.fields = issueData.fields || {};
+          if (!result.source || result.source === 'none') result.source = 'fields';
+        }
+      } catch(e2) { /* continue */ }
+      if (result.source === 'none') {
         return res.status(500).json({ error: 'SLA fetch failed' });
       }
+      return res.status(200).json(result);
     }
 
     // ─── ACTION: replyCustomer (JSM visible to customer) ──────
@@ -375,25 +383,6 @@ export default async function handler(req, res) {
       return res.status(r2.status).json(await r2.json());
     }
 
-    // ─── ACTION: sla (fetch SLA data) ────────────────────────
-    if (action === 'sla') {
-      const key = req.query.key;
-      if (!key) return res.status(400).json({ error: 'Missing key parameter' });
-      try {
-        const r = await fetch(`${baseUrl}/rest/servicedesc/1/servicedesk/request/${key}/sla`, {
-          headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
-        });
-        if (r.status === 200) return res.status(200).json(await r.json());
-      } catch(e) {}
-      try {
-        const r2 = await fetch(`${baseUrl}/rest/api/3/issue/${key}?fields=customfield_10020,customfield_10010`, {
-          headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
-        });
-        return res.status(r2.status).json(await r2.json());
-      } catch(e2) {
-        return res.status(500).json({ error: 'SLA fetch failed' });
-      }
-    }
 
         // ─── ACTION: assignable (list users) ─────────────────────
     if (action === 'assignable') {
