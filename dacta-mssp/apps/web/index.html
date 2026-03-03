@@ -3962,10 +3962,13 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 }
 .cc-metric-unit {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 9px;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+  opacity: 0.55;
+  align-self: flex-end;
+  margin-bottom: 3px;
 }
 .cc-metric-label {
   font-family: var(--font-body);
@@ -34327,6 +34330,11 @@ function updateAllVisuals(vis) {
     var totalHandled = (vis.resolvedAllTime || 0) + (vis.escalatedCount || 0);
     var slaCompliant = totalHandled > 0 ? Math.min(99.2, 92 + (vis.resolvedAllTime || 0) / Math.max(totalHandled, 1) * 7).toFixed(1) : '—';
     slaEl.textContent = slaCompliant;
+  }
+  // Restore units for MTTD/MTTR/SLA (cleared on mode switch)
+  if (mttdEl) { var _mu = mttdEl.parentElement.querySelector('.cc-metric-unit'); if (_mu) _mu.textContent = 'min'; }
+  if (mttrEl) { var _mu2 = mttrEl.parentElement.querySelector('.cc-metric-unit'); if (_mu2) _mu2.textContent = 'min'; }
+  if (slaEl) { var _mu3 = slaEl.parentElement.querySelector('.cc-metric-unit'); if (_mu3) _mu3.textContent = '%';
   }
 
   // 2. Re-render heatmap with live data
