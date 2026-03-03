@@ -9627,8 +9627,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                 <option value="1h">Last 1H</option>
                 <option value="4h">Last 4H</option>
                 <option value="12h">Last 12H</option>
-                <option value="24h" selected>Last 24H</option>
-                <option value="7d">Last 7 Days</option>
+                <option value="24h">Last 24H</option>
+                <option value="7d" selected>Last 7 Days</option>
                 <option value="30d">Last 30 Days</option>
               </select>
               <button class="cc-refresh-btn" onclick="refreshDashboardData()" title="Refresh dashboard data">
@@ -33930,7 +33930,7 @@ window.DactaJira = {
 
   async fetchDashboard() {
     var now = Date.now();
-    var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '24h';
+    var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '7d';
     var cacheKey = 'dashboard_' + tr;
     if (this._cache[cacheKey] && (now - (this._cacheTime[cacheKey] || 0)) < this._CACHE_TTL) {
       return this._cache[cacheKey];
@@ -34005,7 +34005,7 @@ window.DactaJira = {
 
   async fetchTelemetry() {
     var now = Date.now();
-    var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '24h';
+    var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '7d';
     var cacheKey = 'telemetry_' + tr;
     if (this._cache[cacheKey] && (now - (this._cacheTime[cacheKey] || 0)) < this._CACHE_TTL) return this._cache[cacheKey];
     var data = await this._fetch('/api/jira?action=telemetry&timeRange=' + encodeURIComponent(tr));
@@ -34016,7 +34016,7 @@ window.DactaJira = {
 
   async fetchDashVisuals() {
     var now = Date.now();
-    var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '24h';
+    var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '7d';
     var cacheKey = 'dashvisuals_' + tr;
     if (this._cache[cacheKey] && (now - (this._cacheTime[cacheKey] || 0)) < this._CACHE_TTL) {
       return this._cache[cacheKey];
@@ -34114,7 +34114,7 @@ function jiraLiveBadge() {
 // ── DASHBOARD LIVE DATA ─────────────────────────────────────
 
 // Dashboard time range state
-var _dashTimeRange = '24h';
+var _dashTimeRange = '7d';
 var _dashTimeLabels = {
   '1h': { elastic: 'now-1h', short: '1H', label: '1h' },
   '4h': { elastic: 'now-4h', short: '4H', label: '4h' },
@@ -34125,13 +34125,13 @@ var _dashTimeLabels = {
 };
 
 function getDashElasticGte() {
-  return (_dashTimeLabels[_dashTimeRange] || _dashTimeLabels['24h']).elastic;
+  return (_dashTimeLabels[_dashTimeRange] || _dashTimeLabels['7d']).elastic;
 }
 function getDashTimeShort() {
-  return (_dashTimeLabels[_dashTimeRange] || _dashTimeLabels['24h']).short;
+  return (_dashTimeLabels[_dashTimeRange] || _dashTimeLabels['7d']).short;
 }
 function getDashTimeLabel() {
-  return (_dashTimeLabels[_dashTimeRange] || _dashTimeLabels['24h']).label;
+  return (_dashTimeLabels[_dashTimeRange] || _dashTimeLabels['7d']).label;
 }
 
 function onDashTimeRangeChange() {
