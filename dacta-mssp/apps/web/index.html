@@ -27646,9 +27646,14 @@ async function syncJiraOrgs() {
     _jiraOrgs = data.organizations || [];
 
     // Compare with ORG_CONNECTORS to find new orgs
-    var knownNames = Object.values(ORG_CONNECTORS).map(function(o) { return o.name.toLowerCase(); });
+    // Use fuzzy matching: Jira org "Foxwood" should match ORG_CONNECTORS "Foxwood Technology"
+    var knownOrgs = Object.values(ORG_CONNECTORS);
     _onboardingQueue = _jiraOrgs.filter(function(jo) {
-      return !knownNames.includes(jo.name.toLowerCase());
+      var jName = jo.name.toLowerCase().trim();
+      return !knownOrgs.some(function(o) {
+        var oName = o.name.toLowerCase().trim();
+        return oName === jName || oName.indexOf(jName) === 0 || jName.indexOf(oName) === 0;
+      });
     });
 
     renderOnboardingPage();
@@ -27715,7 +27720,7 @@ function renderOnboardingPage() {
   var orgKeys = Object.keys(ORG_CONNECTORS);
   orgKeys.forEach(function(id) {
     var org = ORG_CONNECTORS[id];
-    var jiraMatch = _jiraOrgs.find(function(jo) { return jo.name.toLowerCase() === org.name.toLowerCase(); });
+    var jiraMatch = _jiraOrgs.find(function(jo) { var jn=jo.name.toLowerCase().trim(), on=org.name.toLowerCase().trim(); return jn===on||on.indexOf(jn)===0||jn.indexOf(on)===0; });
     var typeLabel = org.type === 'internal' ? 'Internal' : org.type === 'mdr' ? 'MDR' : 'SOCaaS';
     var typeBadge = org.type === 'internal' ? 'badge-cyan' : org.type === 'mdr' ? 'badge-amber' : 'badge-green';
 
