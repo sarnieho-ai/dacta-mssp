@@ -2425,6 +2425,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   position: relative;
 }
 .inv-pipeline-stage.stage-tokenize  { border-left: 3px solid var(--cyan); }
+.inv-pipeline-stage.stage-classifier { border-left: 3px solid #f59e0b; }
 .inv-pipeline-stage.stage-round1    { border-left: 3px solid #3b82f6; }
 .inv-pipeline-stage.stage-round2    { border-left: 3px solid var(--purple); }
 .inv-pipeline-stage.stage-round3    { border-left: 3px solid var(--amber); }
@@ -10411,6 +10412,17 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   <div class="inv-pipeline-stage-name">Tokenize</div>
                   <div class="inv-pipeline-stage-sub">847 PII tokens generated</div>
                   <div class="inv-pipeline-stage-metric">23ms · Vault: NS_DACT_*</div>
+                  <div class="inv-pipeline-stage-status">✓ Complete</div>
+                </div>
+
+                <div class="inv-pipeline-arrow">→</div>
+
+                <!-- Stage 1.5: Classifier — Haiku -->
+                <div class="inv-pipeline-stage stage-classifier">
+                  <div class="inv-pipeline-stage-icon">🎯</div>
+                  <div class="inv-pipeline-stage-name">Classifier — Haiku</div>
+                  <div class="inv-pipeline-stage-sub">Domain routing: SIEM, EDR, Firewall, TI</div>
+                  <div class="inv-pipeline-stage-metric">1.1s · 4 domains routed</div>
                   <div class="inv-pipeline-stage-status">✓ Complete</div>
                 </div>
 
@@ -35098,7 +35110,7 @@ async function openInvestigation(ticketKey) {
           '<div style="width:48px;height:48px;border:3px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
           '<div style="font-size:13px;color:var(--cyan);font-family:var(--font-mono);text-align:center;font-weight:500;">Initializing AI Investigation Engine</div>' +
           '<div style="width:240px;height:5px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:3px;animation:invProgressBar 8s ease-in-out forwards;"></div></div>' +
-          '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Running Elastic SIEM queries &middot; OpenCTI enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
+          '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Querying log sources &middot; OpenCTI enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
         '</div>' +
       '</div>' +
 
@@ -36149,6 +36161,37 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (f.customfield_10002 && f.customfield_10002.length > 0) org = f.customfield_10002[0].name || '';
   var pShort = (priority.split(' - ')[0] || 'P3').toUpperCase();
 
+  // ── Connector-Aware: Determine which tools this org has ──
+  var orgLower = org.toLowerCase();
+  var invNamespace = 'default';
+  if (orgLower.includes('naga')) invNamespace = 'nagaworld';
+  else if (orgLower.includes('dacta') && !orgLower.includes('training')) invNamespace = 'dacta';
+  else if (orgLower.includes('foxwood')) invNamespace = 'foxwood';
+  else if (orgLower.includes('silver')) invNamespace = 'silverkey';
+  else if (orgLower.includes('spmt') || orgLower.includes('sp media')) invNamespace = 'spmt';
+  else if (orgLower.includes('em ') || orgLower.includes('em service')) invNamespace = 'emservices';
+  else if (orgLower.includes('sp tele') || orgLower.includes('sptele')) invNamespace = 'sptelecom';
+  else if (orgLower.includes('toyota')) invNamespace = 'toyotafinancial';
+  else if (orgLower.includes('training')) invNamespace = 'dactatraining';
+  else if (orgLower.includes('adv')) invNamespace = 'advpartners';
+
+  var _invHasEDR = orgHasConnector(invNamespace, 'edr');
+  var _invHasFirewall = orgHasConnector(invNamespace, 'firewall');
+  var _invEdrConn = getOrgConnector(invNamespace, 'edr');
+  var _invFwConn = getOrgConnector(invNamespace, 'firewall');
+
+  // Build dynamic tool label for pipeline display
+  var invToolsList = ['Elastic SIEM'];
+  if (_invHasEDR && _invEdrConn) {
+    invToolsList.push(_invEdrConn.vendor || 'EDR');
+  }
+  if (_invHasFirewall && _invFwConn) {
+    invToolsList.push((_invFwConn.vendor || 'Firewall') + ' Logs');
+  }
+  invToolsList.push('OpenCTI');
+  var invToolsLabel = invToolsList.join(' + ');
+  console.log('[AI Investigation] Org: ' + org + ' | Namespace: ' + invNamespace + ' | EDR: ' + _invHasEDR + ' | Firewall: ' + _invHasFirewall + ' | Tools: ' + invToolsLabel);
+
   // Determine number of rounds based on priority/severity
   var totalRounds = 3;
   if (pShort === 'P4') totalRounds = 1;
@@ -36255,6 +36298,19 @@ async function runAIInvestigation(ticketKey, issueData) {
     '<div class="inv-pipeline-stage-status">\u2713 Complete</div></div>' +
     '<div class="inv-pipeline-arrow">\u2192</div>';
 
+  // Classifier (Haiku) stage — routes alerts to domain handlers
+  var classifierDomains = ['SIEM'];
+  if (_invHasEDR) classifierDomains.push('EDR');
+  if (_invHasFirewall) classifierDomains.push('Firewall');
+  classifierDomains.push('TI');
+  pipelineHTML += '<div class="inv-pipeline-stage stage-classifier" id="pipeClassifier">' +
+    '<div class="inv-pipeline-stage-icon">\uD83C\uDFAF</div>' +
+    '<div class="inv-pipeline-stage-name">Classifier \u2014 Haiku</div>' +
+    '<div class="inv-pipeline-stage-sub">Domain routing: ' + classifierDomains.join(', ') + '</div>' +
+    '<div class="inv-pipeline-stage-metric">' + invToolsLabel + '</div>' +
+    '<div class="inv-pipeline-stage-status" id="pipeClassifierStatus">\u23F3 Queued</div></div>' +
+    '<div class="inv-pipeline-arrow">\u2192</div>';
+
   // Round stages (initially "Waiting")
   for (var ri = 0; ri < totalRounds; ri++) {
     pipelineHTML += '<div class="inv-pipeline-stage" id="pipeStage' + (ri+1) + '" style="border-left:3px solid ' + stageColors[ri % 3] + '40;">' +
@@ -36302,12 +36358,27 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (!roundsContainer) return;
 
   // ═══════════════════════════════════════════════
+  // PHASE 1.5: Animate Classifier (Haiku) step
+  // ═══════════════════════════════════════════════
+  var classifierStatusEl = document.getElementById('pipeClassifierStatus');
+  if (classifierStatusEl) classifierStatusEl.innerHTML = '<div class="jira-spinner" style="width:10px;height:10px;display:inline-block;"></div> Classifying';
+  var progStatus0 = document.getElementById('invProgressStatus');
+  if (progStatus0) progStatus0.textContent = 'Classifier (Haiku) routing alert to domain handlers...';
+  await sleep(1200);
+  if (classifierStatusEl) classifierStatusEl.innerHTML = '\u2713 Complete';
+  var classifierEl = document.getElementById('pipeClassifier');
+  if (classifierEl) {
+    var classMetric = classifierEl.querySelector('.inv-pipeline-stage-metric');
+    if (classMetric) classMetric.textContent = '1.1s \u00B7 ' + classifierDomains.length + ' domains routed';
+  }
+
+  // ═══════════════════════════════════════════════
   // PHASE 2: Animate through rounds
   // ═══════════════════════════════════════════════
 
   var roundTimings = [3500, 2200, 2500];
   var roundLabels = ['Initial Classification + Log Query', 'Threat Context & Evidence Gathering', 'Deep Investigation & Balanced Verdict'];
-  var roundSubtitles = ['Elastic SIEM + CrowdStrike + OpenCTI queries', 'IOC enrichment + exculpatory analysis', 'Attack chain synthesis + final assessment'];
+  var roundSubtitles = [invToolsLabel + ' queries', 'IOC enrichment + exculpatory analysis', 'Attack chain synthesis + final assessment'];
 
   // Process each round
   for (var rnd = 1; rnd <= totalRounds; rnd++) {
