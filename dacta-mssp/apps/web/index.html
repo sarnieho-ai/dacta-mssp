@@ -28674,7 +28674,15 @@ function applyProductionMode() {
 
   // Command Center metric values
   document.querySelectorAll('.cc-metric-value').forEach(function(el) { el.textContent = '0'; });
-  document.querySelectorAll('.cc-metric-unit').forEach(function(el) { el.textContent = ''; });
+  document.querySelectorAll('.cc-metric-unit').forEach(function(el) {
+    // Preserve MTTD/MTTR/SLA units (min/min/%); only clear the first 4 data cards
+    var card = el.closest('.cc-metric-card');
+    if (card) {
+      var valEl = card.querySelector('.cc-metric-value');
+      if (valEl && (valEl.id === 'cc-mttd' || valEl.id === 'cc-mttr' || valEl.id === 'cc-sla')) return;
+    }
+    el.textContent = '';
+  });
   document.querySelectorAll('.cc-count-value, .cc-big-count').forEach(function(el) { el.textContent = '0'; });
 
   // Severity dots in metric card
