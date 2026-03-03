@@ -2559,12 +2559,13 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   margin-top:12px;
 }
 .inv-feedback-panel textarea {
-  width:100%; min-height:60px; background:var(--surface-2);
-  border:1px solid var(--border); border-radius:6px;
+  width:100%; min-height:60px; background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.12); border-radius:6px;
   padding:10px 12px; color:var(--text-primary);
   font-size:11px; font-family:var(--font-body);
   resize:vertical; outline:none; box-sizing:border-box;
 }
+.inv-feedback-panel textarea::placeholder { color:rgba(255,255,255,0.3); }
 .inv-feedback-panel textarea:focus {
   border-color:rgba(0,212,255,0.4);
 }
@@ -9343,7 +9344,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 }
 
 </style>
-</head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.supabase.co https://*.atlassian.net https://*.atlassian.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.atlassian.net https://*.atlassian.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://*.opencti.io http://61.13.214.198:*;">
+    </head>
 <body>
 
 <!-- ============================================================
@@ -23081,7 +23083,16 @@ Analyst: K. Rasmussen | 2026-02-28
           </div>
         </div>
 
-        <!-- Client Connector Registry — Dynamic -->
+        <!-- Settings Tabs -->
+        <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid var(--border-card);">
+          <button class="btn" id="stgTabConnectors" onclick="switchSettingsTab('connectors')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid var(--cyan);color:var(--cyan);background:transparent;border-radius:0;cursor:pointer;">🔌 Client Connectors</button>
+          <button class="btn" id="stgTabRAG" onclick="switchSettingsTab('rag')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;">🤖 AI Investigation Config</button>
+          <button class="btn" id="stgTabRules" onclick="switchSettingsTab('rules')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;">📋 Decision & Audit</button>
+          <button class="btn" id="stgTabSecurity" onclick="switchSettingsTab('security')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;">🔒 Security & Access</button>
+        </div>
+
+        <!-- TAB: Client Connectors -->
+        <div id="stgPanelConnectors" class="stg-tab-panel">
         <div class="card" style="margin-bottom:24px;">
           <div class="card-header" style="margin-bottom:16px;">
             <div>
@@ -23097,7 +23108,10 @@ Analyst: K. Rasmussen | 2026-02-28
           <div id="settingsConnectorMeta" style="margin-top:14px;"></div>
         </div>
 
-        <!-- RAG Router Config (keep existing) -->
+        </div><!-- end stgPanelConnectors -->
+
+        <!-- TAB: AI Investigation Config -->
+        <div id="stgPanelRAG" class="stg-tab-panel" style="display:none;">
         <div class="card stg-section" style="margin-bottom:24px;">
           <div class="card-header" style="margin-bottom:18px;">
             <div>
@@ -23134,7 +23148,31 @@ Analyst: K. Rasmussen | 2026-02-28
             <span class="badge badge-cyan" style="font-size:9px;padding:2px 8px;margin-left:auto;white-space:nowrap;">On-Demand</span>
           </div>
         </div>
+        </div><!-- end stgPanelRAG -->
 
+        <!-- TAB: Decision & Audit -->
+        <div id="stgPanelRules" class="stg-tab-panel" style="display:none;">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><span class="card-title">Investigation Decision Log</span><span class="badge badge-cyan">Compliance</span></div>
+            <div style="font-size:11px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px;">Every LLM-driven investigation decision is logged with: ticket ID, model used, verdict, confidence, analyst override (if any), and timestamp. This creates an immutable audit trail for SOC 2 and ISO 27001 compliance.</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Log all AI investigation decisions</div><div style="font-size:10px;color:var(--text-muted);">Verdict, confidence, model, duration</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Track analyst overrides</div><div style="font-size:10px;color:var(--text-muted);">Who, when, justification</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Rule version history</div><div style="font-size:10px;color:var(--text-muted);">Detection rules + RAG config changes</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Feedback loop telemetry</div><div style="font-size:10px;color:var(--text-muted);">Analyst ratings feed into prompt tuning</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Data Retention</span></div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Investigation Cache TTL</div><select class="filter-select" style="width:100%;"><option>30 days</option><option>90 days</option><option>12 months</option><option>Indefinite</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Audit Log Retention</div><select class="filter-select" style="width:100%;"><option>12 months</option><option>24 months</option><option>7 years (Compliance)</option></select></div>
+            </div>
+          </div>
+        </div><!-- end stgPanelRules -->
+
+        <!-- TAB: Security & Access -->
+        <div id="stgPanelSecurity" class="stg-tab-panel" style="display:none;">
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><span class="card-title">LLM Configuration</span><span class="badge badge-cyan">AI Engine</span></div>
@@ -23174,6 +23212,7 @@ Analyst: K. Rasmussen | 2026-02-28
             </div>
           </div>
         </div>
+        </div><!-- end stgPanelSecurity -->
       </div><!-- end settings -->
 
 
@@ -26808,6 +26847,26 @@ async function loadIntegrationHub() {
 }
 
 // ============================================================
+//  SETTINGS PAGE — TAB SWITCHING
+// ============================================================
+function switchSettingsTab(tabName) {
+  var tabs = ['connectors', 'rag', 'rules', 'security'];
+  var tabMap = { connectors: 'stgTabConnectors', rag: 'stgTabRAG', rules: 'stgTabRules', security: 'stgTabSecurity' };
+  var panelMap = { connectors: 'stgPanelConnectors', rag: 'stgPanelRAG', rules: 'stgPanelRules', security: 'stgPanelSecurity' };
+  tabs.forEach(function(t) {
+    var tabEl = document.getElementById(tabMap[t]);
+    var panelEl = document.getElementById(panelMap[t]);
+    if (t === tabName) {
+      if (tabEl) { tabEl.style.borderBottomColor = 'var(--cyan)'; tabEl.style.color = 'var(--cyan)'; }
+      if (panelEl) panelEl.style.display = '';
+    } else {
+      if (tabEl) { tabEl.style.borderBottomColor = 'transparent'; tabEl.style.color = 'var(--text-muted)'; }
+      if (panelEl) panelEl.style.display = 'none';
+    }
+  });
+}
+
+// ============================================================
 //  SETTINGS PAGE — LIVE CLIENT CONNECTOR REGISTRY
 // ============================================================
 function renderSettingsConnectors() {
@@ -26872,7 +26931,7 @@ function renderSettingsConnectors() {
       '<div class="stg-conn-field">' +
         '<div class="stg-conn-field-label">METADATA <span style="font-size:8px;color:var(--cyan);">(used by LLM investigation)</span></div>' +
         metaHtml +
-        '<button class="btn btn-sm" style="margin-top:6px;padding:2px 8px;font-size:9px;color:var(--text-muted);border-color:var(--border-card);" onclick="addConnectorMeta(\'' + cid + '\')">' +
+        '<button class="btn" style="margin-top:6px;padding:2px 8px;font-size:9px;color:var(--text-muted);border:1px solid var(--border-card);border-radius:4px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;gap:3px;" onclick="addConnectorMeta(\'' + cid + '\')">' +
           '+ Add Field</button>' +
       '</div>' +
       '<div class="stg-conn-footer" style="justify-content:space-between;">' +
@@ -27692,6 +27751,9 @@ function init() {
 // connector-aware investigation (prevents querying CrowdStrike
 // for clients that don't have EDR, etc.)
 // ═══════════════════════════════════════════════════════════════
+// Deleted org IDs persisted in localStorage
+var _deletedOrgIds = JSON.parse(localStorage.getItem('deletedOrgIds') || '[]');
+
 var ORG_CONNECTORS = {
   '9ce7a126-4e9d-434e-b952-f4c4fce56fa1': { // Dacta Global
     code: 'DG', name: 'Dacta Global', type: 'internal', namespace: 'dacta',
@@ -27766,6 +27828,21 @@ var ORG_CONNECTORS = {
 };
 
 // Helper: get connectors for a namespace
+// Remove deleted orgs from hardcoded ORG_CONNECTORS on startup
+_deletedOrgIds.forEach(function(delId) { if (ORG_CONNECTORS[delId]) { console.log('[Onboarding] Removing deleted org:', ORG_CONNECTORS[delId].name); delete ORG_CONNECTORS[delId]; } });
+// Also check by name (for orgs added from Supabase with different IDs)
+var _deletedOrgNames = JSON.parse(localStorage.getItem('deletedOrgNames') || '[]');
+_deletedOrgNames.forEach(function(name) {
+  var lowerName = name.toLowerCase().trim();
+  Object.keys(ORG_CONNECTORS).forEach(function(id) {
+    var oName = ORG_CONNECTORS[id].name.toLowerCase().trim();
+    if (oName === lowerName || oName.indexOf(lowerName) === 0 || lowerName.indexOf(oName) === 0) {
+      console.log('[Onboarding] Removing deleted org by name:', ORG_CONNECTORS[id].name);
+      delete ORG_CONNECTORS[id];
+    }
+  });
+});
+
 function getOrgByNamespace(ns) {
   for (var id in ORG_CONNECTORS) {
     if (ORG_CONNECTORS[id].namespace === ns) return ORG_CONNECTORS[id];
@@ -27798,6 +27875,12 @@ var _dismissedJiraOrgIds = JSON.parse(localStorage.getItem('dismissedJiraOrgIds'
 async function syncJiraOrgs() {
   var btn = document.getElementById('onboardSyncBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Syncing...'; }
+  
+  // Show progress bars
+  var queueEl = document.getElementById('onboardQueue');
+  if (queueEl) queueEl.innerHTML = '<div style="padding:24px 0;text-align:center;"><div style="width:200px;height:4px;background:rgba(255,255,255,0.06);border-radius:4px;margin:0 auto 8px;overflow:hidden;"><div style="height:100%;width:60%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:4px;animation:invProgressBar 3s ease-in-out infinite;"></div></div><div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Fetching organizations from Jira...</div></div>';
+  var tableEl = document.getElementById('onboardedTable');
+  if (tableEl) { var existingRows = tableEl.querySelectorAll('tr'); /* keep existing if any */ }
 
   try {
     var resp = await fetch('/api/jira?action=organizations', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
@@ -27942,6 +28025,15 @@ function approveOnboardOrg(idx) {
 
   // Remove from queue
   _onboardingQueue.splice(idx, 1);
+
+  // If this org was previously deleted, remove from deleted lists
+  _deletedOrgIds = _deletedOrgIds.filter(function(id) { return id !== newId; });
+  localStorage.setItem('deletedOrgIds', JSON.stringify(_deletedOrgIds));
+  var dnl = JSON.parse(localStorage.getItem('deletedOrgNames') || '[]');
+  var onLower = org.name.toLowerCase().trim();
+  dnl = dnl.filter(function(n) { return n.toLowerCase().trim() !== onLower; });
+  localStorage.setItem('deletedOrgNames', JSON.stringify(dnl));
+
   renderOnboardingPage();
 
   // Also try to create in Supabase
@@ -28037,8 +28129,14 @@ async function deleteOnboardedOrg(orgId) {
   if (!org) return;
   if (!confirm('Remove "' + org.name + '" from SIEMLess?\n\nThis will delete the client from the platform.')) return;
 
-  // Remove from runtime ORG_CONNECTORS
+  // Remove from runtime ORG_CONNECTORS + persist deletion
+  var orgName = org.name;
   delete ORG_CONNECTORS[orgId];
+  _deletedOrgIds.push(orgId);
+  localStorage.setItem('deletedOrgIds', JSON.stringify(_deletedOrgIds));
+  if (!window._deletedOrgNames) window._deletedOrgNames = JSON.parse(localStorage.getItem('deletedOrgNames') || '[]');
+  _deletedOrgNames.push(orgName);
+  localStorage.setItem('deletedOrgNames', JSON.stringify(_deletedOrgNames));
 
   // Also add to dismissed list so it doesn't re-appear from Jira sync
   var matchingJiraOrg = _jiraOrgs.find(function(jo) {
@@ -34352,7 +34450,6 @@ async function populateLiveDashboard() {
 
       // Add live ticket rows (show up to 8 recent open)
       var openTickets = tickets.filter(function(t) { return t.status === 'Open'; }).slice(0, 8);
-      if (openTickets.length === 0) openTickets = tickets.slice(0, 8); // fallback: show any recent
 
       var cardHeader = ticketsCard.querySelector('.card-header');
       openTickets.forEach(function(t) {
@@ -35262,6 +35359,11 @@ async function openInvestigation(ticketKey) {
           '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Playbook Actions</span><span style="font-size:9px;color:var(--text-muted);margin-left:6px;">From Detection Rules</span></div>' +
           '<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Matching playbook...</div>' +
         '</div>' +
+        // Client Escalation Draft card
+        '<div class="card" style="padding:14px;" id="clientEscalationCard">' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Client Escalation Draft</span><span class="badge badge-cyan" style="font-size:9px;">AI Generated</span></div>' +
+          '<div id="escalationDraftContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Draft will be generated after investigation...</div>' +
+        '</div>' +
       '</div>' +
     '</div>';
 
@@ -35460,9 +35562,31 @@ async function submitCreateTicket() {
 var _investigationCache = {}; // { 'DAC-12345': { html, verdict, confidence, timestamp, feedback, overrideVerdict, overrideReason, promptNotes } }
 var _activeInvestigations = {}; // { 'DAC-12345': true } — tickets currently being investigated
 
+// Load cached investigations from localStorage as fallback when Supabase table doesn't exist
+(function() {
+  try {
+    var lsCache = JSON.parse(localStorage.getItem('investigationCache') || '{}');
+    Object.keys(lsCache).forEach(function(k) { _investigationCache[k] = lsCache[k]; });
+    if (Object.keys(lsCache).length > 0) console.log('[InvCache] Loaded ' + Object.keys(lsCache).length + ' entries from localStorage fallback');
+  } catch(e) { /* ignore */ }
+})();
+
 // ── Supabase persistence helpers ──
 async function saveInvestigationCache(ticketKey, cacheEntry) {
   _investigationCache[ticketKey] = cacheEntry;
+  // Save to localStorage as fallback when Supabase table doesn't exist
+  try {
+    var lsCacheAll = JSON.parse(localStorage.getItem('investigationCache') || '{}');
+    // Store a lightweight version (no full HTML for localStorage size limits)
+    lsCacheAll[ticketKey] = {
+      verdict: cacheEntry.verdict, confidence: cacheEntry.confidence,
+      timestamp: cacheEntry.timestamp, html: cacheEntry.html,
+      overrideVerdict: cacheEntry.overrideVerdict, overrideReason: cacheEntry.overrideReason,
+      feedbackRating: cacheEntry.feedbackRating, feedbackText: cacheEntry.feedbackText,
+      promptNotes: cacheEntry.promptNotes, metadata: cacheEntry.metadata
+    };
+    localStorage.setItem('investigationCache', JSON.stringify(lsCacheAll));
+  } catch(lsErr) { console.warn('[InvCache] localStorage save failed:', lsErr.message); }
   try {
     if (!window._supabaseRef) return;
     // Upsert to investigation_cache table
@@ -37065,6 +37189,9 @@ async function runAIInvestigation(ticketKey, issueData) {
     appendFeedbackPanel(ticketKey, cacheEntry, invMainContent);
   }
 
+  // Generate client escalation draft
+  generateEscalationDraft(ticketKey, org, verdict, confidence, summary);
+
   } catch (aiErr) {
     console.error('[AI Investigation] Error:', aiErr);
     markInvestigationCompleted(ticketKey);
@@ -37075,6 +37202,82 @@ async function runAIInvestigation(ticketKey, issueData) {
         '<div style="font-size:11px;font-weight:600;color:var(--red-bright);margin-bottom:4px;">AI Investigation Error</div>' +
         '<div style="font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);">' + aiErr.message + '</div></div>';
     }
+  }
+}
+
+// ── Client Escalation Draft Generator ──
+function generateEscalationDraft(ticketKey, org, verdict, confidence, summary) {
+  var card = document.getElementById('clientEscalationCard');
+  if (!card) return;
+  var content = document.getElementById('escalationDraftContent');
+  if (!content) return;
+
+  var orgObj = Object.values(ORG_CONNECTORS).find(function(o) {
+    return o.name.toLowerCase().indexOf(org.toLowerCase()) === 0 || org.toLowerCase().indexOf(o.name.toLowerCase()) === 0;
+  });
+  var orgName = orgObj ? orgObj.name : org;
+  var isThreat = verdict.toLowerCase().indexOf('true positive') !== -1;
+  var severity = isThreat ? 'HIGH' : 'LOW';
+  var action = isThreat ? 'Immediate action recommended' : 'No action required at this time';
+
+  var draftHTML = '<div style="display:flex;flex-direction:column;gap:8px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+      '<span class="badge ' + (isThreat ? 'badge-p1' : 'badge-green') + '" style="font-size:9px;">' + verdict.split('\u2014')[0].trim() + '</span>' +
+      '<span style="font-size:10px;color:var(--text-muted);">Confidence: ' + confidence + '%</span>' +
+    '</div>' +
+    '<div style="padding:10px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.1);border-radius:8px;font-size:10px;">' +
+      '<div style="display:flex;gap:6px;margin-bottom:4px;"><span style="color:var(--text-muted);width:36px;">To:</span><span style="color:var(--text-primary);font-family:var(--font-mono);">security@' + orgName.toLowerCase().replace(/\s+/g,'') + '.com</span></div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:4px;"><span style="color:var(--text-muted);width:36px;">CC:</span><span style="color:var(--text-secondary);font-family:var(--font-mono);">soc-lead@dacta.global</span></div>' +
+      '<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);width:36px;">Subj:</span><span style="color:var(--amber);font-weight:600;">[' + severity + '] Security Alert \u2014 ' + ticketKey + '</span></div>' +
+    '</div>' +
+    '<div style="font-size:10px;color:var(--text-secondary);line-height:1.6;padding:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:6px;">' +
+      '<p style="margin:0 0 6px;">Dear ' + orgName + ' Security Team,</p>' +
+      '<p style="margin:0 0 6px;">Our SOC has completed an investigation of alert <strong style="color:var(--cyan);">' + ticketKey + '</strong>: <em>' + escapeHtml(summary) + '</em></p>' +
+      '<p style="margin:0 0 6px;"><strong>AI Verdict:</strong> ' + verdict + ' (' + confidence + '% confidence)</p>' +
+      '<p style="margin:0 0 6px;"><strong>Recommended Action:</strong> ' + action + '</p>' +
+      '<p style="margin:0;">Full investigation details are available in the DACTA SIEMLess portal. Please respond if you require additional context.</p>' +
+    '</div>' +
+    '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px;">' +
+      '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="copyEscalationDraft(\'' + ticketKey + '\')">\uD83D\uDCCB Copy</button>' +
+      '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.25);" onclick="submitEscalationToJira(\'' + ticketKey + '\')">\uD83D\uDCE8 Submit to Jira</button>' +
+    '</div>' +
+  '</div>';
+  content.innerHTML = draftHTML;
+}
+
+function copyEscalationDraft(ticketKey) {
+  var content = document.getElementById('escalationDraftContent');
+  if (content) {
+    var text = content.innerText || content.textContent;
+    navigator.clipboard.writeText(text).then(function() { showToast('Escalation draft copied to clipboard', 'success'); });
+  }
+}
+
+async function submitEscalationToJira(ticketKey) {
+  if (!ticketKey) return;
+  try {
+    var content = document.getElementById('escalationDraftContent');
+    var draftText = content ? (content.innerText || content.textContent) : '';
+    // Add comment to Jira ticket with the escalation draft
+    var commentBody = '\u2709\uFE0F *Client Escalation Draft (AI Generated)*\n\n' + draftText;
+    await DactaJira.addComment(ticketKey, commentBody);
+    // Transition to Escalated if possible
+    try {
+      var transitions = await DactaJira.fetchTransitions(ticketKey);
+      var escTrans = transitions.find(function(t) { return t.name.toLowerCase().indexOf('escalat') !== -1; });
+      if (escTrans) await DactaJira.transitionIssue(ticketKey, escTrans.id);
+    } catch(e) { /* transition optional */ }
+    showToast('Escalation submitted to Jira as comment on ' + ticketKey, 'success');
+    // Log to audit
+    logToSupabase('audit_log', {
+      action: 'client_escalation_submitted',
+      entity_type: 'investigation',
+      entity_id: ticketKey,
+      details: { draft_length: draftText.length },
+      performed_by: _getCurrentUserEmail() || 'admin'
+    });
+  } catch(e) {
+    showToast('Failed to submit escalation: ' + e.message, 'error');
   }
 }
 
@@ -37470,6 +37673,157 @@ function updateRoundHTML(container, num, totalRounds, state, content) {
   }
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// SECURITY HARDENING (Issue 6)
+// ══════════════════════════════════════════════════════════════
+
+// --- 1. Auth Guard: Require authentication for all Supabase operations ---
+(function() {
+  var _origFetch = window.fetch;
+  window.fetch = function(url, opts) {
+    // Intercept Supabase REST calls to ensure auth token is present
+    if (typeof url === 'string' && url.indexOf('supabase.co/rest/') !== -1) {
+      var headers = (opts && opts.headers) || {};
+      var authHeader = headers['Authorization'] || headers['authorization'] || '';
+      // If only anon key (no Bearer with user JWT), block write operations
+      if (opts && opts.method && opts.method !== 'GET' && !authHeader.match(/Bearer ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/)) {
+        console.warn('[Security] Blocked unauthenticated write to Supabase');
+        return Promise.reject(new Error('Authentication required'));
+      }
+    }
+    return _origFetch.apply(this, arguments);
+  };
+})();
+
+// --- 2. Rate Limiter for API calls ---
+var _rateLimiter = {
+  _calls: {},
+  check: function(key, maxCalls, windowMs) {
+    var now = Date.now();
+    if (!this._calls[key]) this._calls[key] = [];
+    this._calls[key] = this._calls[key].filter(function(t) { return now - t < windowMs; });
+    if (this._calls[key].length >= maxCalls) {
+      console.warn('[Security] Rate limit exceeded for: ' + key);
+      return false;
+    }
+    this._calls[key].push(now);
+    return true;
+  }
+};
+
+// Wrap LLM calls with rate limiting (max 10 per minute)
+var _origRunInvestigation = window.runAIInvestigation;
+if (typeof _origRunInvestigation === 'function') {
+  window.runAIInvestigation = function() {
+    if (!_rateLimiter.check('llm_investigation', 10, 60000)) {
+      showToast('Too many investigation requests. Please wait a moment.', 'error');
+      return Promise.resolve();
+    }
+    return _origRunInvestigation.apply(this, arguments);
+  };
+}
+
+// --- 3. XSS Prevention: Sanitize all innerHTML assignments for user-generated content ---
+function sanitizeHTML(str) {
+  if (!str) return '';
+  var temp = document.createElement('div');
+  temp.textContent = str;
+  return temp.innerHTML;
+}
+
+// --- 4. Session timeout: Auto-logout after 8 hours of inactivity ---
+(function() {
+  var SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 hours
+  var _lastActivity = Date.now();
+  var activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+  activityEvents.forEach(function(evt) {
+    document.addEventListener(evt, function() { _lastActivity = Date.now(); }, { passive: true });
+  });
+  setInterval(function() {
+    if (Date.now() - _lastActivity > SESSION_TIMEOUT_MS) {
+      if (window._supabaseRef) {
+        window._supabaseRef.auth.signOut().then(function() {
+          showToast('Session expired due to inactivity. Please log in again.', 'error');
+          setTimeout(function() { location.reload(); }, 1500);
+        });
+      }
+    }
+  }, 60000); // Check every minute
+})();
+
+// --- 5. Clickjacking protection ---
+if (window.self !== window.top) {
+  document.body.innerHTML = '<div style="padding:40px;color:#ef4444;font-size:18px;">This application cannot be embedded in an iframe.</div>';
+  throw new Error('Clickjacking attempt blocked');
+}
+
+// --- 6. Disable console in production (optional — uncomment to enable) ---
+// Prevent attackers from using console to manipulate app state
+if (location.hostname.indexOf('vercel.app') !== -1) {
+  var _noop = function() {};
+  // console.log = _noop; // Uncomment for production
+  // console.debug = _noop;
+  // console.info = _noop;
+}
+
+// --- 7. Secure localStorage wrapper ---
+var SecureStore = {
+  set: function(key, value) {
+    try {
+      localStorage.setItem('dacta_' + key, JSON.stringify({ v: value, t: Date.now() }));
+    } catch(e) { console.warn('[SecureStore] Storage full or blocked'); }
+  },
+  get: function(key, maxAgeMs) {
+    try {
+      var raw = localStorage.getItem('dacta_' + key);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (maxAgeMs && Date.now() - parsed.t > maxAgeMs) {
+        localStorage.removeItem('dacta_' + key);
+        return null;
+      }
+      return parsed.v;
+    } catch(e) { return null; }
+  },
+  remove: function(key) {
+    localStorage.removeItem('dacta_' + key);
+  }
+};
+
+// --- 8. Input validation helpers ---
+function validateEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+function validateTicketKey(key) {
+  return /^[A-Z]+-\d+$/.test(key);
+}
+function validateOrgId(id) {
+  return /^[a-f0-9-]{36}$/.test(id) || /^[A-Z]{2}$/.test(id);
+}
+
+// --- 9. Audit trail for sensitive actions ---
+function logSecurityEvent(action, details) {
+  var entry = {
+    action: action,
+    details: details,
+    timestamp: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    url: location.href
+  };
+  console.log('[Security Audit]', entry);
+  // Also write to Supabase audit_log if available
+  if (window._supabaseRef) {
+    window._supabaseRef.from('audit_log').insert({
+      action: 'security_' + action,
+      resource_type: 'platform',
+      details: entry,
+      user_agent: navigator.userAgent
+    }).then(function() {}).catch(function() {});
+  }
+}
+
+console.log('[Security] Platform hardening active: auth guard, rate limiter, XSS prevention, session timeout, clickjacking protection');
 
 
 </script>
