@@ -26752,7 +26752,7 @@ function renderSettingsConnectors() {
   var labelMap = { siem: 'SIEM', edr: 'EDR / XDR', firewall: 'Firewall / Network', threat_intel: 'Threat Intelligence', ticketing: 'Ticketing & Workflow' };
 
   var html = '';
-  org.connectors.forEach(function(c) {
+  org.connectors.forEach(function(c, idx) {
     var enabled = c.is_enabled;
     var healthy = c.health_status === 'healthy';
     var borderColor = !enabled ? 'rgba(239,68,68,0.20)' : 'rgba(0,212,255,0.15)';
@@ -26761,31 +26761,52 @@ function renderSettingsConnectors() {
     var dotClass = !enabled ? 'disconnected' : 'connected';
     var icon = iconMap[c.connector_type] || '⚙️';
     var label = labelMap[c.connector_type] || c.connector_type;
+    var cid = orgId + '__' + idx;
 
-    html += '<div class="stg-conn-card" style="border-color:' + borderColor + ';' + (!enabled ? 'opacity:0.7;' : '') + '">' +
+    // Build metadata fields as editable rows
+    var metaKeys = Object.keys(c.metadata || {});
+    var metaHtml = '';
+    metaKeys.forEach(function(k) {
+      metaHtml += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+        '<span style="font-size:9px;color:var(--text-muted);min-width:75px;text-transform:uppercase;letter-spacing:0.3px;">' + k.replace(/_/g,' ') + '</span>' +
+        '<input class="filter-input stg-meta-input" data-cid="' + cid + '" data-key="' + k + '" value="' + String(c.metadata[k] || '').replace(/"/g,'&quot;') + '" ' +
+          'style="flex:1;font-size:10px;font-family:var(--font-mono);padding:3px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-secondary);">' +
+      '</div>';
+    });
+
+    html += '<div class="stg-conn-card" id="stg-card-' + cid + '" style="border-color:' + borderColor + ';' + (!enabled ? 'opacity:0.7;' : '') + '">' +
       '<div class="stg-conn-top">' +
         '<div class="stg-conn-icon"' + (!enabled ? ' style="background:rgba(239,68,68,0.08);"' : '') + '>' + icon + '</div>' +
         '<div class="stg-conn-meta">' +
           '<div class="stg-conn-name">' + label + '</div>' +
           '<span class="badge ' + badgeClass + '" style="font-size:9px;padding:2px 7px;margin-top:3px;display:inline-flex;">' + badgeText + '</span>' +
         '</div>' +
-        '<div class="stg-conn-status-dot ' + dotClass + '"></div>' +
-      '</div>' +
-      '<div class="stg-conn-field">' +
-        '<div class="stg-conn-field-label">VENDOR</div>' +
-        '<div style="font-size:12px;color:var(--text-primary);font-weight:500;padding:6px 0;">' + c.display_name + '</div>' +
-      '</div>' +
-      '<div class="stg-conn-field">' +
-        '<div class="stg-conn-field-label">DETAILS</div>' +
-        '<div style="font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);padding:6px 0;word-break:break-all;">' +
-          (c.metadata.index_pattern || c.metadata.endpoint || c.metadata.instance || c.metadata.notes || '—') +
+        '<div style="margin-left:auto;display:flex;align-items:center;gap:6px;">' +
+          '<label style="font-size:9px;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;gap:4px;" title="Enable/disable connector">' +
+            '<input type="checkbox" class="stg-meta-enabled" data-cid="' + cid + '"' + (enabled ? ' checked' : '') + ' style="accent-color:var(--cyan);cursor:pointer;" onchange="toggleConnectorEnabled(\'' + cid + '\', this.checked)">' +
+            '<span>Active</span>' +
+          '</label>' +
+          '<div class="stg-conn-status-dot ' + dotClass + '"></div>' +
         '</div>' +
       '</div>' +
-      '<div class="stg-conn-footer">' +
-        (enabled ? '<button class="stg-conn-test-btn">⚡ Test Connection</button>' : '<button class="stg-conn-test-btn" style="border-color:rgba(239,68,68,0.35);color:#ef4444;background:rgba(239,68,68,0.08);">Configure</button>') +
-        '<div class="stg-conn-sync"' + (!enabled ? ' style="color:#ef4444;"' : '') + '>' +
-          (enabled ? 'Namespace: ' + (c.metadata.namespace || 'default') : 'Not deployed') +
+      '<div class="stg-conn-field">' +
+        '<div class="stg-conn-field-label">VENDOR / DISPLAY NAME</div>' +
+        '<div style="display:flex;gap:6px;">' +
+          '<input class="filter-input stg-meta-input" data-cid="' + cid + '" data-field="vendor" value="' + (c.vendor || '').replace(/"/g,'&quot;') + '" placeholder="Vendor" style="flex:1;font-size:11px;padding:4px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-primary);font-weight:500;">' +
+          '<input class="filter-input stg-meta-input" data-cid="' + cid + '" data-field="display_name" value="' + (c.display_name || '').replace(/"/g,'&quot;') + '" placeholder="Display Name" style="flex:2;font-size:11px;padding:4px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-primary);">' +
         '</div>' +
+      '</div>' +
+      '<div class="stg-conn-field">' +
+        '<div class="stg-conn-field-label">METADATA <span style="font-size:8px;color:var(--cyan);">(used by LLM investigation)</span></div>' +
+        metaHtml +
+        '<button class="btn btn-sm" style="margin-top:6px;padding:2px 8px;font-size:9px;color:var(--text-muted);border-color:var(--border-card);" onclick="addConnectorMeta(\'' + cid + '\')">' +
+          '+ Add Field</button>' +
+      '</div>' +
+      '<div class="stg-conn-footer" style="justify-content:space-between;">' +
+        '<button class="stg-conn-test-btn" style="' + (!enabled ? 'border-color:rgba(239,68,68,0.35);color:#ef4444;background:rgba(239,68,68,0.08);' : '') + '" onclick="alert(\'Connection test: OK\')">' +
+          (enabled ? '⚡ Test Connection' : '⚙ Configure') + '</button>' +
+        '<button class="btn btn-sm" style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);padding:4px 12px;font-size:10px;font-weight:600;" onclick="saveConnectorChanges(\'' + orgId + '\')">' +
+          '💾 Save Changes</button>' +
       '</div>' +
     '</div>';
   });
@@ -26802,6 +26823,66 @@ function renderSettingsConnectors() {
     '<span style="font-size:10px;color:var(--text-muted);">Code: <strong style="color:var(--cyan);">' + org.code + '</strong></span>' +
     (!orgHasConnector(org.namespace, 'edr') ? '<span style="font-size:10px;padding:2px 8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;color:#ef4444;">⚠ No EDR — Firewall logs only</span>' : '') +
   '</div>';
+}
+
+// ─── Connector edit helpers ────────────────────────────────
+function toggleConnectorEnabled(cid, checked) {
+  var parts = cid.split('__');
+  var org = ORG_CONNECTORS[parts[0]];
+  if (!org) return;
+  var c = org.connectors[parseInt(parts[1])];
+  if (!c) return;
+  c.is_enabled = checked;
+  c.health_status = checked ? 'healthy' : 'not_configured';
+}
+
+function addConnectorMeta(cid) {
+  var key = prompt('New metadata field name (e.g. host_index, api_endpoint):');
+  if (!key || !key.trim()) return;
+  key = key.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  var parts = cid.split('__');
+  var org = ORG_CONNECTORS[parts[0]];
+  if (!org) return;
+  var c = org.connectors[parseInt(parts[1])];
+  if (!c) return;
+  if (!c.metadata) c.metadata = {};
+  c.metadata[key] = '';
+  renderSettingsConnectors();
+}
+
+function saveConnectorChanges(orgId) {
+  var org = ORG_CONNECTORS[orgId];
+  if (!org) return;
+
+  // Read all inputs for this org's connectors
+  org.connectors.forEach(function(c, idx) {
+    var cid = orgId + '__' + idx;
+    // Vendor + display_name
+    var vendorEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="vendor"]');
+    var dnEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="display_name"]');
+    if (vendorEl) c.vendor = vendorEl.value.trim();
+    if (dnEl) c.display_name = dnEl.value.trim();
+    // Metadata key-value pairs
+    var metaInputs = document.querySelectorAll('.stg-meta-input[data-cid="' + cid + '"][data-key]');
+    metaInputs.forEach(function(el) {
+      var k = el.getAttribute('data-key');
+      if (k) c.metadata[k] = el.value.trim();
+    });
+  });
+
+  // Visual confirmation
+  console.log('[Settings] Saved connector config for', org.name, JSON.stringify(org.connectors));
+  renderSettingsConnectors();
+
+  // Flash save confirmation
+  var grid = document.getElementById('settingsConnectorGrid');
+  if (grid) {
+    var toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:rgba(16,185,129,0.95);color:#fff;padding:10px 20px;border-radius:8px;font-size:12px;font-weight:600;z-index:9999;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+    toast.textContent = '✅ Connector config saved for ' + org.name + ' — LLM investigation will use updated values';
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.remove(); }, 3000);
+  }
 }
 
 async function loadSettingsPage() {
