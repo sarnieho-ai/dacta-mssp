@@ -27050,7 +27050,10 @@ function saveConnectorChanges(orgId) {
 
 async function persistConnectorConfig(orgId, org) {
   try {
-    if (!window._supabaseRef) { console.warn('[Settings] No Supabase ref'); return; }
+    if (!window._supabaseRef) {
+      console.warn('[Settings] No Supabase ref — using localStorage only');
+      return;
+    }
     var payload = {
       org_id: orgId,
       org_name: org.name,
@@ -27059,15 +27062,16 @@ async function persistConnectorConfig(orgId, org) {
       connectors: JSON.stringify(org.connectors),
       updated_at: new Date().toISOString()
     };
-    var { error } = await window._supabaseRef.from('org_connectors').upsert(payload, { onConflict: 'org_id' });
+    var { data, error } = await window._supabaseRef.from('org_connectors').upsert(payload, { onConflict: 'org_id' }).select();
     if (error) {
-      console.warn('[Settings] Supabase save failed, using localStorage fallback:', error.message);
-      // localStorage already saved above — still works
+      console.warn('[Settings] Supabase save failed:', error.message, error.details);
+      showToast('Saved locally. Supabase sync: ' + (error.message || 'failed'), 'warn');
     } else {
-      console.log('[Settings] Saved to Supabase:', orgId);
+      console.log('[Settings] Saved to Supabase:', orgId, data);
     }
   } catch(e) {
     console.warn('[Settings] Persist error:', e.message);
+    showToast('Saved locally. Supabase error: ' + e.message, 'warn');
   }
 }
 
@@ -28170,27 +28174,55 @@ function approveOnboardOrg(idx) {
 
 async function createOrgInSupabase(name, code, type, ns, sla, industry, region) {
   try {
-    if (window._supabaseRef) {
-      var resp = await window._supabaseRef.from('organizations').insert({
-        name: name,
-        short_name: code,
-        service_model: type,
-        contract_type: type === 'internal' ? 'internal' : 'mssp',
-        status: 'active',
-        sla_tier: sla,
-        industry: industry || null,
-        region: region || 'SEA',
-        timezone: 'Asia/Singapore',
-        data_residency: 'SG',
-        endpoints_count: 0,
-        auto_response_enabled: false,
-        auto_response_policy: {},
-        metadata: { namespace: ns, jira_synced: true }
-      });
-      console.log('[Onboarding] Supabase insert:', resp);
+    if (!window._supabaseRef) {
+      console.warn('[Onboarding] No Supabase ref — org saved to localStorage only');
+      return;
+    }
+    var { data, error } = await window._supabaseRef.from('organizations').insert({
+      name: name,
+      short_name: code,
+      service_model: type,
+      contract_type: type === 'internal' ? 'internal' : 'mssp',
+      status: 'active',
+      sla_tier: sla,
+      industry: industry || null,
+      region: region || 'SEA',
+      timezone: 'Asia/Singapore',
+      data_residency: 'SG',
+      endpoints_count: 0,
+      auto_response_enabled: false,
+      auto_response_policy: {},
+      metadata: { namespace: ns, jira_synced: true }
+    }).select();
+    if (error) {
+      console.error('[Onboarding] Supabase insert error:', error.message, error.details);
+      showToast('Org created locally. Supabase sync: ' + (error.message || 'failed'), 'warn');
+    } else {
+      console.log('[Onboarding] Supabase insert success:', data);
+      // If Supabase returned the new row, merge its ID into ORG_CONNECTORS
+      if (data && data[0] && data[0].id) {
+        var sbId = data[0].id;
+        // Find the org we just added by name and re-key it
+        var obKey = Object.keys(ORG_CONNECTORS).find(function(k) {
+          return ORG_CONNECTORS[k].name === name && k.startsWith('ob-');
+        });
+        if (obKey && obKey !== sbId) {
+          ORG_CONNECTORS[sbId] = ORG_CONNECTORS[obKey];
+          delete ORG_CONNECTORS[obKey];
+          // Update localStorage approved orgs too
+          try {
+            var ao = JSON.parse(localStorage.getItem('dacta_approvedOrgs') || '{}');
+            if (ao[obKey]) { ao[sbId] = ao[obKey]; delete ao[obKey]; }
+            localStorage.setItem('dacta_approvedOrgs', JSON.stringify(ao));
+          } catch(lse) {}
+          console.log('[Onboarding] Re-keyed org from', obKey, 'to Supabase ID:', sbId);
+        }
+      }
+      showToast('Organization synced to Supabase', 'success');
     }
   } catch(e) {
     console.error('[Onboarding] Supabase insert failed:', e);
+    showToast('Org created locally. Supabase error: ' + e.message, 'warn');
   }
 }
 
@@ -34124,14 +34156,11 @@ function updateDashTimeLabels() {
 function refreshDashboardData() {
   if (window._dactaMode !== 'production') return;
   _dashboardLoading = false;
-  // Clear all time-range-specific caches
-  Object.keys(DactaJira._cache).forEach(function(k) {
-    if (k.startsWith('dashboard_')) delete DactaJira._cache[k];
-  });
-  DactaJira._cache.dashboard = null;
-  DactaJira._cache.telemetry = null;
-  DactaJira._cache.dashvisuals = null;
-  showToast('Refreshing dashboard data...');
+  // Clear ALL caches so fresh data is fetched
+  Object.keys(DactaJira._cache).forEach(function(k) { delete DactaJira._cache[k]; });
+  Object.keys(DactaJira._cacheTime).forEach(function(k) { delete DactaJira._cacheTime[k]; });
+  window._liveVis = null;
+  showToast('Refreshing for ' + getDashTimeLabel() + '...');
   populateLiveDashboard();
 }
 
@@ -34204,8 +34233,9 @@ function updateDashboardVisuals(kpi, tickets, tele) {
     classicSourceChartObj.update('none');
   }
 
-  // Remove any leftover prod-overlay elements from dashboard
+  // Remove any leftover prod-overlay and sidebar-empty elements from dashboard
   document.querySelectorAll('#page-dashboard .prod-overlay').forEach(function(el) { el.remove(); });
+  document.querySelectorAll('#page-dashboard .prod-sidebar-empty').forEach(function(el) { el.remove(); });
 
   // Ensure canvases are visible
   ['classicAlertChart','classicSourceChart'].forEach(function(id) {
@@ -34587,6 +34617,12 @@ async function populateLiveDashboard() {
           }).join('');
         }
       }
+      // Clean up all remaining sidebar spinners
+      document.querySelectorAll('#page-dashboard .cc-right-sidebar .prod-sidebar-empty').forEach(function(el) { el.remove(); });
+      document.querySelectorAll('#page-dashboard .prod-overlay').forEach(function(el) { el.remove(); });
+      // Show canvases that were hidden
+      document.querySelectorAll('#page-dashboard .chart-container canvas').forEach(function(c) { c.style.display = ''; });
+
       // Update visuals with telemetry data
       updateDashboardVisuals(kpi, tickets, tele);
     }).catch(function(e) { console.error('[DactaJira] Telemetry error:', e); });
@@ -34740,6 +34776,10 @@ async function populateLiveDashboard() {
           orgCard.appendChild(row);
         });
       }
+
+      // ── Clean up ALL sidebar spinners/empty states ──
+      rightSidebar.querySelectorAll('.prod-sidebar-empty').forEach(function(el) { el.remove(); });
+      rightSidebar.querySelectorAll('.prod-overlay').forEach(function(el) { el.remove(); });
 
       // ── Triage Labels ──
       var labelsGrid = rightSidebar.querySelector('.labels-grid');
@@ -35517,9 +35557,9 @@ async function openInvestigation(ticketKey) {
       ? labels.map(function(l) { return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + l + '</span>'; }).join('')
       : '<span style="color:var(--text-muted);font-size:11px;">None</span>';
 
-    livePanel.innerHTML = '<div style="display:grid;grid-template-columns:280px 1fr 300px;gap:12px;margin-top:4px;">' +
+    livePanel.innerHTML = '<div style="display:grid;grid-template-columns:280px 1fr;gap:12px;margin-top:4px;">' +
 
-      // ── LEFT SIDEBAR ──
+      // ── LEFT SIDEBAR (Ticket Details + Raw Alert + Timeline) ──
       '<div style="display:flex;flex-direction:column;gap:12px;">' +
         // Ticket Details card
         '<div class="card" style="padding:14px;">' +
@@ -35546,33 +35586,15 @@ async function openInvestigation(ticketKey) {
 
         // Raw Alert card (from description)
         '<div class="card" style="padding:14px;">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Raw Alert Data</span></div>' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Raw Alert</span></div>' +
           '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;max-height:300px;overflow-y:auto;font-family:var(--font-mono);background:var(--surface-0);padding:10px;border-radius:6px;border:1px solid var(--border-subtle);word-break:break-all;">' +
             (description ? highlightEntities(description) : '<span style="color:var(--text-muted);font-style:italic;">No raw alert data</span>') +
           '</div>' +
         '</div>' +
 
-        // Quick actions
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-          '<button class="btn btn-secondary btn-sm" style="flex:1;font-size:10px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\', \'_blank\')">Open in Jira \u2197</button>' +
-        '</div>' +
-      '</div>' +
-
-      // \u2500\u2500 CENTER MAIN (AI Investigation will be injected here by runAIInvestigation) \u2500\u2500
-      '<div id="invMainContent" style="display:flex;flex-direction:column;gap:12px;">' +
-        '<div id="invLoadingSpinner" class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;min-height:350px;background:var(--bg-card);border:1px solid var(--border-card);border-radius:12px;">' +
-          '<div style="width:48px;height:48px;border:3px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
-          '<div style="font-size:13px;color:var(--cyan);font-family:var(--font-mono);text-align:center;font-weight:500;">Initializing AI Investigation Engine</div>' +
-          '<div style="width:240px;height:5px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:3px;animation:invProgressBar 8s ease-in-out forwards;"></div></div>' +
-          '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Querying log sources &middot; OpenCTI enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
-        '</div>' +
-      '</div>' +
-
-      // \u2500\u2500 RIGHT SIDEBAR \u2500\u2500
-      '<div style="display:flex;flex-direction:column;gap:12px;">' +
-        // Activity Timeline
+        // Activity Timeline (moved from right sidebar to match demo)
         '<div class="card" style="padding:14px;max-height:400px;overflow-y:auto;">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Activity Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span></div>' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span></div>' +
           (timelineItems.length === 0
             ? '<div style="text-align:center;padding:16px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">No activity recorded</div>'
             : '<div style="display:flex;flex-direction:column;gap:0;">' +
@@ -35600,33 +35622,27 @@ async function openInvestigation(ticketKey) {
           ) +
         '</div>' +
 
-        // Enrichment Summary (populated by AI investigation)
-        '<div class="card" style="padding:14px;" id="enrichmentSummaryCard">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Enrichment Summary</span></div>' +
-          '<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Waiting for investigation...</div>' +
+        // Quick actions
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary btn-sm" style="flex:1;font-size:10px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\', \'_blank\')">Open in Jira \u2197</button>' +
         '</div>' +
+      '</div>' +
 
-        // Correlated Alerts placeholder
-        '<div class="card" style="padding:14px;" id="correlatedAlertsCard">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Correlated Alerts</span></div>' +
-          '<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Waiting for investigation...</div>' +
+      // ── CENTER MAIN (AI Investigation + Escalation Draft — all in one column, matching demo) ──
+      '<div id="invMainContent" style="display:flex;flex-direction:column;gap:12px;">' +
+        '<div id="invLoadingSpinner" class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;min-height:350px;background:var(--bg-card);border:1px solid var(--border-card);border-radius:12px;">' +
+          '<div style="width:48px;height:48px;border:3px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
+          '<div style="font-size:13px;color:var(--cyan);font-family:var(--font-mono);text-align:center;font-weight:500;">Initializing AI Investigation Engine</div>' +
+          '<div style="width:240px;height:5px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:3px;animation:invProgressBar 8s ease-in-out forwards;"></div></div>' +
+          '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Querying log sources &middot; OpenCTI enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
         '</div>' +
-
-        // Recommended Actions
-        '<div class="card" style="padding:14px;" id="recommendedActionsCard">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">AI Recommended Actions</span></div>' +
-          '<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Waiting for investigation...</div>' +
-        '</div>' +
-        '<div class="card" style="padding:14px;" id="playbookActionsCard">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Playbook Actions</span><span style="font-size:9px;color:var(--text-muted);margin-left:6px;">From Detection Rules</span></div>' +
-          '<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Matching playbook...</div>' +
-        '</div>' +
-        // Client Escalation Draft card
+        // Client Escalation Draft (moved from right sidebar — will be populated after investigation)
         '<div class="card" style="padding:14px;" id="clientEscalationCard">' +
           '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Client Escalation Draft</span><span class="badge badge-cyan" style="font-size:9px;">AI Generated</span></div>' +
           '<div id="escalationDraftContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Draft will be generated after investigation...</div>' +
         '</div>' +
       '</div>' +
+
     '</div>';
 
         // ── Check investigation cache before running LLM ──
@@ -36022,15 +36038,18 @@ function applyCollapsibleSections(container) {
     var children = roundCard.children;
     if (children.length < 2) return;
     var headerEl = children[0];
-    var contentEl = children[children.length - 1];
-    if (!contentEl || !headerEl) return;
+    // Gather ALL content elements (everything except the first child = header)
+    var contentEls = [];
+    for (var i = 1; i < children.length; i++) {
+      contentEls.push(children[i]);
+    }
+    if (contentEls.length === 0) return;
 
-    // Collapse by default
-    contentEl.style.maxHeight = '0px';
-    contentEl.style.overflow = 'hidden';
-    contentEl.style.transition = 'max-height 0.3s ease, padding 0.3s ease';
-    contentEl.style.marginTop = '0';
-    headerEl.style.marginBottom = '0';
+    // Collapse by default — use display:none which is bulletproof
+    contentEls.forEach(function(el) {
+      el.style.display = 'none';
+      el.setAttribute('data-inv-collapsible', 'true');
+    });
     headerEl.style.cursor = 'pointer';
 
     // Add toggle arrow if not already added
@@ -36041,16 +36060,16 @@ function applyCollapsibleSections(container) {
       arrow.textContent = '\u25BA';
       headerEl.appendChild(arrow);
     }
-    headerEl.onclick = (function(cEl, hEl) {
+    headerEl.onclick = (function(cEls, hEl) {
       return function() {
-        var isOpen = cEl.style.maxHeight !== '0px';
-        cEl.style.maxHeight = isOpen ? '0px' : '2000px';
-        cEl.style.overflow = isOpen ? 'hidden' : 'visible';
-        cEl.style.marginTop = isOpen ? '0' : '10px';
+        var isOpen = cEls[0].style.display !== 'none';
+        cEls.forEach(function(el) {
+          el.style.display = isOpen ? 'none' : '';
+        });
         var arr = hEl.querySelector('.inv-round-toggle');
         if (arr) arr.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
       };
-    })(contentEl, headerEl);
+    })(contentEls, headerEl);
   });
 
   // Also make the pipeline panel collapsible
@@ -36058,7 +36077,6 @@ function applyCollapsibleSections(container) {
   if (pipelinePanel) {
     var pipeHeader = pipelinePanel.querySelector('.inv-pipeline-header');
     var pipeFlow = pipelinePanel.querySelector('.inv-pipeline-flow');
-    var pipeSummary = pipelinePanel.querySelector('.inv-pipeline-summary');
     if (pipeHeader && pipeFlow) {
       pipeHeader.style.cursor = 'pointer';
       if (!pipeHeader.querySelector('.inv-round-toggle')) {
@@ -36068,14 +36086,11 @@ function applyCollapsibleSections(container) {
         pArr.textContent = '\u25BA';
         pipeHeader.appendChild(pArr);
       }
-      // Default collapsed
-      pipeFlow.style.maxHeight = '0px';
-      pipeFlow.style.overflow = 'hidden';
-      pipeFlow.style.transition = 'max-height 0.3s ease';
+      // Default collapsed — use display:none
+      pipeFlow.style.display = 'none';
       pipeHeader.onclick = function() {
-        var isOpen = pipeFlow.style.maxHeight !== '0px';
-        pipeFlow.style.maxHeight = isOpen ? '0px' : '600px';
-        pipeFlow.style.overflow = isOpen ? 'hidden' : 'visible';
+        var isOpen = pipeFlow.style.display !== 'none';
+        pipeFlow.style.display = isOpen ? 'none' : '';
         var arr = pipeHeader.querySelector('.inv-round-toggle');
         if (arr) arr.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
       };
