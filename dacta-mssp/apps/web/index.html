@@ -22937,299 +22937,30 @@ Analyst: K. Rasmussen | 2026-02-28
            ===================================================== -->
       <div class="page" id="page-settings">
         <div class="page-header">
-          <div><div class="page-title">Settings</div><div class="page-subtitle">Platform configuration and preferences</div></div>
-          <div class="page-actions"><button class="btn btn-primary btn-sm">💾 Save Changes</button></div>
+          <div><div class="page-title">Settings</div><div class="page-subtitle">Platform configuration · Client connectors loaded from registry</div></div>
+          <div class="page-actions">
+            <span id="settingsOrgCount" style="font-size:11px;color:var(--text-muted);margin-right:12px;"></span>
+            <button class="btn btn-primary btn-sm" onclick="alert('Settings saved')">💾 Save Changes</button>
+          </div>
         </div>
 
-        <!-- ═══════════════════════════════════════════════════════════
-             SECTION 1: CLIENT CONNECTOR CONFIGURATION
-             ═══════════════════════════════════════════════════════════ -->
-        <div class="card stg-section" style="margin-bottom:24px;">
+        <!-- Client Connector Registry — Dynamic -->
+        <div class="card" style="margin-bottom:24px;">
           <div class="card-header" style="margin-bottom:16px;">
             <div>
               <span class="card-title">Client Environment Connectors</span>
-              <div class="stg-section-sub">Per-tenant log source & security tool integrations — these connect to the client’s environment for RAG-powered AI investigation</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Per-tenant log source &amp; security tool integrations — loaded from ORG_CONNECTORS registry</div>
             </div>
-            <div class="stg-org-selector">
-              <span class="stg-org-label">Client Org:</span>
-              <select class="stg-org-select">
-                <option>MAS — Monetary Authority of Singapore</option>
-                <option>SingTel — Network Operations</option>
-                <option>ST Engineering — OT Division</option>
-                <option>GovTech — Smart Nation</option>
-                <option selected>Dacta SG — Internal SOC</option>
-              </select>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:11px;color:var(--text-muted);">Client:</span>
+              <select id="settingsOrgSelector" class="filter-select" style="min-width:220px;" onchange="renderSettingsConnectors()"></select>
             </div>
           </div>
+          <div id="settingsConnectorGrid" class="stg-connector-grid"></div>
+          <div id="settingsConnectorMeta" style="margin-top:14px;"></div>
+        </div>
 
-          <div class="stg-connector-grid">
-
-            <!-- 1. SIEM Connector -->
-            <div class="stg-conn-card">
-              <div class="stg-conn-top">
-                <div class="stg-conn-icon">📊</div>
-                <div class="stg-conn-meta">
-                  <div class="stg-conn-name">SIEM Connector</div>
-                  <span class="badge badge-green" style="font-size:9px;padding:2px 7px;margin-top:3px;display:inline-flex;">Connected</span>
-                </div>
-                <div class="stg-conn-status-dot connected"></div>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">CONNECTION TYPE</div>
-                <select class="stg-conn-select">
-                  <option selected>Elastic SIEM</option>
-                  <option>Splunk Enterprise</option>
-                  <option>Microsoft Sentinel</option>
-                  <option>QRadar</option>
-                </select>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">ENDPOINT URL</div>
-                <input class="stg-conn-input" value="https://elastic.mas.gov.sg:9200" />
-              </div>
-              <div class="stg-conn-footer">
-                <button class="stg-conn-test-btn">⚡ Test Connection</button>
-                <div class="stg-conn-sync">Last synced: 2 min ago</div>
-              </div>
-            </div>
-
-            <!-- 2. EDR Connector -->
-            <div class="stg-conn-card">
-              <div class="stg-conn-top">
-                <div class="stg-conn-icon">🛡</div>
-                <div class="stg-conn-meta">
-                  <div class="stg-conn-name">EDR Connector</div>
-                  <span class="badge badge-green" style="font-size:9px;padding:2px 7px;margin-top:3px;display:inline-flex;">Connected</span>
-                </div>
-                <div class="stg-conn-status-dot connected"></div>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">CONNECTION TYPE</div>
-                <select class="stg-conn-select">
-                  <option selected>CrowdStrike Falcon</option>
-                  <option>SentinelOne</option>
-                  <option>Microsoft Defender</option>
-                  <option>Carbon Black</option>
-                </select>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">ENDPOINT URL</div>
-                <input class="stg-conn-input" value="https://falcon.crowdstrike.com/api" />
-              </div>
-              <div class="stg-conn-footer">
-                <button class="stg-conn-test-btn">⚡ Test Connection</button>
-                <div class="stg-conn-sync">Last synced: 5 min ago</div>
-              </div>
-            </div>
-
-            <!-- 3. Threat Intel Connector -->
-            <div class="stg-conn-card">
-              <div class="stg-conn-top">
-                <div class="stg-conn-icon">🔍</div>
-                <div class="stg-conn-meta">
-                  <div class="stg-conn-name">Threat Intel Connector</div>
-                  <span class="badge badge-green" style="font-size:9px;padding:2px 7px;margin-top:3px;display:inline-flex;">Connected</span>
-                </div>
-                <div class="stg-conn-status-dot connected"></div>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">CONNECTION TYPE</div>
-                <select class="stg-conn-select">
-                  <option selected>MISP (Self-hosted)</option>
-                  <option>AlienVault OTX</option>
-                  <option>VirusTotal Enterprise</option>
-                  <option>Recorded Future</option>
-                </select>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">ENDPOINT URL</div>
-                <input class="stg-conn-input" value="https://misp.dacta.sg/api" />
-              </div>
-              <div class="stg-conn-footer">
-                <button class="stg-conn-test-btn">⚡ Test Connection</button>
-                <div class="stg-conn-sync">Last synced: 12 min ago</div>
-              </div>
-            </div>
-
-            <!-- 4. Identity & Access Connector -->
-            <div class="stg-conn-card">
-              <div class="stg-conn-top">
-                <div class="stg-conn-icon">👤</div>
-                <div class="stg-conn-meta">
-                  <div class="stg-conn-name">Identity &amp; Access Connector</div>
-                  <span class="badge badge-green" style="font-size:9px;padding:2px 7px;margin-top:3px;display:inline-flex;">Connected</span>
-                </div>
-                <div class="stg-conn-status-dot connected"></div>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">CONNECTION TYPE</div>
-                <select class="stg-conn-select">
-                  <option selected>Microsoft Entra ID</option>
-                  <option>Okta</option>
-                  <option>CyberArk</option>
-                  <option>JumpCloud</option>
-                </select>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">ENDPOINT URL</div>
-                <input class="stg-conn-input" value="https://graph.microsoft.com/v1.0" />
-              </div>
-              <div class="stg-conn-footer">
-                <button class="stg-conn-test-btn">⚡ Test Connection</button>
-                <div class="stg-conn-sync">Last synced: 8 min ago</div>
-              </div>
-            </div>
-
-            <!-- 5. DACTA Knowledge Base -->
-            <div class="stg-conn-card">
-              <div class="stg-conn-top">
-                <div class="stg-conn-icon">📚</div>
-                <div class="stg-conn-meta">
-                  <div class="stg-conn-name">DACTA Knowledge Base</div>
-                  <span class="badge badge-green" style="font-size:9px;padding:2px 7px;margin-top:3px;display:inline-flex;">Connected</span>
-                </div>
-                <div class="stg-conn-status-dot connected"></div>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">CONNECTION TYPE</div>
-                <select class="stg-conn-select">
-                  <option selected>PostgreSQL + pgvector</option>
-                  <option>Weaviate</option>
-                  <option>Pinecone</option>
-                  <option>ChromaDB</option>
-                </select>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">ENDPOINT URL</div>
-                <input class="stg-conn-input" value="postgresql://kb.dacta.sg:5432/rag_vectors" />
-              </div>
-              <div class="stg-conn-footer">
-                <button class="stg-conn-test-btn">⚡ Test Connection</button>
-                <div class="stg-conn-sync">Last synced: 1 hr ago</div>
-              </div>
-            </div>
-
-            <!-- 6. Ticketing & Workflow -->
-            <div class="stg-conn-card">
-              <div class="stg-conn-top">
-                <div class="stg-conn-icon">📋</div>
-                <div class="stg-conn-meta">
-                  <div class="stg-conn-name">Ticketing &amp; Workflow</div>
-                  <span class="badge badge-green" style="font-size:9px;padding:2px 7px;margin-top:3px;display:inline-flex;">Connected</span>
-                </div>
-                <div class="stg-conn-status-dot connected"></div>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">CONNECTION TYPE</div>
-                <select class="stg-conn-select">
-                  <option selected>ServiceNow</option>
-                  <option>Jira Service Mgmt</option>
-                  <option>Freshservice</option>
-                  <option>DACTA Internal</option>
-                </select>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">ENDPOINT URL</div>
-                <input class="stg-conn-input" value="https://dacta.service-now.com/api" />
-              </div>
-              <div class="stg-conn-footer">
-                <button class="stg-conn-test-btn">⚡ Test Connection</button>
-                <div class="stg-conn-sync">Last synced: 3 min ago</div>
-              </div>
-            </div>
-
-            <!-- 7. Network & Firewall -->
-            <div class="stg-conn-card" style="border-color:rgba(239,68,68,0.20);">
-              <div class="stg-conn-top">
-                <div class="stg-conn-icon" style="background:rgba(239,68,68,0.08);">🌐</div>
-                <div class="stg-conn-meta">
-                  <div class="stg-conn-name">Network &amp; Firewall</div>
-                  <span class="badge badge-red" style="font-size:9px;padding:2px 7px;margin-top:3px;display:inline-flex;">Disconnected</span>
-                </div>
-                <div class="stg-conn-status-dot disconnected"></div>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">CONNECTION TYPE</div>
-                <select class="stg-conn-select">
-                  <option selected>Palo Alto Panorama</option>
-                  <option>Fortinet FortiManager</option>
-                  <option>Cisco FMC</option>
-                  <option>Zscaler</option>
-                </select>
-              </div>
-              <div class="stg-conn-field">
-                <div class="stg-conn-field-label">ENDPOINT URL</div>
-                <input class="stg-conn-input" placeholder="https://panorama.example.com/api/" />
-              </div>
-              <div class="stg-conn-footer">
-                <button class="stg-conn-test-btn" style="border-color:rgba(239,68,68,0.35);color:#ef4444;background:rgba(239,68,68,0.08);">⚡ Connect</button>
-                <div class="stg-conn-sync" style="color:#ef4444;">Last synced: Never</div>
-              </div>
-            </div>
-
-          </div><!-- end connector grid -->
-
-          <!-- Data Residency Row -->
-          <div class="stg-residency-row">
-            <div class="stg-residency-item">
-              <span>🔒</span>
-              <span>Data Residency:</span>
-              <strong>🇸🇬 Singapore (ap-southeast-1)</strong>
-              <span class="badge badge-green" style="font-size:9px;padding:2px 7px;">Verified</span>
-            </div>
-            <div class="stg-residency-item" style="color:#4d5a6e;">|</div>
-            <div class="stg-residency-item">
-              <span>🔐</span>
-              <span>Encryption:</span>
-              <strong>AES-256-GCM at rest, TLS 1.3 in transit</strong>
-              <span class="badge badge-cyan" style="font-size:9px;padding:2px 7px;">Active</span>
-            </div>
-            <div class="stg-residency-item" style="color:#4d5a6e;">|</div>
-            <div class="stg-residency-item">
-              <span>🔄</span>
-              <span>Redaction Pipeline:</span>
-              <strong>3-Round Active</strong>
-              <span class="badge badge-green" style="font-size:9px;padding:2px 7px;">Live</span>
-            </div>
-          </div>
-
-          <!-- Per-Tenant Log Sources -->
-          <div style="margin-top:18px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--text-primary);">Log Sources</span>
-                <span class="badge badge-cyan" style="font-size:9px;padding:2px 7px;">8 Active</span>
-              </div>
-              <button class="btn btn-secondary btn-sm" style="font-size:10px;">+ Add Log Source</button>
-            </div>
-            <div class="table-wrap" style="max-height:220px;overflow-y:auto;">
-              <table>
-                <thead><tr><th>Log Source</th><th>Type</th><th>Protocol</th><th>EPS (Avg)</th><th>Status</th><th>Last Event</th></tr></thead>
-                <tbody>
-                  <tr><td style="color:var(--text-primary);font-weight:500;">CS Falcon — Endpoints</td><td><span class="badge badge-cyan" style="font-size:9px;">EDR</span></td><td style="font-family:var(--font-mono);font-size:10px;">HTTPS API Pull</td><td class="mono">340</td><td><div class="status-dot green" style="display:inline-block;"></div> Ingesting</td><td class="mono">12s ago</td></tr>
-                  <tr><td style="color:var(--text-primary);font-weight:500;">Palo Alto PA-5260</td><td><span class="badge badge-amber" style="font-size:9px;">Firewall</span></td><td style="font-family:var(--font-mono);font-size:10px;">Syslog TCP/514</td><td class="mono">1,280</td><td><div class="status-dot green" style="display:inline-block;"></div> Ingesting</td><td class="mono">3s ago</td></tr>
-                  <tr><td style="color:var(--text-primary);font-weight:500;">Entra ID — Sign-ins</td><td><span class="badge badge-purple" style="font-size:9px;">Identity</span></td><td style="font-family:var(--font-mono);font-size:10px;">Graph API v1.0</td><td class="mono">85</td><td><div class="status-dot green" style="display:inline-block;"></div> Ingesting</td><td class="mono">45s ago</td></tr>
-                  <tr><td style="color:var(--text-primary);font-weight:500;">Windows DC — Security</td><td><span class="badge badge-blue" style="font-size:9px;">OS Logs</span></td><td style="font-family:var(--font-mono);font-size:10px;">WEF / Winlogbeat</td><td class="mono">520</td><td><div class="status-dot green" style="display:inline-block;"></div> Ingesting</td><td class="mono">8s ago</td></tr>
-                  <tr><td style="color:var(--text-primary);font-weight:500;">Exchange Online</td><td><span class="badge badge-blue" style="font-size:9px;">Email</span></td><td style="font-family:var(--font-mono);font-size:10px;">Graph API v1.0</td><td class="mono">190</td><td><div class="status-dot green" style="display:inline-block;"></div> Ingesting</td><td class="mono">22s ago</td></tr>
-                  <tr><td style="color:var(--text-primary);font-weight:500;">Zscaler ZIA</td><td><span class="badge badge-green" style="font-size:9px;">Proxy</span></td><td style="font-family:var(--font-mono);font-size:10px;">NSS Feed</td><td class="mono">750</td><td><div class="status-dot green" style="display:inline-block;"></div> Ingesting</td><td class="mono">5s ago</td></tr>
-                  <tr><td style="color:var(--text-primary);font-weight:500;">AWS CloudTrail</td><td><span class="badge badge-amber" style="font-size:9px;">Cloud</span></td><td style="font-family:var(--font-mono);font-size:10px;">S3 → SQS → Elastic</td><td class="mono">420</td><td><div class="status-dot green" style="display:inline-block;"></div> Ingesting</td><td class="mono">1m ago</td></tr>
-                  <tr><td style="color:var(--text-primary);font-weight:500;">CyberArk PAS</td><td><span class="badge badge-red" style="font-size:9px;">PAM</span></td><td style="font-family:var(--font-mono);font-size:10px;">Syslog TCP/1514</td><td class="mono">60</td><td><div class="status-dot green" style="display:inline-block;"></div> Ingesting</td><td class="mono">2m ago</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;">
-              <span style="font-size:10px;color:var(--text-muted);">Total EPS: <strong style="color:var(--cyan);">3,645</strong></span>
-              <span style="font-size:10px;color:var(--text-muted);">Daily Volume: <strong style="color:var(--text-secondary);">~315M events</strong></span>
-              <span style="font-size:10px;color:var(--text-muted);">Retention: <strong style="color:var(--text-secondary);">90 days hot / 365 days warm</strong></span>
-            </div>
-          </div>
-
-        </div><!-- end connector config card -->
-
-
-        <!-- ═══════════════════════════════════════════════════════════
-             SECTION 2: SEVERITY-GATED RAG ROUTER
-             ═══════════════════════════════════════════════════════════ -->
+        <!-- RAG Router Config (keep existing) -->
         <div class="card stg-section" style="margin-bottom:24px;">
           <div class="card-header" style="margin-bottom:18px;">
             <div>
@@ -23238,251 +22969,71 @@ Analyst: K. Rasmussen | 2026-02-28
             </div>
             <span class="badge badge-cyan">Live Config</span>
           </div>
-
           <div class="stg-rag-lanes">
-
-            <!-- P1 Critical -->
             <div class="stg-rag-lane" style="border-color:rgba(239,68,68,0.20);background:rgba(239,68,68,0.03);">
-              <div class="stg-rag-lane-sev">
-                <div class="stg-sev-badge p1">P1 / P0</div>
-                <div class="stg-sev-label">Critical</div>
-                <div class="stg-sev-label" style="margin-top:2px;">Full RAG Pipeline</div>
-              </div>
-              <div class="stg-rag-flow">
-                <span class="stg-chip p1">Alert Ingest</span>
-                <span class="stg-arrow p1">→</span>
-                <span class="stg-chip p1">3-Round Redaction</span>
-                <span class="stg-arrow p1">→</span>
-                <span class="stg-chip p1">Classifier (Haiku)</span>
-                <span class="stg-arrow p1">→</span>
-                <span class="stg-chip p1">All 7 Domain Handlers</span>
-                <span class="stg-arrow p1">→</span>
-                <span class="stg-chip p1">Context Aggregator</span>
-                <span class="stg-arrow p1">→</span>
-                <span class="stg-chip p1">Reasoner (Opus)</span>
-                <span class="stg-arrow p1">→</span>
-                <span class="stg-chip p1">Investigation Brief</span>
-              </div>
-              <div class="stg-rag-stats">
-                <div class="stg-stat-row"><span class="stg-stat-label">Model</span><span class="stg-stat-val" style="color:#ef4444;">Claude Opus</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Latency</span><span class="stg-stat-val">~18s</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Domains</span><span class="stg-stat-val">7 / 7</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Trigger</span><span class="stg-stat-val">Auto on alert</span></div>
-              </div>
+              <div class="stg-rag-lane-sev"><div class="stg-sev-badge p1">P1 / P0</div><div class="stg-sev-label">Critical</div><div class="stg-sev-label" style="margin-top:2px;">Full RAG Pipeline</div></div>
+              <div class="stg-rag-flow"><span class="stg-chip p1">Alert Ingest</span><span class="stg-arrow p1">→</span><span class="stg-chip p1">3-Round Redaction</span><span class="stg-arrow p1">→</span><span class="stg-chip p1">Classifier (Haiku)</span><span class="stg-arrow p1">→</span><span class="stg-chip p1">All 7 Domain Handlers</span><span class="stg-arrow p1">→</span><span class="stg-chip p1">Context Aggregator</span><span class="stg-arrow p1">→</span><span class="stg-chip p1">Reasoner (Opus)</span><span class="stg-arrow p1">→</span><span class="stg-chip p1">Investigation Brief</span></div>
+              <div class="stg-rag-stats"><div class="stg-stat-row"><span class="stg-stat-label">Model</span><span class="stg-stat-val" style="color:#ef4444;">Claude Opus</span></div><div class="stg-stat-row"><span class="stg-stat-label">Latency</span><span class="stg-stat-val">~18s</span></div><div class="stg-stat-row"><span class="stg-stat-label">Domains</span><span class="stg-stat-val">7 / 7</span></div><div class="stg-stat-row"><span class="stg-stat-label">Trigger</span><span class="stg-stat-val">Auto on alert</span></div></div>
             </div>
-
-            <!-- P2 High -->
             <div class="stg-rag-lane" style="border-color:rgba(249,115,22,0.18);background:rgba(249,115,22,0.025);">
-              <div class="stg-rag-lane-sev">
-                <div class="stg-sev-badge p2">P2</div>
-                <div class="stg-sev-label">High</div>
-                <div class="stg-sev-label" style="margin-top:2px;">Selective RAG</div>
-              </div>
-              <div class="stg-rag-flow">
-                <span class="stg-chip p2">Alert Ingest</span>
-                <span class="stg-arrow p2">→</span>
-                <span class="stg-chip p2">3-Round Redaction</span>
-                <span class="stg-arrow p2">→</span>
-                <span class="stg-chip p2">Classifier (Haiku)</span>
-                <span class="stg-arrow p2">→</span>
-                <span class="stg-chip p2">TI + SIEM Handlers</span>
-                <span class="stg-arrow p2">→</span>
-                <span class="stg-chip p2">Reasoner (Sonnet)</span>
-                <span class="stg-arrow p2">→</span>
-                <span class="stg-chip p2">Summary Card</span>
-              </div>
-              <div class="stg-rag-stats">
-                <div class="stg-stat-row"><span class="stg-stat-label">Model</span><span class="stg-stat-val" style="color:#f97316;">Claude Sonnet</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Latency</span><span class="stg-stat-val">~8s</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Domains</span><span class="stg-stat-val">2 / 7</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Trigger</span><span class="stg-stat-val">Auto on assign</span></div>
-              </div>
+              <div class="stg-rag-lane-sev"><div class="stg-sev-badge p2">P2</div><div class="stg-sev-label">High</div><div class="stg-sev-label" style="margin-top:2px;">Selective RAG</div></div>
+              <div class="stg-rag-flow"><span class="stg-chip p2">Alert Ingest</span><span class="stg-arrow p2">→</span><span class="stg-chip p2">3-Round Redaction</span><span class="stg-arrow p2">→</span><span class="stg-chip p2">Classifier (Haiku)</span><span class="stg-arrow p2">→</span><span class="stg-chip p2">TI + SIEM Handlers</span><span class="stg-arrow p2">→</span><span class="stg-chip p2">Reasoner (Sonnet)</span><span class="stg-arrow p2">→</span><span class="stg-chip p2">Summary Card</span></div>
+              <div class="stg-rag-stats"><div class="stg-stat-row"><span class="stg-stat-label">Model</span><span class="stg-stat-val" style="color:#f97316;">Claude Sonnet</span></div><div class="stg-stat-row"><span class="stg-stat-label">Latency</span><span class="stg-stat-val">~8s</span></div><div class="stg-stat-row"><span class="stg-stat-label">Domains</span><span class="stg-stat-val">2 / 7</span></div><div class="stg-stat-row"><span class="stg-stat-label">Trigger</span><span class="stg-stat-val">Auto on assign</span></div></div>
             </div>
-
-            <!-- P3 Medium -->
             <div class="stg-rag-lane" style="border-color:rgba(245,158,11,0.16);background:rgba(245,158,11,0.02);">
-              <div class="stg-rag-lane-sev">
-                <div class="stg-sev-badge p3">P3</div>
-                <div class="stg-sev-label">Medium</div>
-                <div class="stg-sev-label" style="margin-top:2px;">Lightweight Enrichment</div>
-              </div>
-              <div class="stg-rag-flow">
-                <span class="stg-chip p3">Alert Ingest</span>
-                <span class="stg-arrow p3">→</span>
-                <span class="stg-chip p3">Redaction (R1 only)</span>
-                <span class="stg-arrow p3">→</span>
-                <span class="stg-chip p3">KB Cache Lookup</span>
-                <span class="stg-arrow p3">→</span>
-                <span class="stg-chip p3">TI Enrichment</span>
-                <span class="stg-arrow p3">→</span>
-                <span class="stg-chip p3">Context Card</span>
-              </div>
-              <div class="stg-rag-stats">
-                <div class="stg-stat-row"><span class="stg-stat-label">Model</span><span class="stg-stat-val" style="color:#f59e0b;">Haiku (classifier)</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Latency</span><span class="stg-stat-val">~3s</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Domains</span><span class="stg-stat-val">1 / 7</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Trigger</span><span class="stg-stat-val">On analyst open</span></div>
-              </div>
+              <div class="stg-rag-lane-sev"><div class="stg-sev-badge p3">P3</div><div class="stg-sev-label">Medium</div><div class="stg-sev-label" style="margin-top:2px;">Lightweight Enrichment</div></div>
+              <div class="stg-rag-flow"><span class="stg-chip p3">Alert Ingest</span><span class="stg-arrow p3">→</span><span class="stg-chip p3">Redaction (R1 only)</span><span class="stg-arrow p3">→</span><span class="stg-chip p3">KB Cache Lookup</span><span class="stg-arrow p3">→</span><span class="stg-chip p3">TI Enrichment</span><span class="stg-arrow p3">→</span><span class="stg-chip p3">Context Card</span></div>
+              <div class="stg-rag-stats"><div class="stg-stat-row"><span class="stg-stat-label">Model</span><span class="stg-stat-val" style="color:#f59e0b;">Haiku (classifier)</span></div><div class="stg-stat-row"><span class="stg-stat-label">Latency</span><span class="stg-stat-val">~3s</span></div><div class="stg-stat-row"><span class="stg-stat-label">Domains</span><span class="stg-stat-val">1 / 7</span></div><div class="stg-stat-row"><span class="stg-stat-label">Trigger</span><span class="stg-stat-val">On analyst open</span></div></div>
             </div>
-
-            <!-- P4 Info -->
             <div class="stg-rag-lane" style="border-color:rgba(16,185,129,0.14);background:rgba(16,185,129,0.015);">
-              <div class="stg-rag-lane-sev">
-                <div class="stg-sev-badge p4">P4</div>
-                <div class="stg-sev-label">Info / Low</div>
-                <div class="stg-sev-label" style="margin-top:2px;">Rule-Based Only</div>
-              </div>
-              <div class="stg-rag-flow">
-                <span class="stg-chip p4">Alert Ingest</span>
-                <span class="stg-arrow p4">→</span>
-                <span class="stg-chip p4">Rule Engine</span>
-                <span class="stg-arrow p4">→</span>
-                <span class="stg-chip p4">Asset Tag</span>
-                <span class="stg-arrow p4">→</span>
-                <span class="stg-chip p4">Auto-Close / Queue</span>
-              </div>
-              <div class="stg-rag-stats">
-                <div class="stg-stat-row"><span class="stg-stat-label">Model</span><span class="stg-stat-val" style="color:#10b981;">None (rule-based)</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Latency</span><span class="stg-stat-val">&lt;1s</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Domains</span><span class="stg-stat-val">0 / 7</span></div>
-                <div class="stg-stat-row"><span class="stg-stat-label">Trigger</span><span class="stg-stat-val">Auto on ingest</span></div>
-              </div>
+              <div class="stg-rag-lane-sev"><div class="stg-sev-badge p4">P4</div><div class="stg-sev-label">Info / Low</div><div class="stg-sev-label" style="margin-top:2px;">Rule-Based Only</div></div>
+              <div class="stg-rag-flow"><span class="stg-chip p4">Alert Ingest</span><span class="stg-arrow p4">→</span><span class="stg-chip p4">Rule Engine</span><span class="stg-arrow p4">→</span><span class="stg-chip p4">Asset Tag</span><span class="stg-arrow p4">→</span><span class="stg-chip p4">Auto-Close / Queue</span></div>
+              <div class="stg-rag-stats"><div class="stg-stat-row"><span class="stg-stat-label">Model</span><span class="stg-stat-val" style="color:#10b981;">None (rule-based)</span></div><div class="stg-stat-row"><span class="stg-stat-label">Latency</span><span class="stg-stat-val">&lt;1s</span></div><div class="stg-stat-row"><span class="stg-stat-label">Domains</span><span class="stg-stat-val">0 / 7</span></div><div class="stg-stat-row"><span class="stg-stat-label">Trigger</span><span class="stg-stat-val">Auto on ingest</span></div></div>
             </div>
-
-          </div><!-- end rag lanes -->
-
-          <!-- Override row -->
+          </div>
           <div class="stg-rag-override">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;"><circle cx="8" cy="8" r="7" stroke="#00d4ff" stroke-width="1.5" opacity="0.6"/><path d="M8 5v4M8 11v.5" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/></svg>
             <span>Analysts can trigger Full RAG on any severity via <kbd>⌘K</kbd> Command Bar or the <kbd>Run AI</kbd> button on any alert card.</span>
             <span class="badge badge-cyan" style="font-size:9px;padding:2px 8px;margin-left:auto;white-space:nowrap;">On-Demand</span>
           </div>
-
-        </div><!-- end RAG router card -->
-
+        </div>
 
         <div class="grid-2">
-          <!-- LLM Configuration -->
           <div class="card">
             <div class="card-header"><span class="card-title">LLM Configuration</span><span class="badge badge-cyan">AI Engine</span></div>
             <div style="display:flex;flex-direction:column;gap:12px;">
-              <div>
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Primary Model (Investigation Briefs)</div>
-                <select class="filter-select" style="width:100%;">
-                  <option>Claude 3.5 Sonnet (Recommended)</option>
-                  <option>Claude 3 Opus</option>
-                  <option>GPT-4o</option>
-                  <option>Gemini 1.5 Pro</option>
-                </select>
-              </div>
-              <div>
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Fast Model (Enrichment, Triage)</div>
-                <select class="filter-select" style="width:100%;">
-                  <option>Claude 3.5 Haiku (Recommended)</option>
-                  <option>GPT-4o Mini</option>
-                  <option>Gemini Flash</option>
-                  <option>DeepSeek V3</option>
-                </select>
-              </div>
-              <div>
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Threat Intel Model</div>
-                <select class="filter-select" style="width:100%;">
-                  <option>Perplexity Sonar Pro</option>
-                  <option>Claude 3.5 Sonnet</option>
-                  <option>GPT-4o + Web Browsing</option>
-                </select>
-              </div>
-              <div>
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Monthly AI Budget Cap</div>
-                <input class="filter-input" value="$250.00" style="width:100%;">
-              </div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;">
-                <span style="font-size:12px;color:var(--text-secondary);">Auto-run AI on all P1/P2 alerts</span>
-                <div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div>
-              </div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Primary Model (Investigation Briefs)</div><select class="filter-select" style="width:100%;"><option>Claude 3.5 Sonnet (Recommended)</option><option>Claude 3 Opus</option><option>GPT-4o</option><option>Gemini 1.5 Pro</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Fast Model (Enrichment, Triage)</div><select class="filter-select" style="width:100%;"><option>Claude 3.5 Haiku (Recommended)</option><option>GPT-4o Mini</option><option>Gemini Flash</option><option>DeepSeek V3</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Threat Intel Model</div><select class="filter-select" style="width:100%;"><option>Perplexity Sonar Pro</option><option>Claude 3.5 Sonnet</option><option>GPT-4o + Web Browsing</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Monthly AI Budget Cap</div><input class="filter-input" value="$250.00" style="width:100%;"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><span style="font-size:12px;color:var(--text-secondary);">Auto-run AI on all P1/P2 alerts</span><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
             </div>
           </div>
-
-          <!-- SLA Configuration -->
           <div class="card">
             <div class="card-header"><span class="card-title">SLA Configuration</span></div>
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;">
-                <span class="badge badge-p1">P1</span>
-                <div style="flex:1;">
-                  <div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div>
-                </div>
-                <input class="filter-input" value="15 min" style="width:80px;text-align:center;">
-                <span style="color:var(--text-muted);">/</span>
-                <input class="filter-input" value="4 hr" style="width:80px;text-align:center;">
-              </div>
-              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;">
-                <span class="badge badge-p2">P2</span>
-                <div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div>
-                <input class="filter-input" value="30 min" style="width:80px;text-align:center;">
-                <span style="color:var(--text-muted);">/</span>
-                <input class="filter-input" value="12 hr" style="width:80px;text-align:center;">
-              </div>
-              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;">
-                <span class="badge badge-p3">P3</span>
-                <div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div>
-                <input class="filter-input" value="2 hr" style="width:80px;text-align:center;">
-                <span style="color:var(--text-muted);">/</span>
-                <input class="filter-input" value="48 hr" style="width:80px;text-align:center;">
-              </div>
-              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;">
-                <span class="badge badge-p4">P4</span>
-                <div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div>
-                <input class="filter-input" value="8 hr" style="width:80px;text-align:center;">
-                <span style="color:var(--text-muted);">/</span>
-                <input class="filter-input" value="7 days" style="width:80px;text-align:center;">
-              </div>
+              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;"><span class="badge badge-p1">P1</span><div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div><input class="filter-input" value="15 min" style="width:80px;text-align:center;"><span style="color:var(--text-muted);">/</span><input class="filter-input" value="4 hr" style="width:80px;text-align:center;"></div>
+              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;"><span class="badge badge-p2">P2</span><div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div><input class="filter-input" value="30 min" style="width:80px;text-align:center;"><span style="color:var(--text-muted);">/</span><input class="filter-input" value="12 hr" style="width:80px;text-align:center;"></div>
+              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;"><span class="badge badge-p3">P3</span><div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div><input class="filter-input" value="2 hr" style="width:80px;text-align:center;"><span style="color:var(--text-muted);">/</span><input class="filter-input" value="48 hr" style="width:80px;text-align:center;"></div>
+              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;"><span class="badge badge-p4">P4</span><div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div><input class="filter-input" value="8 hr" style="width:80px;text-align:center;"><span style="color:var(--text-muted);">/</span><input class="filter-input" value="7 days" style="width:80px;text-align:center;"></div>
             </div>
           </div>
-
-          <!-- Notifications -->
           <div class="card">
             <div class="card-header"><span class="card-title">Notification Settings</span></div>
             <div style="display:flex;flex-direction:column;gap:10px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;">
-                <div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">P1 Alert — Slack + SMS</div><div style="font-size:10px;color:var(--text-muted);">#soc-critical channel</div></div>
-                <div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div>
-              </div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;">
-                <div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Shift Handover Reminder</div><div style="font-size:10px;color:var(--text-muted);">30 min before shift end</div></div>
-                <div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div>
-              </div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;">
-                <div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">SLA Breach Warning</div><div style="font-size:10px;color:var(--text-muted);">When 80% of SLA window elapsed</div></div>
-                <div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div>
-              </div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;">
-                <div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Daily Digest Email</div><div style="font-size:10px;color:var(--text-muted);">08:00 SGT every morning</div></div>
-                <div style="width:36px;height:20px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:var(--text-muted);border-radius:50%;position:absolute;left:2px;top:1px;"></div></div>
-              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">P1 Alert — Slack + SMS</div><div style="font-size:10px;color:var(--text-muted);">#soc-critical channel</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Shift Handover Reminder</div><div style="font-size:10px;color:var(--text-muted);">30 min before shift end</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">SLA Breach Warning</div><div style="font-size:10px;color:var(--text-muted);">When 80% of SLA window elapsed</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Daily Digest Email</div><div style="font-size:10px;color:var(--text-muted);">08:00 SGT every morning</div></div><div style="width:36px;height:20px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:var(--text-muted);border-radius:50%;position:absolute;left:2px;top:1px;"></div></div></div>
             </div>
           </div>
-
-          <!-- Tenant Settings -->
           <div class="card">
             <div class="card-header"><span class="card-title">Tenant Settings</span></div>
             <div style="display:flex;flex-direction:column;gap:10px;">
-              <div>
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Organization Name</div>
-                <input class="filter-input" value="Dacta SG Pte Ltd" style="width:100%;">
-              </div>
-              <div>
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Timezone</div>
-                <select class="filter-select" style="width:100%;"><option>Asia/Singapore (UTC+8)</option><option>UTC</option></select>
-              </div>
-              <div>
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Data Retention Policy</div>
-                <select class="filter-select" style="width:100%;"><option>12 months</option><option>24 months</option><option>7 years (Compliance)</option></select>
-              </div>
-              <div>
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Ticket ID Prefix</div>
-                <input class="filter-input" value="DAC-" style="width:100%;">
-              </div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Organization Name</div><input class="filter-input" value="Dacta SG Pte Ltd" style="width:100%;"></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Timezone</div><select class="filter-select" style="width:100%;"><option>Asia/Singapore (UTC+8)</option><option>UTC</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Data Retention Policy</div><select class="filter-select" style="width:100%;"><option>12 months</option><option>24 months</option><option>7 years (Compliance)</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Ticket ID Prefix</div><input class="filter-input" value="DAC-" style="width:100%;"></div>
             </div>
           </div>
         </div>
@@ -27120,71 +26671,99 @@ async function loadIntegrationHub() {
 }
 
 // ============================================================
-//  SETTINGS PAGE — LIVE TENANT DATA
+//  SETTINGS PAGE — LIVE CLIENT CONNECTOR REGISTRY
 // ============================================================
+function renderSettingsConnectors() {
+  var sel = document.getElementById('settingsOrgSelector');
+  if (!sel) return;
+  var orgId = sel.value;
+  var org = ORG_CONNECTORS[orgId];
+  if (!org) return;
+
+  var grid = document.getElementById('settingsConnectorGrid');
+  var meta = document.getElementById('settingsConnectorMeta');
+  if (!grid) return;
+
+  var iconMap = { siem: '📊', edr: '🛡', firewall: '🌐', threat_intel: '🔍', ticketing: '📋' };
+  var labelMap = { siem: 'SIEM', edr: 'EDR / XDR', firewall: 'Firewall / Network', threat_intel: 'Threat Intelligence', ticketing: 'Ticketing & Workflow' };
+
+  var html = '';
+  org.connectors.forEach(function(c) {
+    var enabled = c.is_enabled;
+    var healthy = c.health_status === 'healthy';
+    var borderColor = !enabled ? 'rgba(239,68,68,0.20)' : 'rgba(0,212,255,0.15)';
+    var badgeClass = !enabled ? 'badge-red' : (healthy ? 'badge-green' : 'badge-amber');
+    var badgeText = !enabled ? 'Not Configured' : (healthy ? 'Connected' : 'Degraded');
+    var dotClass = !enabled ? 'disconnected' : 'connected';
+    var icon = iconMap[c.connector_type] || '⚙️';
+    var label = labelMap[c.connector_type] || c.connector_type;
+
+    html += '<div class="stg-conn-card" style="border-color:' + borderColor + ';' + (!enabled ? 'opacity:0.7;' : '') + '">' +
+      '<div class="stg-conn-top">' +
+        '<div class="stg-conn-icon"' + (!enabled ? ' style="background:rgba(239,68,68,0.08);"' : '') + '>' + icon + '</div>' +
+        '<div class="stg-conn-meta">' +
+          '<div class="stg-conn-name">' + label + '</div>' +
+          '<span class="badge ' + badgeClass + '" style="font-size:9px;padding:2px 7px;margin-top:3px;display:inline-flex;">' + badgeText + '</span>' +
+        '</div>' +
+        '<div class="stg-conn-status-dot ' + dotClass + '"></div>' +
+      '</div>' +
+      '<div class="stg-conn-field">' +
+        '<div class="stg-conn-field-label">VENDOR</div>' +
+        '<div style="font-size:12px;color:var(--text-primary);font-weight:500;padding:6px 0;">' + c.display_name + '</div>' +
+      '</div>' +
+      '<div class="stg-conn-field">' +
+        '<div class="stg-conn-field-label">DETAILS</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);padding:6px 0;word-break:break-all;">' +
+          (c.metadata.index_pattern || c.metadata.endpoint || c.metadata.instance || c.metadata.notes || '—') +
+        '</div>' +
+      '</div>' +
+      '<div class="stg-conn-footer">' +
+        (enabled ? '<button class="stg-conn-test-btn">⚡ Test Connection</button>' : '<button class="stg-conn-test-btn" style="border-color:rgba(239,68,68,0.35);color:#ef4444;background:rgba(239,68,68,0.08);">Configure</button>') +
+        '<div class="stg-conn-sync"' + (!enabled ? ' style="color:#ef4444;"' : '') + '>' +
+          (enabled ? 'Namespace: ' + (c.metadata.namespace || 'default') : 'Not deployed') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  grid.innerHTML = html;
+
+  // Meta row
+  var enabledCount = org.connectors.filter(function(c) { return c.is_enabled; }).length;
+  var totalCount = org.connectors.length;
+  var typeLabel = org.type === 'internal' ? 'Internal SOC' : org.type === 'mdr' ? 'MDR Client' : 'SOCaaS Client';
+  meta.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.10);border-radius:8px;">' +
+    '<span style="font-size:10px;color:var(--text-muted);">Namespace: <strong style="color:var(--cyan);">' + org.namespace + '</strong></span>' +
+    '<span style="font-size:10px;color:var(--text-muted);">Type: <strong style="color:var(--text-secondary);">' + typeLabel + '</strong></span>' +
+    '<span style="font-size:10px;color:var(--text-muted);">Connectors: <strong style="color:var(--text-secondary);">' + enabledCount + ' / ' + totalCount + ' active</strong></span>' +
+    '<span style="font-size:10px;color:var(--text-muted);">Code: <strong style="color:var(--cyan);">' + org.code + '</strong></span>' +
+    (!orgHasConnector(org.namespace, 'edr') ? '<span style="font-size:10px;padding:2px 8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;color:#ef4444;">⚠ No EDR — Firewall-only model</span>' : '') +
+  '</div>';
+}
+
 async function loadSettingsPage() {
   var page = document.getElementById('page-settings');
   if (!page) return;
 
-  try {
-    var resp = await fetch('/api/elastic', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'search',
-        index: 'logs-*',
-        body: {
-          size: 0,
-          aggs: {
-            namespaces: {
-              terms: { field: 'data_stream.namespace', size: 20 }
-            }
-          }
-        }
-      })
-    });
-    var data = await resp.json();
-    var namespaces = (data.aggregations && data.aggregations.namespaces) ? data.aggregations.namespaces.buckets : [];
-    if (!namespaces.length) return;
+  var sel = document.getElementById('settingsOrgSelector');
+  var countEl = document.getElementById('settingsOrgCount');
+  if (!sel) return;
 
-    var orgMap = { nagaworld: 'Naga World', dacta: 'Dacta Global', foxwood: 'Foxwood Technology', silverkey: 'Silver Key Corp', hla: 'HLA Group', demo: 'Demo Environment' };
-
-    // Find the org selector and update it with live namespaces
-    var orgSelect = page.querySelector('.stg-org-select');
-    if (orgSelect && namespaces.length > 0) {
-      // Build options from live data
-      var optHTML = '';
-      namespaces.forEach(function(ns) {
-        var name = orgMap[ns.key] || ns.key;
-        optHTML += '<option value="' + ns.key + '">' + name + ' · ' + ns.doc_count.toLocaleString() + ' events</option>';
-      });
-      orgSelect.innerHTML = optHTML;
-    }
-
-    // Update the SIEM connector last synced time
-    var syncEls = page.querySelectorAll('.stg-conn-sync');
-    if (syncEls.length >= 1) syncEls[0].textContent = 'Live · ' + namespaces.length + ' active namespaces';
-
-    // Find or create a tenant summary section
-    var existingBanner = page.querySelector('#settingsLiveBanner');
-    if (!existingBanner) {
-      var banner = document.createElement('div');
-      banner.id = 'settingsLiveBanner';
-      banner.style.cssText = 'padding:10px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;margin-bottom:16px;display:flex;align-items:center;gap:10px;';
-      banner.innerHTML = '<span style="font-size:10px;color:var(--text-secondary);">Active tenants from Elastic:</span>' +
-        namespaces.map(function(ns) {
-          var name = orgMap[ns.key] || ns.key;
-          return '<span style="font-size:10px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:10px;color:var(--cyan);">' + name + '</span>';
-        }).join('') +
-        '<span style="margin-left:auto;">' + jiraLiveBadge() + '</span>';
-      var firstCard = page.querySelector('.card');
-      if (firstCard) firstCard.insertBefore(banner, firstCard.firstChild);
-    }
-
-    console.log('[Settings] Live namespaces loaded: ' + namespaces.map(function(n){return n.key;}).join(', '));
-  } catch (err) {
-    console.error('[Settings] Load error:', err);
+  // Populate org selector from ORG_CONNECTORS
+  var optHTML = '';
+  var orgCount = 0;
+  for (var id in ORG_CONNECTORS) {
+    var o = ORG_CONNECTORS[id];
+    var typeTag = o.type === 'internal' ? '(Internal)' : o.type === 'mdr' ? '(MDR)' : '(SOCaaS)';
+    optHTML += '<option value="' + id + '">' + o.name + ' [' + o.code + '] ' + typeTag + '</option>';
+    orgCount++;
   }
+  sel.innerHTML = optHTML;
+  if (countEl) countEl.textContent = orgCount + ' organizations registered';
+
+  // Render first org's connectors
+  renderSettingsConnectors();
+
+  console.log('[Settings] Live connector registry loaded: ' + orgCount + ' orgs');
 }
 
 // ============================================================
@@ -27886,6 +27465,108 @@ function init() {
   // Supabase config
   var SUPABASE_URL = 'https://qiqrizggitcqwkwshmfy.supabase.co';
   var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpcXJpemdnaXRjcXdrd3NobWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNzkzMjEsImV4cCI6MjA4NzY1NTMyMX0.ZNN47SWAYvAzzY5Dn6VCYV8nzrTrqvvybp2aF4NFHCA';
+
+// ═══════════════════════════════════════════════════════════════
+// ORG_CONNECTORS — Per-client connector & log source config
+// Referenced by Settings page and realElasticLookup() for
+// connector-aware investigation (prevents querying CrowdStrike
+// for clients that don't have EDR, etc.)
+// ═══════════════════════════════════════════════════════════════
+var ORG_CONNECTORS = {
+  '9ce7a126-4e9d-434e-b952-f4c4fce56fa1': { // Dacta Global
+    code: 'DG', name: 'Dacta Global', type: 'internal', namespace: 'dacta',
+    connectors: [
+      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'dacta', index_pattern: 'dacta-*' } },
+      { connector_type: 'edr', vendor: 'CrowdStrike', display_name: 'CrowdStrike Falcon EDR', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'dacta', index_pattern: '.ds-logs-crowdstrike.alert-dacta-*', host_index: '.ds-logs-crowdstrike.host-dacta-*' } },
+      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'dacta', index_pattern: 'logs-panw.panos-dacta-*' } },
+      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
+      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
+    ]
+  },
+  '3a57db8a-7787-414c-9e28-1c14de388d31': { // Naga World
+    code: 'NW', name: 'Naga World', type: 'mdr', namespace: 'nagaworld',
+    connectors: [
+      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'nagaworld', index_pattern: 'nagaworld-*' } },
+      { connector_type: 'edr', vendor: 'CrowdStrike', display_name: 'CrowdStrike Falcon EDR', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'nagaworld', index_pattern: '.ds-logs-crowdstrike.alert-nagaworld-*', host_index: '.ds-logs-crowdstrike.host-nagaworld-*' } },
+      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'nagaworld', index_pattern: 'logs-panw.panos-nagaworld-*' } },
+      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
+      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
+    ]
+  },
+  'bc08ccf3-7143-47ff-97af-07b735208186': { // EM Services
+    code: 'EM', name: 'EM Services', type: 'socaas', namespace: 'emservices',
+    connectors: [
+      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'emservices', index_pattern: 'emservices-*' } },
+      { connector_type: 'edr', vendor: 'CrowdStrike', display_name: 'CrowdStrike Falcon EDR', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'emservices', index_pattern: '.ds-logs-crowdstrike.alert-emservices-*', host_index: '.ds-logs-crowdstrike.host-emservices-*' } },
+      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'emservices', index_pattern: 'logs-panw.panos-emservices-*' } },
+      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
+      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
+    ]
+  },
+  '00145232-a625-4b8b-be55-989b35b1c7c2': { // SP Telecom
+    code: 'SP', name: 'SP Telecom', type: 'socaas', namespace: 'sptelecom',
+    connectors: [
+      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'sptelecom', index_pattern: 'sptelecom-*' } },
+      { connector_type: 'edr', vendor: 'CrowdStrike', display_name: 'CrowdStrike Falcon EDR', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'sptelecom', index_pattern: '.ds-logs-crowdstrike.alert-sptelecom-*', host_index: '.ds-logs-crowdstrike.host-sptelecom-*' } },
+      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'sptelecom', index_pattern: 'logs-panw.panos-sptelecom-*' } },
+      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
+      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
+    ]
+  },
+  'a1cffb2a-32f3-4cb6-b29e-3fa40d8e08a6': { // Toyota Financial
+    code: 'TF', name: 'Toyota Financial', type: 'socaas', namespace: 'toyotafinancial',
+    connectors: [
+      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'toyotafinancial', index_pattern: 'toyotafinancial-*' } },
+      { connector_type: 'edr', vendor: 'CrowdStrike', display_name: 'CrowdStrike Falcon EDR', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'toyotafinancial', index_pattern: '.ds-logs-crowdstrike.alert-toyotafinancial-*', host_index: '.ds-logs-crowdstrike.host-toyotafinancial-*' } },
+      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'toyotafinancial', index_pattern: 'logs-panw.panos-toyotafinancial-*' } },
+      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
+      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
+    ]
+  },
+  'f6463102-adc3-4bdc-a014-ba197d0fada6': { // Foxwood — NO EDR, firewall only
+    code: 'FW', name: 'Foxwood Technology', type: 'mdr', namespace: 'foxwood',
+    connectors: [
+      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'foxwood', index_pattern: 'foxwood-*' } },
+      { connector_type: 'edr', vendor: 'None', display_name: 'No EDR Deployed', is_enabled: false, health_status: 'not_configured', metadata: { notes: 'Client does not have EDR. Firewall-only MDR model.' } },
+      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'foxwood', index_pattern: 'logs-panw.panos-foxwood-*' } },
+      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
+      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
+    ]
+  },
+  'b8672c8b-3907-48b0-8c58-b61aa38fbf4b': { // SPMT — Trend Micro + FortiGate
+    code: 'SM', name: 'SPMT', type: 'socaas', namespace: 'spmt',
+    connectors: [
+      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'spmt', index_pattern: 'spmt-*' } },
+      { connector_type: 'edr', vendor: 'Trend Micro', display_name: 'Trend Vision One', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'spmt', notes: 'Vision One XDR' } },
+      { connector_type: 'firewall', vendor: 'Fortinet', display_name: 'FortiGate Firewall', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'spmt', index_pattern: 'logs-fortinet_fortigate.log-spmt-*' } },
+      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
+      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
+    ]
+  }
+};
+
+// Helper: get connectors for a namespace
+function getOrgByNamespace(ns) {
+  for (var id in ORG_CONNECTORS) {
+    if (ORG_CONNECTORS[id].namespace === ns) return ORG_CONNECTORS[id];
+  }
+  return null;
+}
+
+// Helper: check if org has a specific connector type enabled
+function orgHasConnector(ns, connType) {
+  var org = getOrgByNamespace(ns);
+  if (!org) return false;
+  var conn = org.connectors.find(function(c) { return c.connector_type === connType; });
+  return conn && conn.is_enabled;
+}
+
+// Helper: get connector metadata
+function getOrgConnector(ns, connType) {
+  var org = getOrgByNamespace(ns);
+  if (!org) return null;
+  return org.connectors.find(function(c) { return c.connector_type === connType; }) || null;
+}
 
   // Wait for Supabase SDK to load, then initialize auth
   function initSupabaseAuth() {
@@ -35337,172 +35018,232 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   else if (org.includes('silver')) namespace = 'silverkey';
   else if (org.includes('hla')) namespace = 'hla';
   else if (org.includes('demo')) namespace = 'demo';
+  else if (org.includes('spmt') || org.includes('sp media')) namespace = 'spmt';
+  else if (org.includes('em ') || org.includes('em service')) namespace = 'emservices';
+  else if (org.includes('sp tele') || org.includes('sptele')) namespace = 'sptelecom';
+  else if (org.includes('toyota')) namespace = 'toyotafinancial';
 
-  // ── QUERY 1: CrowdStrike Alert Correlation ──
-  var alertIndex = '.ds-logs-crowdstrike.alert-' + namespace + '-*';
-  var alertQuery = { size: 5, sort: [{ '@timestamp': 'desc' }], _source: true };
-  var hostnames = iocs.hosts || [];
-  if (hostnames.length > 0) {
-    alertQuery.query = { bool: { should: hostnames.map(function(h) { return { match: { 'host.hostname': h } }; }), minimum_should_match: 1 } };
-  } else {
-    var procNames = (iocs.files || []).filter(function(f) { return f.includes('.exe'); });
-    if (procNames.length > 0) {
-      alertQuery.query = { bool: { should: procNames.map(function(p) { return { match: { 'process.name': p } }; }), minimum_should_match: 1 } };
+  // ── Connector-Aware Investigation ──
+  // Check ORG_CONNECTORS to determine which data sources are available
+  var _orgConfig = getOrgByNamespace(namespace);
+  var _hasEDR = orgHasConnector(namespace, 'edr');
+  var _hasFirewall = orgHasConnector(namespace, 'firewall');
+  var _edrConnector = getOrgConnector(namespace, 'edr');
+  var _fwConnector = getOrgConnector(namespace, 'firewall');
+  console.log('[Investigation] Org: ' + namespace + ' | EDR: ' + _hasEDR + ' | Firewall: ' + _hasFirewall);
+
+  // ── QUERY 1: EDR Alert Correlation (connector-aware) ──
+  if (_hasEDR) {
+    // Client has EDR — proceed with CrowdStrike/EDR queries
+    var edrMeta = _edrConnector ? _edrConnector.metadata : {};
+    var alertIndex = edrMeta.index_pattern || ('.ds-logs-crowdstrike.alert-' + namespace + '-*');
+    var alertQuery = { size: 5, sort: [{ '@timestamp': 'desc' }], _source: true };
+    var hostnames = iocs.hosts || [];
+    if (hostnames.length > 0) {
+      alertQuery.query = { bool: { should: hostnames.map(function(h) { return { match: { 'host.hostname': h } }; }), minimum_should_match: 1 } };
     } else {
-      alertQuery.query = { match_all: {} };
-    }
-  }
-
-  var qD1 = { name: 'CrowdStrike Alert Lookup', index: alertIndex, query: JSON.stringify(alertQuery.query || {}).substring(0, 120), status: 'running' };
-  logs.queryDetails.push(qD1);
-  logs.queriesRun++;
-
-  var alertResult = await queryElastic('search', alertIndex, alertQuery);
-  if (alertResult && alertResult.hits && alertResult.hits.hits && alertResult.hits.hits.length > 0) {
-    logs.elasticConnected = true;
-    qD1.status = 'success';
-    qD1.hits = alertResult.hits.total ? alertResult.hits.total.value : alertResult.hits.hits.length;
-
-    alertResult.hits.hits.forEach(function(hit) {
-      var src = hit._source;
-      var cs = (src.crowdstrike || {}).alert || {};
-      logs.rawAlerts.push({
-        timestamp: src['@timestamp'],
-        hostname: (src.host || {}).hostname || 'unknown',
-        processName: (src.process || {}).name || 'unknown',
-        parentProcess: ((src.process || {}).parent || {}).name || 'unknown',
-        cmdline: cs.cmdline || '',
-        alertName: cs.display_name || cs.name || '',
-        severity: cs.severity_name || '',
-        confidence: cs.confidence || 0,
-        disposition: cs.pattern_disposition_description || '',
-        dispositionDetails: cs.pattern_disposition_details || {},
-        tactic: ((src.threat || {}).tactic || {}).name || [],
-        technique: ((src.threat || {}).technique || {}).name || [],
-        techniqueId: ((src.threat || {}).technique || {}).id || [],
-        relatedIPs: (src.related || {}).ip || [],
-        relatedHashes: (src.related || {}).hash || [],
-        relatedUsers: (src.related || {}).user || [],
-        relatedHosts: (src.related || {}).hosts || [],
-        falconLink: cs.falcon_host_link || '',
-        product: cs.product || '',
-        scenario: cs.scenario || '',
-        objective: cs.objective || '',
-        localPrevalence: cs.local_prevalence || '',
-        globalPrevalence: cs.global_prevalence || '',
-        grandparentProcess: (cs.grandparent_details || {}).filename || '',
-        grandparentCmdline: (cs.grandparent_details || {}).cmdline || '',
-        processHash: ((src.process || {}).hash || {}).sha256 || '',
-        parentHash: (((src.process || {}).parent || {}).hash || {}).sha256 || ''
-      });
-    });
-
-    var pa = logs.rawAlerts[0];
-
-    // EDR Actions
-    if (pa.disposition) {
-      logs.edrActions.push({ status: pa.dispositionDetails.kill_process ? 'KILLED' : 'INFO', action: pa.disposition, result: pa.disposition, engine: 'CrowdStrike Falcon', falconLink: pa.falconLink });
-    }
-    if (pa.dispositionDetails.kill_process) {
-      logs.edrActions.push({ status: 'CLEAR', action: 'Kill Effective', result: 'CrowdStrike confirmed kill_process=true, kill_subprocess=' + (pa.dispositionDetails.kill_subprocess || false) });
-    }
-
-    // ── QUERY 2: Child Processes ──
-    var alertTime = pa.timestamp;
-    var timeFrom = new Date(new Date(alertTime).getTime() - 300000).toISOString();
-    var timeTo = new Date(new Date(alertTime).getTime() + 300000).toISOString();
-    var childQ = { size: 20, query: { bool: { must: [{ match: { 'host.hostname': pa.hostname } }, { range: { '@timestamp': { gte: timeFrom, lte: timeTo } } }] } }, sort: [{ '@timestamp': 'asc' }], _source: ['@timestamp', 'process.name', 'process.parent.name', 'crowdstrike.alert.name', 'crowdstrike.alert.cmdline'] };
-    var qD2 = { name: 'Child Process Search', index: alertIndex, query: 'host:' + pa.hostname + ' ±5min', status: 'running' };
-    logs.queryDetails.push(qD2); logs.queriesRun++;
-
-    var childResult = await queryElastic('search', alertIndex, childQ);
-    if (childResult && childResult.hits) {
-      qD2.status = 'success'; qD2.hits = childResult.hits.total ? childResult.hits.total.value : 0;
-      var childHits = (childResult.hits.hits || []).filter(function(h) {
-        var pName = (h._source.process || {}).name || '';
-        return pName !== pa.processName;
-      });
-      if (childHits.length === 0) {
-        logs.childProcesses.push({ status: 'CLEAR', query: 'process.parent.name:"' + pa.processName + '" on ' + pa.hostname + ' (±5min)', result: 'No child processes spawned. Elastic returned 0 child process events in ±5min window.', count: 0, live: true });
+      var procNames = (iocs.files || []).filter(function(f) { return f.includes('.exe'); });
+      if (procNames.length > 0) {
+        alertQuery.query = { bool: { should: procNames.map(function(p) { return { match: { 'process.name': p } }; }), minimum_should_match: 1 } };
       } else {
-        var cNames = childHits.map(function(h) { return (h._source.process || {}).name || 'unknown'; });
-        logs.childProcesses.push({ status: 'ALERT', query: 'process.parent.name:"' + pa.processName + '"', result: 'Child processes: ' + [...new Set(cNames)].join(', '), count: childHits.length, live: true });
+        alertQuery.query = { match_all: {} };
+      }
+    }
+
+    var qD1 = { name: 'CrowdStrike Alert Lookup', index: alertIndex, query: JSON.stringify(alertQuery.query || {}).substring(0, 120), status: 'running' };
+    logs.queryDetails.push(qD1);
+    logs.queriesRun++;
+
+    var alertResult = await queryElastic('search', alertIndex, alertQuery);
+    if (alertResult && alertResult.hits && alertResult.hits.hits && alertResult.hits.hits.length > 0) {
+      logs.elasticConnected = true;
+      qD1.status = 'success';
+      qD1.hits = alertResult.hits.total ? alertResult.hits.total.value : alertResult.hits.hits.length;
+
+      alertResult.hits.hits.forEach(function(hit) {
+        var src = hit._source;
+        var cs = (src.crowdstrike || {}).alert || {};
+        logs.rawAlerts.push({
+          timestamp: src['@timestamp'],
+          hostname: (src.host || {}).hostname || 'unknown',
+          processName: (src.process || {}).name || 'unknown',
+          parentProcess: ((src.process || {}).parent || {}).name || 'unknown',
+          cmdline: cs.cmdline || '',
+          alertName: cs.display_name || cs.name || '',
+          severity: cs.severity_name || '',
+          confidence: cs.confidence || 0,
+          disposition: cs.pattern_disposition_description || '',
+          dispositionDetails: cs.pattern_disposition_details || {},
+          tactic: ((src.threat || {}).tactic || {}).name || [],
+          technique: ((src.threat || {}).technique || {}).name || [],
+          techniqueId: ((src.threat || {}).technique || {}).id || [],
+          relatedIPs: (src.related || {}).ip || [],
+          relatedHashes: (src.related || {}).hash || [],
+          relatedUsers: (src.related || {}).user || [],
+          relatedHosts: (src.related || {}).hosts || [],
+          falconLink: cs.falcon_host_link || '',
+          product: cs.product || '',
+          scenario: cs.scenario || '',
+          objective: cs.objective || '',
+          localPrevalence: cs.local_prevalence || '',
+          globalPrevalence: cs.global_prevalence || '',
+          grandparentProcess: (cs.grandparent_details || {}).filename || '',
+          grandparentCmdline: (cs.grandparent_details || {}).cmdline || '',
+          processHash: ((src.process || {}).hash || {}).sha256 || '',
+          parentHash: (((src.process || {}).parent || {}).hash || {}).sha256 || ''
+        });
+      });
+
+      var pa = logs.rawAlerts[0];
+
+      // EDR Actions
+      if (pa.disposition) {
+        logs.edrActions.push({ status: pa.dispositionDetails.kill_process ? 'KILLED' : 'INFO', action: pa.disposition, result: pa.disposition, engine: 'CrowdStrike Falcon', falconLink: pa.falconLink });
+      }
+      if (pa.dispositionDetails.kill_process) {
+        logs.edrActions.push({ status: 'CLEAR', action: 'Kill Effective', result: 'CrowdStrike confirmed kill_process=true, kill_subprocess=' + (pa.dispositionDetails.kill_subprocess || false) });
+      }
+
+      // ── QUERY 2: Child Processes ──
+      var alertTime = pa.timestamp;
+      var timeFrom = new Date(new Date(alertTime).getTime() - 300000).toISOString();
+      var timeTo = new Date(new Date(alertTime).getTime() + 300000).toISOString();
+      var childQ = { size: 20, query: { bool: { must: [{ match: { 'host.hostname': pa.hostname } }, { range: { '@timestamp': { gte: timeFrom, lte: timeTo } } }] } }, sort: [{ '@timestamp': 'asc' }], _source: ['@timestamp', 'process.name', 'process.parent.name', 'crowdstrike.alert.name', 'crowdstrike.alert.cmdline'] };
+      var qD2 = { name: 'Child Process Search', index: alertIndex, query: 'host:' + pa.hostname + ' ±5min', status: 'running' };
+      logs.queryDetails.push(qD2); logs.queriesRun++;
+
+      var childResult = await queryElastic('search', alertIndex, childQ);
+      if (childResult && childResult.hits) {
+        qD2.status = 'success'; qD2.hits = childResult.hits.total ? childResult.hits.total.value : 0;
+        var childHits = (childResult.hits.hits || []).filter(function(h) {
+          var pName = (h._source.process || {}).name || '';
+          return pName !== pa.processName;
+        });
+        if (childHits.length === 0) {
+          logs.childProcesses.push({ status: 'CLEAR', query: 'process.parent.name:"' + pa.processName + '" on ' + pa.hostname + ' (±5min)', result: 'No child processes spawned. Elastic returned 0 child process events in ±5min window.', count: 0, live: true });
+        } else {
+          var cNames = childHits.map(function(h) { return (h._source.process || {}).name || 'unknown'; });
+          logs.childProcesses.push({ status: 'ALERT', query: 'process.parent.name:"' + pa.processName + '"', result: 'Child processes: ' + [...new Set(cNames)].join(', '), count: childHits.length, live: true });
+        }
+      } else {
+        qD2.status = 'success'; qD2.hits = 0;
+        logs.childProcesses.push({ status: 'CLEAR', query: 'child process search', result: 'No child process telemetry in alert index', count: 0, live: true });
+      }
+
+      // ── QUERY 3: Network Connections (Firewall logs) ──
+      var alertIPs = (pa.relatedIPs || []).concat((iocs.ips || []).filter(function(ip) { return !(pa.relatedIPs || []).includes(ip); }));
+      if (alertIPs.length > 0) {
+        for (var ni = 0; ni < alertIPs.length; ni++) {
+          var ip = alertIPs[ni];
+          var isPrivate = ip.startsWith('10.') || ip.startsWith('172.') || ip.startsWith('192.168.') || ip.startsWith('127.');
+          var netIndex = 'logs-fortinet_fortigate.log-' + namespace + '-*,logs-panw.panos-' + namespace + '-*';
+          var netQ = { size: 5, query: { bool: { must: [{ range: { '@timestamp': { gte: timeFrom, lte: timeTo } } }], should: [{ match: { 'destination.ip': ip } }, { match: { 'source.ip': ip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
+          var qD3 = { name: 'Network: ' + ip, index: 'Firewall logs', query: 'dst.ip:"' + ip + '" ±5min', status: 'running' };
+          logs.queryDetails.push(qD3); logs.queriesRun++;
+
+          var netResult = await queryElastic('search', netIndex, netQ);
+          if (netResult && netResult.hits && netResult.hits.total && netResult.hits.total.value > 0) {
+            qD3.status = 'success'; qD3.hits = netResult.hits.total.value;
+            logs.networkConnections.push({ status: 'ALERT', query: 'destination.ip:"' + ip + '" (Firewall)', result: 'Connection to ' + ip + ' found — ' + netResult.hits.total.value + ' events in firewall logs', ip: ip, count: netResult.hits.total.value, live: true });
+          } else {
+            qD3.status = netResult ? 'success' : 'error'; qD3.hits = 0;
+            logs.networkConnections.push({ status: 'CLEAR', query: 'destination.ip:"' + ip + '" (Firewall ±5min)', result: 'No outbound connection to ' + ip + ' in firewall logs' + (isPrivate ? ' (private IP)' : ''), ip: ip, count: 0, live: true });
+          }
+        }
+      } else {
+        logs.networkConnections.push({ status: 'CLEAR', query: 'No IPs from alert', result: 'No external IPs for network correlation', ip: 'N/A', count: 0, live: true });
+      }
+
+      // ── QUERY 4: Host Inventory ──
+      var hostIndex = edrMeta.host_index || ('.ds-logs-crowdstrike.host-' + namespace + '-*');
+      var qD4 = { name: 'Host Inventory', index: hostIndex, query: 'host:' + pa.hostname, status: 'running' };
+      logs.queryDetails.push(qD4); logs.queriesRun++;
+      var hostResult = await queryElastic('search', hostIndex, { size: 1, query: { match: { 'host.hostname': pa.hostname } }, sort: [{ '@timestamp': 'desc' }], _source: ['host', 'related', 'company', '@timestamp'] });
+      if (hostResult && hostResult.hits && hostResult.hits.hits && hostResult.hits.hits.length > 0) {
+        qD4.status = 'success'; qD4.hits = 1;
+        var hs = hostResult.hits.hits[0]._source;
+        logs.hostInfo = { hostname: (hs.host || {}).hostname, os: ((hs.host || {}).os || {}).full || 'Unknown', ip: ((hs.host || {}).ip || []).join(', '), geo: (hs.host || {}).geo || {}, mac: ((hs.host || {}).mac || []).join(', '), company: ((hs.company || {}).name) || '', lastSeen: hs['@timestamp'] };
+      } else { qD4.status = 'success'; qD4.hits = 0; }
+
+      // ── QUERY 5: Alert History ──
+      var qD5 = { name: 'Alert History', index: alertIndex, query: 'host:' + pa.hostname + ' (aggs)', status: 'running' };
+      logs.queryDetails.push(qD5); logs.queriesRun++;
+      var histResult = await queryElastic('search', alertIndex, { size: 0, query: { match: { 'host.hostname': pa.hostname } }, aggs: { by_name: { terms: { field: 'crowdstrike.alert.name', size: 20 } }, by_sev: { terms: { field: 'crowdstrike.alert.severity_name', size: 10 } }, time_range: { stats: { field: '@timestamp' } } } });
+      if (histResult && histResult.aggregations) {
+        qD5.status = 'success'; qD5.hits = histResult.hits.total ? histResult.hits.total.value : 0;
+        logs.alertHistory = { totalAlerts: qD5.hits, byName: (histResult.aggregations.by_name || {}).buckets || [], bySeverity: (histResult.aggregations.by_sev || {}).buckets || [], firstAlert: ((histResult.aggregations.time_range || {}).min_as_string) || '', lastAlert: ((histResult.aggregations.time_range || {}).max_as_string) || '' };
+      } else { qD5.status = 'success'; qD5.hits = 0; }
+
+      // Hashes from alert
+      if (pa.processHash && pa.processHash !== '0000000000000000000000000000000000000000') {
+        logs.queryResults.push({ type: 'Process Hash (CrowdStrike)', status: 'INFO', hash: pa.processHash.substring(0, 16) + '...', fullHash: pa.processHash, result: 'SHA256: ' + pa.processHash, live: true });
+      }
+      if (pa.parentHash) {
+        logs.queryResults.push({ type: 'Parent Hash', status: 'INFO', hash: pa.parentHash.substring(0, 16) + '...', fullHash: pa.parentHash, result: 'Parent SHA256: ' + pa.parentHash, live: true });
+      }
+
+      // User context
+      var users = (pa.relatedUsers || []).filter(function(u) { return !u.startsWith('uid:') && !u.startsWith('S-1-'); });
+      if (users.length > 0) {
+        logs.authEvents.push({ status: 'INFO', user: users.join(', '), result: 'Users: ' + users.join(', ') + ' — Domain: ' + (pa.relatedHosts || []).filter(function(h) { return h.includes('.'); }).join(', '), live: true });
+      }
+
+      // File events from disposition
+      if (pa.dispositionDetails.quarantine_file) {
+        logs.fileEvents.push({ status: 'ALERT', query: 'quarantine_file=true', result: 'CrowdStrike quarantined a file', count: 1, live: true });
+      } else {
+        logs.fileEvents.push({ status: 'CLEAR', query: 'disposition.quarantine_file', result: 'No files quarantined by CrowdStrike', count: 0, live: true });
       }
     } else {
-      qD2.status = 'success'; qD2.hits = 0;
-      logs.childProcesses.push({ status: 'CLEAR', query: 'child process search', result: 'No child process telemetry in alert index', count: 0, live: true });
+      qD1.status = alertResult ? 'success' : 'error'; qD1.hits = 0;
+      if (alertResult) logs.elasticConnected = true;
+      logs.childProcesses.push({ status: 'UNCLEAR', query: 'No CrowdStrike alert found', result: 'Unable to correlate Jira ticket to Elastic alert', count: 0, live: false });
+      logs.networkConnections.push({ status: 'UNCLEAR', query: 'N/A', result: 'No Elastic data for network correlation', ip: 'N/A', count: 0, live: false });
+      logs.fileEvents.push({ status: 'UNCLEAR', query: 'N/A', result: 'No Elastic data for file correlation', count: 0, live: false });
     }
+  } else {
+    // ── NO EDR: Skip CrowdStrike, go to firewall-only investigation ──
+    var noEdrMsg = _orgConfig ? (_orgConfig.name + ' has no EDR deployed — firewall-only MDR model') : ('No EDR configured for namespace: ' + namespace);
+    console.log('[Investigation] ' + noEdrMsg);
+    logs.queryDetails.push({ name: 'EDR Check', index: 'ORG_CONNECTORS', query: 'orgHasConnector("' + namespace + '", "edr")', status: 'skipped', hits: 0, note: noEdrMsg });
 
-    // ── QUERY 3: Network Connections (Firewall logs) ──
-    var alertIPs = (pa.relatedIPs || []).concat((iocs.ips || []).filter(function(ip) { return !(pa.relatedIPs || []).includes(ip); }));
-    if (alertIPs.length > 0) {
-      for (var ni = 0; ni < alertIPs.length; ni++) {
-        var ip = alertIPs[ni];
-        var isPrivate = ip.startsWith('10.') || ip.startsWith('172.') || ip.startsWith('192.168.') || ip.startsWith('127.');
-        var netIndex = 'logs-fortinet_fortigate.log-' + namespace + '-*,logs-panw.panos-' + namespace + '-*';
-        var netQ = { size: 5, query: { bool: { must: [{ range: { '@timestamp': { gte: timeFrom, lte: timeTo } } }], should: [{ match: { 'destination.ip': ip } }, { match: { 'source.ip': ip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
-        var qD3 = { name: 'Network: ' + ip, index: 'Firewall logs', query: 'dst.ip:"' + ip + '" ±5min', status: 'running' };
-        logs.queryDetails.push(qD3); logs.queriesRun++;
+    logs.childProcesses.push({ status: 'INFO', query: 'EDR not available', result: noEdrMsg + '. Process tree analysis requires endpoint telemetry.', count: 0, live: true });
+    logs.edrActions.push({ status: 'INFO', action: 'No EDR', result: 'EDR containment not available. Containment actions limited to firewall block rules.', engine: 'N/A' });
+    logs.fileEvents.push({ status: 'INFO', query: 'EDR not available', result: 'File-level analysis unavailable without EDR. Review firewall logs for data exfil indicators.', count: 0, live: true });
 
-        var netResult = await queryElastic('search', netIndex, netQ);
-        if (netResult && netResult.hits && netResult.hits.total && netResult.hits.total.value > 0) {
-          qD3.status = 'success'; qD3.hits = netResult.hits.total.value;
-          logs.networkConnections.push({ status: 'ALERT', query: 'destination.ip:"' + ip + '" (Firewall)', result: 'Connection to ' + ip + ' found — ' + netResult.hits.total.value + ' events in firewall logs', ip: ip, count: netResult.hits.total.value, live: true });
+    // Still query firewall logs for network connections
+    var allIPs = (iocs.ips || []);
+    if (allIPs.length > 0) {
+      var fwMeta = _fwConnector ? _fwConnector.metadata : {};
+      var fwIndex = fwMeta.index_pattern || ('logs-panw.panos-' + namespace + '-*');
+      // Also try fortinet pattern
+      if (_fwConnector && _fwConnector.vendor === 'Fortinet') {
+        fwIndex = fwMeta.index_pattern || ('logs-fortinet_fortigate.log-' + namespace + '-*');
+      }
+      for (var fi = 0; fi < allIPs.length; fi++) {
+        var fip = allIPs[fi];
+        var isPrivateFW = fip.startsWith('10.') || fip.startsWith('172.') || fip.startsWith('192.168.') || fip.startsWith('127.');
+        var fwQ = { size: 10, query: { bool: { must: [{ range: { '@timestamp': { gte: 'now-24h' } } }], should: [{ match: { 'destination.ip': fip } }, { match: { 'source.ip': fip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
+        var qDFW = { name: 'Firewall: ' + fip, index: fwIndex, query: 'ip:"' + fip + '" (24h)', status: 'running' };
+        logs.queryDetails.push(qDFW); logs.queriesRun++;
+
+        var fwResult = await queryElastic('search', fwIndex, fwQ);
+        if (fwResult && fwResult.hits && fwResult.hits.total && fwResult.hits.total.value > 0) {
+          qDFW.status = 'success'; qDFW.hits = fwResult.hits.total.value;
+          logs.networkConnections.push({ status: 'ALERT', query: 'ip:"' + fip + '" (Firewall)', result: fwResult.hits.total.value + ' firewall events for ' + fip, ip: fip, count: fwResult.hits.total.value, live: true });
+          logs.elasticConnected = true;
         } else {
-          qD3.status = netResult ? 'success' : 'error'; qD3.hits = 0;
-          logs.networkConnections.push({ status: 'CLEAR', query: 'destination.ip:"' + ip + '" (Firewall ±5min)', result: 'No outbound connection to ' + ip + ' in firewall logs' + (isPrivate ? ' (private IP)' : ''), ip: ip, count: 0, live: true });
+          qDFW.status = fwResult ? 'success' : 'error'; qDFW.hits = 0;
+          if (fwResult) logs.elasticConnected = true;
+          logs.networkConnections.push({ status: 'CLEAR', query: 'ip:"' + fip + '" (Firewall 24h)', result: 'No firewall events for ' + fip + (isPrivateFW ? ' (private IP)' : ''), ip: fip, count: 0, live: true });
         }
       }
     } else {
-      logs.networkConnections.push({ status: 'CLEAR', query: 'No IPs from alert', result: 'No external IPs for network correlation', ip: 'N/A', count: 0, live: true });
+      logs.networkConnections.push({ status: 'INFO', query: 'No IPs extracted', result: 'No IPs in alert for firewall correlation. Check alert details manually.', ip: 'N/A', count: 0, live: true });
     }
 
-    // ── QUERY 4: Host Inventory ──
-    var hostIndex = '.ds-logs-crowdstrike.host-' + namespace + '-*';
-    var qD4 = { name: 'Host Inventory', index: hostIndex, query: 'host:' + pa.hostname, status: 'running' };
-    logs.queryDetails.push(qD4); logs.queriesRun++;
-    var hostResult = await queryElastic('search', hostIndex, { size: 1, query: { match: { 'host.hostname': pa.hostname } }, sort: [{ '@timestamp': 'desc' }], _source: ['host', 'related', 'company', '@timestamp'] });
-    if (hostResult && hostResult.hits && hostResult.hits.hits && hostResult.hits.hits.length > 0) {
-      qD4.status = 'success'; qD4.hits = 1;
-      var hs = hostResult.hits.hits[0]._source;
-      logs.hostInfo = { hostname: (hs.host || {}).hostname, os: ((hs.host || {}).os || {}).full || 'Unknown', ip: ((hs.host || {}).ip || []).join(', '), geo: (hs.host || {}).geo || {}, mac: ((hs.host || {}).mac || []).join(', '), company: ((hs.company || {}).name) || '', lastSeen: hs['@timestamp'] };
-    } else { qD4.status = 'success'; qD4.hits = 0; }
-
-    // ── QUERY 5: Alert History ──
-    var qD5 = { name: 'Alert History', index: alertIndex, query: 'host:' + pa.hostname + ' (aggs)', status: 'running' };
-    logs.queryDetails.push(qD5); logs.queriesRun++;
-    var histResult = await queryElastic('search', alertIndex, { size: 0, query: { match: { 'host.hostname': pa.hostname } }, aggs: { by_name: { terms: { field: 'crowdstrike.alert.name', size: 20 } }, by_sev: { terms: { field: 'crowdstrike.alert.severity_name', size: 10 } }, time_range: { stats: { field: '@timestamp' } } } });
-    if (histResult && histResult.aggregations) {
-      qD5.status = 'success'; qD5.hits = histResult.hits.total ? histResult.hits.total.value : 0;
-      logs.alertHistory = { totalAlerts: qD5.hits, byName: (histResult.aggregations.by_name || {}).buckets || [], bySeverity: (histResult.aggregations.by_sev || {}).buckets || [], firstAlert: ((histResult.aggregations.time_range || {}).min_as_string) || '', lastAlert: ((histResult.aggregations.time_range || {}).max_as_string) || '' };
-    } else { qD5.status = 'success'; qD5.hits = 0; }
-
-    // Hashes from alert
-    if (pa.processHash && pa.processHash !== '0000000000000000000000000000000000000000') {
-      logs.queryResults.push({ type: 'Process Hash (CrowdStrike)', status: 'INFO', hash: pa.processHash.substring(0, 16) + '...', fullHash: pa.processHash, result: 'SHA256: ' + pa.processHash, live: true });
-    }
-    if (pa.parentHash) {
-      logs.queryResults.push({ type: 'Parent Hash', status: 'INFO', hash: pa.parentHash.substring(0, 16) + '...', fullHash: pa.parentHash, result: 'Parent SHA256: ' + pa.parentHash, live: true });
-    }
-
-    // User context
-    var users = (pa.relatedUsers || []).filter(function(u) { return !u.startsWith('uid:') && !u.startsWith('S-1-'); });
-    if (users.length > 0) {
-      logs.authEvents.push({ status: 'INFO', user: users.join(', '), result: 'Users: ' + users.join(', ') + ' — Domain: ' + (pa.relatedHosts || []).filter(function(h) { return h.includes('.'); }).join(', '), live: true });
-    }
-
-    // File events from disposition
-    if (pa.dispositionDetails.quarantine_file) {
-      logs.fileEvents.push({ status: 'ALERT', query: 'quarantine_file=true', result: 'CrowdStrike quarantined a file', count: 1, live: true });
-    } else {
-      logs.fileEvents.push({ status: 'CLEAR', query: 'disposition.quarantine_file', result: 'No files quarantined by CrowdStrike', count: 0, live: true });
-    }
-  } else {
-    qD1.status = alertResult ? 'success' : 'error'; qD1.hits = 0;
-    if (alertResult) logs.elasticConnected = true;
-    logs.childProcesses.push({ status: 'UNCLEAR', query: 'No CrowdStrike alert found', result: 'Unable to correlate Jira ticket to Elastic alert', count: 0, live: false });
-    logs.networkConnections.push({ status: 'UNCLEAR', query: 'N/A', result: 'No Elastic data for network correlation', ip: 'N/A', count: 0, live: false });
-    logs.fileEvents.push({ status: 'UNCLEAR', query: 'N/A', result: 'No Elastic data for file correlation', count: 0, live: false });
+    // No host info or alert history from EDR
+    logs.authEvents.push({ status: 'INFO', user: 'N/A', result: 'User context requires EDR telemetry. Not available for this client.', live: true });
   }
 
   // ── QUERY 6: OpenCTI IOC Lookups ──
