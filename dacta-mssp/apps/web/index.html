@@ -26804,7 +26804,7 @@ function renderSettingsConnectors() {
   '</div>';
 }
 
-function loadSettingsPage() {
+async function loadSettingsPage() {
   try {
     console.log('[Settings] loadSettingsPage called');
     var page = document.getElementById('page-settings');
@@ -26820,6 +26820,9 @@ function loadSettingsPage() {
       setTimeout(loadSettingsPage, 500);
       return;
     }
+
+    // Ensure Supabase-onboarded orgs are merged before rendering
+    await loadOrgsFromSupabase();
 
     // Populate org selector from ORG_CONNECTORS
     var optHTML = '';
@@ -27907,7 +27910,8 @@ function dismissOnboardOrg(idx) {
   renderOnboardingPage();
 }
 
-function loadOnboardingPage() {
+async function loadOnboardingPage() {
+  await loadOrgsFromSupabase();
   syncJiraOrgs();
 }
 
