@@ -37082,8 +37082,9 @@ async function openInvestigation(ticketKey) {
         '</div>' +
 
         // Activity Timeline
-        '<div class="card" style="padding:14px;max-height:400px;overflow-y:auto;">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span></div>' +
+        '<div class="card" style="padding:14px;">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="max-height:600px;overflow-y:auto;">' +
           (timelineItems.length === 0
             ? '<div style="text-align:center;padding:16px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">No activity recorded</div>'
             : '<div style="display:flex;flex-direction:column;gap:0;">' +
@@ -37109,9 +37110,8 @@ async function openInvestigation(ticketKey) {
               }).join('') +
             '</div>'
           ) +
+          '</div>' +
         '</div>' +
-
-        // ── Panels below Timeline (collapsed by default) ──
 
         // Enrichment Summary — collapsed by default
         '<div class="card" style="padding:14px;" id="enrichmentSummaryCard">' +
