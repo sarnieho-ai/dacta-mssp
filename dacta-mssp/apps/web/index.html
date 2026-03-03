@@ -26736,7 +26736,7 @@ function renderSettingsConnectors() {
     '<span style="font-size:10px;color:var(--text-muted);">Type: <strong style="color:var(--text-secondary);">' + typeLabel + '</strong></span>' +
     '<span style="font-size:10px;color:var(--text-muted);">Connectors: <strong style="color:var(--text-secondary);">' + enabledCount + ' / ' + totalCount + ' active</strong></span>' +
     '<span style="font-size:10px;color:var(--text-muted);">Code: <strong style="color:var(--cyan);">' + org.code + '</strong></span>' +
-    (!orgHasConnector(org.namespace, 'edr') ? '<span style="font-size:10px;padding:2px 8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;color:#ef4444;">⚠ No EDR — Firewall-only model</span>' : '') +
+    (!orgHasConnector(org.namespace, 'edr') ? '<span style="font-size:10px;padding:2px 8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;color:#ef4444;">⚠ No EDR — Firewall logs only</span>' : '') +
   '</div>';
 }
 
@@ -27482,7 +27482,7 @@ var ORG_CONNECTORS = {
     ]
   },
   '3a57db8a-7787-414c-9e28-1c14de388d31': { // Naga World
-    code: 'NW', name: 'Naga World', type: 'mdr', namespace: 'nagaworld',
+    code: 'NW', name: 'Naga World', type: 'socaas', namespace: 'nagaworld',
     connectors: [
       { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'nagaworld', index_pattern: 'nagaworld-*' } },
       { connector_type: 'edr', vendor: 'CrowdStrike', display_name: 'CrowdStrike Falcon EDR', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'nagaworld', index_pattern: '.ds-logs-crowdstrike.alert-nagaworld-*', host_index: '.ds-logs-crowdstrike.host-nagaworld-*' } },
@@ -27522,10 +27522,10 @@ var ORG_CONNECTORS = {
     ]
   },
   'f6463102-adc3-4bdc-a014-ba197d0fada6': { // Foxwood — NO EDR, firewall only
-    code: 'FW', name: 'Foxwood Technology', type: 'mdr', namespace: 'foxwood',
+    code: 'FW', name: 'Foxwood Technology', type: 'socaas', namespace: 'foxwood',
     connectors: [
       { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'foxwood', index_pattern: 'foxwood-*' } },
-      { connector_type: 'edr', vendor: 'None', display_name: 'No EDR Deployed', is_enabled: false, health_status: 'not_configured', metadata: { notes: 'Client does not have EDR. Firewall-only MDR model.' } },
+      { connector_type: 'edr', vendor: 'None', display_name: 'No EDR Deployed', is_enabled: false, health_status: 'not_configured', metadata: { notes: 'Client does not have EDR. Firewall logs only sent to Elastic SIEM.' } },
       { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'foxwood', index_pattern: 'logs-panw.panos-foxwood-*' } },
       { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
       { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
