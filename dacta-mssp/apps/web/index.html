@@ -27725,15 +27725,25 @@ function renderOnboardingPage() {
     var typeLabel = org.type === 'internal' ? 'Internal' : org.type === 'mdr' ? 'MDR' : 'SOCaaS';
     var typeBadge = org.type === 'internal' ? 'badge-cyan' : org.type === 'mdr' ? 'badge-amber' : 'badge-green';
 
-    thtml += '<tr>' +
-      '<td style="font-weight:600;color:var(--text-primary);">' + org.name + '</td>' +
-      '<td><span style="color:var(--cyan);font-family:var(--font-mono);font-size:11px;">' + org.code + '</span></td>' +
-      '<td><span class="badge ' + typeBadge + '" style="font-size:9px;padding:2px 7px;">' + typeLabel + '</span></td>' +
-      '<td style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);">' + org.namespace + '</td>' +
+    var selSocaas = org.type==='socaas'?' selected':'';
+    var selMdr = org.type==='mdr'?' selected':'';
+    var selInt = org.type==='internal'?' selected':'';
+
+    thtml += '<tr id="obrow-' + id + '">' +
+      '<td><input class="filter-input obedit-field" data-orgid="' + id + '" data-field="name" value="' + org.name.replace(/"/g,'&quot;') + '" style="font-weight:600;color:var(--text-primary);font-size:12px;width:100%;min-width:100px;background:transparent;border-color:transparent;padding:4px 6px;" readonly></td>' +
+      '<td><input class="filter-input obedit-field" data-orgid="' + id + '" data-field="code" value="' + org.code + '" style="color:var(--cyan);font-family:var(--font-mono);font-size:11px;width:50px;background:transparent;border-color:transparent;padding:4px 6px;text-align:center;" readonly></td>' +
+      '<td><select class="filter-select obedit-field" data-orgid="' + id + '" data-field="type" style="font-size:11px;background:transparent;border-color:transparent;padding:3px 4px;pointer-events:none;-webkit-appearance:none;appearance:none;">' +
+        '<option value="socaas"' + selSocaas + '>SOCaaS</option><option value="mdr"' + selMdr + '>MDR</option><option value="internal"' + selInt + '>Internal</option></select></td>' +
+      '<td><input class="filter-input obedit-field" data-orgid="' + id + '" data-field="namespace" value="' + org.namespace + '" style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);width:100%;min-width:80px;background:transparent;border-color:transparent;padding:4px 6px;" readonly></td>' +
       '<td style="text-align:center;">' + (jiraMatch ? jiraMatch.ticket_count : '<span style="color:var(--text-muted);">0</span>') + '</td>' +
       '<td><span class="badge badge-green" style="font-size:9px;padding:2px 7px;">Active</span></td>' +
-      '<td style="text-align:center;"><button class="btn btn-sm" style="padding:3px 8px;font-size:10px;" onclick="navigate(\'settings\')">⚙️</button></td>' +
-      '<td style="text-align:center;"><button class="btn btn-sm" style="padding:3px 8px;font-size:10px;background:rgba(239,68,68,0.08);color:#ef4444;border:1px solid rgba(239,68,68,0.2);" onclick="deleteOnboardedOrg(\'' + id + '\')" title="Remove client">🗑️</button></td>' +
+      '<td style="text-align:center;white-space:nowrap;">' +
+        '<button class="btn btn-sm obedit-view" data-orgid="' + id + '" style="padding:3px 8px;font-size:10px;" onclick="navigate(\'settings\')">⚙️</button> ' +
+        '<button class="btn btn-sm obedit-view" data-orgid="' + id + '" style="padding:3px 8px;font-size:10px;" onclick="startEditOrg(\'' + id + '\')" title="Edit client">✏️</button> ' +
+        '<button class="btn btn-sm obedit-view" data-orgid="' + id + '" style="padding:3px 8px;font-size:10px;background:rgba(239,68,68,0.08);color:#ef4444;border:1px solid rgba(239,68,68,0.2);" onclick="deleteOnboardedOrg(\'' + id + '\')" title="Remove client">🗑️</button>' +
+        '<button class="btn btn-sm obedit-edit" data-orgid="' + id + '" style="display:none;padding:3px 8px;font-size:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);" onclick="saveEditOrg(\'' + id + '\')" title="Save changes">💾 Save</button> ' +
+        '<button class="btn btn-sm obedit-edit" data-orgid="' + id + '" style="display:none;padding:3px 8px;font-size:10px;" onclick="cancelEditOrg(\'' + id + '\')" title="Cancel">✖ Cancel</button>' +
+      '</td>' +
     '</tr>';
   });
   tableEl.innerHTML = thtml;
@@ -27802,6 +27812,64 @@ async function createOrgInSupabase(name, code, type, ns, sla, industry, region) 
   } catch(e) {
     console.error('[Onboarding] Supabase insert failed:', e);
   }
+}
+
+function startEditOrg(orgId) {
+  var row = document.getElementById('obrow-' + orgId);
+  if (!row) return;
+  // Enable inputs
+  row.querySelectorAll('.obedit-field').forEach(function(el) {
+    el.removeAttribute('readonly');
+    el.style.background = 'var(--bg-elevated)';
+    el.style.borderColor = 'var(--border-card)';
+    if (el.tagName === 'SELECT') { el.style.pointerEvents = 'auto'; el.style.webkitAppearance = 'menulist'; el.style.appearance = 'menulist'; }
+  });
+  // Toggle buttons
+  row.querySelectorAll('.obedit-view').forEach(function(b) { b.style.display = 'none'; });
+  row.querySelectorAll('.obedit-edit').forEach(function(b) { b.style.display = 'inline-flex'; });
+}
+
+async function saveEditOrg(orgId) {
+  var org = ORG_CONNECTORS[orgId];
+  if (!org) return;
+  var row = document.getElementById('obrow-' + orgId);
+  if (!row) return;
+
+  // Read values
+  var fields = row.querySelectorAll('.obedit-field');
+  var updates = {};
+  fields.forEach(function(el) {
+    updates[el.getAttribute('data-field')] = el.value.trim();
+  });
+
+  // Apply to ORG_CONNECTORS
+  if (updates.name) org.name = updates.name;
+  if (updates.code) org.code = updates.code;
+  if (updates.type) org.type = updates.type;
+  if (updates.namespace) org.namespace = updates.namespace;
+
+  // Persist to Supabase
+  try {
+    if (window._supabaseRef && orgId.indexOf('ob-') !== 0) {
+      await window._supabaseRef.from('organizations').update({
+        name: org.name,
+        short_name: org.code,
+        service_model: org.type,
+        contract_type: org.type === 'internal' ? 'internal' : 'mssp'
+      }).eq('id', orgId);
+      console.log('[Onboarding] Updated Supabase:', org.name);
+    }
+  } catch(e) {
+    console.error('[Onboarding] Supabase update failed:', e);
+  }
+
+  // Re-render to reset UI
+  renderOnboardingPage();
+}
+
+function cancelEditOrg(orgId) {
+  // Just re-render to discard changes
+  renderOnboardingPage();
 }
 
 async function deleteOnboardedOrg(orgId) {
