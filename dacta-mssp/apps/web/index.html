@@ -34005,21 +34005,25 @@ window.DactaJira = {
 
   async fetchTelemetry() {
     var now = Date.now();
-    if (this._cache.telemetry && (now - this._cacheTime.telemetry) < this._CACHE_TTL) return this._cache.telemetry;
-    var data = await this._fetch('/api/jira?action=telemetry');
-    this._cache.telemetry = data;
-    this._cacheTime.telemetry = now;
+    var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '24h';
+    var cacheKey = 'telemetry_' + tr;
+    if (this._cache[cacheKey] && (now - (this._cacheTime[cacheKey] || 0)) < this._CACHE_TTL) return this._cache[cacheKey];
+    var data = await this._fetch('/api/jira?action=telemetry&timeRange=' + encodeURIComponent(tr));
+    this._cache[cacheKey] = data;
+    this._cacheTime[cacheKey] = now;
     return data;
   },
 
   async fetchDashVisuals() {
     var now = Date.now();
-    if (this._cache.dashvisuals && (now - this._cacheTime.dashvisuals) < this._CACHE_TTL) {
-      return this._cache.dashvisuals;
+    var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '24h';
+    var cacheKey = 'dashvisuals_' + tr;
+    if (this._cache[cacheKey] && (now - (this._cacheTime[cacheKey] || 0)) < this._CACHE_TTL) {
+      return this._cache[cacheKey];
     }
-    var data = await this._fetch('/api/jira?action=dashvisuals');
-    this._cache.dashvisuals = data;
-    this._cacheTime.dashvisuals = now;
+    var data = await this._fetch('/api/jira?action=dashvisuals&timeRange=' + encodeURIComponent(tr));
+    this._cache[cacheKey] = data;
+    this._cacheTime[cacheKey] = now;
     return data;
   }
 };

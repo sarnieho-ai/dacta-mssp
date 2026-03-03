@@ -373,32 +373,44 @@ export default async function handler(req, res) {
 
     // ─── ACTION: dashvisuals (full data for dashboard visuals) ────
     if (action === 'dashvisuals') {
-      // Check server-side cache first
-      var cachedVis = _getCached('dashvisuals');
+      // Time range support — same mapping as dashboard action
+      const timeRange = req.query.timeRange || '24h';
+      const timeRangeMap = {
+        '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': 'startOfDay()',
+        '7d': 'startOfWeek()', '30d': '-30d'
+      };
+      const recentJql = timeRangeMap[timeRange] || 'startOfDay()';
+      const isRelative = recentJql.startsWith('-');
+      const createdFilter = isRelative ? ('created >= "' + recentJql + '"') : ('created >= ' + recentJql);
+
+      // Check server-side cache (keyed by time range)
+      var cachedVis = _getCached('dashvisuals_' + timeRange);
       if (cachedVis) {
         res.setHeader('X-Cache', 'HIT');
         return res.status(200).json(cachedVis);
       }
       const B = 'project = DAC AND type = "[System] Incident"';
+      const BT = `${B} AND ${createdFilter}`; // time-filtered base
 
-      // Parallel: count queries + fetch 200 recent tickets for distribution analysis
+      // Parallel: count queries + fetch recent tickets for distribution analysis
+      // Use BT (time-filtered) for totals so numbers change with time picker
       const [
         totalAll, totalOpen, inProgressCount, escalatedCount,
         resolvedAllTime, resolvedWeek,
         p1All, p2All, p3All, p4All,
         recentBatch, weekBatch
       ] = await Promise.all([
-        countJql(B),
-        countJql(`${B} AND status = "Open"`),
-        countJql(`${B} AND status = "In Progress"`),
-        countJql(`${B} AND status = "Escalated"`),
-        countJql(`${B} AND status in ("Closed","Completed","Canceled")`),
+        countJql(BT),
+        countJql(`${BT} AND status = "Open"`),
+        countJql(`${BT} AND status = "In Progress"`),
+        countJql(`${BT} AND status = "Escalated"`),
+        countJql(`${B} AND status in ("Closed","Completed","Canceled") AND ${createdFilter}`),
         countJql(`${B} AND status in ("Closed","Completed","Canceled") AND updated >= startOfWeek()`),
-        countJql(`${B} AND priority = "P1 - Critical"`),
-        countJql(`${B} AND priority = "P2 - High"`),
-        countJql(`${B} AND priority = "P3 - Medium"`),
-        countJql(`${B} AND priority = "P4 - Low"`),
-        searchJql(`${B} ORDER BY created DESC`,
+        countJql(`${BT} AND priority = "P1 - Critical"`),
+        countJql(`${BT} AND priority = "P2 - High"`),
+        countJql(`${BT} AND priority = "P3 - Medium"`),
+        countJql(`${BT} AND priority = "P4 - Low"`),
+        searchJql(`${BT} ORDER BY created DESC`,
           ['created','priority','status','customfield_10002'], 200),
         searchJql(`${B} AND created >= -14d ORDER BY created DESC`,
           ['created'], 1000)
@@ -481,45 +493,56 @@ export default async function handler(req, res) {
         orgDist, statusDist, prioDist,
         issueCount: issues.length
       };
-      _setCache('dashvisuals', visResult);
+      _setCache('dashvisuals_' + timeRange, visResult);
       return res.status(200).json(visResult);
     }
 
     // ─── ACTION: telemetry (extended dashboard data) ─────────
     if (action === 'telemetry') {
-      // Check server-side cache first
-      var cachedTele = _getCached('telemetry');
+      // Time range support
+      const timeRange = req.query.timeRange || '24h';
+      const timeRangeMap = {
+        '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': 'startOfDay()',
+        '7d': 'startOfWeek()', '30d': '-30d'
+      };
+      const recentJql = timeRangeMap[timeRange] || 'startOfDay()';
+      const isRelative = recentJql.startsWith('-');
+      const createdFilter = isRelative ? ('created >= "' + recentJql + '"') : ('created >= ' + recentJql);
+
+      // Check server-side cache (keyed by time range)
+      var cachedTele = _getCached('telemetry_' + timeRange);
       if (cachedTele) {
         res.setHeader('X-Cache', 'HIT');
         return res.status(200).json(cachedTele);
       }
       const B = 'project = DAC AND type = "[System] Incident"';
+      const BT = `${B} AND ${createdFilter}`; // time-filtered base
       const now = new Date();
       const queries = {};
-      // MTTR proxy: avg time tickets stay open (count by status)
-      queries.inProgress = `${B} AND status = "In Progress"`;
-      queries.escalated = `${B} AND status = "Escalated"`;
-      queries.clientResponded = `${B} AND status = "Client Responded"`;
-      queries.reportedTo = `${B} AND status = "Reported To"`;
-      queries.notified = `${B} AND status = "Notified"`;
+      // MTTR proxy: count by status within time range
+      queries.inProgress = `${BT} AND status = "In Progress"`;
+      queries.escalated = `${BT} AND status = "Escalated"`;
+      queries.clientResponded = `${BT} AND status = "Client Responded"`;
+      queries.reportedTo = `${BT} AND status = "Reported To"`;
+      queries.notified = `${BT} AND status = "Notified"`;
       // Trends
       queries.yesterday = `${B} AND created >= "-2d" AND created < "-1d"`;
       queries.twoDaysAgo = `${B} AND created >= "-3d" AND created < "-2d"`;
-      // By priority (all)
-      queries.allP1 = `${B} AND priority = "P1 - Critical"`;
-      queries.allP2 = `${B} AND priority = "P2 - High"`;
-      queries.allP3 = `${B} AND priority = "P3 - Medium"`;
-      queries.allP4 = `${B} AND priority = "P4 - Low"`;
+      // By priority within time range
+      queries.allP1 = `${BT} AND priority = "P1 - Critical"`;
+      queries.allP2 = `${BT} AND priority = "P2 - High"`;
+      queries.allP3 = `${BT} AND priority = "P3 - Medium"`;
+      queries.allP4 = `${BT} AND priority = "P4 - Low"`;
       // Resolved this week
       queries.resolvedWeek = `${B} AND status in ("Closed","Completed","Canceled") AND updated >= startOfWeek()`;
-      // Top assignees (fetch recent with assignee)
+      // Top assignees within time range
       const [counts, recentAssignees] = await Promise.all([
         (async () => {
           const results = {};
           await Promise.all(Object.entries(queries).map(([key, jql]) => countJql(jql).then(c => { results[key] = c; })));
           return results;
         })(),
-        searchJql(`${B} AND assignee is not EMPTY ORDER BY created DESC`, ['assignee','status','priority','created'], 100)
+        searchJql(`${BT} AND assignee is not EMPTY ORDER BY created DESC`, ['assignee','status','priority','created'], 100)
       ]);
       // Compute assignee distribution
       const assigneeCounts = {};
@@ -530,7 +553,7 @@ export default async function handler(req, res) {
         if ((iss.fields?.status?.name || '') === 'Open') assigneeCounts[name].open++;
       });
       const teleResult = { counts, assigneeCounts };
-      _setCache('telemetry', teleResult);
+      _setCache('telemetry_' + timeRange, teleResult);
       return res.status(200).json(teleResult);
     }
 
