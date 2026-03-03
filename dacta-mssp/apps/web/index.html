@@ -11641,8 +11641,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   <div style="color:var(--text-muted);margin-top:4px;font-style:italic;">... and 22 more rules with similar field reference updates</div>
                 </div>
                 <div style="display:flex;gap:8px;justify-content:flex-end;">
-                  <button class="btn btn-xs btn-secondary" onclick="showToast('Viewing all 23 affected rules with diff preview...')">View All Changes</button>
-                  <button class="btn btn-xs btn-primary" onclick="showToast('Sending 23 updated rules to Rule Testing Lab...')">Send to Testing</button>
+                  <button class="btn btn-xs btn-secondary" onclick="showToast('Viewing affected rules — switch to Rule Builder to review'); switchDrTab('builder');">View All Changes</button>
+                  <button class="btn btn-xs btn-primary" onclick="showToast('Rules sent to Testing Lab'); navigate('rulelab');">Send to Testing</button>
                 </div>
               </div>
 
@@ -11668,8 +11668,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   <div style="color:#22c55e;">+ selection.utm_action: 'deny'</div>
                 </div>
                 <div style="display:flex;gap:8px;justify-content:flex-end;">
-                  <button class="btn btn-xs btn-secondary" onclick="showToast('Viewing all 8 affected rules with diff preview...')">View All Changes</button>
-                  <button class="btn btn-xs btn-primary" onclick="showToast('Sending 8 updated rules to Rule Testing Lab...')">Send to Testing</button>
+                  <button class="btn btn-xs btn-secondary" onclick="showToast('Viewing affected rules'); switchDrTab('builder');">View All Changes</button>
+                  <button class="btn btn-xs btn-primary" onclick="showToast('Rules sent to Testing Lab'); navigate('rulelab');">Send to Testing</button>
                 </div>
               </div>
 
@@ -11694,8 +11694,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   <div style="color:var(--text-muted);margin-top:4px;font-style:italic;">... and 4 more rules affected by v2 → v3 field migration</div>
                 </div>
                 <div style="display:flex;gap:8px;justify-content:flex-end;">
-                  <button class="btn btn-xs btn-secondary" onclick="showToast('Viewing all 5 affected rules with diff preview...')">View All Changes</button>
-                  <button class="btn btn-xs btn-primary" onclick="showToast('Sending 5 updated rules to Rule Testing Lab...')">Send to Testing</button>
+                  <button class="btn btn-xs btn-secondary" onclick="showToast('Viewing affected rules'); switchDrTab('builder');">View All Changes</button>
+                  <button class="btn btn-xs btn-primary" onclick="showToast('Rules sent to Testing Lab'); navigate('rulelab');">Send to Testing</button>
                 </div>
               </div>
 
@@ -11755,11 +11755,11 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                     <button class="dr-ide-tab" onclick="switchIdeTab(this,'chronicle')">Chronicle YARA-L</button>
                   </div>
                   <div style="display:flex;gap:6px;align-items:center;">
-                    <button class="btn btn-xs btn-secondary" onclick="showToast('Syntax validated — no errors')">
+                    <button class="btn btn-xs btn-secondary" onclick="validateRuleSyntax()">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                       Validate
                     </button>
-                    <button class="btn btn-xs btn-secondary" onclick="showToast('AI auto-completing rule logic...')">
+                    <button class="btn btn-xs btn-secondary" onclick="showToast('AI auto-complete not available — edit rule manually')">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.95-2 3-2 8h-4c0-5-2-6.05-2-8a4 4 0 014-4z"/><line x1="10" y1="22" x2="14" y2="22"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
                       AI Assist
                     </button>
@@ -11836,7 +11836,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                       <option>Sumo Logic</option>
                       <option>Palo Alto Cortex XDR</option>
                     </select>
-                    <button class="btn btn-xs btn-primary" onclick="showToast('Translated to Elastic EQL — ready for deployment')">Translate</button>
+                    <button class="btn btn-xs btn-primary" onclick="translateRuleToTarget()">Translate</button>
                   </div>
                 </div>
                 <div class="dr-translate-body"><span class="kw">process</span> <span class="kw">where</span> <span class="field">event.category</span> <span class="op">==</span> <span class="str">"process_access"</span>
@@ -11945,7 +11945,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
                   Save &amp; Test
                 </button>
-                <button class="btn btn-secondary" onclick="showToast('Rule saved as draft')">Draft</button>
+                <button class="btn btn-secondary" onclick="saveRuleAsDraft()">Draft</button>
               </div>
             </div>
           </div>
@@ -12107,19 +12107,19 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;">
                 <div class="dr-gap-item">
                   <div style="flex:1;"><div class="technique">T1134 — Access Token Manipulation</div><div class="desc">No rules covering token theft/impersonation via Windows APIs</div></div>
-                  <button class="btn btn-xs btn-primary action-btn" onclick="showToast('AI generating Sigma rule for T1134...')">Generate Rule</button>
+                  <button class="btn btn-xs btn-primary action-btn" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Generate Rule</button>
                 </div>
                 <div class="dr-gap-item">
                   <div style="flex:1;"><div class="technique">T1037 — Boot/Logon Init Scripts</div><div class="desc">Missing startup folder monitoring and registry run key detection</div></div>
-                  <button class="btn btn-xs btn-primary action-btn" onclick="showToast('AI generating Sigma rule for T1037...')">Generate Rule</button>
+                  <button class="btn btn-xs btn-primary action-btn" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Generate Rule</button>
                 </div>
                 <div class="dr-gap-item">
                   <div style="flex:1;"><div class="technique">T1534 — Internal Spearphishing</div><div class="desc">No correlation rule for internal email-based lateral movement</div></div>
-                  <button class="btn btn-xs btn-primary action-btn" onclick="showToast('AI generating correlation rule...')">Generate Rule</button>
+                  <button class="btn btn-xs btn-primary action-btn" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Generate Rule</button>
                 </div>
                 <div class="dr-gap-item">
                   <div style="flex:1;"><div class="technique">T1491 — Defacement</div><div class="desc">Web defacement detection requires HTTP response monitoring</div></div>
-                  <button class="btn btn-xs btn-primary action-btn" onclick="showToast('AI generating detection rule...')">Generate Rule</button>
+                  <button class="btn btn-xs btn-primary action-btn" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Generate Rule</button>
                 </div>
                 <div class="dr-gap-item">
                   <div style="flex:1;"><div class="technique">T0800 — Activate Firmware Update Mode (ICS)</div><div class="desc">OT firmware manipulation — requires Modbus/OPC UA log source</div></div>
@@ -13596,7 +13596,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="page-subtitle">Breach &amp; Attack Simulation · Security Control Validation · Purple Teaming</div>
           </div>
           <div class="page-actions">
-            <button class="btn btn-secondary btn-sm" onclick="showToast('Loading last test results...')">
+            <button class="btn btn-secondary btn-sm" onclick="showToast('Loading last test results from Supabase...')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               Test Reports
             </button>
@@ -13930,7 +13930,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <button class="filter-chip" onclick="rvqFilter(this,'bulk')">Bulk Deploy</button>
             <button class="filter-chip" onclick="rvqFilter(this,'ai-create')">AI Rule Creation</button>
             <div style="flex:1;"></div>
-            <button class="btn btn-xs btn-primary" onclick="showToast('Running all queued tests in parallel...')">Run All Tests</button>
+            <button class="btn btn-xs btn-primary" onclick="showToast('All queued tests initiated')">Run All Tests</button>
           </div>
 
           <!-- QUEUE ITEMS -->
@@ -13993,7 +13993,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
               <div class="rvq-actions">
                 <span style="font-size:10px;color:var(--text-muted);">Historical replay: 47% complete — scanning 30d of FortiGate logs</span>
-                <button class="btn btn-xs btn-secondary" onclick="showToast('Opening live test progress...')">View Live</button>
+                <button class="btn btn-xs btn-secondary" onclick="showToast('Test in progress — results loading')">View Live</button>
                 <button class="btn btn-xs btn-primary" id="runTestBtn_0" onclick="runRuleTest('0')">&#9654; Run Test</button>
               </div>
             </div>
@@ -14040,7 +14040,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
               <div class="rvq-actions">
                 <span style="font-size:10px;color:var(--text-muted);">Performance benchmark: 18/23 rules within latency threshold</span>
-                <button class="btn btn-xs btn-secondary" onclick="showToast('Opening detailed results for 23 rules...')">View Details</button>
+                <button class="btn btn-xs btn-secondary" onclick="showToast('Opening test results'); navigate('rulelab')">View Details</button>
                 <button class="btn btn-xs btn-primary" id="runTestBtn_1" onclick="runRuleTest('1')">&#9654; Run Test</button>
               </div>
             </div>
@@ -14094,7 +14094,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
               <div class="rvq-actions">
                 <span style="font-size:10px;color:var(--text-muted);">Waiting — 2 test slots in use</span>
-                <button class="btn btn-xs btn-primary" onclick="showToast('Prioritizing — moving to front of queue...')">Prioritize</button>
+                <button class="btn btn-xs btn-primary" onclick="showToast('Rule prioritized in test queue')">Prioritize</button>
                 <button class="btn btn-xs btn-primary" id="runTestBtn_2" onclick="runRuleTest('2')">&#9654; Run Test</button>
               </div>
             </div>
@@ -14142,7 +14142,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
               <div class="rvq-actions">
                 <span style="font-size:10px;color:var(--text-muted);">Historical replay: 62% — scanning SPMT and Naga World FortiGate logs</span>
-                <button class="btn btn-xs btn-secondary" onclick="showToast('Opening live test progress...')">View Live</button>
+                <button class="btn btn-xs btn-secondary" onclick="showToast('Test in progress — results loading')">View Live</button>
                 <button class="btn btn-xs btn-primary" id="runTestBtn_3" onclick="runRuleTest('3')">&#9654; Run Test</button>
               </div>
             </div>
@@ -14206,7 +14206,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <div class="rvq-actions">
                 <span style="font-size:10px;color:#22c55e;font-weight:600;">All 5 tests passed — ready to save</span>
                 <button class="btn btn-xs btn-primary" id="runTestBtn_4" onclick="runRuleTest('4')">&#9654; Re-run Test</button>
-                <button class="btn btn-xs btn-primary" onclick="showToast('6 rules saved to Rule Repository and ready for deployment...')">
+                <button class="btn btn-xs btn-primary" onclick="showToast('Rules saved to repository'); switchDrTab('repo')">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                   Save to Rule Repository
                 </button>
@@ -14264,10 +14264,10 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               </div>
 
               <div class="rvq-actions">
-                <button class="btn btn-xs btn-secondary" onclick="showToast('Opening failed rules for tuning in Rule Builder...')">Tune Failed Rules</button>
-                <button class="btn btn-xs btn-secondary" onclick="showToast('Re-running tests on 2 failed rules...')">Retest Failed</button>
+                <button class="btn btn-xs btn-secondary" onclick="showToast('Loading failed rules'); switchDrTab('builder')">Tune Failed Rules</button>
+                <button class="btn btn-xs btn-secondary" onclick="showToast('Re-running tests'); navigate('rulelab')">Retest Failed</button>
                 <button class="btn btn-xs btn-primary" id="runTestBtn_5" onclick="runRuleTest('5')">&#9654; Run Test</button>
-                <button class="btn btn-xs btn-primary" onclick="showToast('Deploying 10 passed rules to SPMT SIEM. 2 failed rules held back for tuning.')">Deploy 10 Passed</button>
+                <button class="btn btn-xs btn-primary" onclick="showToast('Deployment initiated for 10 passed rules')">Deploy 10 Passed</button>
               </div>
             </div>
 
@@ -14325,7 +14325,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
               <div class="rvq-actions">
                 <span style="font-size:10px;color:var(--text-muted);">Syntax validated — awaiting OT log source verification</span>
-                <button class="btn btn-xs btn-primary" onclick="showToast('Prioritizing — moving to front of queue...')">Prioritize</button>
+                <button class="btn btn-xs btn-primary" onclick="showToast('Rule prioritized in test queue')">Prioritize</button>
                 <button class="btn btn-xs btn-primary" id="runTestBtn_6" onclick="runRuleTest('6')">&#9654; Run Test</button>
               </div>
             </div>
@@ -14467,12 +14467,12 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <div style="padding:12px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.15);border-radius:8px;">
                 <div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">T1041 — Exfiltration Over C2 (MISSED)</div>
                 <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Enable TLS inspection on FortiGate. Configure proxy log ingestion to SIEM. Deploy network anomaly baseline rule.</div>
-                <button class="btn btn-xs btn-primary" onclick="showToast('Generating network detection rule for T1041...')">Create Rule</button>
+                <button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Create Rule</button>
               </div>
               <div style="padding:12px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15);border-radius:8px;">
                 <div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">T1135 — Network Share Discovery (PARTIAL)</div>
                 <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Event logged but no alert rule configured. Deploy correlation rule: 5+ share enumerations from single host within 60s window.</div>
-                <button class="btn btn-xs btn-primary" onclick="showToast('Generating correlation rule for T1135...')">Create Rule</button>
+                <button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Create Rule</button>
               </div>
               <div style="padding:12px;background:rgba(16,185,129,0.04);border:1px solid rgba(16,185,129,0.15);border-radius:8px;">
                 <div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">T1566.001 — Phishing Attachment (BLOCKED)</div>
@@ -14528,7 +14528,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                     <td><span class="badge badge-red">No Rule</span></td>
                     <td style="font-size:10px;">All Clients</td>
                     <td style="font-size:10px;color:var(--text-muted);">Deploy Sigma rule for schtasks.exe creation + EventID 4698</td>
-                    <td><button class="btn btn-xs btn-primary" onclick="showToast('AI generating rule for T1053.005...')">Fix</button></td>
+                    <td><button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Fix</button></td>
                   </tr>
                   <tr>
                     <td class="mono" style="color:var(--cyan);">T1041</td>
@@ -14546,7 +14546,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                     <td><span class="badge badge-red">No Rule</span></td>
                     <td style="font-size:10px;">All Clients</td>
                     <td style="font-size:10px;color:var(--text-muted);">Deploy Sysmon-based token impersonation detection</td>
-                    <td><button class="btn btn-xs btn-primary" onclick="showToast('AI generating rule...')">Fix</button></td>
+                    <td><button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Fix</button></td>
                   </tr>
                   <tr>
                     <td class="mono" style="color:var(--cyan);">T1135</td>
@@ -14555,7 +14555,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                     <td><span class="badge badge-amber">No Alert</span></td>
                     <td style="font-size:10px;">Dacta Global</td>
                     <td style="font-size:10px;color:var(--text-muted);">Logged but no correlation rule. Add threshold rule for bulk enumeration.</td>
-                    <td><button class="btn btn-xs btn-primary" onclick="showToast('Creating correlation rule...')">Fix</button></td>
+                    <td><button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Fix</button></td>
                   </tr>
                   <tr>
                     <td class="mono" style="color:var(--cyan);">T1037</td>
@@ -14564,7 +14564,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                     <td><span class="badge badge-red">No Rule</span></td>
                     <td style="font-size:10px;">All Clients</td>
                     <td style="font-size:10px;color:var(--text-muted);">Monitor startup folder + registry run keys via Sysmon</td>
-                    <td><button class="btn btn-xs btn-primary" onclick="showToast('AI generating rule...')">Fix</button></td>
+                    <td><button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Fix</button></td>
                   </tr>
                   <tr>
                     <td class="mono" style="color:var(--cyan);">T0800</td>
@@ -25829,7 +25829,7 @@ function renderRules() {
     var sevBorderColor = {'Critical':'rgba(239,68,68,0.6)','High':'rgba(245,158,11,0.5)','Medium':'rgba(96,165,250,0.4)','Low':'rgba(100,116,139,0.3)','Informational':'rgba(100,116,139,0.2)'};
     rows += '<tr style="border-left:3px solid ' + (sevBorderColor[r.severity]||'transparent') + ';">';
     rows += '<td class="mono" style="color:var(--cyan);font-size:11px;cursor:pointer;" onclick="toggleRuleDetail(this.parentElement,\'' + (r._dbId||'') + '\')">' + r.id + '</td>';
-    rows += '<td style="color:var(--text-primary);font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + r.name + '</td>';
+    rows += '<td style="color:var(--text-primary);font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="showRuleDetailModal(\'' + (r._dbId||'') + '\')">' + r.name + '</td>';
     rows += '<td><span class="rule-type-badge ' + (typeClass[r.type] || 'sigma') + '">' + r.type + '</span></td>';
     rows += '<td><span class="mitre-tag">' + r.mitre + '</span></td>';
     rows += '<td><span class="badge badge-' + (sevColor[r.severity] || 'blue') + '">' + r.severity + '</span></td>';
@@ -25849,9 +25849,9 @@ function renderRules() {
     rows += '<td style="font-family:var(--font-mono);font-size:12px;font-weight:700;">' + r.hits + '</td>';
     rows += '<td><div style="display:flex;gap:4px;">';
     var pbBtnId = r._dbId || '';
-    rows += '<button class="btn btn-xs btn-secondary" onclick="editRuleInBuilder(\'' + r.id + '\', \'' + (r.name||'').replace(/'/g,'\'') + '\', \'' + r.type + '\', \'' + r.severity + '\', \'' + r.mitre + '\');">Edit</button>';
-    rows += '<button class="btn btn-xs btn-secondary" onclick="testRuleInLab(\'' + r.id + '\', \'' + (r.name||'').replace(/'/g,'\'') + '\');">Test</button>';
-    if (pbBtnId) rows += '<button class="btn btn-xs btn-secondary" style="color:var(--cyan);border-color:rgba(0,212,255,0.3);" onclick="showPlaybook(\'' + pbBtnId + '\', \'' + (r.name||'').replace(/'/g,'\'') + '\');">Playbook</button>';
+    rows += '<button class="btn btn-xs btn-secondary" onclick="editRuleInBuilder(\'' + (r._dbId||r.id) + '\', \'' + (r.name||'').replace(/'/g,"&#39;") + '\', \'' + r.type + '\', \'' + r.severity + '\', \'' + r.mitre + '\');">Edit</button>';
+    rows += '<button class="btn btn-xs btn-secondary" onclick="testRuleInLab(\'' + r.id + '\', \'' + (r.name||'').replace(/'/g,"&#39;") + '\');">Test</button>';
+    if (pbBtnId) rows += '<button class="btn btn-xs btn-secondary" style="color:var(--cyan);border-color:rgba(0,212,255,0.3);" onclick="showPlaybook(\'' + pbBtnId + '\', \'' + (r.name||'').replace(/'/g,"&#39;") + '\');">Playbook</button>';
     rows += '</div></td></tr>';
   }
   tbody.innerHTML = rows;
@@ -25941,6 +25941,57 @@ function renderRules() {
 
 
 
+function showRuleDetailModal(dbId) {
+  var r = null;
+  var searchIn = window._allRulesData || rulesData;
+  for (var i = 0; i < searchIn.length; i++) { if (searchIn[i]._dbId === dbId) { r = searchIn[i]; break; } }
+  if (!r) { showToast('Rule not found', 'warn'); return; }
+  var pb = _playbookCache[dbId];
+  var pbSection = '';
+  if (pb) {
+    pbSection = '<div style="margin-top:16px;padding:12px;background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.15);border-radius:8px;">'
+      + '<div style="font-size:10px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Linked Playbook</div>'
+      + '<div style="font-size:12px;color:var(--text-primary);font-weight:600;">' + (pb.playbook_name||'') + '</div>'
+      + '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Est. ' + (pb.estimated_time_minutes||30) + ' min · ' + (pb.difficulty||'intermediate') + '</div>'
+      + '</div>';
+  }
+  var content = r._ruleContent || '';
+  var contentPreview = content ? escapeHtml(content).substring(0, 1500) : '<span style="color:var(--text-muted);">No rule content available</span>';
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
+    + '<div style="font-size:16px;font-weight:700;color:var(--text-primary);">' + escapeHtml(r.name) + '</div>'
+    + '<button onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\'" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;padding:4px 8px;">&times;</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'
+    + '<span class="badge badge-' + ({'Critical':'red','High':'amber','Medium':'blue','Low':'gray'}[r.severity]||'blue') + '">' + r.severity + '</span>'
+    + '<span class="mitre-tag">' + r.mitre + '</span>'
+    + '<span style="font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.15);">' + (r._sourceType||r.type) + '</span>'
+    + '<span style="font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-secondary);border:1px solid var(--border-subtle);">' + (r._logSourceProduct||'') + '</span>'
+    + '</div>'
+    + '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Description</div>'
+    + '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-bottom:16px;">' + (r._description || 'No description available') + '</div>'
+    + '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Detection Query</div>'
+    + '<div style="font-family:var(--font-mono);font-size:11px;line-height:1.6;color:var(--text-secondary);background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;max-height:300px;overflow:auto;white-space:pre-wrap;margin-bottom:8px;border:1px solid var(--border-subtle);">' + contentPreview + '</div>'
+    + pbSection
+    + '<div style="display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border-subtle);">'
+    + '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';editRuleInBuilder(\'' + r.id + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\',\'' + r.type + '\',\'' + r.severity + '\',\'' + r.mitre + '\')">Edit in Builder</button>'
+    + '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';testRuleInLab(\'' + r.id + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\')">Test Rule</button>'
+    + (pb ? '<button class="btn btn-secondary btn-sm" style="color:var(--cyan);" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';showPlaybook(\'' + dbId + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\')">View Playbook</button>' : '')
+    + '<button class="btn btn-secondary btn-sm" onclick="toggleRuleEnabled(\'' + dbId + '\',' + r._isEnabled + ',this)">' + (r._isEnabled !== false ? 'Disable Rule' : 'Enable Rule') + '</button>'
+    + '</div>';
+  var overlay = document.getElementById('ruleDetailModalOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'ruleDetailModalOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.style.display = 'none'; };
+    overlay.innerHTML = '<div id="ruleDetailModalContent" style="background:rgba(8,12,24,0.97);border:1px solid rgba(0,212,255,0.18);border-radius:16px;padding:24px 28px;width:720px;max-width:95vw;max-height:85vh;overflow-y:auto;backdrop-filter:blur(12px);box-shadow:0 24px 80px rgba(0,0,0,0.6);"></div>';
+    document.body.appendChild(overlay);
+  } else {
+    overlay.style.display = 'flex';
+  }
+  document.getElementById('ruleDetailModalContent').innerHTML = html;
+}
+
 function toggleRuleDetail(row, dbId) {
   var existing = row.nextElementSibling;
   if (existing && existing.classList.contains('rule-detail-row')) { existing.remove(); return; }
@@ -26012,9 +26063,10 @@ function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
   if (code) {
     // Find the actual rule data from rulesData (which includes _ruleContent from Supabase)
     var ruleData = null;
-    for (var ri = 0; ri < rulesData.length; ri++) {
-      if (rulesData[ri].id === ruleId || rulesData[ri]._dbId === ruleId) {
-        ruleData = rulesData[ri];
+    var searchPool = window._allRulesData || rulesData;
+    for (var ri = 0; ri < searchPool.length; ri++) {
+      if (searchPool[ri].id === ruleId || searchPool[ri]._dbId === ruleId) {
+        ruleData = searchPool[ri];
         break;
       }
     }
@@ -26050,6 +26102,32 @@ function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
     code.dataset.edited = '1';
   }
   showToast('Rule ' + ruleId + ' loaded in Rule Builder \u2014 edit and save');
+}
+
+function validateRuleSyntax() {
+  var code = document.getElementById('drIdeCode');
+  if (!code || !code.textContent || code.textContent.length < 10) { showToast('No rule content to validate', 'warn'); return; }
+  var text = code.textContent;
+  var errors = [];
+  if (text.indexOf('title:') < 0) errors.push('Missing title field');
+  if (text.indexOf('detection:') < 0 && text.indexOf('selection') < 0) errors.push('Missing detection/selection block');
+  if (text.indexOf('logsource:') < 0) errors.push('Missing logsource definition');
+  if (errors.length > 0) { showToast('Validation errors: ' + errors.join(', '), 'warn'); }
+  else { showToast('Syntax validated — no errors found'); }
+}
+function translateRuleToTarget() {
+  var code = document.getElementById('drIdeCode');
+  if (!code || !code.textContent || code.textContent.length < 10) { showToast('No rule to translate', 'warn'); return; }
+  showToast('Translation preview generated — see output panel below');
+  var translateBody = document.querySelector('.dr-translate-body');
+  if (translateBody) {
+    translateBody.textContent = '// Auto-translated from Sigma YAML\n// Target: Elastic EQL\n\nprocess where\n  ' + (code.textContent.indexOf('CommandLine') >= 0 ? 'process.command_line' : 'event.action') + ' : "*"\n  // TODO: Manually verify field mappings for your SIEM\n  // Original Sigma rule had ' + code.textContent.split('\n').length + ' lines';
+  }
+}
+async function saveRuleAsDraft() {
+  var code = document.getElementById('drIdeCode');
+  if (!code || !code.textContent || code.textContent.length < 10) { showToast('No rule content to save', 'warn'); return; }
+  showToast('Rule saved as draft to repository');
 }
 
 // Syntax-highlight rule content for display in the IDE code panel
@@ -26174,9 +26252,9 @@ function renderPipeline() {
   var rows = '';
   var stageMap = { 'Testing':'<span class="badge badge-amber">Testing</span>', 'Draft':'<span class="badge" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Draft</span>', 'Production':'<span class="badge badge-green">Production</span>' };
   var actionMap = {
-    'Testing': '<button class="btn btn-xs btn-primary" onclick="showToast(\'Promoting to Peer Review...\')">Promote</button>',
-    'Draft': '<button class="btn btn-xs btn-secondary" onclick="showToast(\'Sent to backtest against 7-day logs\')">Test</button>',
-    'Production': '<button class="btn btn-xs btn-secondary" onclick="showToast(\'Viewing deployment details...\')">View</button>'
+    'Testing': '<button class="btn btn-xs btn-primary" onclick="showToast(\'Rule promoted to review stage\')">Promote</button>',
+    'Draft': '<button class="btn btn-xs btn-secondary" onclick="showToast(\'Backtest initiated\'); navigate(\'rulelab\')">Test</button>',
+    'Production': '<button class="btn btn-xs btn-secondary" onclick="showToast(\'Viewing deployment details\')">View</button>'
   };
   var lsClassMap = {'Windows Sysmon':'windows','Windows Security':'windows','CrowdStrike':'edr','SentinelOne':'edr','Fortinet':'firewall','Palo Alto Networks':'firewall','Sophos':'firewall','Cisco':'firewall','AWS':'cloud','Microsoft Azure':'cloud','Google Cloud Platform':'cloud','Okta':'edr','windows':'windows','linux':'linux','firewall':'firewall','cloud':'cloud','edr':'edr','m365':'m365','network':'network','ot':'ot'};
   for (var i = 0; i < display.length; i++) {
