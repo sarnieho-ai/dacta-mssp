@@ -2530,6 +2530,11 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 }
 
 /* ── Cache banner on investigation page ── */
+.inv-collapsible-header { display:flex; align-items:center; user-select:none; }
+.inv-collapsible-header:hover { opacity:0.8; }
+.inv-collapse-arrow { transition: transform 0.3s ease; }
+.inv-collapse-arrow.collapsed { transform: rotate(-90deg); }
+
 .inv-cache-banner {
   display:flex; align-items:center; gap:12px; padding:12px 16px;
   background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2);
@@ -34307,7 +34312,19 @@ window.DactaJira = {
     return data;
   },
 
-  async fetchOpsData() {
+  async replyToCustomer(key, text, isPublic) {
+    return this._fetch('/api/jira?action=replyCustomer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, text, isPublic: isPublic !== false })
+    });
+  },
+
+  async fetchSLA(key) {
+    return this._fetch('/api/jira?action=sla&key=' + key);
+  },
+
+    async fetchOpsData() {
     var now = Date.now();
     if (this._cache.opsdata && (now - this._cacheTime.opsdata) < 120000) return this._cache.opsdata;
     var data = await this._fetch('/api/jira?action=opsdata');
@@ -35766,6 +35783,104 @@ function openEntityExplorer(entity, type) {
 // ── INVESTIGATION LIVE DATA ─────────────────────────────────
 var _currentInvestigationKey = null;
 
+// ── Initialize collapsible panels on investigation page ──
+function initCollapsiblePanels() {
+  document.querySelectorAll('.inv-collapsible-header').forEach(function(header) {
+    if (header._collapsibleInit) return;
+    header._collapsibleInit = true;
+    header.addEventListener('click', function() {
+      var body = header.nextElementSibling;
+      if (!body || !body.classList.contains('inv-collapsible-body')) {
+        body = header.parentElement.querySelector('.inv-collapsible-body');
+      }
+      if (!body) return;
+      var arrow = header.querySelector('.inv-collapse-arrow');
+      var isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : '';
+      if (arrow) arrow.classList.toggle('collapsed', isOpen);
+    });
+  });
+}
+
+// ── Fetch and display SLA data from Jira ──
+async function fetchAndDisplaySLA(ticketKey, ticketFields) {
+  var slaPanel = document.getElementById('invSLAContent');
+  if (!slaPanel) return;
+  
+  // Build SLA display from ticket creation time
+  var created = ticketFields ? (ticketFields.created || ticketFields.updated) : null;
+  var createdDate = created ? new Date(created) : new Date();
+  var now = new Date();
+  var elapsedMs = now - createdDate;
+  var elapsedMin = Math.floor(elapsedMs / 60000);
+  var elapsedHrs = Math.floor(elapsedMin / 60);
+  var elapsedMinRem = elapsedMin % 60;
+  
+  // SLA targets based on priority
+  var priority = ticketFields && ticketFields.priority ? ticketFields.priority.name : 'P3';
+  var pShort = (priority.split(' - ')[0] || 'P3').toUpperCase().trim();
+  
+  var slaTargets = {
+    'P1': { ack: 15, respond: 60, investigate: 60 },
+    'P2': { ack: 30, respond: 120, investigate: 120 },
+    'P3': { ack: 60, respond: 240, investigate: 240 },
+    'P4': { ack: 120, respond: 480, investigate: 480 }
+  };
+  var targets = slaTargets[pShort] || slaTargets['P3'];
+  
+  function fmtCD(elMin, tgtMin) {
+    var rem = tgtMin - elMin;
+    var breached = rem <= 0;
+    var abs = Math.abs(rem);
+    var h = Math.floor(abs / 60), m = abs % 60;
+    var eH = Math.floor(Math.min(elMin, tgtMin) / 60);
+    var eM = Math.min(elMin, tgtMin) % 60;
+    var eStr = (eH > 0 ? eH + 'h ' : '') + eM + 'm';
+    var tH = Math.floor(tgtMin / 60);
+    var tStr = (tH > 0 ? tH + 'h' : '') + (tgtMin % 60 > 0 ? (tH > 0 ? ' ' : '') + (tgtMin % 60) + 'm' : '');
+    var rStr = breached ? 'BREACHED ' + (h > 0 ? h + 'h ' : '') + m + 'm ago' : (h > 0 ? h + 'h ' : '') + m + 'm remaining';
+    var pct = Math.min((elMin / tgtMin) * 100, 100);
+    var col = breached ? '#ef4444' : (pct > 75 ? '#f59e0b' : '#10b981');
+    return { eStr: eStr, tStr: tStr, rStr: rStr, pct: pct, col: col, br: breached };
+  }
+  
+  var ack = fmtCD(elapsedMin, targets.ack);
+  var resp = fmtCD(elapsedMin, targets.respond);
+  var inv = fmtCD(elapsedMin, targets.investigate);
+  
+  function slaRow(label, d, tgtLabel) {
+    var rgba = d.br ? '239,68,68' : (d.pct > 75 ? '245,158,11' : '16,185,129');
+    return '<div style="padding:8px 10px;background:rgba(' + rgba + ',0.04);border:1px solid rgba(' + rgba + ',0.15);border-radius:8px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+        '<span style="font-size:11px;font-weight:600;color:var(--text-primary);">' + label + '</span>' +
+        '<span style="font-size:10px;font-weight:600;color:' + d.col + ';">' + (d.br ? '\u26A0 ' : '\u2705 ') + d.rStr + '</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<div style="flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + d.pct + '%;background:' + d.col + ';border-radius:2px;transition:width 0.5s;"></div>' +
+        '</div>' +
+        '<span style="font-size:9px;color:var(--text-muted);white-space:nowrap;">' + d.eStr + ' / ' + tgtLabel + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+  
+  slaPanel.style.fontFamily = 'inherit';
+  slaPanel.style.fontSize = 'inherit';
+  slaPanel.style.color = 'inherit';
+  slaPanel.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px;">' +
+    slaRow('Time to Acknowledge', ack, 'within ' + targets.ack + 'm') +
+    slaRow('Time to Respond', resp, 'within ' + (targets.respond >= 60 ? (targets.respond / 60) + 'h' : targets.respond + 'm')) +
+    slaRow('Time to Investigate', inv, 'within ' + (targets.investigate >= 60 ? (targets.investigate / 60) + 'h' : targets.investigate + 'm')) +
+    '<div style="font-size:9px;color:var(--text-muted);text-align:right;margin-top:2px;">SLA targets based on ' + pShort + ' priority | Elapsed: ' + (elapsedHrs > 0 ? elapsedHrs + 'h ' : '') + elapsedMinRem + 'm</div>' +
+  '</div>';
+  
+  // Live countdown update every minute
+  if (window._slaInterval) clearInterval(window._slaInterval);
+  window._slaInterval = setInterval(function() {
+    fetchAndDisplaySLA(ticketKey, ticketFields);
+  }, 60000);
+}
+
 async function openInvestigation(ticketKey) {
   if (!ticketKey) return;
   _currentInvestigationKey = ticketKey;
@@ -35956,22 +36071,64 @@ async function openInvestigation(ticketKey) {
         '</div>' +
       '</div>' +
 
-      // ── CENTER MAIN (AI Investigation + Escalation Draft — all in one column, matching demo) ──
+      // ── CENTER MAIN (All panels in single column, matching demo layout) ──
       '<div id="invMainContent" style="display:flex;flex-direction:column;gap:12px;">' +
+        // Re-investigate button (always visible for ALL tickets — fresh + cached)
+        '<div id="invReInvestigateBar" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;">' +
+          '<span style="font-size:14px;">\uD83D\uDD04</span>' +
+          '<div style="flex:1;">' +
+            '<div style="font-size:11px;font-weight:600;color:var(--text-primary);">Investigation Controls</div>' +
+            '<div style="font-size:9px;color:var(--text-muted);">Run or re-run AI investigation on this ticket</div>' +
+          '</div>' +
+          '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="reInvestigate(\'' + ticketKey + '\')">\uD83D\uDD04 Re-investigate</button>' +
+        '</div>' +
+        // SLA Details and Countdown
+        '<div id="invSLAPanel" class="card" style="padding:14px;border-color:rgba(245,158,11,0.2);">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">\u23F1 SLA Details</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" id="invSLAContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Loading SLA data...</div>' +
+        '</div>' +
+        // AI Investigation loading spinner
         '<div id="invLoadingSpinner" class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;min-height:350px;background:var(--bg-card);border:1px solid var(--border-card);border-radius:12px;">' +
           '<div style="width:48px;height:48px;border:3px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
           '<div style="font-size:13px;color:var(--cyan);font-family:var(--font-mono);text-align:center;font-weight:500;">Initializing AI Investigation Engine</div>' +
           '<div style="width:240px;height:5px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:3px;animation:invProgressBar 8s ease-in-out forwards;"></div></div>' +
           '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Querying log sources &middot; OpenCTI enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
         '</div>' +
-        // Client Escalation Draft (moved from right sidebar — will be populated after investigation)
-        '<div class="card" style="padding:14px;" id="clientEscalationCard">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Client Escalation Draft</span><span class="badge badge-cyan" style="font-size:9px;">AI Generated</span></div>' +
-          '<div id="escalationDraftContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Draft will be generated after investigation...</div>' +
+        // Enrichment Summary
+        '<div class="card" style="padding:14px;" id="enrichmentSummaryCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="font-size:10px;color:var(--text-muted);font-style:italic;">Enrichment data will appear after investigation...</div>' +
         '</div>' +
+        // Correlated Alerts
+        '<div class="card" style="padding:14px;" id="correlatedAlertsCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Correlated Alerts</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="font-size:10px;color:var(--text-muted);font-style:italic;">Alert correlation data will appear after investigation...</div>' +
+        '</div>' +
+        // AI Recommended Actions
+        '<div class="card" style="padding:14px;" id="recommendedActionsCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">AI Recommended Actions</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="font-size:10px;color:var(--text-muted);font-style:italic;">Actions will appear after investigation...</div>' +
+        '</div>' +
+        // Playbook Actions
+        '<div class="card" style="padding:14px;" id="playbookActionsCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Playbook Actions</span><span class="badge" style="font-size:8px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);">Detection Rules</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="font-size:10px;color:var(--text-muted);font-style:italic;">Playbook steps will appear after investigation...</div>' +
+        '</div>' +
+        // Client Escalation Draft (just above Analyst Feedback Loop)
+        '<div class="card" style="padding:14px;border-color:rgba(0,212,255,0.2);" id="clientEscalationCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Client Escalation Draft</span><span class="badge badge-cyan" style="font-size:9px;">AI Generated</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" id="escalationDraftContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Draft will be generated after investigation...</div>' +
+        '</div>' +
+        // Analyst Feedback Loop panel appended here dynamically
       '</div>' +
 
     '</div>';
+
+        // ── Initialize collapsible panels ──
+    initCollapsiblePanels();
+    
+    // ── Fetch and display SLA data ──
+    fetchAndDisplaySLA(ticketKey, f);
 
         // ── Check investigation cache before running LLM ──
     var cachedResult = await loadInvestigationCache(ticketKey);
@@ -37754,7 +37911,10 @@ async function runAIInvestigation(ticketKey, issueData) {
       eHTML += '<div style="margin-top:8px;display:flex;align-items:center;gap:6px;"><div style="width:6px;height:6px;border-radius:50%;background:#10b981;"></div><span style="font-size:10px;color:#10b981;font-weight:600;">Elastic SIEM CONNECTED</span></div>' +
         '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">' + elasticLogs.queriesRun + ' queries executed</div>';
     }
-    enrichCard.innerHTML = '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Enrichment Summary</span></div>' + eHTML;
+    var enrichBody = enrichCard.querySelector('.inv-collapsible-body');
+    if (enrichBody) { enrichBody.innerHTML = eHTML; enrichBody.style.fontStyle = 'normal'; }
+    else { enrichCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + eHTML + '</div>'; }
+    setTimeout(initCollapsiblePanels, 100);
   }
 
   // Populate Correlated Alerts card
@@ -37778,7 +37938,10 @@ async function runAIInvestigation(ticketKey, issueData) {
       });
       cHTML += '</div>';
     }
-    corrCard.innerHTML = '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Correlated Alerts</span></div>' + cHTML;
+    var corrBody = corrCard.querySelector('.inv-collapsible-body');
+    if (corrBody) { corrBody.innerHTML = cHTML; corrBody.style.fontStyle = 'normal'; }
+    else { corrCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Correlated Alerts</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + cHTML + '</div>'; }
+    setTimeout(initCollapsiblePanels, 100);
   }
 
   // Populate Recommended Actions card
@@ -37816,7 +37979,10 @@ async function runAIInvestigation(ticketKey, issueData) {
         '<div style="flex:1;"><div style="font-size:10px;color:var(--text-primary);">' + a.text + '</div>' +
         '<div style="font-size:8px;color:' + pColor + ';font-weight:600;margin-top:2px;">' + a.priority + '</div></div></div>';
     });
-    actCard.innerHTML = '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">AI Recommended Actions</span></div>' + aHTML;
+    var actBody = actCard.querySelector('.inv-collapsible-body');
+    if (actBody) { actBody.innerHTML = aHTML; actBody.style.fontStyle = 'normal'; }
+    else { actCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">AI Recommended Actions</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + aHTML + '</div>'; }
+    setTimeout(initCollapsiblePanels, 100);
   }
 
   // Populate Playbook Actions card from detection rules
@@ -37843,7 +38009,10 @@ async function runAIInvestigation(ticketKey, issueData) {
     } else {
       pbHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic;">No matching playbook found for this alert type</div>';
     }
-    playbookCard.innerHTML = '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Playbook Actions</span><span style="font-size:9px;color:var(--text-muted);margin-left:6px;">From Detection Rules</span></div>' + pbHTML;
+    var pbBody = playbookCard.querySelector('.inv-collapsible-body');
+    if (pbBody) { pbBody.innerHTML = pbHTML; pbBody.style.fontStyle = 'normal'; }
+    else { playbookCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Playbook Actions</span><span style="font-size:9px;color:var(--text-muted);margin-left:6px;">Detection Rules</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + pbHTML + '</div>'; }
+    setTimeout(initCollapsiblePanels, 100);
   }
 
   // ═══════════════════════════════════════════════
@@ -38110,17 +38279,30 @@ function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, p
     } catch(e) { timestampStr = createdRaw; }
   }
 
-  // ── Build To/CC from org connectors ──
+  // ── Build To/CC from Jira Request Participants ──
   var toEmail = 'security@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
+  var ccList = ['soc-lead@dacta.global'];
   var ccEmail = 'soc-lead@dacta.global';
-  // If org has a ticketing connector, try to build a more accurate email
-  if (orgObj && orgObj.connectors) {
-    var tickConnector = orgObj.connectors.find(function(c) { return c.connector_type === 'ticketing'; });
-    // Use org code for a cleaner domain
-    if (orgObj.code) {
-      toEmail = 'security@' + orgName.toLowerCase().replace(/\s+/g, '') + '.com';
+  
+  // Extract request participants from ticket data
+  var participants = [];
+  if (f.customfield_10010 && Array.isArray(f.customfield_10010)) participants = f.customfield_10010;
+  else if (f.requestParticipants && Array.isArray(f.requestParticipants)) participants = f.requestParticipants;
+  if (participants.length === 0 && f.customfield_10050 && Array.isArray(f.customfield_10050)) participants = f.customfield_10050;
+  
+  if (participants.length > 0) {
+    var pp = participants[0];
+    if (pp.emailAddress) toEmail = pp.emailAddress;
+    else if (pp.displayName) toEmail = pp.displayName.toLowerCase().replace(/\s+/g, '.') + '@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
+    for (var pi = 1; pi < participants.length; pi++) {
+      var p = participants[pi];
+      if (p.emailAddress) ccList.push(p.emailAddress);
+      else if (p.displayName) ccList.push(p.displayName.toLowerCase().replace(/\s+/g, '.') + '@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com');
     }
+  } else if (orgObj && orgObj.connectors) {
+    if (orgObj.code) toEmail = 'security@' + orgName.toLowerCase().replace(/\s+/g, '') + '.com';
   }
+  ccEmail = ccList.join(', ');
 
   // ── Build subject ──
   var subject = '[' + pShort + '] [' + severity + '] Security Alert \u2014 ' + ticketKey;
@@ -38140,7 +38322,7 @@ function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, p
   if (iocs.ips && iocs.ips.length > 0 && assetsLines.length === 0) {
     iocs.ips.slice(0, 3).forEach(function(ip) { assetsLines.push('- IP: ' + ip); });
   }
-  if (assetsLines.length === 0) assetsLines.push('- Refer to ticket ' + ticketKey + ' for affected asset details');
+  if (assetsLines.length === 0) assetsLines.push('- Details available in the investigation analysis below');
   var assetsText = assetsLines.join('\n');
 
   // ── Build actions taken ──
@@ -38161,20 +38343,54 @@ function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, p
     ? 'Please review the affected assets and confirm whether isolation is appropriate.\nActivate your incident response plan if not already done.\nDo NOT power off affected systems without coordinating with Dacta SOC.'
     : 'No immediate action required. Alert classified as ' + verdict.split('\u2014')[0].trim() + '.';
 
-  // ── Full email body text (stored for modal) ──
+  // ── Comprehensive email body (all info included, no "refer to ticket") ──
+  var descSnippet = cleanDesc.length > 600 ? cleanDesc.substring(0, 600) + '...' : cleanDesc;
+  var iocLines = [];
+  if (iocs.ips && iocs.ips.length > 0) iocLines.push('IP Addresses: ' + iocs.ips.slice(0, 5).join(', '));
+  if (iocs.hashes && iocs.hashes.length > 0) iocLines.push('File Hashes: ' + iocs.hashes.slice(0, 3).join(', '));
+  if (iocs.domains && iocs.domains.length > 0) iocLines.push('Domains: ' + iocs.domains.slice(0, 3).join(', '));
+  if (iocs.emails && iocs.emails.length > 0) iocLines.push('Email Addresses: ' + iocs.emails.slice(0, 3).join(', '));
+  var iocText = iocLines.length > 0 ? iocLines.join('\n') : 'No specific IOCs extracted';
+  
   var emailBodyText =
     'Dear ' + orgName + ' Security Team,\n\n' +
-    'Dacta SG SOC has completed an investigation of the following security alert on your environment.\n\n' +
-    'INCIDENT REFERENCE: ' + ticketKey + '\n' +
-    'SEVERITY: ' + pShort + ' ' + severity + '\n' +
-    'TIMESTAMP: ' + timestampStr + '\n\n' +
-    'SUMMARY:\n' + (summary || 'See ticket details.') + '\n\n' +
-    'AFFECTED ASSETS:\n' + assetsText + '\n\n' +
-    'ACTIONS TAKEN:\n' + actionsTaken.join('\n') + '\n\n' +
-    'IMMEDIATE ACTIONS REQUIRED FROM YOUR TEAM:\n' + immediateActions + '\n\n' +
-    'Full investigation details are available in the DACTA SIEMLess portal.\n' +
-    'Please contact your assigned Dacta Incident Commander for further assistance.\n\n' +
-    'Regards,\nDacta SG SOC Team\nreference: ' + ticketKey;
+    'Dacta SG SOC has completed an investigation of the following security alert on your environment. This notification contains all relevant details for your review and action.\n\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    'INCIDENT DETAILS\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    'Reference: ' + ticketKey + '\n' +
+    'Severity: ' + pShort + ' (' + severity + ')\n' +
+    'Detection Time: ' + timestampStr + '\n' +
+    'AI Verdict: ' + verdict + '\n' +
+    'Confidence: ' + confidence + '%\n\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    'ALERT SUMMARY\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    (summary || 'No summary available') + '\n\n' +
+    'DETAILED DESCRIPTION:\n' +
+    (descSnippet || 'No additional description available') + '\n\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    'AFFECTED ASSETS\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    assetsText + '\n\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    'INDICATORS OF COMPROMISE (IOCs)\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    iocText + '\n\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    'ACTIONS TAKEN BY DACTA SOC\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    actionsTaken.join('\n') + '\n\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    'REQUIRED ACTIONS FROM YOUR TEAM\n' +
+    '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+    immediateActions + '\n\n' +
+    'This escalation was generated by the DACTA SIEMLess AI Investigation Engine. ' +
+    'For questions, reply directly to this notification or contact your Dacta Incident Commander.\n\n' +
+    'Regards,\n' +
+    'Dacta SG SOC Team\n' +
+    'soc-lead@dacta.global\n' +
+    'Incident Reference: ' + ticketKey;
 
   // ── Store draft data globally for modal use ──
   _currentEscalationDraft = {
@@ -38245,19 +38461,38 @@ function copyEscalationDraft(ticketKey) {
 
 async function submitEscalationToJira(ticketKey) {
   if (!ticketKey) return;
+  var submitBtn = event && event.target ? event.target : null;
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '\u23F3 Sending...'; }
   try {
-    var content = document.getElementById('escalationDraftContent');
-    var draftText = content ? (content.innerText || content.textContent) : '';
-    // Add comment to Jira ticket with the escalation draft
-    var commentBody = '\u2709\uFE0F *Client Escalation Draft (AI Generated)*\n\n' + draftText;
-    await DactaJira.addComment(ticketKey, commentBody);
-    // Transition to Escalated if possible
+    var contentEl = document.getElementById('escalationDraftContent');
+    var draftText = contentEl ? (contentEl.innerText || contentEl.textContent) : '';
+    
+    // Step 1: Send as "Reply to customer" (public JSM comment visible to client)
+    var replySuccess = false;
+    try {
+      await DactaJira.replyToCustomer(ticketKey, draftText, true);
+      replySuccess = true;
+    } catch(replyErr) {
+      console.warn('[Escalation] JSM reply failed, using internal comment:', replyErr.message);
+      await DactaJira.addComment(ticketKey, '\u2709\uFE0F *Client Escalation*\n\n' + draftText);
+    }
+    
+    // Step 2: Transition ticket to "Escalated"
+    var transitioned = false;
     try {
       var transitions = await DactaJira.fetchTransitions(ticketKey);
-      var escTrans = transitions.find(function(t) { return t.name.toLowerCase().indexOf('escalat') !== -1; });
-      if (escTrans) await DactaJira.transitionIssue(ticketKey, escTrans.id);
-    } catch(e) { /* transition optional */ }
-    showToast('Escalation submitted to Jira as comment on ' + ticketKey, 'success');
+      var trArr = transitions.transitions || transitions;
+      if (Array.isArray(trArr)) {
+        var escTrans = trArr.find(function(t) { return t.name.toLowerCase().indexOf('escalat') !== -1; });
+        if (escTrans) { await DactaJira.transitionIssue(ticketKey, escTrans.id); transitioned = true; }
+      }
+    } catch(e) { console.warn('[Escalation] Transition failed:', e.message); }
+    
+    var msg = replySuccess 
+      ? 'Escalation sent to client via Jira on ' + ticketKey + (transitioned ? ' (status: Escalated)' : '')
+      : 'Escalation added as comment on ' + ticketKey + (transitioned ? ' (status: Escalated)' : '');
+    showToast(msg, 'success');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '\u2705 Sent'; }
     // Log to audit
     logToSupabase('audit_log', {
       action: 'client_escalation_submitted',
@@ -38268,6 +38503,7 @@ async function submitEscalationToJira(ticketKey) {
     });
   } catch(e) {
     showToast('Failed to submit escalation: ' + e.message, 'error');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '\uD83D\uDCE4 Send Escalation'; }
   }
 }
 

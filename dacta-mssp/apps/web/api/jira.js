@@ -290,7 +290,112 @@ export default async function handler(req, res) {
       return res.status(r.status).json(await r.json());
     }
 
-    // ─── ACTION: assignable (list users) ─────────────────────
+    // ─── ACTION: replyCustomer (JSM "Reply to customer" via servicedesk API) ──
+    if (action === 'replyCustomer') {
+      const body = req.body || {};
+      const key = body.key;
+      const text = body.text;
+      const isPublic = body.isPublic !== false; // default to public (customer-visible)
+      if (!key || !text) return res.status(400).json({ error: 'Missing key or text' });
+      // JSM Service Desk comment endpoint (public = visible to customer = "Reply to customer")
+      const jsmPayload = {
+        body: text,
+        public: isPublic
+      };
+      const r = await fetch(`${baseUrl}/rest/servicedesc/1/servicedesk/request/${key}/comment`, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(jsmPayload)
+      });
+      // Fallback to REST API v2 if servicedesk API fails
+      if (r.status >= 400) {
+        // Try the legacy JSM comment endpoint
+        const r2 = await fetch(`${baseUrl}/rest/api/2/issue/${key}/comment`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            body: text,
+            properties: isPublic ? [{ key: 'sd.public.comment', value: { internal: false } }] : []
+          })
+        });
+        return res.status(r2.status).json(await r2.json());
+      }
+      return res.status(r.status).json(await r.json());
+    }
+
+    // ─── ACTION: sla (fetch SLA data for a ticket) ───────────
+    if (action === 'sla') {
+      const key = req.query.key;
+      if (!key) return res.status(400).json({ error: 'Missing key parameter' });
+      // Try fetching SLA info from JSM Service Desk API
+      try {
+        const r = await fetch(`${baseUrl}/rest/servicedesc/1/servicedesk/request/${key}/sla`, {
+          headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+        });
+        if (r.status === 200) {
+          return res.status(200).json(await r.json());
+        }
+      } catch(e) { /* fallback below */ }
+      // Fallback: Try the issue fields approach (customfield_10020 is commonly SLA)
+      try {
+        const r2 = await fetch(`${baseUrl}/rest/api/3/issue/${key}?fields=customfield_10020,customfield_10010`, {
+          headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+        });
+        return res.status(r2.status).json(await r2.json());
+      } catch(e2) {
+        return res.status(500).json({ error: 'SLA fetch failed' });
+      }
+    }
+
+    // ─── ACTION: replyCustomer (JSM visible to customer) ──────
+    if (action === 'replyCustomer') {
+      const body = req.body || {};
+      const key = body.key;
+      const text = body.text;
+      const isPublic = body.isPublic !== false;
+      if (!key || !text) return res.status(400).json({ error: 'Missing key or text' });
+      // Try JSM Service Desk request comment (public = Reply to customer)
+      try {
+        const r = await fetch(`${baseUrl}/rest/servicedesc/1/servicedesk/request/${key}/comment`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ body: text, public: isPublic })
+        });
+        if (r.status < 400) return res.status(r.status).json(await r.json());
+      } catch(e) { /* fallback */ }
+      // Fallback: REST API v2 with sd.public.comment property
+      const r2 = await fetch(`${baseUrl}/rest/api/2/issue/${key}/comment`, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          body: text,
+          properties: isPublic ? [{ key: 'sd.public.comment', value: { internal: false } }] : []
+        })
+      });
+      return res.status(r2.status).json(await r2.json());
+    }
+
+    // ─── ACTION: sla (fetch SLA data) ────────────────────────
+    if (action === 'sla') {
+      const key = req.query.key;
+      if (!key) return res.status(400).json({ error: 'Missing key parameter' });
+      try {
+        const r = await fetch(`${baseUrl}/rest/servicedesc/1/servicedesk/request/${key}/sla`, {
+          headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+        });
+        if (r.status === 200) return res.status(200).json(await r.json());
+      } catch(e) {}
+      try {
+        const r2 = await fetch(`${baseUrl}/rest/api/3/issue/${key}?fields=customfield_10020,customfield_10010`, {
+          headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+        });
+        return res.status(r2.status).json(await r2.json());
+      } catch(e2) {
+        return res.status(500).json({ error: 'SLA fetch failed' });
+      }
+    }
+
+        // ─── ACTION: assignable (list users) ─────────────────────
     if (action === 'assignable') {
       const r = await fetch(`${baseUrl}/rest/api/3/user/assignable/search?project=DAC&maxResults=50`, {
         headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
