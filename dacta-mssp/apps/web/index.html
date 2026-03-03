@@ -34449,7 +34449,7 @@ async function populateLiveDashboard() {
       if (prodEmpty) prodEmpty.remove();
 
       // Add live ticket rows (show up to 8 recent open)
-      var openTickets = tickets.filter(function(t) { return t.status === 'Open'; }).slice(0, 8);
+      var openTickets = tickets.slice(0, 8);
 
       var cardHeader = ticketsCard.querySelector('.card-header');
       openTickets.forEach(function(t) {

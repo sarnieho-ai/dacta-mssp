@@ -122,7 +122,7 @@ export default async function handler(req, res) {
         countJql(`${B} AND status="Completed" AND updated >= startOfDay()`),
         countJql(`${B} AND created >= startOfDay()`),
         countJql(`${B} AND created >= startOfWeek()`),
-        searchJql(`${B} ORDER BY created DESC`, [
+        searchJql(`${B} AND status="Open" ORDER BY created DESC`, [
           'summary','status','priority','assignee','created','updated','issuetype',
           'labels','customfield_10002','customfield_10050','customfield_10072','customfield_10038'
         ], 20)
