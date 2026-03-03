@@ -22987,6 +22987,7 @@ Analyst: K. Rasmussen | 2026-02-28
                   <th style="text-align:center;">Jira Tickets</th>
                   <th>Status</th>
                   <th style="text-align:center;">Config</th>
+                  <th style="text-align:center;">Actions</th>
                 </tr>
               </thead>
               <tbody id="onboardedTable"></tbody>
@@ -27732,6 +27733,7 @@ function renderOnboardingPage() {
       '<td style="text-align:center;">' + (jiraMatch ? jiraMatch.ticket_count : '<span style="color:var(--text-muted);">0</span>') + '</td>' +
       '<td><span class="badge badge-green" style="font-size:9px;padding:2px 7px;">Active</span></td>' +
       '<td style="text-align:center;"><button class="btn btn-sm" style="padding:3px 8px;font-size:10px;" onclick="navigate(\'settings\')">⚙️</button></td>' +
+      '<td style="text-align:center;"><button class="btn btn-sm" style="padding:3px 8px;font-size:10px;background:rgba(239,68,68,0.08);color:#ef4444;border:1px solid rgba(239,68,68,0.2);" onclick="deleteOnboardedOrg(\'' + id + '\')" title="Remove client">🗑️</button></td>' +
     '</tr>';
   });
   tableEl.innerHTML = thtml;
@@ -27800,6 +27802,36 @@ async function createOrgInSupabase(name, code, type, ns, sla, industry, region) 
   } catch(e) {
     console.error('[Onboarding] Supabase insert failed:', e);
   }
+}
+
+async function deleteOnboardedOrg(orgId) {
+  var org = ORG_CONNECTORS[orgId];
+  if (!org) return;
+  if (!confirm('Remove "' + org.name + '" from SIEMLess?\n\nThis will delete the client from the platform. The organization will reappear in the Pending queue on next Jira sync if it still has tickets.')) return;
+
+  // Remove from runtime ORG_CONNECTORS
+  delete ORG_CONNECTORS[orgId];
+
+  // Remove from Supabase if possible
+  try {
+    if (window._supabaseRef) {
+      await window._supabaseRef.from('organizations').delete().eq('short_name', org.code);
+      console.log('[Onboarding] Deleted from Supabase:', org.name);
+    }
+  } catch(e) {
+    console.error('[Onboarding] Supabase delete failed:', e);
+  }
+
+  // Re-render — org will move back to pending queue if still in Jira
+  var knownOrgs = Object.values(ORG_CONNECTORS);
+  _onboardingQueue = _jiraOrgs.filter(function(jo) {
+    var jName = jo.name.toLowerCase().trim();
+    return !knownOrgs.some(function(o) {
+      var oName = o.name.toLowerCase().trim();
+      return oName === jName || oName.indexOf(jName) === 0 || jName.indexOf(oName) === 0;
+    });
+  });
+  renderOnboardingPage();
 }
 
 function dismissOnboardOrg(idx) {
