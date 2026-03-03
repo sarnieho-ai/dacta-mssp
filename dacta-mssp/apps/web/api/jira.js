@@ -103,10 +103,10 @@ export default async function handler(req, res) {
       // Time range mapping for JQL
       const timeRange = req.query.timeRange || '24h';
       const timeRangeMap = {
-        '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': 'startOfDay()',
-        '7d': 'startOfWeek()', '30d': '-30d'
+        '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': '-24h',
+        '7d': '-168h', '30d': '-720h'
       };
-      const recentJql = timeRangeMap[timeRange] || 'startOfDay()';
+      const recentJql = timeRangeMap[timeRange] || '-24h';
       const isRelative = recentJql.startsWith('-');
       const createdFilter = isRelative ? ('created >= "' + recentJql + '"') : ('created >= ' + recentJql);
       const updatedFilter = isRelative ? ('updated >= "' + recentJql + '"') : ('updated >= ' + recentJql);
@@ -376,10 +376,10 @@ export default async function handler(req, res) {
       // Time range support — same mapping as dashboard action
       const timeRange = req.query.timeRange || '24h';
       const timeRangeMap = {
-        '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': 'startOfDay()',
-        '7d': 'startOfWeek()', '30d': '-30d'
+        '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': '-24h',
+        '7d': '-168h', '30d': '-720h'
       };
-      const recentJql = timeRangeMap[timeRange] || 'startOfDay()';
+      const recentJql = timeRangeMap[timeRange] || '-24h';
       const isRelative = recentJql.startsWith('-');
       const createdFilter = isRelative ? ('created >= "' + recentJql + '"') : ('created >= ' + recentJql);
 
@@ -502,10 +502,10 @@ export default async function handler(req, res) {
       // Time range support
       const timeRange = req.query.timeRange || '24h';
       const timeRangeMap = {
-        '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': 'startOfDay()',
-        '7d': 'startOfWeek()', '30d': '-30d'
+        '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': '-24h',
+        '7d': '-168h', '30d': '-720h'
       };
-      const recentJql = timeRangeMap[timeRange] || 'startOfDay()';
+      const recentJql = timeRangeMap[timeRange] || '-24h';
       const isRelative = recentJql.startsWith('-');
       const createdFilter = isRelative ? ('created >= "' + recentJql + '"') : ('created >= ' + recentJql);
 
