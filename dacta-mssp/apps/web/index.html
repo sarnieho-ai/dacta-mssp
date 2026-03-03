@@ -27463,23 +27463,6 @@ function init() {
 
 // init() is called by Supabase auth after session check (see SUPABASE AUTHENTICATION block below)
 
-// ============================================================
-//  SUPABASE AUTHENTICATION
-// ============================================================
-(function() {
-  var _initCalled = false;
-  function safeInit() {
-    if (!_initCalled) {
-      _initCalled = true;
-      // Apply production mode FIRST (zeros out dashboard) so live data writes over it
-      applyProductionMode();
-      init();
-    }
-  }
-
-  // Supabase config
-  var SUPABASE_URL = 'https://qiqrizggitcqwkwshmfy.supabase.co';
-  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpcXJpemdnaXRjcXdrd3NobWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNzkzMjEsImV4cCI6MjA4NzY1NTMyMX0.ZNN47SWAYvAzzY5Dn6VCYV8nzrTrqvvybp2aF4NFHCA';
 
 // ═══════════════════════════════════════════════════════════════
 // ORG_CONNECTORS — Per-client connector & log source config
@@ -27582,6 +27565,25 @@ function getOrgConnector(ns, connType) {
   if (!org) return null;
   return org.connectors.find(function(c) { return c.connector_type === connType; }) || null;
 }
+
+// ============================================================
+//  SUPABASE AUTHENTICATION
+// ============================================================
+(function() {
+  var _initCalled = false;
+  function safeInit() {
+    if (!_initCalled) {
+      _initCalled = true;
+      // Apply production mode FIRST (zeros out dashboard) so live data writes over it
+      applyProductionMode();
+      init();
+    }
+  }
+
+  // Supabase config
+  var SUPABASE_URL = 'https://qiqrizggitcqwkwshmfy.supabase.co';
+  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpcXJpemdnaXRjcXdrd3NobWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNzkzMjEsImV4cCI6MjA4NzY1NTMyMX0.ZNN47SWAYvAzzY5Dn6VCYV8nzrTrqvvybp2aF4NFHCA';
+
 
   // Wait for Supabase SDK to load, then initialize auth
   function initSupabaseAuth() {
