@@ -2508,6 +2508,67 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   font-weight: 700;
 }
 
+/* ── Investigation Cache & Triage AI Status ── */
+.tq-ai-badge {
+  display:inline-flex; align-items:center; gap:3px;
+  font-size:9px; font-weight:600; padding:2px 7px;
+  border-radius:4px; line-height:1.4; white-space:nowrap;
+}
+.tq-ai-badge.investigating {
+  background:rgba(139,92,246,0.12); border:1px solid rgba(139,92,246,0.3); color:#a78bfa;
+  animation: tqAIPulse 1.5s ease-in-out infinite;
+}
+.tq-ai-badge.cached {
+  background:rgba(16,185,129,0.10); border:1px solid rgba(16,185,129,0.25); color:#10b981;
+}
+.tq-ai-badge.overridden {
+  background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.25); color:#f59e0b;
+}
+@keyframes tqAIPulse {
+  0%,100% { opacity:1; }
+  50% { opacity:0.5; }
+}
+
+/* ── Cache banner on investigation page ── */
+.inv-cache-banner {
+  display:flex; align-items:center; gap:12px; padding:12px 16px;
+  background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2);
+  border-radius:10px; margin-bottom:12px;
+}
+.inv-cache-banner .inv-cache-ts {
+  font-size:10px; color:var(--green); font-family:var(--font-mono); font-weight:600;
+}
+.inv-cache-banner .inv-cache-label {
+  font-size:11px; color:var(--text-secondary); flex:1;
+}
+.inv-reinvestigate-btn {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:10px; font-weight:600; padding:5px 12px;
+  background:rgba(139,92,246,0.1); color:#a78bfa;
+  border:1px solid rgba(139,92,246,0.25); border-radius:6px;
+  cursor:pointer; transition:all 0.18s ease;
+}
+.inv-reinvestigate-btn:hover {
+  background:rgba(139,92,246,0.2); border-color:rgba(139,92,246,0.4);
+}
+
+/* ── Feedback loop panel ── */
+.inv-feedback-panel {
+  padding:14px 16px;
+  background:var(--bg-card); border:1px solid var(--border-card); border-radius:10px;
+  margin-top:12px;
+}
+.inv-feedback-panel textarea {
+  width:100%; min-height:60px; background:var(--surface-2);
+  border:1px solid var(--border); border-radius:6px;
+  padding:10px 12px; color:var(--text-primary);
+  font-size:11px; font-family:var(--font-body);
+  resize:vertical; outline:none; box-sizing:border-box;
+}
+.inv-feedback-panel textarea:focus {
+  border-color:rgba(0,212,255,0.4);
+}
+
 /* =====================================================
    TRIAGE QUEUE ENHANCEMENTS (.tq-)
    ===================================================== */
@@ -9993,7 +10054,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   <th>ID</th>
                   <th>P</th>
                   <th>Title</th>
-                  <th>AI Verdict</th>
+                  <th>AI Status</th>
                   <th>Organization</th>
                   <th>Source</th>
                   <th>Status</th>
@@ -27732,6 +27793,7 @@ function getOrgConnector(ns, connType) {
 // ═══════════════════════════════════════════════════════════════
 var _jiraOrgs = [];
 var _onboardingQueue = [];
+var _dismissedJiraOrgIds = JSON.parse(localStorage.getItem('dismissedJiraOrgIds') || '[]');
 
 async function syncJiraOrgs() {
   var btn = document.getElementById('onboardSyncBtn');
@@ -27746,6 +27808,8 @@ async function syncJiraOrgs() {
     // Use fuzzy matching: Jira org "Foxwood" should match ORG_CONNECTORS "Foxwood Technology"
     var knownOrgs = Object.values(ORG_CONNECTORS);
     _onboardingQueue = _jiraOrgs.filter(function(jo) {
+      // Skip dismissed orgs
+      if (_dismissedJiraOrgIds.indexOf(String(jo.jira_org_id)) !== -1) return false;
       var jName = jo.name.toLowerCase().trim();
       return !knownOrgs.some(function(o) {
         var oName = o.name.toLowerCase().trim();
@@ -27886,8 +27950,8 @@ function approveOnboardOrg(idx) {
 
 async function createOrgInSupabase(name, code, type, ns, sla, industry, region) {
   try {
-    if (typeof _supabaseRef !== 'undefined' && _supabaseRef) {
-      var resp = await _supabaseRef.from('organizations').insert({
+    if (window._supabaseRef) {
+      var resp = await window._supabaseRef.from('organizations').insert({
         name: name,
         short_name: code,
         service_model: type,
@@ -27971,16 +28035,33 @@ function cancelEditOrg(orgId) {
 async function deleteOnboardedOrg(orgId) {
   var org = ORG_CONNECTORS[orgId];
   if (!org) return;
-  if (!confirm('Remove "' + org.name + '" from SIEMLess?\n\nThis will delete the client from the platform. The organization will reappear in the Pending queue on next Jira sync if it still has tickets.')) return;
+  if (!confirm('Remove "' + org.name + '" from SIEMLess?\n\nThis will delete the client from the platform.')) return;
 
   // Remove from runtime ORG_CONNECTORS
   delete ORG_CONNECTORS[orgId];
 
-  // Remove from Supabase if possible
+  // Also add to dismissed list so it doesn't re-appear from Jira sync
+  var matchingJiraOrg = _jiraOrgs.find(function(jo) {
+    var jName = jo.name.toLowerCase().trim();
+    var oName = org.name.toLowerCase().trim();
+    return oName === jName || oName.indexOf(jName) === 0 || jName.indexOf(oName) === 0;
+  });
+  if (matchingJiraOrg) {
+    _dismissedJiraOrgIds.push(String(matchingJiraOrg.jira_org_id));
+    localStorage.setItem('dismissedJiraOrgIds', JSON.stringify(_dismissedJiraOrgIds));
+  }
+
+  // Remove from Supabase — try by name first (most reliable), then by short_name
   try {
     if (window._supabaseRef) {
-      await window._supabaseRef.from('organizations').delete().eq('short_name', org.code);
-      console.log('[Onboarding] Deleted from Supabase:', org.name);
+      var delResp = await window._supabaseRef.from('organizations').delete().eq('name', org.name);
+      if (!delResp.error) {
+        console.log('[Onboarding] Deleted from Supabase by name:', org.name);
+      } else {
+        // Fallback: try by short_name
+        await window._supabaseRef.from('organizations').delete().eq('short_name', org.code);
+        console.log('[Onboarding] Deleted from Supabase by short_name:', org.code);
+      }
     }
   } catch(e) {
     console.error('[Onboarding] Supabase delete failed:', e);
@@ -27989,6 +28070,7 @@ async function deleteOnboardedOrg(orgId) {
   // Re-render — org will move back to pending queue if still in Jira
   var knownOrgs = Object.values(ORG_CONNECTORS);
   _onboardingQueue = _jiraOrgs.filter(function(jo) {
+    if (_dismissedJiraOrgIds.indexOf(String(jo.jira_org_id)) !== -1) return false;
     var jName = jo.name.toLowerCase().trim();
     return !knownOrgs.some(function(o) {
       var oName = o.name.toLowerCase().trim();
@@ -27996,11 +28078,18 @@ async function deleteOnboardedOrg(orgId) {
     });
   });
   renderOnboardingPage();
+  showToast('"' + org.name + '" removed from SIEMLess', 'success');
 }
 
 function dismissOnboardOrg(idx) {
+  var org = _onboardingQueue[idx];
+  if (org && org.jira_org_id) {
+    _dismissedJiraOrgIds.push(String(org.jira_org_id));
+    localStorage.setItem('dismissedJiraOrgIds', JSON.stringify(_dismissedJiraOrgIds));
+  }
   _onboardingQueue.splice(idx, 1);
   renderOnboardingPage();
+  showToast('"' + (org ? org.name : 'Organization') + '" dismissed', 'info');
 }
 
 async function loadOnboardingPage() {
@@ -28080,6 +28169,8 @@ async function loadOrgsFromSupabase() {
 
     // Load any orgs from Supabase that aren't in the hardcoded ORG_CONNECTORS
     loadOrgsFromSupabase();
+    // Load cached investigation keys to populate triage AI status badges
+    loadAllCachedKeys();
 
     var overlay = document.getElementById('loginOverlay');
 
@@ -33223,7 +33314,7 @@ function toggleOverrideMode() {
       '<textarea id="overrideJustification" placeholder="Explain why the AI verdict is incorrect..." style="width:100%;height:80px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;font-family:var(--font-body);resize:none;outline:none;box-sizing:border-box;"></textarea></div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px;">' +
         '<button class="btn btn-secondary btn-sm" onclick="closeOverrideModal()">Cancel</button>' +
-        '<button class="btn btn-amber btn-sm" onclick="submitOverride()">Submit Override</button>' +
+        '<button class="btn btn-amber btn-sm" onclick="submitOverrideWithCache()">Submit Override</button>' +
       '</div>' +
     '</div></div>';
   document.body.appendChild(ov);
@@ -34460,7 +34551,7 @@ async function populateLiveTriage(append) {
           '<td><span class="mono" style="color:var(--cyan);font-size:11px;">' + t.key + '</span></td>' +
           '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
           '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
-          '<td><span style="font-size:10px;color:var(--text-muted);">—</span></td>' +
+          '<td data-ai-status="' + t.key + '">' + getTriageAIBadge(t.key) + '</td>' +
           '<td style="font-size:11px;">' + t.org + '</td>' +
           '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
           '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
@@ -34528,7 +34619,11 @@ function setupTriageFilters() {
     prioEl.onchange = function() { populateLiveTriage(); };
   }
   if (orgEl) {
-    orgEl.innerHTML = '<option>All Organizations</option><option>Dacta Global</option><option>SPMT</option><option>Foxwood</option><option>Naga World</option><option>DG_Demo Client</option><option>PT Pelindo Multi Terminal</option>';
+    var orgOptions = '<option>All Organizations</option>';
+    Object.values(ORG_CONNECTORS).sort(function(a,b){ return a.name.localeCompare(b.name); }).forEach(function(o) {
+      orgOptions += '<option>' + o.name + '</option>';
+    });
+    orgEl.innerHTML = orgOptions;
     orgEl.onchange = function() { populateLiveTriage(); };
   }
   if (statusEl) {
@@ -34635,7 +34730,7 @@ function rerenderTriageTable() {
       '<td><span class="mono" style="color:var(--cyan);font-size:11px;">' + t.key + '</span></td>' +
       '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
       '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
-      '<td><span style="font-size:10px;color:var(--text-muted);">&mdash;</span></td>' +
+      '<td data-ai-status="' + t.key + '">' + getTriageAIBadge(t.key) + '</td>' +
       '<td style="font-size:11px;">' + t.org + '</td>' +
       '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
       '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
@@ -35170,8 +35265,19 @@ async function openInvestigation(ticketKey) {
       '</div>' +
     '</div>';
 
-        // ── Trigger AI Investigation (3 rounds) ──
-    runAIInvestigation(ticketKey, issueData);
+        // ── Check investigation cache before running LLM ──
+    var cachedResult = await loadInvestigationCache(ticketKey);
+    if (cachedResult && cachedResult.html) {
+      // Serve from cache — no LLM credits used
+      console.log('[AI Investigation] Serving cached result for ' + ticketKey);
+      var invMainContent = document.getElementById('invMainContent');
+      if (invMainContent) {
+        renderCachedInvestigation(ticketKey, cachedResult, invMainContent);
+      }
+    } else {
+      // No cache — run fresh AI investigation
+      runAIInvestigation(ticketKey, issueData);
+    }
 
   } catch (err) {
     console.error('[DactaJira] Investigation error:', err);
@@ -35344,6 +35450,281 @@ async function submitCreateTicket() {
   } catch(e) {
     showToast('Failed: ' + e.message, 'error');
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// INVESTIGATION CACHE, TRIAGE AI STATUS & FEEDBACK LOOP
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── In-memory investigation cache (persisted to Supabase) ──
+var _investigationCache = {}; // { 'DAC-12345': { html, verdict, confidence, timestamp, feedback, overrideVerdict, overrideReason, promptNotes } }
+var _activeInvestigations = {}; // { 'DAC-12345': true } — tickets currently being investigated
+
+// ── Supabase persistence helpers ──
+async function saveInvestigationCache(ticketKey, cacheEntry) {
+  _investigationCache[ticketKey] = cacheEntry;
+  try {
+    if (!window._supabaseRef) return;
+    // Upsert to investigation_cache table
+    var resp = await window._supabaseRef.from('investigation_cache').upsert({
+      ticket_key: ticketKey,
+      verdict: cacheEntry.verdict || '',
+      confidence: cacheEntry.confidence || 0,
+      html_content: cacheEntry.html || '',
+      investigated_at: cacheEntry.timestamp,
+      investigated_by: _getCurrentUserEmail() || 'system',
+      override_verdict: cacheEntry.overrideVerdict || null,
+      override_reason: cacheEntry.overrideReason || null,
+      prompt_notes: cacheEntry.promptNotes || null,
+      feedback_rating: cacheEntry.feedbackRating || null,
+      feedback_text: cacheEntry.feedbackText || null,
+      metadata: cacheEntry.metadata || {}
+    }, { onConflict: 'ticket_key' });
+    if (resp.error) console.warn('[InvCache] Supabase upsert error:', resp.error.message);
+    else console.log('[InvCache] Saved to Supabase:', ticketKey);
+  } catch(e) {
+    console.warn('[InvCache] Supabase save failed (will use local cache):', e.message);
+  }
+}
+
+async function loadInvestigationCache(ticketKey) {
+  // Check in-memory first
+  if (_investigationCache[ticketKey]) return _investigationCache[ticketKey];
+  // Try Supabase
+  try {
+    if (!window._supabaseRef) return null;
+    var resp = await window._supabaseRef.from('investigation_cache')
+      .select('*').eq('ticket_key', ticketKey).single();
+    if (resp.data) {
+      var entry = {
+        html: resp.data.html_content || '',
+        verdict: resp.data.verdict || '',
+        confidence: resp.data.confidence || 0,
+        timestamp: resp.data.investigated_at,
+        overrideVerdict: resp.data.override_verdict || null,
+        overrideReason: resp.data.override_reason || null,
+        promptNotes: resp.data.prompt_notes || null,
+        feedbackRating: resp.data.feedback_rating || null,
+        feedbackText: resp.data.feedback_text || null,
+        metadata: resp.data.metadata || {}
+      };
+      _investigationCache[ticketKey] = entry;
+      return entry;
+    }
+  } catch(e) {
+    // Table may not exist yet — that's fine, just use in-memory
+    console.log('[InvCache] Supabase load skipped:', e.message);
+  }
+  return null;
+}
+
+async function loadAllCachedKeys() {
+  try {
+    if (!window._supabaseRef) return;
+    var resp = await window._supabaseRef.from('investigation_cache')
+      .select('ticket_key, verdict, confidence, investigated_at, override_verdict');
+    if (resp.data) {
+      resp.data.forEach(function(row) {
+        if (!_investigationCache[row.ticket_key]) {
+          _investigationCache[row.ticket_key] = {
+            verdict: row.verdict, confidence: row.confidence,
+            timestamp: row.investigated_at,
+            overrideVerdict: row.override_verdict
+          };
+        }
+      });
+      console.log('[InvCache] Loaded ' + resp.data.length + ' cached investigations from Supabase');
+    }
+  } catch(e) {
+    console.log('[InvCache] Bulk load skipped:', e.message);
+  }
+}
+
+// ── Triage queue AI status badge helper ──
+function getTriageAIBadge(ticketKey) {
+  if (_activeInvestigations[ticketKey]) {
+    return '<span class="tq-ai-badge investigating"><span class="jira-spinner" style="width:8px;height:8px;"></span> AI Investigating</span>';
+  }
+  var cached = _investigationCache[ticketKey];
+  if (cached) {
+    if (cached.overrideVerdict) {
+      return '<span class="tq-ai-badge overridden" title="Analyst override: ' + (cached.overrideVerdict || '') + '">\u270F Overridden</span>';
+    }
+    var shortVerdict = (cached.verdict || '').split('\u2014')[0].trim();
+    if (shortVerdict.length > 14) shortVerdict = shortVerdict.substring(0, 14) + '\u2026';
+    return '<span class="tq-ai-badge cached" title="Cached ' + new Date(cached.timestamp).toLocaleString() + '">\u2713 ' + (shortVerdict || 'Investigated') + '</span>';
+  }
+  return '<span style="font-size:10px;color:var(--text-muted);">\u2014</span>';
+}
+
+// ── Mark investigation start/end for triage status ──
+function markInvestigationStarted(ticketKey) {
+  _activeInvestigations[ticketKey] = true;
+  refreshTriageAIColumn();
+}
+function markInvestigationCompleted(ticketKey) {
+  delete _activeInvestigations[ticketKey];
+  refreshTriageAIColumn();
+}
+
+// Refresh just the AI status column in triage table (without full re-render)
+function refreshTriageAIColumn() {
+  document.querySelectorAll('[data-ai-status]').forEach(function(cell) {
+    var key = cell.getAttribute('data-ai-status');
+    if (key) cell.innerHTML = getTriageAIBadge(key);
+  });
+}
+
+// ── Cached investigation renderer ──
+function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent) {
+  // Build cache banner
+  var ts = new Date(cacheEntry.timestamp);
+  var tsStr = ts.toLocaleDateString('en-SG', {day:'2-digit',month:'short',year:'numeric'}) + ' ' + ts.toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  var bannerHTML = '<div class="inv-cache-banner" id="invCacheBanner">' +
+    '<div style="font-size:16px;">\uD83D\uDCBE</div>' +
+    '<div style="flex:1;">' +
+      '<div class="inv-cache-label">Loaded from cache \u2014 no additional LLM credits used</div>' +
+      '<div class="inv-cache-ts">Investigated: ' + tsStr + '</div>' +
+    '</div>' +
+    '<button class="inv-reinvestigate-btn" onclick="reInvestigate(\'' + ticketKey + '\')">' +
+      '\uD83D\uDD04 Re-investigate' +
+    '</button>' +
+  '</div>';
+
+  // Override banner if applicable
+  var overrideBanner = '';
+  if (cacheEntry.overrideVerdict) {
+    overrideBanner = '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;margin-bottom:10px;">' +
+      '<span style="font-size:14px;">\u270F\uFE0F</span>' +
+      '<div style="flex:1;"><div style="font-size:11px;font-weight:600;color:var(--amber);">Analyst Override: ' + cacheEntry.overrideVerdict + '</div>' +
+      (cacheEntry.overrideReason ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">' + cacheEntry.overrideReason + '</div>' : '') +
+      '</div></div>';
+  }
+
+  // Remove spinner, inject cached content
+  var spinner = document.getElementById('invLoadingSpinner');
+  if (spinner) spinner.remove();
+
+  var container = document.createElement('div');
+  container.innerHTML = bannerHTML + overrideBanner + (cacheEntry.html || '<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:11px;">Cached investigation data unavailable. Click Re-investigate to run a fresh analysis.</div>');
+  invMainContent.appendChild(container);
+
+  // Also add feedback panel below
+  appendFeedbackPanel(ticketKey, cacheEntry, invMainContent);
+}
+
+// ── Re-investigate: clear cache and re-run ──
+async function reInvestigate(ticketKey) {
+  if (!ticketKey) return;
+  // Remove from cache
+  delete _investigationCache[ticketKey];
+  // Remove from Supabase cache
+  try {
+    if (window._supabaseRef) {
+      await window._supabaseRef.from('investigation_cache').delete().eq('ticket_key', ticketKey);
+    }
+  } catch(e) { console.warn('[InvCache] Delete failed:', e.message); }
+  showToast('Re-investigating ' + ticketKey + ' with fresh LLM analysis...', 'info');
+  // Re-open the investigation
+  openInvestigation(ticketKey);
+}
+
+// ── Feedback loop panel ──
+function appendFeedbackPanel(ticketKey, cacheEntry, container) {
+  var existingFeedback = cacheEntry.feedbackText || '';
+  var existingNotes = cacheEntry.promptNotes || '';
+  var existingRating = cacheEntry.feedbackRating || '';
+
+  var feedbackHTML = '<div class="inv-feedback-panel" id="invFeedbackPanel">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+      '<div style="font-size:12px;font-weight:700;color:var(--text-primary);">\uD83D\uDD04 Analyst Feedback Loop</div>' +
+      '<div style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">Improves future investigations</div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">' +
+      '<div>' +
+        '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Investigation Quality</div>' +
+        '<div style="display:flex;gap:4px;" id="feedbackRating">' +
+          '<button class="btn btn-xs ' + (existingRating === 'good' ? 'btn-primary' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'good\')" style="font-size:10px;">\uD83D\uDC4D Accurate</button>' +
+          '<button class="btn btn-xs ' + (existingRating === 'partial' ? 'btn-amber' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'partial\')" style="font-size:10px;">\u2B50 Partially</button>' +
+          '<button class="btn btn-xs ' + (existingRating === 'poor' ? 'btn-danger' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'poor\')" style="font-size:10px;">\uD83D\uDC4E Inaccurate</button>' +
+        '</div>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">What did the AI miss or get wrong?</div>' +
+        '<textarea id="feedbackText" placeholder="e.g. Missed lateral movement from host B, or false positive due to scheduled task...">' + existingFeedback + '</textarea>' +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-bottom:10px;">' +
+      '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Prompt Improvement Notes <span style="font-size:9px;color:var(--purple);">(LLM will use this context in future investigations)</span></div>' +
+      '<textarea id="promptNotes" placeholder="e.g. For this client, always check FortiGate deny logs for outbound C2. Check if process is a known scheduled task before flagging...">' + existingNotes + '</textarea>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
+      '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="saveFeedback(\'' + ticketKey + '\')">\uD83D\uDCBE Save Feedback</button>' +
+    '</div>' +
+  '</div>';
+
+  var el = document.createElement('div');
+  el.innerHTML = feedbackHTML;
+  container.appendChild(el);
+}
+
+function setFeedbackRating(ticketKey, rating) {
+  if (!_investigationCache[ticketKey]) _investigationCache[ticketKey] = {};
+  _investigationCache[ticketKey].feedbackRating = rating;
+  // Update button states
+  var ratingDiv = document.getElementById('feedbackRating');
+  if (ratingDiv) {
+    ratingDiv.querySelectorAll('button').forEach(function(btn) {
+      btn.className = 'btn btn-xs btn-secondary';
+    });
+    var idx = { good: 0, partial: 1, poor: 2 }[rating];
+    var cls = { good: 'btn-primary', partial: 'btn-amber', poor: 'btn-danger' }[rating];
+    var btns = ratingDiv.querySelectorAll('button');
+    if (btns[idx]) btns[idx].className = 'btn btn-xs ' + cls;
+  }
+}
+
+async function saveFeedback(ticketKey) {
+  var cache = _investigationCache[ticketKey];
+  if (!cache) { showToast('No investigation to save feedback for', 'warn'); return; }
+  var feedbackText = (document.getElementById('feedbackText') || {}).value || '';
+  var promptNotes = (document.getElementById('promptNotes') || {}).value || '';
+
+  cache.feedbackText = feedbackText;
+  cache.promptNotes = promptNotes;
+  await saveInvestigationCache(ticketKey, cache);
+  showToast('Feedback saved \u2014 LLM will use this context in future investigations', 'success');
+}
+
+// ── Enhanced override that persists to cache ──
+function submitOverrideWithCache() {
+  var sel = document.getElementById('overrideSelect');
+  var just = document.getElementById('overrideJustification');
+  if (!just || !just.value.trim()) { showToast('Please provide justification', 'warn'); return; }
+  var newVerdict = sel ? sel.value.split('\u2014')[0].trim() : 'Override';
+  var reason = just.value.trim();
+
+  // Update cache
+  if (_currentInvestigationKey) {
+    var cache = _investigationCache[_currentInvestigationKey] || {};
+    cache.overrideVerdict = newVerdict;
+    cache.overrideReason = reason;
+    cache.timestamp = cache.timestamp || new Date().toISOString();
+    saveInvestigationCache(_currentInvestigationKey, cache);
+  }
+
+  // Also log to audit trail
+  logToSupabase('audit_log', {
+    action: 'verdict_override',
+    entity_type: 'investigation',
+    entity_id: _currentInvestigationKey,
+    details: { new_verdict: newVerdict, reason: reason },
+    performed_by: _getCurrentUserEmail() || 'admin'
+  });
+
+  closeOverrideModal();
+  showToast('Verdict overridden to: ' + newVerdict, 'success');
+  refreshTriageAIColumn();
 }
 
 // ── AI INVESTIGATION ──
@@ -36143,6 +36524,9 @@ function navigateToEntityFromInv(entityId) {
 
 async function runAIInvestigation(ticketKey, issueData) {
   try {
+  // Mark as actively investigating (updates triage queue badge)
+  markInvestigationStarted(ticketKey);
+
   var invPage = document.getElementById('page-investigation');
   if (!invPage) return;
 
@@ -36648,8 +37032,43 @@ async function runAIInvestigation(ticketKey, issueData) {
     }
     playbookCard.innerHTML = '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Playbook Actions</span><span style="font-size:9px;color:var(--text-muted);margin-left:6px;">From Detection Rules</span></div>' + pbHTML;
   }
+
+  // ═══════════════════════════════════════════════
+  // SAVE INVESTIGATION TO CACHE + FEEDBACK PANEL
+  // ═══════════════════════════════════════════════
+  var investigatedTimestamp = new Date().toISOString();
+  // Capture the full investigation HTML for caching
+  var aiPanelEl = document.getElementById('aiInvestigationPanel');
+  var cachedHTML = aiPanelEl ? aiPanelEl.innerHTML : '';
+
+  var cacheEntry = {
+    html: cachedHTML,
+    verdict: verdict,
+    confidence: confidence,
+    timestamp: investigatedTimestamp,
+    metadata: {
+      totalRounds: totalRounds,
+      org: org,
+      priority: pShort,
+      techniquesCount: techniques.length,
+      inculpatoryCount: inculpatory.length,
+      exculpatoryCount: exculpatory.length
+    }
+  };
+  await saveInvestigationCache(ticketKey, cacheEntry);
+  markInvestigationCompleted(ticketKey);
+  console.log('[AI Investigation] Cached result for ' + ticketKey + ' at ' + investigatedTimestamp);
+
+  // Append feedback loop panel
+  var invMainContent = document.getElementById('invMainContent');
+  if (invMainContent) {
+    appendFeedbackPanel(ticketKey, cacheEntry, invMainContent);
+  }
+
   } catch (aiErr) {
     console.error('[AI Investigation] Error:', aiErr);
+    markInvestigationCompleted(ticketKey);
+    refreshTriageAIColumn();
     var errPanel = document.getElementById('aiInvestigationPanel');
     if (errPanel) {
       errPanel.innerHTML += '<div style="padding:12px;border:1px solid rgba(239,68,68,0.3);border-radius:6px;background:rgba(239,68,68,0.05);margin-top:8px;">' +
