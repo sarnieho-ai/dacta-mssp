@@ -25997,23 +25997,22 @@ async function loadLogSourceCatalogLive() {
   // Async: fetch rule counts per vendor from DB (non-blocking, updates cells as they load)
   if (window._dactaSupabase) {
     // Fire count queries in batches of 10 to avoid overwhelming the DB
-    var queue = items.slice();
-    var batchIdx = 0;
+    var countIdx = 0;
     function runCountBatch() {
-      var batch = queue.splice(0, 10);
-      if (batch.length === 0) return;
-      batch.forEach(function(s) {
-        var idx = items.indexOf(s);
-        window._dactaSupabase.from('detection_rules').select('id', {count:'exact'}).eq('vendor', s.v).limit(1).then(function(res) {
-          var el = document.getElementById('lsc-count-' + idx);
-          if (el && res && !res.error && typeof res.count === 'number') {
-            el.textContent = res.count > 0 ? res.count.toLocaleString() : '—';
-            el.style.color = res.count > 0 ? 'var(--text-primary)' : 'var(--text-muted)';
-          }
-        }).catch(function() {});
-      });
-      // Next batch after 300ms
-      if (queue.length > 0) setTimeout(runCountBatch, 300);
+      var end = Math.min(countIdx + 10, items.length);
+      for (var i = countIdx; i < end; i++) {
+        (function(cellIdx, vendorKey) {
+          window._dactaSupabase.from('detection_rules').select('id', {count:'exact'}).eq('vendor', vendorKey).limit(1).then(function(res) {
+            var el = document.getElementById('lsc-count-' + cellIdx);
+            if (el && res && typeof res.count === 'number' && res.count > 0) {
+              el.textContent = res.count.toLocaleString();
+              el.style.color = 'var(--text-primary)';
+            }
+          }).catch(function(e) { console.warn('[LSC] Count error for', vendorKey, e); });
+        })(i, items[i].v);
+      }
+      countIdx = end;
+      if (countIdx < items.length) setTimeout(runCountBatch, 300);
     }
     runCountBatch();
   }
