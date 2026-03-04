@@ -29526,6 +29526,7 @@ async function loadUserManagement() {
           '<button class="btn btn-sm um-toggle-btn" data-uid="' + escapeHtml(u.id) + '" style="font-size:10px;padding:3px 8px;background:' + (isActive ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)') + ';color:' + (isActive ? 'var(--red-bright)' : 'var(--green)') + ';border:1px solid ' + (isActive ? 'rgba(239,68,68,0.25)' : 'rgba(16,185,129,0.25)') + ';">' +
             (isActive ? 'Disable' : 'Enable') +
           '</button>' +
+          (!isActive ? '<button class="btn btn-sm um-delete-btn" data-uid="' + escapeHtml(u.id) + '" style="font-size:10px;padding:3px 8px;margin-left:4px;background:rgba(239,68,68,0.15);color:var(--red-bright);border:1px solid rgba(239,68,68,0.35);">Delete</button>' : '') +
         '</td>' +
       '</tr>';
     });
@@ -29596,6 +29597,27 @@ async function loadUserManagement() {
       btn.addEventListener('click', function() {
         var uid = this.getAttribute('data-uid');
         umOpenEditModal(uid);
+      });
+    });
+
+    // Delete (only visible on disabled users)
+    document.querySelectorAll('#page-users .um-delete-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var uid = this.getAttribute('data-uid');
+        var user = null;
+        for (var i = 0; i < _users.length; i++) { if (_users[i].id === uid) { user = _users[i]; break; } }
+        if (!user) return;
+        var confirmYesBtn = document.getElementById('um-confirm-yes');
+        if (confirmYesBtn) {
+          confirmYesBtn.style.background = 'rgba(239,68,68,0.2)';
+          confirmYesBtn.style.color = 'var(--red-bright)';
+          confirmYesBtn.style.border = '1px solid rgba(239,68,68,0.4)';
+        }
+        umShowConfirm(
+          'Permanently Delete User',
+          'Are you sure you want to permanently delete <strong>' + escapeHtml(user.display_name) + '</strong> (' + escapeHtml(user.email || 'no email') + ')?<br><br><span style="color:var(--red-bright);font-size:11px;">This action cannot be undone.</span>',
+          function() { umDeleteUser(uid); }
+        );
       });
     });
 
@@ -29689,6 +29711,60 @@ async function loadUserManagement() {
   }
 
   // ============================================================
+  //  DELETE USER (only allowed on disabled users)
+  // ============================================================
+  async function umDeleteUser(uid) {
+    var user = null;
+    var userIdx = -1;
+    for (var i = 0; i < _users.length; i++) {
+      if (_users[i].id === uid) { user = _users[i]; userIdx = i; break; }
+    }
+    if (!user || user.status !== 'disabled') {
+      showToast('Only disabled users can be deleted', 'error');
+      return;
+    }
+
+    // Remove from array
+    _users.splice(userIdx, 1);
+
+    // Try Supabase delete
+    var saved = false;
+    try {
+      if (window._supabaseRef) {
+        var res = await window._supabaseRef.from('platform_users').delete().eq('id', uid);
+        if (!res.error) saved = true;
+      }
+    } catch(e) {}
+    if (!saved) { try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e) {} }
+
+    // Audit log
+    var auditEntry = {
+      id: 'a_' + Date.now(),
+      created_at: new Date().toISOString(),
+      actor: 'current_user',
+      action: 'user_deleted',
+      target: user.email,
+      details: 'Permanently deleted user: ' + user.display_name + ' (was disabled)'
+    };
+    _auditLog.unshift(auditEntry);
+    try {
+      if (window._supabaseRef) await window._supabaseRef.from('rbac_audit_log').insert([auditEntry]);
+      else { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); }
+    } catch(e) {}
+
+    umRenderUsers(_users);
+    umRenderRoleCards(_users);
+    umRenderAudit(_auditLog);
+
+    // Update subtitle
+    var activeCount3 = _users.filter(function(u){ return u.status !== 'disabled'; }).length;
+    var sub3 = document.getElementById('um-subtitle');
+    if (sub3) sub3.textContent = activeCount3 + ' active users \u00B7 ' + Object.keys(RBAC_ROLES).length + ' roles';
+
+    showToast('User ' + user.display_name + ' permanently deleted', 'warning');
+  }
+
+  // ============================================================
   //  RENDER ROLE CARDS
   // ============================================================
   function umRenderRoleCards(users) {
@@ -29755,6 +29831,7 @@ async function loadUserManagement() {
     }
     var actionColors = {
       'user_created':       'var(--green)',
+      'user_deleted':       'var(--red-bright)',
       'role_changed':       'var(--cyan)',
       'user_disabled':      'var(--red-bright)',
       'user_enabled':       'var(--green)',
@@ -30090,69 +30167,95 @@ async function loadUserManagement() {
   }
 
   // ============================================================
-  //  SYNC FROM JIRA
+  //  SYNC FROM JIRA TEAMS
   // ============================================================
   var jiraSyncBtn = document.getElementById('um-jira-sync-btn');
   if (jiraSyncBtn) {
     jiraSyncBtn.addEventListener('click', async function() {
       jiraSyncBtn.disabled = true;
-      jiraSyncBtn.textContent = 'Syncing...';
+      jiraSyncBtn.textContent = 'Syncing Teams...';
       try {
-        var resp = await fetch('/api/jira?action=users');
+        var resp = await fetch('/api/jira?action=teams');
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         var data = await resp.json();
-        var jiraUsers = Array.isArray(data) ? data : (data.users || data.values || []);
+        var teams = data.teams || [];
         var newCount = 0;
         var existCount = 0;
-        jiraUsers.forEach(function(ju) {
-          if (!ju.emailAddress) return;
-          var exists = false;
-          for (var i = 0; i < _users.length; i++) {
-            if ((_users[i].email || '').toLowerCase() === ju.emailAddress.toLowerCase()) {
-              exists = true;
-              break;
+        var seen = {};  // dedup by displayName (some users lack email)
+
+        teams.forEach(function(team) {
+          var teamName = team.displayName || 'Unknown Team';
+          var members = team.members || [];
+          members.forEach(function(m) {
+            var key = (m.emailAddress || '').toLowerCase() || (m.displayName || '').toLowerCase();
+            if (!key || seen[key]) return;
+            seen[key] = true;
+
+            // Check if user already exists (by email if available, else displayName)
+            var exists = false;
+            for (var i = 0; i < _users.length; i++) {
+              if (m.emailAddress && (_users[i].email || '').toLowerCase() === m.emailAddress.toLowerCase()) {
+                exists = true; break;
+              }
+              if (!m.emailAddress && (_users[i].display_name || '').toLowerCase() === (m.displayName || '').toLowerCase()) {
+                exists = true; break;
+              }
             }
-          }
-          if (exists) {
-            existCount++;
-          } else {
-            var newUser = {
-              id: 'u_jira_' + (ju.accountId || Date.now() + '_' + newCount),
-              email: ju.emailAddress,
-              display_name: ju.displayName || ju.emailAddress,
-              role: 'soc_l1',
-              assigned_orgs: ['all'],
-              status: ju.active === false ? 'disabled' : 'active',
-              last_login: null,
-              created_at: new Date().toISOString()
-            };
-            _users.push(newUser);
-            var auditE = {
-              id: 'a_' + Date.now() + '_' + newCount,
-              created_at: new Date().toISOString(),
-              actor: 'jira_sync',
-              action: 'user_created',
-              target: ju.emailAddress,
-              details: 'Synced from Jira DAC project, Role: soc_l1'
-            };
-            _auditLog.unshift(auditE);
-            newCount++;
-          }
+            if (exists) {
+              existCount++;
+            } else {
+              var newUser = {
+                id: 'u_jira_' + (m.accountId || Date.now() + '_' + newCount),
+                email: m.emailAddress || '',
+                display_name: m.displayName || m.emailAddress || 'Unknown',
+                role: 'soc_l1',
+                assigned_orgs: ['all'],
+                status: m.active === false ? 'disabled' : 'active',
+                jira_team: teamName,
+                last_login: null,
+                created_at: new Date().toISOString()
+              };
+              _users.push(newUser);
+              var auditE = {
+                id: 'a_' + Date.now() + '_' + newCount,
+                created_at: new Date().toISOString(),
+                actor: 'jira_sync',
+                action: 'user_created',
+                target: m.emailAddress || m.displayName,
+                details: 'Synced from Jira Team: ' + teamName + ', Role: soc_l1'
+              };
+              _auditLog.unshift(auditE);
+              newCount++;
+            }
+          });
         });
+
         if (newCount > 0) {
-          try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e2) {}
+          var saved2 = false;
+          try {
+            if (window._supabaseRef) {
+              for (var j = 0; j < _users.length; j++) {
+                if (_users[j].id && _users[j].id.indexOf('u_jira_') === 0) {
+                  await window._supabaseRef.from('platform_users').upsert([_users[j]], { onConflict: 'id' });
+                }
+              }
+              saved2 = true;
+            }
+          } catch(e2) {}
+          if (!saved2) { try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e2) {} }
           try { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); } catch(e2) {}
         }
+
         umRenderUsers(_users);
         umRenderRoleCards(_users);
         umRenderAudit(_auditLog);
         var subEl = document.getElementById('um-subtitle');
         var actCnt = _users.filter(function(u){ return u.status !== 'disabled'; }).length;
         if (subEl) subEl.textContent = actCnt + ' active users \u00B7 ' + Object.keys(RBAC_ROLES).length + ' roles';
-        showToast('Synced ' + newCount + ' new user' + (newCount !== 1 ? 's' : '') + ' from Jira (' + existCount + ' already exist)', newCount > 0 ? 'success' : 'info');
+        showToast('Synced ' + newCount + ' new user' + (newCount !== 1 ? 's' : '') + ' from ' + teams.length + ' Jira Teams (' + existCount + ' already exist)', newCount > 0 ? 'success' : 'info');
       } catch(err) {
-        console.error('[JiraSync]', err);
-        showToast('Jira sync failed: ' + err.message, 'error');
+        console.error('[JiraTeamsSync]', err);
+        showToast('Jira Teams sync failed: ' + err.message, 'error');
       }
       jiraSyncBtn.disabled = false;
       jiraSyncBtn.innerHTML = '&#x1F504; Sync from Jira';

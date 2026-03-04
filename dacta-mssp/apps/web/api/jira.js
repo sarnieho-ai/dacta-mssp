@@ -2,12 +2,13 @@
 // Handles CORS, authentication, and pagination for Jira Cloud REST API v3
 // All credentials read from Vercel Environment Variables — never hardcode secrets
 
-// Required env vars: JIRA_EMAIL, JIRA_API_TOKEN, JIRA_INSTANCE, JIRA_CLOUD_ID, JIRA_TEAM_ID, SUPABASE_URL, SUPABASE_ANON_KEY
+// Required env vars: JIRA_EMAIL, JIRA_API_TOKEN, JIRA_INSTANCE, JIRA_CLOUD_ID, JIRA_TEAM_ID, JIRA_ORG_ID, SUPABASE_URL, SUPABASE_ANON_KEY
 const _JE = process.env.JIRA_EMAIL || '';
 const _JT = process.env.JIRA_API_TOKEN || '';
 const _JI = process.env.JIRA_INSTANCE || 'dactaglobal-sg.atlassian.net';
 const _CID = process.env.JIRA_CLOUD_ID || '';
 const _TID = process.env.JIRA_TEAM_ID || '';
+const _OID = process.env.JIRA_ORG_ID || '';
 
 // Server-side in-memory cache (survives across warm invocations on same Vercel instance)
 const _serverCache = {};
@@ -142,6 +143,75 @@ export default async function handler(req, res) {
       });
       const users = await r.json();
       return res.status(200).json(Array.isArray(users) ? users : []);
+    }
+
+    // ─── ACTION: teams ─────────────────────────────────────────
+    // Lists all Jira Teams and their members (resolved to displayName + email)
+    if (action === 'teams') {
+      if (!_OID) {
+        return res.status(500).json({ error: 'JIRA_ORG_ID environment variable is required for teams sync' });
+      }
+
+      const teamsBase = `${baseUrl}/gateway/api/public/teams/v1/org/${_OID}`;
+      const jiraApi = `https://api.atlassian.com/ex/jira/${_CID}/rest/api/3`;
+      const hdrs = { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' };
+
+      // 1. List all teams
+      const teamsR = await fetch(`${teamsBase}/teams`, { headers: hdrs });
+      const teamsData = await teamsR.json();
+      const teams = teamsData.entities || [];
+
+      // 2. Fetch members for each team in parallel
+      const memberPromises = teams.map(function(t) {
+        return fetch(`${teamsBase}/teams/${t.teamId}/members`, {
+          method: 'POST',
+          headers: { ...hdrs, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ first: 50 })
+        }).then(function(r) { return r.json(); });
+      });
+      const memberResults = await Promise.all(memberPromises);
+
+      // 3. Collect all unique accountIds across all teams
+      const allAccountIds = new Set();
+      memberResults.forEach(function(mr) {
+        (mr.results || []).forEach(function(m) { allAccountIds.add(m.accountId); });
+      });
+
+      // 4. Resolve accountIds to user details in parallel (batched)
+      const userMap = {};
+      const resolvePromises = [...allAccountIds].map(function(aid) {
+        return fetch(`${jiraApi}/user?accountId=${aid}`, { headers: hdrs })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            userMap[aid] = {
+              accountId: aid,
+              displayName: d.displayName || aid,
+              emailAddress: d.emailAddress || null,
+              active: d.active !== false,
+              avatarUrl: (d.avatarUrls || {})['32x32'] || null
+            };
+          })
+          .catch(function() {
+            userMap[aid] = { accountId: aid, displayName: aid, emailAddress: null, active: true, avatarUrl: null };
+          });
+      });
+      await Promise.all(resolvePromises);
+
+      // 5. Build response: teams with resolved member details
+      const result = teams.map(function(t, i) {
+        var members = (memberResults[i].results || []).map(function(m) {
+          return userMap[m.accountId] || { accountId: m.accountId, displayName: m.accountId, emailAddress: null, active: true };
+        });
+        return {
+          teamId: t.teamId,
+          displayName: t.displayName,
+          description: t.description || '',
+          memberCount: members.length,
+          members: members
+        };
+      });
+
+      return res.status(200).json({ teams: result, totalUsers: allAccountIds.size });
     }
 
     // ─── ACTION: dashboard ────────────────────────────────────
