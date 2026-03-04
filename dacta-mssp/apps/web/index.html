@@ -41723,5 +41723,40 @@ function getTimeAgo(ts) {
     </div>
   </div>
 </div>
+<!-- TEMP DEBUG OVERLAY -->
+<script>
+(function() {
+  var d = document.createElement('div');
+  d.id = 'debugOverlay';
+  d.style.cssText = 'position:fixed;bottom:0;left:220px;right:0;height:180px;background:#111;color:#0f0;font-family:monospace;font-size:11px;z-index:99999;overflow-y:auto;padding:8px;border-top:2px solid #0f0;';
+  document.body.appendChild(d);
+  var origLog = console.log;
+  var origErr = console.error;
+  function addLine(msg, color) {
+    var line = document.createElement('div');
+    line.style.color = color || '#0f0';
+    line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+    d.appendChild(line);
+    d.scrollTop = d.scrollHeight;
+  }
+  console.log = function() {
+    var args = Array.prototype.slice.call(arguments).map(function(a) { return typeof a === 'object' ? JSON.stringify(a) : String(a); }).join(' ');
+    addLine(args, '#0f0');
+    origLog.apply(console, arguments);
+  };
+  console.error = function() {
+    var args = Array.prototype.slice.call(arguments).map(function(a) { return typeof a === 'object' ? JSON.stringify(a) : String(a); }).join(' ');
+    addLine('ERROR: ' + args, '#f00');
+    origErr.apply(console, arguments);
+  };
+  window.onerror = function(msg, url, line, col, err) {
+    addLine('UNCAUGHT: ' + msg + ' at line ' + line, '#f00');
+  };
+  window.addEventListener('unhandledrejection', function(e) {
+    addLine('PROMISE REJECT: ' + (e.reason ? (e.reason.message || String(e.reason)) : 'unknown'), '#f00');
+  });
+  addLine('Debug overlay ready', '#ff0');
+})();
+</script>
 </body>
 </html>
