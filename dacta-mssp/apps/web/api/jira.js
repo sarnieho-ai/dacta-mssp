@@ -13,6 +13,11 @@ const _serverCache = {};
 const _serverCacheTime = {};
 const _SERVER_CACHE_TTL = 30000; // 30 seconds — balances freshness vs. speed
 
+// Contact directory cache — longer TTL (24h) since contacts rarely change
+const _contactCache = {};
+const _contactCacheTime = {};
+const _CONTACT_CACHE_TTL = 86400000; // 24 hours
+
 function _getCached(key) {
   if (_serverCache[key] && (Date.now() - _serverCacheTime[key]) < _SERVER_CACHE_TTL) {
     return _serverCache[key];
@@ -25,6 +30,43 @@ function _setCache(key, data) {
 }
 
 function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
+
+// ── Supabase REST API helpers (server-side, bypasses client RLS issues) ──
+const _SB_URL = 'https://qiqrizggitcqwkwshmfy.supabase.co';
+const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpcXJpemdnaXRjcXdrd3NobWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNzkzMjEsImV4cCI6MjA4NzY1NTMyMX0.ZNN47SWAYvAzzY5Dn6VCYV8nzrTrqvvybp2aF4NFHCA';
+
+async function _sbGet(table, query) {
+  try {
+    const r = await fetch(`${_SB_URL}/rest/v1/${table}?${query}`, {
+      headers: { 'apikey': _SB_KEY, 'Authorization': `Bearer ${_SB_KEY}`, 'Accept': 'application/json' }
+    });
+    if (r.status === 404 || r.status === 406) return []; // Table doesn't exist yet
+    if (!r.ok) { console.warn('[SB] GET error:', r.status); return []; }
+    return await r.json();
+  } catch(e) { console.warn('[SB] GET failed:', e.message); return []; }
+}
+
+async function _sbUpsert(table, row, conflictCol) {
+  try {
+    const r = await fetch(`${_SB_URL}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: {
+        'apikey': _SB_KEY, 'Authorization': `Bearer ${_SB_KEY}`,
+        'Content-Type': 'application/json', 'Accept': 'application/json',
+        'Prefer': `resolution=merge-duplicates${conflictCol ? `,on_conflict=${conflictCol}` : ''}`
+      },
+      body: JSON.stringify(row)
+    });
+    if (!r.ok) {
+      const errText = await r.text();
+      console.warn('[SB] UPSERT error:', r.status, errText);
+      // If table doesn't exist, fall back to server cache only
+      return null;
+    }
+    const data = await r.json();
+    return Array.isArray(data) ? data[0] : data;
+  } catch(e) { console.warn('[SB] UPSERT failed:', e.message); return null; }
+}
 
 export default async function handler(req, res) {
   // CORS headers
@@ -444,6 +486,61 @@ export default async function handler(req, res) {
         } catch(re) { /* skip */ }
       }
 
+      // ── Contact Directory: resolve GDPR-blocked emails & auto-save resolved ones ──
+      const orgName = (result.organizations && result.organizations[0]) || '';
+      for (const p of result.participants) {
+        if (p.emailAddress && p.emailAddress.indexOf('@') !== -1) {
+          // Email resolved — auto-save to directory for future lookups
+          const saveKey = p.accountId || p.displayName;
+          if (saveKey && !_contactCache[saveKey]) {
+            _contactCache[saveKey] = { email: p.emailAddress, display_name: p.displayName, jira_org: orgName };
+            _contactCacheTime[saveKey] = Date.now();
+            // Fire-and-forget save to Supabase
+            _sbUpsert('contact_directory', {
+              account_id: p.accountId || '', display_name: p.displayName || '',
+              email: p.emailAddress, jira_org: orgName, source: 'jira_api',
+              updated_at: new Date().toISOString()
+            }, 'account_id').catch(() => {});
+          }
+        } else {
+          // GDPR blocked — check contact directory for cached email
+          const lookupKey = p.accountId || p.displayName;
+          // Check in-memory contact cache first
+          if (_contactCache[lookupKey] && _contactCache[lookupKey].email) {
+            p.emailAddress = _contactCache[lookupKey].email;
+            p._resolvedFrom = 'contact_cache';
+          } else {
+            // Try Supabase directory
+            let sbContacts = [];
+            if (p.accountId) {
+              sbContacts = await _sbGet('contact_directory', `select=*&account_id=eq.${encodeURIComponent(p.accountId)}`);
+            }
+            if ((!sbContacts || sbContacts.length === 0) && p.displayName) {
+              sbContacts = await _sbGet('contact_directory', `select=*&display_name=eq.${encodeURIComponent(p.displayName)}`);
+            }
+            if (sbContacts && sbContacts.length > 0 && sbContacts[0].email) {
+              p.emailAddress = sbContacts[0].email;
+              p._resolvedFrom = 'contact_directory';
+              _contactCache[lookupKey] = sbContacts[0];
+              _contactCacheTime[lookupKey] = Date.now();
+            }
+          }
+        }
+      }
+      // Same for reporter
+      if (result.reporter && result.reporter.emailAddress && result.reporter.emailAddress.indexOf('@') !== -1) {
+        const rKey = result.reporter.accountId || result.reporter.displayName;
+        if (rKey && !_contactCache[rKey]) {
+          _contactCache[rKey] = { email: result.reporter.emailAddress, display_name: result.reporter.displayName, jira_org: orgName };
+          _contactCacheTime[rKey] = Date.now();
+          _sbUpsert('contact_directory', {
+            account_id: result.reporter.accountId || '', display_name: result.reporter.displayName || '',
+            email: result.reporter.emailAddress, jira_org: orgName, source: 'jira_api',
+            updated_at: new Date().toISOString()
+          }, 'account_id').catch(() => {});
+        }
+      }
+
       return res.status(200).json(result);
     }
 
@@ -811,7 +908,107 @@ export default async function handler(req, res) {
       return res.status(200).json({ organizations: Object.values(allOrgs) });
     }
 
-    return res.status(400).json({ error: 'Unknown action. Use: dashboard, triage, issue, comments, search, counts, transitions, transition, assign, addcomment, assignable, createticket, opsdata, dashvisuals, organizations' });
+    // ─── ACTION: contactDirectory (get all cached contacts) ────
+    if (action === 'contactDirectory') {
+      const contacts = await _sbGet('contact_directory', 'select=*');
+      return res.status(200).json({ contacts: contacts || [] });
+    }
+
+    // ─── ACTION: getEscalationMatrix (load per-client escalation config) ────
+    if (action === 'getEscalationMatrix') {
+      const orgId = req.query.orgId || '';
+      // Try Supabase first
+      let matrix = null;
+      if (orgId) {
+        const rows = await _sbGet('escalation_matrix', `select=*&org_id=eq.${encodeURIComponent(orgId)}`);
+        if (rows && rows.length > 0) matrix = rows[0];
+      }
+      // Fallback to server cache
+      if (!matrix && orgId) {
+        const cacheKey = 'esc_matrix_' + orgId;
+        const cached = _getCached(cacheKey);
+        if (cached) matrix = cached;
+      }
+      return res.status(200).json({ matrix: matrix || null });
+    }
+
+    // ─── ACTION: getAllEscalationMatrices (load all client configs) ────
+    if (action === 'getAllEscalationMatrices') {
+      const rows = await _sbGet('escalation_matrix', 'select=*');
+      return res.status(200).json({ matrices: rows || [] });
+    }
+
+    // ─── ACTION: saveEscalationMatrix (upsert per-client escalation config) ────
+    if (action === 'saveEscalationMatrix') {
+      const body = req.body || {};
+      const { orgId, orgName, contacts, sla, escalationTiers, notes } = body;
+      if (!orgId) return res.status(400).json({ error: 'Missing orgId' });
+      const row = {
+        org_id: orgId,
+        org_name: orgName || '',
+        contacts: JSON.stringify(contacts || []),
+        sla: JSON.stringify(sla || {}),
+        escalation_tiers: JSON.stringify(escalationTiers || []),
+        notes: notes || '',
+        updated_at: new Date().toISOString()
+      };
+      // Try Supabase
+      const result = await _sbUpsert('escalation_matrix', row, 'org_id');
+      // Always update server cache
+      const cacheKey = 'esc_matrix_' + orgId;
+      _serverCache[cacheKey] = row;
+      _serverCacheTime[cacheKey] = Date.now();
+      return res.status(200).json({ success: true, matrix: result || row });
+    }
+
+    // ─── ACTION: deleteEscalationContact (remove a contact from matrix) ────
+    if (action === 'deleteEscalationContact') {
+      // This is handled client-side by re-saving the full matrix without the contact
+      return res.status(200).json({ success: true, note: 'Use saveEscalationMatrix with updated contacts array' });
+    }
+
+    // ─── ACTION: saveContact (upsert a contact into directory) ────
+    if (action === 'saveContact') {
+      const body = req.body || {};
+      const { accountId, displayName, emailAddress, jiraOrg, source } = body;
+      if (!accountId && !displayName) return res.status(400).json({ error: 'Missing accountId or displayName' });
+      const contact = {
+        account_id: accountId || '',
+        display_name: displayName || '',
+        email: emailAddress || '',
+        jira_org: jiraOrg || '',
+        source: source || 'manual', // 'jira_api', 'manual', 'analyst'
+        updated_at: new Date().toISOString()
+      };
+      const result = await _sbUpsert('contact_directory', contact, 'account_id');
+      // Also update server-side cache
+      _setCache('contact_' + (accountId || displayName), contact);
+      return res.status(200).json({ success: true, contact: result || contact });
+    }
+
+    // ─── ACTION: lookupContact (find contact by accountId or name) ────
+    if (action === 'lookupContact') {
+      const accountId = req.query.accountId || '';
+      const name = req.query.name || '';
+      // Check server cache first
+      const cacheKey = 'contact_' + (accountId || name);
+      const cached = _getCached(cacheKey);
+      if (cached) return res.status(200).json({ contact: cached, source: 'cache' });
+      // Try Supabase
+      let contacts = [];
+      if (accountId) {
+        contacts = await _sbGet('contact_directory', `select=*&account_id=eq.${encodeURIComponent(accountId)}`);
+      } else if (name) {
+        contacts = await _sbGet('contact_directory', `select=*&display_name=eq.${encodeURIComponent(name)}`);
+      }
+      if (contacts && contacts.length > 0) {
+        _setCache(cacheKey, contacts[0]);
+        return res.status(200).json({ contact: contacts[0], source: 'directory' });
+      }
+      return res.status(200).json({ contact: null, source: 'none' });
+    }
+
+    return res.status(400).json({ error: 'Unknown action' });
 
   } catch (err) {
     console.error('Jira proxy error:', err);

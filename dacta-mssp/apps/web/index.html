@@ -23168,6 +23168,7 @@ Analyst: K. Rasmussen | 2026-02-28
         <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid var(--border-card);">
           <button class="btn" id="stgTabConnectors" onclick="switchSettingsTab('connectors')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid var(--cyan);color:var(--cyan);background:transparent;border-radius:0;cursor:pointer;">🔌 Client Connectors</button>
           <button class="btn" id="stgTabRAG" onclick="switchSettingsTab('rag')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;">🤖 AI Investigation Config</button>
+          <button class="btn" id="stgTabEscalation" onclick="switchSettingsTab('escalation')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;">🚨 Escalation Matrix</button>
           <button class="btn" id="stgTabRules" onclick="switchSettingsTab('rules')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;">📋 Decision & Audit</button>
           <button class="btn" id="stgTabSecurity" onclick="switchSettingsTab('security')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;">🔒 Security & Access</button>
         </div>
@@ -23230,6 +23231,172 @@ Analyst: K. Rasmussen | 2026-02-28
           </div>
         </div>
         </div><!-- end stgPanelRAG -->
+
+        <!-- TAB: Escalation Matrix -->
+        <div id="stgPanelEscalation" class="stg-tab-panel" style="display:none;">
+
+          <!-- Client selector -->
+          <div class="card" style="margin-bottom:16px;padding:14px 18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:11px;color:var(--text-muted);font-weight:600;">CLIENT:</span>
+                <select id="escMatrixOrgSelector" class="filter-select" style="min-width:260px;" onchange="loadEscalationMatrixForOrg()"></select>
+                <span id="escMatrixStatus" style="font-size:10px;color:var(--text-muted);"></span>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-sm" style="background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);padding:5px 14px;font-size:10px;font-weight:600;" onclick="importContactsFromJira()">↻ Pull from Jira</button>
+                <button class="btn btn-primary btn-sm" style="padding:5px 14px;font-size:10px;font-weight:600;" onclick="saveEscalationMatrix()">💾 Save Matrix</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="gap:16px;">
+
+            <!-- LEFT: Escalation Contacts -->
+            <div>
+              <div class="card" style="margin-bottom:16px;">
+                <div class="card-header" style="margin-bottom:14px;">
+                  <div>
+                    <span class="card-title">Escalation Contacts</span>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">Client-side contacts for escalations &mdash; auto-populated in escalation drafts</div>
+                  </div>
+                  <button class="btn btn-sm" style="background:rgba(16,185,129,0.08);color:#10b981;border:1px solid rgba(16,185,129,0.2);padding:4px 12px;font-size:10px;font-weight:600;" onclick="addEscalationContact()">+ Add Contact</button>
+                </div>
+                <div id="escContactsTable">
+                  <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                    <thead>
+                      <tr style="border-bottom:1px solid var(--border-card);">
+                        <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;">Name</th>
+                        <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;">Role</th>
+                        <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;">Email</th>
+                        <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;">Phone</th>
+                        <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;">Tier</th>
+                        <th style="width:36px;"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="escContactsTbody"></tbody>
+                  </table>
+                  <div id="escContactsEmpty" style="display:none;padding:24px;text-align:center;color:var(--text-muted);font-size:11px;">No contacts configured for this client. Click <b>+ Add Contact</b> or <b>Pull from Jira</b> to populate.</div>
+                </div>
+              </div>
+
+              <!-- Escalation Notes -->
+              <div class="card">
+                <div class="card-header" style="margin-bottom:10px;"><span class="card-title">Escalation Notes</span></div>
+                <textarea id="escMatrixNotes" rows="3" class="filter-input" style="width:100%;font-size:11px;line-height:1.5;resize:vertical;min-height:60px;" placeholder="Special instructions for this client (e.g. 'Always CC the CISO for P1 alerts', 'Client prefers WhatsApp for after-hours')..."></textarea>
+              </div>
+            </div>
+
+            <!-- RIGHT: SLA + Escalation Tiers -->
+            <div>
+              <!-- Per-Client SLA -->
+              <div class="card" style="margin-bottom:16px;">
+                <div class="card-header" style="margin-bottom:14px;">
+                  <div>
+                    <span class="card-title">SLA Configuration</span>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">Client-specific response &amp; resolution targets (overrides global defaults)</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <label style="font-size:9px;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;gap:4px;">
+                      <input type="checkbox" id="escSlaOverrideToggle" onchange="toggleSlaOverride()" style="accent-color:var(--cyan);cursor:pointer;">
+                      <span>Use Custom SLA</span>
+                    </label>
+                  </div>
+                </div>
+                <div id="escSlaGrid" style="display:flex;flex-direction:column;gap:8px;opacity:0.5;pointer-events:none;">
+                  <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;border-left:3px solid #ef4444;">
+                    <span class="badge badge-p1" style="min-width:28px;text-align:center;">P1</span>
+                    <div style="flex:1;"><div style="font-size:10px;color:var(--text-muted);">Response / Resolution</div></div>
+                    <input id="escSlaP1Resp" class="filter-input" value="15 min" style="width:80px;text-align:center;font-size:11px;">
+                    <span style="color:var(--text-muted);font-size:10px;">/</span>
+                    <input id="escSlaP1Res" class="filter-input" value="4 hr" style="width:80px;text-align:center;font-size:11px;">
+                  </div>
+                  <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;border-left:3px solid #f97316;">
+                    <span class="badge badge-p2" style="min-width:28px;text-align:center;">P2</span>
+                    <div style="flex:1;"><div style="font-size:10px;color:var(--text-muted);">Response / Resolution</div></div>
+                    <input id="escSlaP2Resp" class="filter-input" value="30 min" style="width:80px;text-align:center;font-size:11px;">
+                    <span style="color:var(--text-muted);font-size:10px;">/</span>
+                    <input id="escSlaP2Res" class="filter-input" value="12 hr" style="width:80px;text-align:center;font-size:11px;">
+                  </div>
+                  <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;border-left:3px solid #f59e0b;">
+                    <span class="badge badge-p3" style="min-width:28px;text-align:center;">P3</span>
+                    <div style="flex:1;"><div style="font-size:10px;color:var(--text-muted);">Response / Resolution</div></div>
+                    <input id="escSlaP3Resp" class="filter-input" value="2 hr" style="width:80px;text-align:center;font-size:11px;">
+                    <span style="color:var(--text-muted);font-size:10px;">/</span>
+                    <input id="escSlaP3Res" class="filter-input" value="48 hr" style="width:80px;text-align:center;font-size:11px;">
+                  </div>
+                  <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;border-left:3px solid #10b981;">
+                    <span class="badge badge-p4" style="min-width:28px;text-align:center;">P4</span>
+                    <div style="flex:1;"><div style="font-size:10px;color:var(--text-muted);">Response / Resolution</div></div>
+                    <input id="escSlaP4Resp" class="filter-input" value="8 hr" style="width:80px;text-align:center;font-size:11px;">
+                    <span style="color:var(--text-muted);font-size:10px;">/</span>
+                    <input id="escSlaP4Res" class="filter-input" value="7 days" style="width:80px;text-align:center;font-size:11px;">
+                  </div>
+                </div>
+                <div id="escSlaDefault" style="margin-top:8px;padding:8px 12px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.10);border-radius:6px;font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#00d4ff" stroke-width="1.5" opacity="0.6"/><path d="M8 5v4M8 11v.5" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+                  Using <b style="color:var(--cyan);margin:0 3px;">global SLA defaults</b>. Enable "Use Custom SLA" to set client-specific targets.
+                </div>
+              </div>
+
+              <!-- Escalation Tiers -->
+              <div class="card">
+                <div class="card-header" style="margin-bottom:14px;">
+                  <div>
+                    <span class="card-title">Escalation Tiers</span>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">Define escalation path &mdash; auto-escalate when SLA thresholds are breached</div>
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                  <!-- Tier L1 -->
+                  <div style="padding:12px;background:var(--bg-elevated);border-radius:8px;border-left:3px solid var(--cyan);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;font-weight:700;color:var(--cyan);">L1</span>
+                        <span style="font-size:10px;color:var(--text-secondary);">SOC Analyst (Initial Response)</span>
+                      </div>
+                      <span style="font-size:9px;color:var(--text-muted);background:rgba(0,212,255,0.06);padding:2px 8px;border-radius:4px;">Auto-assigned</span>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                      <div style="flex:1;min-width:140px;"><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">ESCALATE TO L2 AFTER</div><input id="escTierL1Time" class="filter-input" value="30 min" style="width:100%;font-size:10px;text-align:center;"></div>
+                      <div style="flex:2;min-width:200px;"><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">NOTIFY CONTACTS (TIER)</div><select id="escTierL1Contacts" class="filter-select" style="width:100%;font-size:10px;"><option value="primary">Primary Contact</option><option value="all">All Contacts</option></select></div>
+                    </div>
+                  </div>
+                  <!-- Tier L2 -->
+                  <div style="padding:12px;background:var(--bg-elevated);border-radius:8px;border-left:3px solid #f97316;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;font-weight:700;color:#f97316;">L2</span>
+                        <span style="font-size:10px;color:var(--text-secondary);">Senior Analyst / Team Lead</span>
+                      </div>
+                      <span style="font-size:9px;color:var(--text-muted);background:rgba(249,115,22,0.06);padding:2px 8px;border-radius:4px;">On SLA breach</span>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                      <div style="flex:1;min-width:140px;"><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">ESCALATE TO L3 AFTER</div><input id="escTierL2Time" class="filter-input" value="2 hr" style="width:100%;font-size:10px;text-align:center;"></div>
+                      <div style="flex:2;min-width:200px;"><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">NOTIFY CONTACTS (TIER)</div><select id="escTierL2Contacts" class="filter-select" style="width:100%;font-size:10px;"><option value="secondary">Secondary Contact</option><option value="primary">Primary Contact</option><option value="all">All Contacts</option></select></div>
+                    </div>
+                  </div>
+                  <!-- Tier L3 -->
+                  <div style="padding:12px;background:var(--bg-elevated);border-radius:8px;border-left:3px solid #ef4444;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;font-weight:700;color:#ef4444;">L3</span>
+                        <span style="font-size:10px;color:var(--text-secondary);">SOC Manager / Client CISO</span>
+                      </div>
+                      <span style="font-size:9px;color:var(--text-muted);background:rgba(239,68,68,0.06);padding:2px 8px;border-radius:4px;">Critical escalation</span>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                      <div style="flex:1;min-width:140px;"><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">ESCALATE TO MGMT AFTER</div><input id="escTierL3Time" class="filter-input" value="4 hr" style="width:100%;font-size:10px;text-align:center;"></div>
+                      <div style="flex:2;min-width:200px;"><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">NOTIFY CONTACTS (TIER)</div><select id="escTierL3Contacts" class="filter-select" style="width:100%;font-size:10px;"><option value="escalation">Escalation Contact</option><option value="all">All Contacts</option></select></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- end grid-2 -->
+        </div><!-- end stgPanelEscalation -->
+
 
         <!-- TAB: Decision & Audit -->
         <div id="stgPanelRules" class="stg-tab-panel" style="display:none;">
@@ -27426,9 +27593,9 @@ async function loadIntegrationHub() {
 //  SETTINGS PAGE — TAB SWITCHING
 // ============================================================
 function switchSettingsTab(tabName) {
-  var tabs = ['connectors', 'rag', 'rules', 'security'];
-  var tabMap = { connectors: 'stgTabConnectors', rag: 'stgTabRAG', rules: 'stgTabRules', security: 'stgTabSecurity' };
-  var panelMap = { connectors: 'stgPanelConnectors', rag: 'stgPanelRAG', rules: 'stgPanelRules', security: 'stgPanelSecurity' };
+  var tabs = ['connectors', 'rag', 'escalation', 'rules', 'security'];
+  var tabMap = { connectors: 'stgTabConnectors', rag: 'stgTabRAG', escalation: 'stgTabEscalation', rules: 'stgTabRules', security: 'stgTabSecurity' };
+  var panelMap = { connectors: 'stgPanelConnectors', rag: 'stgPanelRAG', escalation: 'stgPanelEscalation', rules: 'stgPanelRules', security: 'stgPanelSecurity' };
   tabs.forEach(function(t) {
     var tabEl = document.getElementById(tabMap[t]);
     var panelEl = document.getElementById(panelMap[t]);
@@ -27440,6 +27607,8 @@ function switchSettingsTab(tabName) {
       if (panelEl) panelEl.style.display = 'none';
     }
   });
+  // Load escalation matrix data when switching to that tab
+  if (tabName === 'escalation') initEscalationMatrixTab();
 }
 
 // ============================================================
@@ -27756,6 +27925,428 @@ async function loadSettingsPage() {
   } catch(err) {
     console.error('[Settings] Error in loadSettingsPage:', err.message, err.stack);
   }
+}
+
+// ============================================================
+//  ESCALATION MATRIX — PER-CLIENT CONTACTS, SLA & TIERS
+// ============================================================
+
+var _escMatrixData = {}; // { orgId: { contacts: [], sla: {}, escalationTiers: [], notes: '' } }
+var _escMatrixLoaded = false;
+var _escCurrentOrgId = '';
+
+// Initialize the escalation matrix tab — populate org selector, load data
+async function initEscalationMatrixTab() {
+  try {
+    console.log('[EscMatrix] Initializing escalation matrix tab');
+    var sel = document.getElementById('escMatrixOrgSelector');
+    if (!sel) return;
+
+    // Wait for ORG_CONNECTORS
+    if (typeof ORG_CONNECTORS === 'undefined' || !ORG_CONNECTORS) {
+      sel.innerHTML = '<option>Loading organizations...</option>';
+      setTimeout(initEscalationMatrixTab, 500);
+      return;
+    }
+
+    // Populate org selector
+    var optHTML = '';
+    var keys = Object.keys(ORG_CONNECTORS);
+    for (var i = 0; i < keys.length; i++) {
+      var id = keys[i];
+      var o = ORG_CONNECTORS[id];
+      var typeTag = o.type === 'internal' ? '(Internal)' : o.type === 'mdr' ? '(MDR)' : '(SOCaaS)';
+      optHTML += '<option value="' + id + '">' + o.name + ' [' + o.code + '] ' + typeTag + '</option>';
+    }
+    sel.innerHTML = optHTML;
+
+    // Load all matrices from server (first time)
+    if (!_escMatrixLoaded) {
+      await loadAllEscalationMatrices();
+      _escMatrixLoaded = true;
+    }
+
+    // Load first org
+    if (keys.length > 0) {
+      loadEscalationMatrixForOrg();
+    }
+  } catch(e) {
+    console.error('[EscMatrix] Init error:', e);
+  }
+}
+
+// Load all escalation matrices from the API
+async function loadAllEscalationMatrices() {
+  try {
+    var resp = await fetch('/api/jira?action=getAllEscalationMatrices');
+    var data = await resp.json();
+    if (data.matrices && Array.isArray(data.matrices)) {
+      data.matrices.forEach(function(m) {
+        _escMatrixData[m.org_id] = {
+          contacts: typeof m.contacts === 'string' ? JSON.parse(m.contacts || '[]') : (m.contacts || []),
+          sla: typeof m.sla === 'string' ? JSON.parse(m.sla || '{}') : (m.sla || {}),
+          escalationTiers: typeof m.escalation_tiers === 'string' ? JSON.parse(m.escalation_tiers || '[]') : (m.escalation_tiers || []),
+          notes: m.notes || '',
+          orgName: m.org_name || ''
+        };
+      });
+      console.log('[EscMatrix] Loaded ' + data.matrices.length + ' matrices from server');
+    }
+  } catch(e) {
+    console.warn('[EscMatrix] Could not load from server, using localStorage fallback');
+  }
+  // Also load from localStorage as fallback
+  try {
+    var local = JSON.parse(localStorage.getItem('dacta_esc_matrix') || '{}');
+    Object.keys(local).forEach(function(orgId) {
+      if (!_escMatrixData[orgId]) _escMatrixData[orgId] = local[orgId];
+    });
+  } catch(e) {}
+}
+
+// Load and render escalation matrix for the selected org
+function loadEscalationMatrixForOrg() {
+  var sel = document.getElementById('escMatrixOrgSelector');
+  if (!sel) return;
+  var orgId = sel.value;
+  _escCurrentOrgId = orgId;
+  var statusEl = document.getElementById('escMatrixStatus');
+
+  // Get or create default matrix for this org
+  var matrix = _escMatrixData[orgId] || { contacts: [], sla: {}, escalationTiers: [], notes: '' };
+
+  // Render contacts table
+  renderEscalationContacts(matrix.contacts);
+
+  // Render SLA
+  var hasCustomSla = matrix.sla && matrix.sla.customEnabled;
+  var toggle = document.getElementById('escSlaOverrideToggle');
+  if (toggle) toggle.checked = !!hasCustomSla;
+  toggleSlaOverride();
+  if (hasCustomSla && matrix.sla) {
+    var fields = ['P1', 'P2', 'P3', 'P4'];
+    fields.forEach(function(p) {
+      var respEl = document.getElementById('escSla' + p + 'Resp');
+      var resEl = document.getElementById('escSla' + p + 'Res');
+      if (respEl && matrix.sla[p + '_response']) respEl.value = matrix.sla[p + '_response'];
+      if (resEl && matrix.sla[p + '_resolution']) resEl.value = matrix.sla[p + '_resolution'];
+    });
+  }
+
+  // Render escalation tiers
+  if (matrix.escalationTiers && matrix.escalationTiers.length > 0) {
+    var tiers = matrix.escalationTiers;
+    if (tiers[0]) {
+      var l1t = document.getElementById('escTierL1Time');
+      var l1c = document.getElementById('escTierL1Contacts');
+      if (l1t && tiers[0].time) l1t.value = tiers[0].time;
+      if (l1c && tiers[0].notify) l1c.value = tiers[0].notify;
+    }
+    if (tiers[1]) {
+      var l2t = document.getElementById('escTierL2Time');
+      var l2c = document.getElementById('escTierL2Contacts');
+      if (l2t && tiers[1].time) l2t.value = tiers[1].time;
+      if (l2c && tiers[1].notify) l2c.value = tiers[1].notify;
+    }
+    if (tiers[2]) {
+      var l3t = document.getElementById('escTierL3Time');
+      var l3c = document.getElementById('escTierL3Contacts');
+      if (l3t && tiers[2].time) l3t.value = tiers[2].time;
+      if (l3c && tiers[2].notify) l3c.value = tiers[2].notify;
+    }
+  }
+
+  // Render notes
+  var notesEl = document.getElementById('escMatrixNotes');
+  if (notesEl) notesEl.value = matrix.notes || '';
+
+  // Status indicator
+  if (statusEl) {
+    var hasData = (matrix.contacts && matrix.contacts.length > 0) || hasCustomSla;
+    statusEl.innerHTML = hasData
+      ? '<span style="color:#10b981;">\u25cf</span> Configured'
+      : '<span style="color:#f59e0b;">\u25cb</span> Not configured';
+  }
+}
+
+// Render contacts table rows
+function renderEscalationContacts(contacts) {
+  var tbody = document.getElementById('escContactsTbody');
+  var emptyEl = document.getElementById('escContactsEmpty');
+  if (!tbody) return;
+
+  if (!contacts || contacts.length === 0) {
+    tbody.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  var html = '';
+  contacts.forEach(function(c, idx) {
+    var tierColor = c.tier === 'primary' ? '#00d4ff' : c.tier === 'secondary' ? '#f97316' : c.tier === 'escalation' ? '#ef4444' : '#8892a4';
+    var tierLabel = c.tier === 'primary' ? 'Primary' : c.tier === 'secondary' ? 'Secondary' : c.tier === 'escalation' ? 'Escalation' : (c.tier || 'Primary');
+    html += '<tr style="border-bottom:1px solid var(--border-card);transition:background 0.15s;" onmouseenter="this.style.background=\'rgba(0,212,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">' +
+      '<td style="padding:8px;"><input class="filter-input esc-contact-field" data-idx="' + idx + '" data-field="name" value="' + escapeHtml(c.name || '') + '" style="font-size:11px;padding:3px 6px;width:100%;background:transparent;border-color:transparent;color:var(--text-primary);font-weight:500;" onfocus="this.style.borderColor=\'rgba(0,212,255,0.3)\'" onblur="this.style.borderColor=\'transparent\';updateEscContact(' + idx + ',\'name\',this.value)"></td>' +
+      '<td style="padding:8px;"><input class="filter-input esc-contact-field" data-idx="' + idx + '" data-field="role" value="' + escapeHtml(c.role || '') + '" placeholder="e.g. IT Manager" style="font-size:10px;padding:3px 6px;width:100%;background:transparent;border-color:transparent;color:var(--text-secondary);" onfocus="this.style.borderColor=\'rgba(0,212,255,0.3)\'" onblur="this.style.borderColor=\'transparent\';updateEscContact(' + idx + ',\'role\',this.value)"></td>' +
+      '<td style="padding:8px;"><input class="filter-input esc-contact-field" data-idx="' + idx + '" data-field="email" value="' + escapeHtml(c.email || '') + '" type="email" style="font-size:10px;padding:3px 6px;width:100%;background:transparent;border-color:transparent;color:var(--cyan);font-family:var(--font-mono);" onfocus="this.style.borderColor=\'rgba(0,212,255,0.3)\'" onblur="this.style.borderColor=\'transparent\';updateEscContact(' + idx + ',\'email\',this.value)"></td>' +
+      '<td style="padding:8px;"><input class="filter-input esc-contact-field" data-idx="' + idx + '" data-field="phone" value="' + escapeHtml(c.phone || '') + '" placeholder="+65..." style="font-size:10px;padding:3px 6px;width:100%;background:transparent;border-color:transparent;color:var(--text-secondary);font-family:var(--font-mono);" onfocus="this.style.borderColor=\'rgba(0,212,255,0.3)\'" onblur="this.style.borderColor=\'transparent\';updateEscContact(' + idx + ',\'phone\',this.value)"></td>' +
+      '<td style="padding:8px;"><select class="filter-select" data-idx="' + idx + '" data-field="tier" style="font-size:9px;padding:2px 6px;min-width:80px;" onchange="updateEscContact(' + idx + ',\'tier\',this.value)">' +
+        '<option value="primary"' + (c.tier === 'primary' ? ' selected' : '') + '>Primary</option>' +
+        '<option value="secondary"' + (c.tier === 'secondary' ? ' selected' : '') + '>Secondary</option>' +
+        '<option value="escalation"' + (c.tier === 'escalation' ? ' selected' : '') + '>Escalation</option>' +
+      '</select></td>' +
+      '<td style="padding:8px;text-align:center;"><button onclick="removeEscContact(' + idx + ')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 6px;opacity:0.6;transition:opacity 0.15s;" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0.6" title="Remove contact">\u00d7</button></td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+// Update a contact field in memory
+function updateEscContact(idx, field, value) {
+  if (!_escCurrentOrgId) return;
+  if (!_escMatrixData[_escCurrentOrgId]) _escMatrixData[_escCurrentOrgId] = { contacts: [], sla: {}, escalationTiers: [], notes: '' };
+  var contacts = _escMatrixData[_escCurrentOrgId].contacts || [];
+  if (contacts[idx]) {
+    contacts[idx][field] = value;
+  }
+}
+
+// Add a new blank contact row
+function addEscalationContact() {
+  if (!_escCurrentOrgId) return;
+  if (!_escMatrixData[_escCurrentOrgId]) _escMatrixData[_escCurrentOrgId] = { contacts: [], sla: {}, escalationTiers: [], notes: '' };
+  _escMatrixData[_escCurrentOrgId].contacts.push({
+    name: '', role: '', email: '', phone: '', tier: 'primary'
+  });
+  renderEscalationContacts(_escMatrixData[_escCurrentOrgId].contacts);
+  // Focus the name field of the new row
+  setTimeout(function() {
+    var inputs = document.querySelectorAll('#escContactsTbody input[data-field="name"]');
+    if (inputs.length > 0) inputs[inputs.length - 1].focus();
+  }, 50);
+}
+
+// Remove a contact
+function removeEscContact(idx) {
+  if (!_escCurrentOrgId || !_escMatrixData[_escCurrentOrgId]) return;
+  _escMatrixData[_escCurrentOrgId].contacts.splice(idx, 1);
+  renderEscalationContacts(_escMatrixData[_escCurrentOrgId].contacts);
+}
+
+// Toggle SLA override
+function toggleSlaOverride() {
+  var toggle = document.getElementById('escSlaOverrideToggle');
+  var grid = document.getElementById('escSlaGrid');
+  var defaultMsg = document.getElementById('escSlaDefault');
+  if (!toggle || !grid) return;
+  if (toggle.checked) {
+    grid.style.opacity = '1';
+    grid.style.pointerEvents = 'auto';
+    if (defaultMsg) defaultMsg.style.display = 'none';
+  } else {
+    grid.style.opacity = '0.5';
+    grid.style.pointerEvents = 'none';
+    if (defaultMsg) defaultMsg.style.display = '';
+  }
+}
+
+// Import contacts from Jira request participants for this org
+async function importContactsFromJira() {
+  if (!_escCurrentOrgId) return;
+  var sel = document.getElementById('escMatrixOrgSelector');
+  var orgName = sel ? sel.options[sel.selectedIndex].text.split(' [')[0] : '';
+  var statusEl = document.getElementById('escMatrixStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--cyan);">\u21bb</span> Pulling contacts from Jira...';
+
+  try {
+    // Search recent tickets for this org to find participants
+    var jql = encodeURIComponent('project = DAC AND "Organizations" = "' + orgName + '" ORDER BY created DESC');
+    var resp = await fetch('/api/jira?action=search&jql=' + jql + '&maxResults=10&fields=key');
+    var data = await resp.json();
+    var tickets = data.issues || [];
+
+    if (tickets.length === 0) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:#f59e0b;">\u26a0</span> No tickets found for this org';
+      return;
+    }
+
+    // Fetch participants from first few tickets
+    var seenEmails = {};
+    var newContacts = [];
+    for (var i = 0; i < Math.min(tickets.length, 5); i++) {
+      try {
+        var pResp = await fetch('/api/jira?action=requestParticipants&issueKey=' + tickets[i].key);
+        var pData = await pResp.json();
+        var participants = pData.participants || [];
+        participants.forEach(function(p) {
+          if (p.emailAddress && !seenEmails[p.emailAddress]) {
+            seenEmails[p.emailAddress] = true;
+            newContacts.push({
+              name: p.displayName || '',
+              role: '',
+              email: p.emailAddress,
+              phone: '',
+              tier: newContacts.length === 0 ? 'primary' : 'secondary'
+            });
+          }
+        });
+        // Also check reporter
+        if (pData.reporter && pData.reporter.emailAddress && !seenEmails[pData.reporter.emailAddress]) {
+          seenEmails[pData.reporter.emailAddress] = true;
+          newContacts.push({
+            name: pData.reporter.displayName || '',
+            role: 'Reporter',
+            email: pData.reporter.emailAddress,
+            phone: '',
+            tier: newContacts.length === 0 ? 'primary' : 'secondary'
+          });
+        }
+      } catch(e) { console.warn('[EscMatrix] Error fetching participants for', tickets[i].key, e); }
+    }
+
+    if (newContacts.length === 0) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:#f59e0b;">\u26a0</span> No email addresses found (may be GDPR-restricted)';
+      return;
+    }
+
+    // Merge with existing contacts (don't overwrite)
+    if (!_escMatrixData[_escCurrentOrgId]) _escMatrixData[_escCurrentOrgId] = { contacts: [], sla: {}, escalationTiers: [], notes: '' };
+    var existing = _escMatrixData[_escCurrentOrgId].contacts || [];
+    var existingEmails = {};
+    existing.forEach(function(c) { if (c.email) existingEmails[c.email] = true; });
+    var added = 0;
+    newContacts.forEach(function(nc) {
+      if (!existingEmails[nc.email]) {
+        existing.push(nc);
+        added++;
+      }
+    });
+    _escMatrixData[_escCurrentOrgId].contacts = existing;
+    renderEscalationContacts(existing);
+
+    if (statusEl) statusEl.innerHTML = '<span style="color:#10b981;">\u2713</span> Imported ' + added + ' contact' + (added !== 1 ? 's' : '') + ' from Jira';
+  } catch(e) {
+    console.error('[EscMatrix] Jira import error:', e);
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">\u2717</span> Import failed: ' + e.message;
+  }
+}
+
+// Collect current form state into the data model
+function collectEscalationMatrixState() {
+  if (!_escCurrentOrgId) return null;
+  if (!_escMatrixData[_escCurrentOrgId]) _escMatrixData[_escCurrentOrgId] = { contacts: [], sla: {}, escalationTiers: [], notes: '' };
+  var m = _escMatrixData[_escCurrentOrgId];
+
+  // Collect SLA
+  var toggle = document.getElementById('escSlaOverrideToggle');
+  m.sla = {
+    customEnabled: toggle ? toggle.checked : false,
+    P1_response: (document.getElementById('escSlaP1Resp') || {}).value || '15 min',
+    P1_resolution: (document.getElementById('escSlaP1Res') || {}).value || '4 hr',
+    P2_response: (document.getElementById('escSlaP2Resp') || {}).value || '30 min',
+    P2_resolution: (document.getElementById('escSlaP2Res') || {}).value || '12 hr',
+    P3_response: (document.getElementById('escSlaP3Resp') || {}).value || '2 hr',
+    P3_resolution: (document.getElementById('escSlaP3Res') || {}).value || '48 hr',
+    P4_response: (document.getElementById('escSlaP4Resp') || {}).value || '8 hr',
+    P4_resolution: (document.getElementById('escSlaP4Res') || {}).value || '7 days'
+  };
+
+  // Collect escalation tiers
+  m.escalationTiers = [
+    { level: 'L1', time: (document.getElementById('escTierL1Time') || {}).value || '30 min', notify: (document.getElementById('escTierL1Contacts') || {}).value || 'primary' },
+    { level: 'L2', time: (document.getElementById('escTierL2Time') || {}).value || '2 hr', notify: (document.getElementById('escTierL2Contacts') || {}).value || 'secondary' },
+    { level: 'L3', time: (document.getElementById('escTierL3Time') || {}).value || '4 hr', notify: (document.getElementById('escTierL3Contacts') || {}).value || 'escalation' }
+  ];
+
+  // Collect notes
+  m.notes = (document.getElementById('escMatrixNotes') || {}).value || '';
+
+  return m;
+}
+
+// Save the escalation matrix for the current org
+async function saveEscalationMatrix() {
+  if (!_escCurrentOrgId) { alert('No organization selected'); return; }
+
+  // Collect current state
+  var matrix = collectEscalationMatrixState();
+  if (!matrix) return;
+
+  var sel = document.getElementById('escMatrixOrgSelector');
+  var orgName = sel ? sel.options[sel.selectedIndex].text.split(' [')[0] : '';
+  var statusEl = document.getElementById('escMatrixStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--cyan);">\u21bb</span> Saving...';
+
+  try {
+    // Save to server
+    var resp = await fetch('/api/jira?action=saveEscalationMatrix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orgId: _escCurrentOrgId,
+        orgName: orgName,
+        contacts: matrix.contacts,
+        sla: matrix.sla,
+        escalationTiers: matrix.escalationTiers,
+        notes: matrix.notes
+      })
+    });
+    var data = await resp.json();
+
+    // Also save to localStorage as backup
+    try {
+      var allLocal = JSON.parse(localStorage.getItem('dacta_esc_matrix') || '{}');
+      allLocal[_escCurrentOrgId] = matrix;
+      localStorage.setItem('dacta_esc_matrix', JSON.stringify(allLocal));
+    } catch(e) {}
+
+    if (statusEl) statusEl.innerHTML = '<span style="color:#10b981;">\u2713</span> Saved';
+    setTimeout(function() {
+      if (statusEl && statusEl.innerHTML.indexOf('Saved') > -1) {
+        var hasData = (matrix.contacts && matrix.contacts.length > 0) || (matrix.sla && matrix.sla.customEnabled);
+        statusEl.innerHTML = hasData
+          ? '<span style="color:#10b981;">\u25cf</span> Configured'
+          : '<span style="color:#f59e0b;">\u25cb</span> Not configured';
+      }
+    }, 2000);
+  } catch(e) {
+    console.error('[EscMatrix] Save error:', e);
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">\u2717</span> Save failed';
+  }
+}
+
+// ── Get escalation contacts for a specific org (used by escalation draft) ──
+function getEscalationContactsForOrg(orgName) {
+  // Try to find by org name in _escMatrixData
+  var keys = Object.keys(_escMatrixData);
+  for (var i = 0; i < keys.length; i++) {
+    var m = _escMatrixData[keys[i]];
+    if (m && m.orgName === orgName && m.contacts && m.contacts.length > 0) {
+      return m;
+    }
+    // Also check ORG_CONNECTORS for name match
+    if (typeof ORG_CONNECTORS !== 'undefined' && ORG_CONNECTORS[keys[i]] && ORG_CONNECTORS[keys[i]].name === orgName) {
+      return m;
+    }
+  }
+  return null;
+}
+
+// ── Get client SLA for a specific org (used by dashboard and escalation) ──
+function getClientSLA(orgName) {
+  var matrix = getEscalationContactsForOrg(orgName);
+  if (matrix && matrix.sla && matrix.sla.customEnabled) {
+    return matrix.sla;
+  }
+  // Return global defaults
+  return {
+    customEnabled: false,
+    P1_response: '15 min', P1_resolution: '4 hr',
+    P2_response: '30 min', P2_resolution: '12 hr',
+    P3_response: '2 hr', P3_resolution: '48 hr',
+    P4_response: '8 hr', P4_resolution: '7 days'
+  };
 }
 
 // ============================================================
@@ -28437,6 +29028,13 @@ function init() {
     initCommandCenter();
     initHeatMap();
   });
+
+  // Preload escalation matrix data (available for escalation drafts even before visiting Settings)
+  setTimeout(function() {
+    if (typeof loadAllEscalationMatrices === 'function' && !_escMatrixLoaded) {
+      loadAllEscalationMatrices().then(function() { _escMatrixLoaded = true; }).catch(function() {});
+    }
+  }, 3000);
 }
 
 // init() is called by Supabase auth after session check (see SUPABASE AUTHENTICATION block below)
@@ -39353,6 +39951,25 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
   var toEmail = '';
   var ccEmail = 'soc-lead@dacta.global';
   var participantNames = []; // Declared outside try for fallback access
+
+  // ── FIRST: Check escalation matrix for pre-configured contacts ──
+  var escMatrix = typeof getEscalationContactsForOrg === 'function' ? getEscalationContactsForOrg(orgName) : null;
+  if (escMatrix && escMatrix.contacts && escMatrix.contacts.length > 0) {
+    var primaryContacts = escMatrix.contacts.filter(function(c) { return c.tier === 'primary' && c.email; });
+    var secondaryContacts = escMatrix.contacts.filter(function(c) { return c.tier === 'secondary' && c.email; });
+    var allContactEmails = escMatrix.contacts.filter(function(c) { return c.email; }).map(function(c) { return c.email; });
+    if (primaryContacts.length > 0) {
+      toEmail = primaryContacts.map(function(c) { return c.email; }).join(', ');
+      // Add secondary/escalation contacts to CC
+      if (secondaryContacts.length > 0) {
+        ccEmail = ccEmail + ', ' + secondaryContacts.map(function(c) { return c.email; }).join(', ');
+      }
+      console.log('[EscDraft] Using escalation matrix contacts. TO:', toEmail, 'CC:', ccEmail);
+    }
+  }
+
+  // ── THEN: If no matrix contacts, try Jira API ──
+  if (!toEmail) {
   try {
     var rpResp = await fetch('/api/jira?action=requestParticipants&key=' + encodeURIComponent(ticketKey));
     if (rpResp.ok) {
@@ -39416,18 +40033,32 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
   } catch(rpErr) {
     console.warn('[EscDraft] Failed to fetch request participants:', rpErr);
   }
-  // Fallback: if no real emails resolved, show participant names or fabricated org email
+  } // end if (!toEmail) — Jira fallback block
+  // Fallback: if no real emails resolved, show inline email resolver for GDPR-blocked contacts
+  var _unresolvedParticipants = []; // Track GDPR-blocked contacts for inline UI
   if (!toEmail) {
-    // Check if we captured any participant names (GDPR-blocked emails)
     if (participantNames.length > 0) {
-      toEmail = participantNames.join(', ') + ' (email hidden by Jira GDPR — check JSM portal)';
+      // Store unresolved participant data for the inline resolver UI
+      if (typeof rpData !== 'undefined' && rpData && rpData.participants) {
+        rpData.participants.forEach(function(p) {
+          if (!p.emailAddress || p.emailAddress.indexOf('@') === -1) {
+            _unresolvedParticipants.push({ accountId: p.accountId || '', displayName: p.displayName || '' });
+          }
+        });
+      } else {
+        participantNames.forEach(function(n) {
+          _unresolvedParticipants.push({ accountId: '', displayName: n });
+        });
+      }
+      // Show names as placeholder — the card will render an inline resolver
+      toEmail = participantNames.join(', ');
     } else {
       toEmail = 'security@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
       if (orgObj && orgObj.connectors && orgObj.code) {
         toEmail = 'security@' + orgName.toLowerCase().replace(/\s+/g, '') + '.com';
       }
     }
-    console.log('[EscDraft] Fallback TO:', toEmail);
+    console.log('[EscDraft] Fallback TO:', toEmail, 'unresolved:', _unresolvedParticipants);
   }
 
   // ── Build subject ──
@@ -39530,7 +40161,8 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
     confidence: confidence,
     severity: severity,
     pShort: pShort,
-    isThreat: isThreat
+    isThreat: isThreat,
+    unresolvedParticipants: _unresolvedParticipants
   };
 
   // ── Render card with email preview ──
@@ -39541,16 +40173,36 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
   var draftHTML =
     '<div style="display:flex;flex-direction:column;gap:8px;">' +
       // Status badges row
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;flex-wrap:wrap;">' +
         '<span class="badge ' + badgeClass + '" style="font-size:9px;">' + verdict.split('\u2014')[0].trim() + '</span>' +
         '<span class="badge" style="font-size:9px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);">' + pShort + ' ' + severity + '</span>' +
+        (escMatrix && escMatrix.sla && escMatrix.sla.customEnabled
+          ? '<span class="badge" style="font-size:9px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);" title="Client-specific SLA">SLA: ' + (escMatrix.sla[pShort + '_response'] || 'N/A') + ' / ' + (escMatrix.sla[pShort + '_resolution'] || 'N/A') + '</span>'
+          : '<span class="badge" style="font-size:9px;background:rgba(136,146,164,0.1);color:#8892a4;border:1px solid rgba(136,146,164,0.15);" title="Global SLA defaults">SLA: Global</span>'
+        ) +
+        (escMatrix && escMatrix.contacts && escMatrix.contacts.length > 0
+          ? '<span class="badge" style="font-size:9px;background:rgba(0,212,255,0.05);color:var(--cyan);border:1px solid rgba(0,212,255,0.12);" title="Contact from escalation matrix">\u2709 Matrix</span>'
+          : ''
+        ) +
         '<span style="font-size:10px;color:var(--text-muted);margin-left:auto;">Confidence: ' + confidence + '%</span>' +
       '</div>' +
       // To/CC/Subject header
       '<div style="padding:10px 12px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.12);border-radius:8px;font-size:10px;">' +
-        '<div style="display:flex;gap:6px;margin-bottom:4px;align-items:baseline;">' +
+        '<div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;">' +
           '<span style="color:var(--text-muted);min-width:38px;font-size:9px;text-transform:uppercase;letter-spacing:0.06em;">To:</span>' +
-          '<span style="color:var(--text-primary);font-family:var(--font-mono);">' + escapeHtml(toEmail) + '</span>' +
+          (_unresolvedParticipants.length > 0
+            ? '<span id="escToField" style="display:flex;align-items:center;gap:6px;flex:1;flex-wrap:wrap;">' +
+                '<span style="color:var(--amber);font-family:var(--font-mono);">' + escapeHtml(toEmail) + '</span>' +
+                '<input id="escToEmailInput" type="email" placeholder="Enter email for ' + escapeHtml(_unresolvedParticipants[0].displayName) + '" ' +
+                  'style="flex:1;min-width:180px;padding:3px 8px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.25);border-radius:4px;' +
+                  'color:var(--text-primary);font-family:var(--font-mono);font-size:10px;outline:none;" ' +
+                  'onkeydown="if(event.key===\'Enter\')resolveContactEmail(\'' + ticketKey + '\')"/>' +
+                '<button onclick="resolveContactEmail(\'' + ticketKey + '\')" ' +
+                  'style="padding:3px 10px;background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:4px;' +
+                  'color:var(--cyan);font-size:9px;cursor:pointer;white-space:nowrap;">Save Contact</button>' +
+              '</span>'
+            : '<span style="color:var(--text-primary);font-family:var(--font-mono);">' + escapeHtml(toEmail) + '</span>'
+          ) +
         '</div>' +
         '<div style="display:flex;gap:6px;margin-bottom:4px;align-items:baseline;">' +
           '<span style="color:var(--text-muted);min-width:38px;font-size:9px;text-transform:uppercase;letter-spacing:0.06em;">CC:</span>' +
@@ -39575,6 +40227,56 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
     '</div>';
 
   content.innerHTML = draftHTML;
+}
+
+// ── Contact Directory: inline email resolver for GDPR-blocked participants ──
+async function resolveContactEmail(ticketKey) {
+  var input = document.getElementById('escToEmailInput');
+  if (!input) return;
+  var email = input.value.trim();
+  if (!email || email.indexOf('@') === -1) {
+    showToast('Please enter a valid email address', 'warning');
+    input.focus();
+    return;
+  }
+
+  // Get the unresolved participant data
+  var draft = _currentEscalationDraft || {};
+  var unresolved = draft.unresolvedParticipants || [];
+  var participant = unresolved[0] || {};
+
+  // Save to contact directory via API
+  try {
+    var saveResp = await fetch('/api/jira?action=saveContact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountId: participant.accountId || '',
+        displayName: participant.displayName || '',
+        emailAddress: email,
+        jiraOrg: (draft.ticketKey || '').split('-')[0] || '',
+        source: 'analyst'
+      })
+    });
+    if (saveResp.ok) {
+      console.log('[ContactDir] Saved contact:', participant.displayName, '->', email);
+    }
+  } catch(saveErr) {
+    console.warn('[ContactDir] Save failed (will use locally):', saveErr);
+  }
+
+  // Update the TO field in the draft and card
+  _currentEscalationDraft.to = email;
+  _currentEscalationDraft.unresolvedParticipants = [];
+
+  // Update the visual TO field
+  var toField = document.getElementById('escToField');
+  if (toField) {
+    toField.innerHTML = '<span style="color:var(--text-primary);font-family:var(--font-mono);">' + escapeHtml(email) + '</span>' +
+      '<span style="font-size:8px;color:var(--green);margin-left:4px;">\u2713 saved to directory</span>';
+  }
+
+  showToast('Contact saved: ' + (participant.displayName || 'Unknown') + ' \u2192 ' + email, 'success');
 }
 
 function copyEscalationDraft(ticketKey) {
