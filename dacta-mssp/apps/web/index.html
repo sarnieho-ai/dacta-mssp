@@ -10832,8 +10832,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
           <!-- Filter Bar -->
           <div class="dr-filter-bar">
-            <input class="filter-input" placeholder="Search rules by name, MITRE ID, log source..." style="flex:1;min-width:200px;" id="drRuleSearch">
-            <select class="filter-select" id="drTypeFilter">
+            <input class="filter-input" placeholder="Search rules by name, MITRE ID, log source..." style="flex:1;min-width:200px;" id="drRuleSearch" oninput="clearTimeout(window._drSearchTimer); window._drSearchTimer = setTimeout(function(){ if(window._applyRuleFilters) window._applyRuleFilters(); }, 400);">
+            <select class="filter-select" id="drTypeFilter" onchange="if(window._applyRuleFilters) window._applyRuleFilters();">
               <option value="">All Types</option>
               <option>Sigma</option>
               <option>YARA</option>
@@ -10842,7 +10842,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <option>EQL</option>
               <option>ML Anomaly</option>
             </select>
-            <select class="filter-select" id="drSeverityFilter">
+            <select class="filter-select" id="drSeverityFilter" onchange="if(window._applyRuleFilters) window._applyRuleFilters();">
               <option value="">All Severities</option>
               <option>Critical</option>
               <option>High</option>
@@ -10850,7 +10850,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <option>Low</option>
               <option>Informational</option>
             </select>
-            <select class="filter-select" id="drLogSourceFilter">
+            <select class="filter-select" id="drLogSourceFilter" onchange="if(window._applyRuleFilters) window._applyRuleFilters();">
               <option value="">All Log Sources</option>
               <option>Windows Sysmon</option>
               <option>Windows Security</option>
@@ -10865,13 +10865,13 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <option>SentinelOne</option>
               <option>Cisco</option>
             </select>
-            <select class="filter-select" id="drAuthorFilter">
+            <select class="filter-select" id="drAuthorFilter" onchange="if(window._applyRuleFilters) window._applyRuleFilters();">
               <option value="">All Authors</option>
               <option>Dacta SOC</option>
               <option>Community (Sigma HQ)</option>
               <option>Custom / Client</option>
             </select>
-            <select class="filter-select" id="drStatusFilter">
+            <select class="filter-select" id="drStatusFilter" onchange="if(window._applyRuleFilters) window._applyRuleFilters();">
               <option value="">All Statuses</option>
               <option>Production</option>
               <option>Testing</option>
@@ -11609,7 +11609,10 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           async function loadCoverageAnalytics() {
             var panel = document.getElementById('dr-panel-coverage');
             if(!panel) return;
-            showToast('Loading coverage analytics...');
+            showToast('Loading coverage analytics from SIEMLess DB...');
+            // Use DB data (renderCoverage already called by loadDetectionRulesLive)
+            renderCoverage();
+            // Also attempt Elastic for heatmap cell coverage (best-effort)
             try {
               var resp = await fetch('/api/elastic', {
                 method:'POST', headers:{'Content-Type':'application/json'},
@@ -11619,26 +11622,20 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   body:{
                     size:0,
                     aggs:{
-                      by_rule: { terms:{ field:'kibana.alert.rule.name', size:100 } },
                       by_technique: { terms:{ field:'kibana.alert.rule.parameters.threat.technique.id', size:50 } }
                     }
                   }
                 })
               });
               var data = await resp.json();
-              var rules = data.aggregations && data.aggregations.by_rule ? data.aggregations.by_rule.buckets : [];
               var techniques = data.aggregations && data.aggregations.by_technique ? data.aggregations.by_technique.buckets : [];
-              var totalRulesEl = document.getElementById('covStatTotal');
-              if(totalRulesEl && rules.length>0) totalRulesEl.textContent = rules.length;
-              var prodEl = document.getElementById('covStatProduction');
-              if(prodEl && rules.length>0) prodEl.textContent = Math.ceil(rules.length*0.85);
               // Update heatmap cells for covered techniques
               techniques.forEach(function(t) {
                 var cell = document.querySelector('.mitre-cell[data-tech="'+t.key+'"]');
                 if(cell) { cell.style.background='rgba(0,212,255,0.3)'; cell.style.borderColor='rgba(0,212,255,0.5)'; }
               });
             } catch(e) {
-              console.error('[Coverage] Load error:', e);
+              console.warn('[Coverage] Elastic heatmap update failed (non-critical):', e.message);
             }
           }
           // ── Emerging Threats (Live from DACTA TIP) ─────────────
@@ -22942,7 +22939,7 @@ Analyst: K. Rasmussen | 2026-02-28
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                     <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Domain</div><input class="filter-input sso-cfg-input" id="ssoAzureDomain" data-provider="azure_ad" data-field="domain" placeholder="dacta.sg" style="width:100%;font-size:11px;"></div>
-                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Provider ID (optional)</div><input class="filter-input sso-cfg-input" id="ssoAzureProviderId" data-provider="azure_ad" data-field="provider_id" placeholder="From Supabase SSO setup" style="width:100%;font-size:11px;"></div>
+                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Provider ID (optional)</div><input class="filter-input sso-cfg-input" id="ssoAzureProviderId" data-provider="azure_ad" data-field="provider_id" placeholder="From SIEMLess DB SSO setup" style="width:100%;font-size:11px;"></div>
                   </div>
                 </div>
                 <!-- Okta -->
@@ -22953,7 +22950,7 @@ Analyst: K. Rasmussen | 2026-02-28
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                     <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Domain</div><input class="filter-input sso-cfg-input" id="ssoOktaDomain" data-provider="okta" data-field="domain" placeholder="company.okta.com" style="width:100%;font-size:11px;"></div>
-                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Provider ID (optional)</div><input class="filter-input sso-cfg-input" id="ssoOktaProviderId" data-provider="okta" data-field="provider_id" placeholder="From Supabase SSO setup" style="width:100%;font-size:11px;"></div>
+                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Provider ID (optional)</div><input class="filter-input sso-cfg-input" id="ssoOktaProviderId" data-provider="okta" data-field="provider_id" placeholder="From SIEMLess DB SSO setup" style="width:100%;font-size:11px;"></div>
                   </div>
                 </div>
                 <!-- Google Workspace -->
@@ -22964,7 +22961,7 @@ Analyst: K. Rasmussen | 2026-02-28
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                     <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Domain</div><input class="filter-input sso-cfg-input" id="ssoGoogleDomain" data-provider="google_workspace" data-field="domain" placeholder="dacta.sg" style="width:100%;font-size:11px;"></div>
-                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Provider ID (optional)</div><input class="filter-input sso-cfg-input" id="ssoGoogleProviderId" data-provider="google_workspace" data-field="provider_id" placeholder="From Supabase SSO setup" style="width:100%;font-size:11px;"></div>
+                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Provider ID (optional)</div><input class="filter-input sso-cfg-input" id="ssoGoogleProviderId" data-provider="google_workspace" data-field="provider_id" placeholder="From SIEMLess DB SSO setup" style="width:100%;font-size:11px;"></div>
                   </div>
                 </div>
               </div>
@@ -24996,56 +24993,48 @@ async function loadElasticRules() {
   }
 }
 
-// ── Main init: loads Elastic live rules + server-side paginated SIEMLess DB ──
+// ── Main init: SIEMLess DB-only paginated rule loading ──
 async function loadDetectionRulesLive() {
-  console.log('[DetectionRules] Loading rules from Elastic + SIEMLess DB (paginated)...');
+  console.log('[DetectionRules] Loading rules from SIEMLess DB (paginated)...');
   _rulesLoading = true;
 
   // Show loading indicator
   var tbody = document.getElementById('drRepoTableBody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-muted);"><div style="font-size:13px;">Loading detection rules...</div></td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-muted);"><div style="font-size:13px;">Loading detection rules from SIEMLess DB...</div></td></tr>';
+
+  // Wire filter inputs on first load (idempotent — safe to call multiple times)
+  _wireRuleFilters();
 
   try {
-    // Fire Elastic + SIEMLess DB page + stat counts in parallel
-    var [elasticRules, pageResult] = await Promise.all([
-      loadElasticRules(),
+    // Load page 1 + stat counts in parallel from SIEMLess DB
+    var [pageResult] = await Promise.all([
       loadRulesPage(1, _rulesCurrentFilters),
       loadRuleStatCounts()
     ]);
 
-    var supabaseRows = pageResult.data;
+    rulesData = pageResult.data;
     _rulesTotalCount = pageResult.count;
     _rulesPage = 1;
 
-    // Merge: Elastic rules at top, then SIEMLess DB paginated rules (deduped by name)
-    if (elasticRules.length > 0) {
-      var elasticNames = {};
-      elasticRules.forEach(function(r) { elasticNames[r.name] = true; });
-      var deduped = supabaseRows.filter(function(r) { return !elasticNames[r.name]; });
-      rulesData = elasticRules.concat(deduped);
-      console.log('[DetectionRules] ' + elasticRules.length + ' from Elastic + ' + deduped.length + ' from SIEMLess DB page = ' + rulesData.length + ' displayed');
-      // Sync elastic rules to SIEMLess DB in background
-      if (typeof syncDetectionRulesToSupabase === 'function') syncDetectionRulesToSupabase(elasticRules);
-    } else {
-      rulesData = supabaseRows;
-      console.log('[DetectionRules] SIEMLess DB-only: ' + supabaseRows.length + ' rules on page 1 of ' + _rulesTotalCount.toLocaleString() + ' total');
-    }
+    console.log('[DetectionRules] SIEMLess DB: ' + rulesData.length + ' rules on page 1 of ' + _rulesTotalCount.toLocaleString() + ' total');
+
+    // Sync Elastic rules to SIEMLess DB in background (non-blocking, display not affected)
+    loadElasticRules().then(function(elasticRules) {
+      if (elasticRules.length > 0 && typeof syncDetectionRulesToSupabase === 'function') {
+        syncDetectionRulesToSupabase(elasticRules);
+      }
+    }).catch(function() {});
 
     // Update page subtitle
-    var page = document.getElementById('page-rules');
-    if (page) {
-      var sub = page.querySelector('.page-subtitle');
-      if (sub) {
-        var srcLabel = elasticRules.length > 0
-          ? elasticRules.length + ' live from Elastic + ' + (_rulesTotalCount || 0).toLocaleString() + ' from SIEMLess DB repo'
-          : _rulesTotalCount.toLocaleString() + ' rules from SIEMLess DB repository';
-        sub.innerHTML = srcLabel + ' ' + jiraLiveBadge();
-      }
+    var pageEl = document.getElementById('page-rules');
+    if (pageEl) {
+      var sub = pageEl.querySelector('.page-subtitle');
+      if (sub) sub.innerHTML = (_rulesTotalCount || 0).toLocaleString() + ' rules from SIEMLess DB repository &nbsp;' + jiraLiveBadge();
     }
 
     // Update tab badge
     var tabCount = document.getElementById('repoTabCount');
-    if (tabCount) tabCount.textContent = (_rulesTotalCount + elasticRules.length).toLocaleString();
+    if (tabCount) tabCount.textContent = (_rulesTotalCount || 0).toLocaleString();
 
     renderRules();
     renderPipeline();
@@ -25065,6 +25054,7 @@ async function loadDetectionRulesLive() {
 
   } catch (err) {
     console.error('[DetectionRules] Error:', err);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--red-bright);"><div style="font-size:13px;">Failed to load rules — check SIEMLess DB connection</div></td></tr>';
   }
   _rulesLoading = false;
 }
@@ -25347,13 +25337,13 @@ function renderRules() {
   var statusColor = { 'Production':'green', 'Testing':'amber', 'Draft':'gray', 'Deprecated':'red' };
   var lsClassMap = {'Windows Sysmon':'windows','Windows Security':'windows','CrowdStrike':'edr','SentinelOne':'edr','Fortinet':'firewall','Palo Alto Networks':'firewall','Sophos':'firewall','Cisco':'firewall','AWS':'cloud','Microsoft Azure':'cloud','Google Cloud Platform':'cloud','Okta':'edr','windows':'windows','linux':'linux','firewall':'firewall','cloud':'cloud','edr':'edr','m365':'m365','network':'network','ot':'ot'};
 
-  var total = _rulesTotalCount + (rulesData.length > 0 && rulesData[0]._source === 'elastic' ? rulesData.filter(function(r){return r._source==='elastic';}).length : 0);
+  // DB-only pagination: _rulesTotalCount is the server count, rulesData is current page
+  var total = _rulesTotalCount;
   var totalPages = Math.max(1, Math.ceil(total / _rulesPerPage));
   if (_rulesPage > totalPages) _rulesPage = totalPages;
   if (_rulesPage < 1) _rulesPage = 1;
   var start = (_rulesPage - 1) * _rulesPerPage;
-  // Only render up to _rulesPerPage rows (rulesData may have elastic + supabase merged)
-  var displayData = rulesData.slice(0, _rulesPerPage);
+  var displayData = rulesData; // current page from DB
   var end = Math.min(start + displayData.length, total);
 
   var rows = '';
@@ -25439,7 +25429,16 @@ async function goToRulesPage(page) {
 }
 
 // ── Filter Event Listeners (server-side) ──
-(function wireFilters() {
+// Called by loadDetectionRulesLive() each time the rules page opens (idempotent)
+var _filtersWired = false;
+function _wireRuleFilters() {
+  if (_filtersWired) return; // only wire once
+  var els = ['drRuleSearch','drTypeFilter','drSeverityFilter','drLogSourceFilter','drAuthorFilter','drStatusFilter'];
+  var allFound = els.every(function(id) { return !!document.getElementById(id); });
+  if (!allFound) return; // DOM not ready yet — will retry on next call
+
+  var searchTimer = null;
+
   async function applyFilters() {
     var search = (document.getElementById('drRuleSearch') || {}).value || '';
     var typeF = (document.getElementById('drTypeFilter') || {}).value || '';
@@ -25462,52 +25461,65 @@ async function goToRulesPage(page) {
     await goToRulesPage(1);
   }
 
-  var searchTimer = null;
-  document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(function() {
-      var els = ['drRuleSearch','drTypeFilter','drSeverityFilter','drLogSourceFilter','drAuthorFilter','drStatusFilter'];
-      els.forEach(function(id) {
-        var el = document.getElementById(id);
-        if (!el) return;
-        if (id === 'drRuleSearch') {
-          el.addEventListener('input', function() { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 400); });
-        } else {
-          el.addEventListener('change', applyFilters);
-        }
-      });
-    }, 500);
+  els.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (id === 'drRuleSearch') {
+      el.addEventListener('input', function() { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 400); });
+    } else {
+      el.addEventListener('change', applyFilters);
+    }
   });
 
   window._applyRuleFilters = applyFilters;
   window._resetRuleFilters = resetFilters;
-})();
+  _filtersWired = true;
+  console.log('[DetectionRules] Filter inputs wired successfully');
+}
 
-
-// ── Rule Detail Modal (on-demand fetch) ──
+// ── Rule Detail Modal (on-demand fetch from SIEMLess DB) ──
 async function showRuleDetailModal(dbId) {
-  showToast('Loading rule details...', 'info');
-  var r = null;
-  if (dbId) {
-    r = await fetchRuleDetail(dbId);
+  // Guard: if dbId is missing/empty, show error
+  if (!dbId || dbId === 'undefined') {
+    showToast('Cannot load rule — no database ID available', 'warn');
+    return;
   }
-  // Fallback: find in current page data (for Elastic rules with no dbId)
+  showToast('Loading rule details...', 'info');
+  var r = await fetchRuleDetail(dbId);
+  // Fallback: find in current page data
   if (!r) {
     for (var _i = 0; _i < rulesData.length; _i++) {
-      if (rulesData[_i]._dbId === dbId || rulesData[_i].id === dbId) { r = rulesData[_i]; break; }
+      if (rulesData[_i]._dbId === dbId) { r = rulesData[_i]; break; }
     }
   }
-  if (!r) { showToast('Rule not found', 'warn'); return; }
-  var pb = dbId ? (_playbookCache[dbId] || await fetchPlaybook(dbId)) : null;
+  if (!r) { showToast('Rule not found in SIEMLess DB', 'warn'); return; }
+  var pb = _playbookCache[dbId] || await fetchPlaybook(dbId);
   var pbSection = '';
   if (pb) {
     pbSection = '<div style="margin-top:16px;padding:12px;background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.15);border-radius:8px;">'
       + '<div style="font-size:10px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Linked Playbook</div>'
       + '<div style="font-size:12px;color:var(--text-primary);font-weight:600;">' + (pb.playbook_name||'') + '</div>'
-      + '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Est. ' + (pb.estimated_time_minutes||30) + ' min \u00b7 ' + (pb.difficulty||'intermediate') + '</div>'
+      + '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Est. ' + (pb.estimated_time_minutes||30) + ' min &middot; ' + (pb.difficulty||'intermediate') + '</div>'
+      + '</div>';
+  } else {
+    pbSection = '<div style="margin-top:16px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid var(--border-subtle);border-radius:8px;">'
+      + '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Linked Playbook</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);">No playbook linked &mdash; generate one in Rule Builder</div>'
       + '</div>';
   }
   var content = r._ruleContent || '';
-  var contentPreview = content ? escapeHtml(content).substring(0, 1500) : '<span style="color:var(--text-muted);">No rule content available</span>';
+  var contentHtml = content
+    ? '<div style="font-family:var(--font-mono);font-size:11px;line-height:1.6;color:var(--text-secondary);background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;max-height:300px;overflow:auto;white-space:pre-wrap;border:1px solid var(--border-subtle);">' + escapeHtml(content).substring(0, 2000) + '</div>'
+    : '<div style="font-size:11px;color:var(--text-muted);padding:10px;">No Sigma YAML content stored for this rule</div>';
+  // Build meta row: MITRE tactic + technique, vendor, log sources, false positives
+  var mitreSection = '';
+  if (r._mitreTactic || r.mitre) {
+    mitreSection = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;">'
+      + (r._mitreTactic ? '<div><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px;">Tactic</div><div style="font-size:11px;color:#a78bfa;font-weight:600;text-transform:capitalize;">' + r._mitreTactic.replace(/_/g,' ') + '</div></div>' : '')
+      + (r.mitre !== '\u2014' ? '<div><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px;">Technique</div><div style="font-size:11px;color:var(--cyan);font-family:var(--font-mono);font-weight:600;">' + r.mitre + '</div></div>' : '')
+      + (r._mitreTechniqueName ? '<div style="flex:1;"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px;">Technique Name</div><div style="font-size:11px;color:var(--text-primary);">' + r._mitreTechniqueName + '</div></div>' : '')
+      + '</div>';
+  }
   var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
     + '<div style="font-size:16px;font-weight:700;color:var(--text-primary);">' + escapeHtml(r.name) + '</div>'
     + '<button onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\'" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;padding:4px 8px;">&times;</button>'
@@ -25515,17 +25527,22 @@ async function showRuleDetailModal(dbId) {
     + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'
     + '<span class="badge badge-' + ({'Critical':'red','High':'amber','Medium':'blue','Low':'gray'}[r.severity]||'blue') + '">' + r.severity + '</span>'
     + '<span class="mitre-tag">' + r.mitre + '</span>'
-    + '<span style="font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.15);">' + (r._sourceType||r.type) + '</span>'
-    + '<span style="font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-secondary);border:1px solid var(--border-subtle);">' + (r._logSourceProduct||'') + '</span>'
+    + '<span style="font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.15);">' + r.type + '</span>'
+    + '<span style="font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-secondary);border:1px solid var(--border-subtle);">' + (r._sourceType || r._logSourceCategory || '') + '</span>'
+    + (r._vendor ? '<span style="font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(245,158,11,0.06);color:var(--amber);border:1px solid rgba(245,158,11,0.15);">' + escapeHtml(r._vendor) + '</span>' : '')
+    + '<span style="font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(100,116,139,0.1);color:var(--text-secondary);border:1px solid var(--border-subtle);">' + (r._isEnabled !== false ? '&#x1F7E2; Enabled' : '&#x1F534; Disabled') + '</span>'
     + '</div>'
+    + mitreSection
     + '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Description</div>'
-    + '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-bottom:16px;">' + (r._description || 'No description available') + '</div>'
-    + '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Detection Query</div>'
-    + '<div style="font-family:var(--font-mono);font-size:11px;line-height:1.6;color:var(--text-secondary);background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;max-height:300px;overflow:auto;white-space:pre-wrap;margin-bottom:8px;border:1px solid var(--border-subtle);">' + contentPreview + '</div>'
+    + '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-bottom:16px;">' + escapeHtml(r._description || 'No description available') + '</div>'
+    + '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Sigma YAML / Detection Rule</div>'
+    + contentHtml
+    + (r._logSourceProduct ? '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:12px;margin-bottom:4px;">Log Sources</div><div style="font-size:11px;color:var(--text-secondary);">' + escapeHtml(r._logSourceProduct) + (r._logSourceCategory ? ' &middot; ' + r._logSourceCategory : '') + '</div>' : '')
+    + (r.fp && r.fp !== '\u2014' ? '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:12px;margin-bottom:4px;">False Positive Rate</div><div style="font-size:11px;color:var(--text-secondary);">' + r.fp + '</div>' : '')
     + pbSection
-    + '<div style="display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border-subtle);">'
+    + '<div style="display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border-subtle);flex-wrap:wrap;">'
     + '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';editRuleInBuilder(\'' + r._dbId + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\',\'' + r.type + '\',\'' + r.severity + '\',\'' + r.mitre + '\')">Edit in Builder</button>'
-    + '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';testRuleInLab(\'' + r.id + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\')">Test Rule</button>'
+    + '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';testRuleInLab(\'' + r._dbId + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\')">Test Rule</button>'
     + (pb ? '<button class="btn btn-secondary btn-sm" style="color:var(--cyan);" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';showPlaybook(\'' + dbId + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\')">View Playbook</button>' : '')
     + '<button class="btn btn-secondary btn-sm" onclick="toggleRuleEnabled(\'' + dbId + '\',' + r._isEnabled + ',this)">' + (r._isEnabled !== false ? 'Disable Rule' : 'Enable Rule') + '</button>'
     + '</div>';
@@ -25543,21 +25560,27 @@ async function showRuleDetailModal(dbId) {
   document.getElementById('ruleDetailModalContent').innerHTML = html;
 }
 
-// ── Inline rule detail expand (on-demand fetch) ──
+// ── Inline rule detail expand (on-demand fetch from SIEMLess DB) ──
 async function toggleRuleDetail(row, dbId) {
   var existing = row.nextElementSibling;
   if (existing && existing.classList.contains('rule-detail-row')) { existing.remove(); return; }
   document.querySelectorAll('.rule-detail-row').forEach(function(el) { el.remove(); });
 
-  // Fetch full detail + playbook on demand; fallback to page data for Elastic rules
-  var r = dbId ? await fetchRuleDetail(dbId) : null;
+  // Guard: need a valid DB ID to fetch
+  if (!dbId || dbId === 'undefined') {
+    showToast('Cannot expand — no SIEMLess DB ID for this rule', 'warn');
+    return;
+  }
+
+  // Fetch full detail + playbook on demand
+  var r = await fetchRuleDetail(dbId);
   if (!r) {
     for (var _i = 0; _i < rulesData.length; _i++) {
-      if (rulesData[_i]._dbId === dbId || rulesData[_i].id === dbId) { r = rulesData[_i]; break; }
+      if (rulesData[_i]._dbId === dbId) { r = rulesData[_i]; break; }
     }
   }
-  if (!r) return;
-  var pb = dbId ? (_playbookCache[dbId] || await fetchPlaybook(dbId)) : null;
+  if (!r) { showToast('Rule details not found', 'warn'); return; }
+  var pb = _playbookCache[dbId] || await fetchPlaybook(dbId);
 
   var detailRow = document.createElement('tr');
   detailRow.className = 'rule-detail-row';
@@ -25833,8 +25856,8 @@ function renderPipeline() {
 }
 
 function renderCoverage() {
-  // Update top stat cards
-  var total = rulesData.length;
+  // Use _rulesTotalCount for DB totals; page data for breakdowns
+  var total = _rulesTotalCount || rulesData.length;
   var prod = rulesData.filter(function(r) { return r.status === 'Production'; }).length;
   var crit = rulesData.filter(function(r) { return r.severity === 'Critical'; }).length;
   // Count unique log source types
