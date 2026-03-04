@@ -23052,6 +23052,8 @@ Analyst: K. Rasmussen | 2026-02-28
           .um-matrix-wrap table th:first-child,
           .um-matrix-wrap table td:first-child { position:sticky; left:0; background:var(--bg-card); z-index:1; min-width:150px; }
           .um-group-row td { background:rgba(0,0,0,0.25); color:var(--text-muted); font-size:10px; font-family:var(--font-mono); letter-spacing:0.05em; text-transform:uppercase; padding:5px 8px; }
+          #um-users-table td, #um-users-table th { padding-top:4px; padding-bottom:4px; }
+          #um-panel-users .table-wrap { max-height:none !important; overflow-y:visible !important; }
           .um-role-card { background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:10px; padding:16px; transition:border-color 0.2s; position:relative; overflow:hidden; }
           .um-role-card:hover { border-color:rgba(0,212,255,0.3); }
           .um-role-card-accent { position:absolute; top:0; left:0; right:0; height:3px; }
@@ -23064,6 +23066,15 @@ Analyst: K. Rasmussen | 2026-02-28
           .um-filter-select:focus { border-color:var(--cyan); }
           .um-action-event { color:var(--cyan); font-family:var(--font-mono); font-size:10px; }
           .um-mfa-badge { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:10px; font-size:9px; background:rgba(16,185,129,0.12); color:var(--green); border:1px solid rgba(16,185,129,0.25); }
+          /* Edit-role mode */
+          .um-perm-cell-edit select { background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:4px; color:var(--text-secondary); font-size:10px; padding:1px 4px; cursor:pointer; font-family:var(--font-body); }
+          .um-matrix-edit-bar { display:none; gap:8px; align-items:center; padding:8px 0 4px 0; }
+          .um-matrix-edit-bar.visible { display:flex; }
+          /* Edit user modal & confirm modal shared overlay */
+          .um-overlay { display:none; position:fixed; inset:0; z-index:9000; background:rgba(8,12,24,0.82); backdrop-filter:blur(6px); align-items:center; justify-content:center; }
+          .um-overlay.open { display:flex; }
+          .um-modal-box { background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:14px; padding:28px; width:480px; max-width:95vw; max-height:88vh; overflow-y:auto; position:relative; }
+          .um-confirm-box { background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:12px; padding:24px; width:380px; max-width:92vw; }
         </style>
 
         <div class="page-header">
@@ -23073,6 +23084,7 @@ Analyst: K. Rasmussen | 2026-02-28
           </div>
           <div class="page-actions">
             <button class="btn btn-secondary btn-sm" id="um-export-btn">↓ Export</button>
+            <button class="btn btn-secondary btn-sm" id="um-jira-sync-btn">&#x1F504; Sync from Jira</button>
             <button class="btn btn-primary btn-sm" id="um-invite-btn">+ Invite User</button>
           </div>
         </div>
@@ -23114,6 +23126,10 @@ Analyst: K. Rasmussen | 2026-02-28
 
         <!-- TAB 2: Roles -->
         <div class="um-tab-panel" id="um-panel-roles">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <span style="font-size:11px;color:var(--text-muted);">Role definitions &amp; permission matrix</span>
+            <button class="btn btn-secondary btn-sm" id="um-edit-roles-btn" style="font-size:11px;">&#9998; Edit Roles</button>
+          </div>
           <div id="um-role-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:24px;"></div>
           <div class="card">
             <div class="card-header" style="cursor:pointer;" id="um-matrix-toggle">
@@ -23224,6 +23240,61 @@ Analyst: K. Rasmussen | 2026-02-28
                 <button class="btn btn-secondary btn-sm" id="um-invite-back">← Back</button>
                 <button class="btn btn-primary btn-sm" id="um-invite-submit">Send Invite</button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edit User Modal -->
+        <div id="um-edit-modal" class="um-overlay">
+          <div class="um-modal-box">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+              <div style="font-size:15px;font-weight:600;color:var(--text-primary);font-family:var(--font-body);">Edit User</div>
+              <button id="um-edit-close" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;line-height:1;">&#x2715;</button>
+            </div>
+            <div style="margin-bottom:14px;">
+              <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:5px;">Display Name *</label>
+              <input id="um-edit-name" type="text" class="um-search" style="width:100%;box-sizing:border-box;" placeholder="Full Name" />
+            </div>
+            <div style="margin-bottom:14px;">
+              <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:5px;">Email (read-only)</label>
+              <input id="um-edit-email" type="email" class="um-search" style="width:100%;box-sizing:border-box;opacity:0.6;" readonly />
+            </div>
+            <div style="margin-bottom:14px;">
+              <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:5px;">Role *</label>
+              <select id="um-edit-role" class="um-filter-select" style="width:100%;">
+                <option value="soc_l1">SOC L1 Analyst</option>
+                <option value="soc_l2">SOC L2 Analyst</option>
+                <option value="soc_l3">SOC L3 / Hunter</option>
+                <option value="det_eng">Detection Engineer</option>
+                <option value="soc_mgr">SOC Manager</option>
+                <option value="admin">Admin</option>
+                <option value="client">Client Portal</option>
+              </select>
+            </div>
+            <div style="margin-bottom:14px;">
+              <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:8px;">Assigned Organizations</label>
+              <div id="um-edit-orgs" style="max-height:160px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:6px;padding:8px;"></div>
+            </div>
+            <div style="margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+              <label style="font-size:11px;color:var(--text-secondary);">MFA Enabled</label>
+              <input id="um-edit-mfa" type="checkbox" style="accent-color:var(--cyan);width:14px;height:14px;cursor:pointer;" />
+            </div>
+            <input type="hidden" id="um-edit-uid" value="" />
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+              <button class="btn btn-secondary btn-sm" id="um-edit-cancel">Cancel</button>
+              <button class="btn btn-primary btn-sm" id="um-edit-save">Save Changes</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Confirm Dialog Modal -->
+        <div id="um-confirm-modal" class="um-overlay">
+          <div class="um-confirm-box">
+            <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:10px;font-family:var(--font-body);" id="um-confirm-title">Confirm Action</div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:20px;" id="um-confirm-msg"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+              <button class="btn btn-secondary btn-sm" id="um-confirm-no">Cancel</button>
+              <button class="btn btn-primary btn-sm" id="um-confirm-yes" style="background:rgba(239,68,68,0.15);color:var(--red-bright);border:1px solid rgba(239,68,68,0.3);">Confirm</button>
             </div>
           </div>
         </div>
@@ -29321,7 +29392,27 @@ async function loadUserManagement() {
     document.querySelectorAll('#page-users .um-toggle-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var uid = this.getAttribute('data-uid');
-        umToggleUser(uid);
+        var user = null;
+        for (var i = 0; i < _users.length; i++) { if (_users[i].id === uid) { user = _users[i]; break; } }
+        if (!user) return;
+        var isActive = user.status !== 'disabled';
+        var title = isActive ? 'Disable User' : 'Re-enable User';
+        var msg = isActive
+          ? 'Are you sure you want to disable <strong>' + escapeHtml(user.display_name) + '</strong>? They will lose platform access.'
+          : 'Re-enable <strong>' + escapeHtml(user.display_name) + '</strong>? They will regain access with their existing role.';
+        var confirmYesBtn = document.getElementById('um-confirm-yes');
+        if (confirmYesBtn) {
+          if (isActive) {
+            confirmYesBtn.style.background = 'rgba(239,68,68,0.15)';
+            confirmYesBtn.style.color = 'var(--red-bright)';
+            confirmYesBtn.style.border = '1px solid rgba(239,68,68,0.3)';
+          } else {
+            confirmYesBtn.style.background = 'rgba(16,185,129,0.15)';
+            confirmYesBtn.style.color = 'var(--green)';
+            confirmYesBtn.style.border = '1px solid rgba(16,185,129,0.3)';
+          }
+        }
+        umShowConfirm(title, msg, function() { umToggleUser(uid); });
       });
     });
 
@@ -29329,7 +29420,7 @@ async function loadUserManagement() {
     document.querySelectorAll('#page-users .um-edit-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var uid = this.getAttribute('data-uid');
-        showToast('Edit user coming soon', 'info');
+        umOpenEditModal(uid);
       });
     });
 
@@ -29822,6 +29913,348 @@ async function loadUserManagement() {
       if (e.target === modal) umHideModal();
     });
   }
+
+  // ============================================================
+  //  SYNC FROM JIRA
+  // ============================================================
+  var jiraSyncBtn = document.getElementById('um-jira-sync-btn');
+  if (jiraSyncBtn) {
+    jiraSyncBtn.addEventListener('click', async function() {
+      jiraSyncBtn.disabled = true;
+      jiraSyncBtn.textContent = 'Syncing...';
+      try {
+        var resp = await fetch('/api/jira?action=users');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var data = await resp.json();
+        var jiraUsers = Array.isArray(data) ? data : (data.users || data.values || []);
+        var newCount = 0;
+        var existCount = 0;
+        jiraUsers.forEach(function(ju) {
+          if (!ju.emailAddress) return;
+          var exists = false;
+          for (var i = 0; i < _users.length; i++) {
+            if ((_users[i].email || '').toLowerCase() === ju.emailAddress.toLowerCase()) {
+              exists = true;
+              break;
+            }
+          }
+          if (exists) {
+            existCount++;
+          } else {
+            var newUser = {
+              id: 'u_jira_' + (ju.accountId || Date.now() + '_' + newCount),
+              email: ju.emailAddress,
+              display_name: ju.displayName || ju.emailAddress,
+              role: 'soc_l1',
+              assigned_orgs: ['all'],
+              status: ju.active === false ? 'disabled' : 'active',
+              last_login: null,
+              created_at: new Date().toISOString()
+            };
+            _users.push(newUser);
+            var auditE = {
+              id: 'a_' + Date.now() + '_' + newCount,
+              created_at: new Date().toISOString(),
+              actor: 'jira_sync',
+              action: 'user_created',
+              target: ju.emailAddress,
+              details: 'Synced from Jira DAC project, Role: soc_l1'
+            };
+            _auditLog.unshift(auditE);
+            newCount++;
+          }
+        });
+        if (newCount > 0) {
+          try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e2) {}
+          try { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); } catch(e2) {}
+        }
+        umRenderUsers(_users);
+        umRenderRoleCards(_users);
+        umRenderAudit(_auditLog);
+        var subEl = document.getElementById('um-subtitle');
+        var actCnt = _users.filter(function(u){ return u.status !== 'disabled'; }).length;
+        if (subEl) subEl.textContent = actCnt + ' active users \u00B7 ' + Object.keys(RBAC_ROLES).length + ' roles';
+        showToast('Synced ' + newCount + ' new user' + (newCount !== 1 ? 's' : '') + ' from Jira (' + existCount + ' already exist)', newCount > 0 ? 'success' : 'info');
+      } catch(err) {
+        console.error('[JiraSync]', err);
+        showToast('Jira sync failed: ' + err.message, 'error');
+      }
+      jiraSyncBtn.disabled = false;
+      jiraSyncBtn.innerHTML = '&#x1F504; Sync from Jira';
+    });
+  }
+
+  // ============================================================
+  //  CONFIRM DIALOG
+  // ============================================================
+  var _confirmCallback = null;
+  function umShowConfirm(title, msg, onConfirm) {
+    var m = document.getElementById('um-confirm-modal');
+    var t = document.getElementById('um-confirm-title');
+    var b = document.getElementById('um-confirm-msg');
+    if (!m) return;
+    if (t) t.textContent = title;
+    if (b) b.innerHTML = msg;
+    _confirmCallback = onConfirm || null;
+    m.classList.add('open');
+  }
+  function umHideConfirm() {
+    var m = document.getElementById('um-confirm-modal');
+    if (m) m.classList.remove('open');
+    _confirmCallback = null;
+  }
+  var confirmYesBtn = document.getElementById('um-confirm-yes');
+  var confirmNoBtn  = document.getElementById('um-confirm-no');
+  var confirmModal  = document.getElementById('um-confirm-modal');
+  if (confirmYesBtn) {
+    confirmYesBtn.addEventListener('click', function() {
+      var cb = _confirmCallback;
+      umHideConfirm();
+      if (cb) cb();
+    });
+  }
+  if (confirmNoBtn)  confirmNoBtn.addEventListener('click', umHideConfirm);
+  if (confirmModal) {
+    confirmModal.addEventListener('click', function(e) {
+      if (e.target === confirmModal) umHideConfirm();
+    });
+  }
+
+  // ============================================================
+  //  EDIT USER MODAL
+  // ============================================================
+  function umOpenEditModal(uid) {
+    var user = null;
+    for (var i = 0; i < _users.length; i++) { if (_users[i].id === uid) { user = _users[i]; break; } }
+    if (!user) return;
+    var em = document.getElementById('um-edit-modal');
+    if (!em) return;
+    document.getElementById('um-edit-uid').value   = uid;
+    document.getElementById('um-edit-name').value  = user.display_name || '';
+    document.getElementById('um-edit-email').value = user.email || '';
+    document.getElementById('um-edit-role').value  = user.role || 'soc_l1';
+    document.getElementById('um-edit-mfa').checked = !!user.mfa_enabled;
+    // Populate org checkboxes
+    var editOrgsDiv = document.getElementById('um-edit-orgs');
+    if (editOrgsDiv) {
+      var orgHtml2 = '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;color:var(--text-secondary);cursor:pointer;">' +
+        '<input type="checkbox" value="all" style="accent-color:var(--cyan);"' + (user.assigned_orgs && user.assigned_orgs[0] === 'all' ? ' checked' : '') + '> All Organizations</label>';
+      if (window.ORG_CONNECTORS) {
+        Object.keys(window.ORG_CONNECTORS).forEach(function(id) {
+          var org = window.ORG_CONNECTORS[id];
+          var isChecked = user.assigned_orgs && user.assigned_orgs.indexOf(id) >= 0;
+          orgHtml2 += '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;color:var(--text-secondary);cursor:pointer;">' +
+            '<input type="checkbox" value="' + escapeHtml(id) + '" style="accent-color:var(--cyan);"' + (isChecked ? ' checked' : '') + '> ' +
+            escapeHtml(org.name || org.code || id) + '</label>';
+        });
+      }
+      editOrgsDiv.innerHTML = orgHtml2;
+    }
+    em.classList.add('open');
+  }
+  function umHideEditModal() {
+    var em = document.getElementById('um-edit-modal');
+    if (em) em.classList.remove('open');
+  }
+  var editCloseBtn  = document.getElementById('um-edit-close');
+  var editCancelBtn = document.getElementById('um-edit-cancel');
+  var editSaveBtn   = document.getElementById('um-edit-save');
+  var editModal     = document.getElementById('um-edit-modal');
+  if (editCloseBtn)  editCloseBtn.addEventListener('click', umHideEditModal);
+  if (editCancelBtn) editCancelBtn.addEventListener('click', umHideEditModal);
+  if (editModal) {
+    editModal.addEventListener('click', function(e) {
+      if (e.target === editModal) umHideEditModal();
+    });
+  }
+  if (editSaveBtn) {
+    editSaveBtn.addEventListener('click', async function() {
+      var uid2     = (document.getElementById('um-edit-uid')   || {}).value || '';
+      var newName  = (document.getElementById('um-edit-name')  || {}).value || '';
+      var newRole2 = (document.getElementById('um-edit-role')  || {}).value || 'soc_l1';
+      var newMfa   = !!(document.getElementById('um-edit-mfa') || {}).checked;
+      if (!uid2 || !newName) { showToast('Display Name is required', 'error'); return; }
+      var selectedOrgs2 = [];
+      var editOrgsDiv2 = document.getElementById('um-edit-orgs');
+      if (editOrgsDiv2) {
+        editOrgsDiv2.querySelectorAll('input[type=checkbox]:checked').forEach(function(cb){ selectedOrgs2.push(cb.value); });
+      }
+      if (selectedOrgs2.length === 0) selectedOrgs2 = ['all'];
+      var user2 = null;
+      for (var i = 0; i < _users.length; i++) { if (_users[i].id === uid2) { user2 = _users[i]; break; } }
+      if (!user2) return;
+      var oldRole2 = user2.role;
+      user2.display_name  = newName;
+      user2.role          = newRole2;
+      user2.assigned_orgs = selectedOrgs2;
+      user2.mfa_enabled   = newMfa;
+      var saved2 = false;
+      try {
+        if (window._supabaseRef) {
+          var upd = await window._supabaseRef.from('platform_users').update({
+            display_name: newName, role: newRole2, assigned_orgs: selectedOrgs2, mfa_enabled: newMfa
+          }).eq('id', uid2);
+          if (!upd.error) saved2 = true;
+        }
+      } catch(e) {}
+      if (!saved2) { try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e) {} }
+      var auditEntry2 = {
+        id: 'a_' + Date.now(),
+        created_at: new Date().toISOString(),
+        actor: 'current_user',
+        action: 'role_changed',
+        target: user2.email,
+        details: 'Edited: name=' + newName + (oldRole2 !== newRole2 ? ', role=' + oldRole2 + '\u2192' + newRole2 : '')
+      };
+      _auditLog.unshift(auditEntry2);
+      try {
+        if (window._supabaseRef) await window._supabaseRef.from('rbac_audit_log').insert([auditEntry2]);
+        else { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); }
+      } catch(e) {}
+      umHideEditModal();
+      umRenderUsers(_users);
+      umRenderRoleCards(_users);
+      umRenderAudit(_auditLog);
+      showToast('User updated', 'success');
+    });
+  }
+
+  // ============================================================
+  //  EDIT ROLES (PERMISSION MATRIX EDIT MODE)
+  // ============================================================
+  var _rbacEditMode = false;
+  var _rbacDraft    = null;
+
+  function umDeepCopyPerms(src) {
+    var copy = {};
+    Object.keys(src).forEach(function(grp) {
+      copy[grp] = {};
+      Object.keys(src[grp]).forEach(function(perm) {
+        copy[grp][perm] = {};
+        Object.keys(src[grp][perm]).forEach(function(rk) {
+          copy[grp][perm][rk] = src[grp][perm][rk];
+        });
+      });
+    });
+    return copy;
+  }
+
+  function umRenderMatrixEdit() {
+    var tbody3 = document.getElementById('um-matrix-tbody');
+    if (!tbody3) return;
+    var roleOrder3 = ['soc_l1','soc_l2','soc_l3','det_eng','soc_mgr','admin','client'];
+    var permOptions = ['yes','no','read','limited','own','team'];
+    var html3 = '';
+    Object.keys(_rbacDraft).forEach(function(group) {
+      html3 += '<tr class="um-group-row"><td colspan="8" style="padding-left:8px;">' + escapeHtml(group) + '</td></tr>';
+      var perms3 = _rbacDraft[group];
+      Object.keys(perms3).forEach(function(permName) {
+        var row3 = perms3[permName];
+        html3 += '<tr><td style="padding-left:16px;color:var(--text-secondary);font-size:11px;">' + escapeHtml(permName) + '</td>';
+        roleOrder3.forEach(function(rk) {
+          var cur = row3[rk] || 'no';
+          html3 += '<td style="text-align:center;" class="um-perm-cell-edit">' +
+            '<select data-group="' + escapeHtml(group) + '" data-perm="' + escapeHtml(permName) + '" data-role="' + rk + '">' +
+            permOptions.map(function(o) { return '<option value="' + o + '"' + (o === cur ? ' selected' : '') + '>' + o + '</option>'; }).join('') +
+            '</select></td>';
+        });
+        html3 += '</tr>';
+      });
+    });
+    tbody3.innerHTML = html3;
+  }
+
+  var editRolesBtn = document.getElementById('um-edit-roles-btn');
+  // Matrix edit bar — inject after card-header of the matrix card
+  var matrixCardHeader = document.getElementById('um-matrix-toggle');
+  if (matrixCardHeader) {
+    var editBar = document.createElement('div');
+    editBar.id = 'um-matrix-edit-bar';
+    editBar.className = 'um-matrix-edit-bar';
+    editBar.innerHTML =
+      '<span style="font-size:11px;color:var(--amber);">&#9998; Edit mode &mdash; changes are not saved yet</span>' +
+      '<button class="btn btn-primary btn-sm" id="um-matrix-save-btn" style="margin-left:auto;">Save Changes</button>' +
+      '<button class="btn btn-secondary btn-sm" id="um-matrix-cancel-btn">Cancel</button>';
+    matrixCardHeader.parentNode.insertBefore(editBar, matrixCardHeader.nextSibling);
+  }
+
+  if (editRolesBtn) {
+    editRolesBtn.addEventListener('click', function() {
+      if (_rbacEditMode) return;
+      _rbacEditMode = true;
+      _rbacDraft = umDeepCopyPerms(RBAC_PERMISSIONS);
+      editRolesBtn.style.display = 'none';
+      var eb = document.getElementById('um-matrix-edit-bar');
+      if (eb) eb.classList.add('visible');
+      // Expand matrix if collapsed
+      var matBody = document.getElementById('um-matrix-body');
+      var matLabel = document.getElementById('um-matrix-toggle-label');
+      if (matBody && _matrixCollapsed) {
+        _matrixCollapsed = false;
+        matBody.style.display = '';
+        if (matLabel) matLabel.textContent = '\u25BC Collapse';
+      }
+      umRenderMatrixEdit();
+    });
+  }
+
+  document.getElementById('page-users').addEventListener('click', function(e) {
+    var saveBtn3 = e.target.closest ? e.target.closest('#um-matrix-save-btn') : null;
+    var cancBtn3 = e.target.closest ? e.target.closest('#um-matrix-cancel-btn') : null;
+    if (!saveBtn3 && e.target.id === 'um-matrix-save-btn') saveBtn3 = e.target;
+    if (!cancBtn3 && e.target.id === 'um-matrix-cancel-btn') cancBtn3 = e.target;
+    if (saveBtn3) {
+      // Collect all selects in matrix
+      var matBodyEl = document.getElementById('um-matrix-body');
+      if (matBodyEl) {
+        matBodyEl.querySelectorAll('select[data-group]').forEach(function(sel) {
+          var grp4  = sel.getAttribute('data-group');
+          var perm4 = sel.getAttribute('data-perm');
+          var role4 = sel.getAttribute('data-role');
+          if (_rbacDraft[grp4] && _rbacDraft[grp4][perm4]) {
+            _rbacDraft[grp4][perm4][role4] = sel.value;
+          }
+        });
+      }
+      // Apply draft to live
+      Object.keys(_rbacDraft).forEach(function(grp5) {
+        if (!RBAC_PERMISSIONS[grp5]) RBAC_PERMISSIONS[grp5] = {};
+        Object.keys(_rbacDraft[grp5]).forEach(function(perm5) {
+          if (!RBAC_PERMISSIONS[grp5][perm5]) RBAC_PERMISSIONS[grp5][perm5] = {};
+          Object.keys(_rbacDraft[grp5][perm5]).forEach(function(rk5) {
+            RBAC_PERMISSIONS[grp5][perm5][rk5] = _rbacDraft[grp5][perm5][rk5];
+          });
+        });
+      });
+      try { localStorage.setItem('dacta_rbac_permissions', JSON.stringify(RBAC_PERMISSIONS)); } catch(e) {}
+      var auditPerm = {
+        id: 'a_' + Date.now(),
+        created_at: new Date().toISOString(),
+        actor: 'current_user',
+        action: 'permission_modified',
+        target: 'RBAC_PERMISSIONS',
+        details: 'Permission matrix updated via edit mode'
+      };
+      _auditLog.unshift(auditPerm);
+      try { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); } catch(e) {}
+      _rbacEditMode = false;
+      _rbacDraft    = null;
+      var eb2 = document.getElementById('um-matrix-edit-bar');
+      if (eb2) eb2.classList.remove('visible');
+      if (editRolesBtn) editRolesBtn.style.display = '';
+      umRenderMatrix();
+      umRenderAudit(_auditLog);
+      showToast('Permission matrix saved', 'success');
+    }
+    if (cancBtn3) {
+      _rbacEditMode = false;
+      _rbacDraft    = null;
+      var eb3 = document.getElementById('um-matrix-edit-bar');
+      if (eb3) eb3.classList.remove('visible');
+      if (editRolesBtn) editRolesBtn.style.display = '';
+      umRenderMatrix();
+    }
+  });
 
   console.log('[UserMgmt] Loaded ' + _users.length + ' users, ' + _auditLog.length + ' audit entries');
 }
