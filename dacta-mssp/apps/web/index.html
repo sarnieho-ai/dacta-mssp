@@ -35460,18 +35460,34 @@ async function copilotAsk(text) {
   }
 
   try {
-    // Update thinking text
+    // Update thinking text with elapsed timer
     var thinkText = document.getElementById('copilotThinkText');
     if (thinkText) thinkText.textContent = 'Querying AI engine...';
+    var thinkTimer = setInterval(function() {
+      var elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+      if (thinkText && thinkText.parentNode) {
+        thinkText.textContent = 'Analyzing... ' + elapsed + 's';
+      } else {
+        clearInterval(thinkTimer);
+      }
+    }, 1000);
+
+    // Use AbortController with 120s timeout to match Vercel maxDuration
+    var abortCtrl = new AbortController();
+    var fetchTimeout = setTimeout(function() { abortCtrl.abort(); }, 120000);
 
     var resp = await fetch('/api/copilot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: abortCtrl.signal,
       body: JSON.stringify({
         messages: _copilotConversation,
         client_context: clientContext
       })
     });
+
+    clearTimeout(fetchTimeout);
+    clearInterval(thinkTimer);
 
     if (!resp.ok) {
       var errData = await resp.json().catch(function() { return { error: 'Request failed' }; });
@@ -35539,6 +35555,10 @@ async function copilotAsk(text) {
   } catch(err) {
     console.error('[Copilot]', err);
     
+    // Clean up timers
+    if (typeof thinkTimer !== 'undefined') clearInterval(thinkTimer);
+    if (typeof fetchTimeout !== 'undefined') clearTimeout(fetchTimeout);
+    
     // Remove thinking row
     var thinkEl2 = document.getElementById('copilotThinkRow');
     if (thinkEl2) thinkEl2.remove();
@@ -35560,6 +35580,10 @@ async function copilotAsk(text) {
       errorMsg = 'Authentication failed. Please check the ANTHROPIC_API_KEY in Vercel environment variables.';
     } else if (errorMsg.includes('429')) {
       errorMsg = 'Rate limit reached. Please wait a moment and try again.';
+    } else if (err.name === 'AbortError' || errorMsg.includes('abort')) {
+      errorMsg = 'Request timed out. Try a shorter or more specific question, or start a New Session to clear conversation history.';
+    } else if (errorMsg === 'Request failed' || errorMsg.includes('Failed to fetch')) {
+      errorMsg = 'Request timed out or lost connection. Try a more specific question, or start a New Session.';
     }
 
     errorRow.innerHTML = '<div class="msg-avatar copilot-av" style="border-color:rgba(239,68,68,0.3);">\u26a0\ufe0f</div>' +

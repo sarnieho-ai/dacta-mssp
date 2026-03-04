@@ -461,6 +461,73 @@ async function executeTool(name, input) {
   }
 }
 
+// ── Vercel Config ──
+export const config = {
+  maxDuration: 120 // seconds — allows for multi-tool agentic loops
+};
+
+// ── Conversation History Trimming ──
+// Keeps the conversation manageable by summarizing older assistant messages
+function trimConversation(messages) {
+  if (!messages || messages.length <= 4) return messages;
+  
+  const trimmed = [];
+  const keepRecent = 4; // Keep the last 4 messages in full (2 exchanges)
+  
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    const isRecent = i >= messages.length - keepRecent;
+    
+    if (isRecent) {
+      // Keep recent messages in full
+      trimmed.push(msg);
+    } else if (msg.role === 'user' && typeof msg.content === 'string') {
+      // Keep user messages but truncate if very long
+      trimmed.push({
+        role: 'user',
+        content: msg.content.length > 500 ? msg.content.substring(0, 500) + '... [truncated]' : msg.content
+      });
+    } else if (msg.role === 'assistant' && typeof msg.content === 'string') {
+      // Summarize older assistant text responses
+      trimmed.push({
+        role: 'assistant',
+        content: msg.content.length > 800 ? msg.content.substring(0, 800) + '\n\n[Earlier analysis truncated for brevity — key findings above]' : msg.content
+      });
+    } else if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+      // This is a tool-use turn from the agentic loop — skip it entirely
+      // (tool_use blocks + tool_result blocks from prior turns are not needed)
+      continue;
+    } else if (msg.role === 'user' && Array.isArray(msg.content)) {
+      // This is a tool_result turn — skip it
+      continue;
+    } else {
+      trimmed.push(msg);
+    }
+  }
+  
+  // Ensure valid alternating user/assistant pattern
+  // Claude requires messages to alternate, so fix any broken sequences
+  const fixed = [];
+  for (let i = 0; i < trimmed.length; i++) {
+    const msg = trimmed[i];
+    if (fixed.length === 0) {
+      fixed.push(msg);
+    } else if (fixed[fixed.length - 1].role === msg.role) {
+      // Same role back-to-back — merge or skip
+      if (msg.role === 'user' && typeof msg.content === 'string' && typeof fixed[fixed.length - 1].content === 'string') {
+        fixed[fixed.length - 1].content += '\n' + msg.content;
+      } else {
+        // Skip duplicate role
+        continue;
+      }
+    } else {
+      fixed.push(msg);
+    }
+  }
+  
+  return fixed;
+}
+
 // ── Main Handler ──
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -488,9 +555,9 @@ export default async function handler(req, res) {
       systemPrompt += `\n\n## Current Session Context\n- Selected client: ${client_context.name || 'All Clients'}\n- Client namespace: ${client_context.namespace || 'all'}\n- Client type: ${client_context.type || 'unknown'}\n- Available connectors: ${(client_context.connectors || []).map(c => c.display_name + ' (' + c.connector_type + ')').join(', ') || 'unknown'}`;
     }
 
-    // Agentic loop — Claude may call tools multiple times
-    let currentMessages = [...messages];
-    let maxIterations = 8; // Safety limit to prevent infinite loops
+    // Trim conversation history to avoid timeout on follow-ups
+    let currentMessages = trimConversation(messages);
+    let maxIterations = 5; // Safety limit — 5 tool rounds max to stay within timeout
     let iteration = 0;
     let toolCallLog = []; // Track all tool calls for transparency
 
