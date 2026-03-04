@@ -50,10 +50,12 @@ class PiiVault {
       },
       // Hostnames — patterns like WIN-SRV-DC01, DACTASG-WS-047, etc.
       // Only match uppercase hostnames with hyphens/numbers (avoids false positives)
+      // Excludes: Jira ticket keys (DAC-18819), MITRE IDs (T1059-001)
       {
         category: 'HOST',
         regex: /\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+){1,5}\b/g,
-        priority: 50
+        priority: 50,
+        exclude: /^[A-Z]{1,6}-\d+$|^T\d{4}(?:\.\d{3})?(?:-\d+)?$/  // Skip Jira keys (PROJ-12345) and MITRE IDs (T1059, T1059.001, T1059-001)
       },
       // Usernames — common patterns like jdoe, john.smith, admin\jdoe
       // Only match when preceded by user-context keywords
@@ -142,6 +144,8 @@ class PiiVault {
           if (!captured || captured.length < 2) return fullMatch;
           // Don't tokenize values that look like already-tokenized
           if (captured.startsWith('[[') && captured.endsWith(']]')) return fullMatch;
+          // Check exclude pattern
+          if (pat.exclude && pat.exclude.test(captured)) return fullMatch;
           const token = this._getToken(pat.category, captured);
           return fullMatch.replace(captured, token);
         });
@@ -149,6 +153,8 @@ class PiiVault {
         result = result.replace(pat.regex, (match) => {
           // Don't tokenize things that are already tokens
           if (match.startsWith('[[') && match.endsWith(']]')) return match;
+          // Check exclude pattern (e.g., skip Jira ticket keys like DAC-18819)
+          if (pat.exclude && pat.exclude.test(match)) return match;
           // Don't tokenize very short matches that might be false positives
           if (pat.category === 'HOST' && match.length < 5) return match;
           // Don't tokenize phone-like patterns that are too short or look like ports
