@@ -26037,7 +26037,11 @@ function mapRuleRow(r) {
 
 // ── Fetch ONE page of rules with server-side filter/sort ──
 async function loadRulesPage(page, filters) {
-  if (!window._dactaSupabase) return { data: [], count: 0 };
+  // Wait up to 3s for Supabase client init (may not be ready yet on first nav)
+  if (!window._dactaSupabase) {
+    for (var _w = 0; _w < 15 && !window._dactaSupabase; _w++) await new Promise(function(r) { setTimeout(r, 200); });
+  }
+  if (!window._dactaSupabase) { console.warn('[DetectionRules] Supabase not initialized'); return { data: [], count: 0 }; }
   filters = filters || _rulesCurrentFilters;
   var perPage = _rulesPerPage;
   var from = (page - 1) * perPage;
@@ -26075,13 +26079,17 @@ async function loadRulesPage(page, filters) {
   }
 
   var res = await query;
-  if (res.error) { console.warn('[DetectionRules] Page query error:', res.error); return { data: [], count: 0 }; }
+  if (res.error) { console.warn('[DetectionRules] Page query error:', res.error.message, res.error.code, res.error); return { data: [], count: 0 }; }
   return { data: (res.data || []).map(mapRuleRow), count: res.count || 0 };
 }
 
 // ── Load stat card counts via parallel lightweight queries ──
 async function loadRuleStatCounts() {
-  if (!window._dactaSupabase) return;
+  // Wait up to 3s for Supabase client init
+  if (!window._dactaSupabase) {
+    for (var _w = 0; _w < 15 && !window._dactaSupabase; _w++) await new Promise(function(r) { setTimeout(r, 200); });
+  }
+  if (!window._dactaSupabase) { console.warn('[DetectionRules] Supabase not ready for stat counts'); return; }
   var sb = window._dactaSupabase;
   try {
     var [totalRes, activeRes, edrRes, fwRes, critRes, cloudRes] = await Promise.all([
@@ -26216,9 +26224,85 @@ async function showPlaybook(ruleDbId, ruleName) {
   document.getElementById('playbookContent').innerHTML = html;
 }
 
-// ── Main init: loads first page + stats (replaces loadDetectionRulesLive) ──
+// ── Elastic live rule loader (lightweight — no Supabase needed) ──
+async function loadElasticRules() {
+  try {
+    var resp = await fetch('/api/elastic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'search',
+        index: '.internal.alerts-security*',
+        body: {
+          size: 0,
+          aggs: {
+            rules: {
+              terms: { field: 'kibana.alert.rule.name', size: 100 },
+              aggs: {
+                severity: { terms: { field: 'kibana.alert.severity', size: 1 } },
+                category: { terms: { field: 'kibana.alert.rule.category', size: 1 } },
+                latest: { top_hits: { size: 1, sort: [{ '@timestamp': 'desc' }], _source: ['kibana.alert.rule.name', 'kibana.alert.rule.category', 'kibana.alert.severity', 'kibana.alert.rule.description', 'kibana.alert.rule.tags'] } }
+              }
+            }
+          }
+        }
+      })
+    });
+    var result = await resp.json();
+    if (!result || !result.aggregations) return [];
+    var buckets = result.aggregations.rules ? result.aggregations.rules.buckets : [];
+    var elasticRules = [];
+    var idx = 1;
+    buckets.forEach(function(b) {
+      var hit = (b.latest && b.latest.hits && b.latest.hits.hits && b.latest.hits.hits[0]) ? b.latest.hits.hits[0]._source : {};
+      var alert = hit.kibana ? hit.kibana.alert || {} : {};
+      var rule = alert.rule || {};
+      var sev = (b.severity && b.severity.buckets && b.severity.buckets[0]) ? b.severity.buckets[0].key : 'medium';
+      var cat = (b.category && b.category.buckets && b.category.buckets[0]) ? b.category.buckets[0].key : 'Custom Query Rule';
+      var sevMap = { 'critical': 'Critical', 'high': 'High', 'medium': 'Medium', 'low': 'Low' };
+      var typeMap = { 'Custom Query Rule': 'Sigma', 'Threshold Rule': 'Threshold', 'EQL Rule': 'EQL', 'Machine Learning Rule': 'ML', 'Indicator Match Rule': 'Correlation' };
+      var tags = rule.tags || [];
+      var mitre = '\u2014';
+      tags.forEach(function(t) { if (t && t.match && t.match(/^T\d{4}/)) mitre = t; });
+      var isDacta = b.key.indexOf('DACTA') >= 0;
+      var logSources = [];
+      if (b.key.toLowerCase().indexOf('ip ') >= 0 || b.key.toLowerCase().indexOf('ioc') >= 0) logSources.push('network');
+      if (b.key.toLowerCase().indexOf('web') >= 0 || b.key.toLowerCase().indexOf('shell') >= 0) logSources.push('windows');
+      if (b.key.toLowerCase().indexOf('edr') >= 0 || b.key.toLowerCase().indexOf('crowdstrike') >= 0) logSources.push('edr');
+      if (b.key.toLowerCase().indexOf('firewall') >= 0 || b.key.toLowerCase().indexOf('forti') >= 0) logSources.push('firewall');
+      if (logSources.length === 0) logSources.push('edr');
+      elasticRules.push({
+        id: 'RUL-' + String(3000 + idx).padStart(4, '0'),
+        name: b.key,
+        type: typeMap[cat] || 'Sigma',
+        mitre: mitre,
+        severity: sevMap[sev] || 'Medium',
+        logSources: logSources,
+        author: isDacta ? 'Dacta SOC' : 'Custom',
+        ver: '1.0',
+        status: 'Production',
+        fp: '\u2014',
+        hits: b.doc_count,
+        _source: 'elastic',
+        _vendor: '',
+        _isEnabled: true,
+        _syntax: 'sigma',
+        _sourceType: '',
+        _logSourceProduct: '',
+        _logSourceCategory: 'edr'
+      });
+      idx++;
+    });
+    return elasticRules;
+  } catch(err) {
+    console.warn('[DetectionRules] Elastic load failed, Supabase-only mode:', err.message);
+    return [];
+  }
+}
+
+// ── Main init: loads Elastic live rules + server-side paginated Supabase ──
 async function loadDetectionRulesLive() {
-  console.log('[DetectionRules] Loading rules (server-side paginated)...');
+  console.log('[DetectionRules] Loading rules from Elastic + Supabase (paginated)...');
   _rulesLoading = true;
 
   // Show loading indicator
@@ -26226,28 +26310,46 @@ async function loadDetectionRulesLive() {
   if (tbody) tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-muted);"><div style="font-size:13px;">Loading detection rules...</div></td></tr>';
 
   try {
-    // Fire page load + stat counts in parallel
-    var [pageResult] = await Promise.all([
+    // Fire Elastic + Supabase page + stat counts in parallel
+    var [elasticRules, pageResult] = await Promise.all([
+      loadElasticRules(),
       loadRulesPage(1, _rulesCurrentFilters),
       loadRuleStatCounts()
     ]);
 
-    rulesData = pageResult.data;
+    var supabaseRows = pageResult.data;
     _rulesTotalCount = pageResult.count;
     _rulesPage = 1;
+
+    // Merge: Elastic rules at top, then Supabase paginated rules (deduped by name)
+    if (elasticRules.length > 0) {
+      var elasticNames = {};
+      elasticRules.forEach(function(r) { elasticNames[r.name] = true; });
+      var deduped = supabaseRows.filter(function(r) { return !elasticNames[r.name]; });
+      rulesData = elasticRules.concat(deduped);
+      console.log('[DetectionRules] ' + elasticRules.length + ' from Elastic + ' + deduped.length + ' from Supabase page = ' + rulesData.length + ' displayed');
+      // Sync elastic rules to Supabase in background
+      if (typeof syncDetectionRulesToSupabase === 'function') syncDetectionRulesToSupabase(elasticRules);
+    } else {
+      rulesData = supabaseRows;
+      console.log('[DetectionRules] Supabase-only: ' + supabaseRows.length + ' rules on page 1 of ' + _rulesTotalCount.toLocaleString() + ' total');
+    }
 
     // Update page subtitle
     var page = document.getElementById('page-rules');
     if (page) {
       var sub = page.querySelector('.page-subtitle');
       if (sub) {
-        sub.innerHTML = _rulesTotalCount.toLocaleString() + ' rules from Supabase repository ' + jiraLiveBadge();
+        var srcLabel = elasticRules.length > 0
+          ? elasticRules.length + ' live from Elastic + ' + (_rulesTotalCount || 0).toLocaleString() + ' from Supabase repo'
+          : _rulesTotalCount.toLocaleString() + ' rules from Supabase repository';
+        sub.innerHTML = srcLabel + ' ' + jiraLiveBadge();
       }
     }
 
     // Update tab badge
     var tabCount = document.getElementById('repoTabCount');
-    if (tabCount) tabCount.textContent = _rulesTotalCount.toLocaleString();
+    if (tabCount) tabCount.textContent = (_rulesTotalCount + elasticRules.length).toLocaleString();
 
     renderRules();
     renderPipeline();
