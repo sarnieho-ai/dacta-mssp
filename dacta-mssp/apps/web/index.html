@@ -10852,18 +10852,6 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             </select>
             <select class="filter-select" id="drLogSourceFilter" onchange="if(window._applyRuleFilters) window._applyRuleFilters();">
               <option value="">All Log Sources</option>
-              <option>Windows Sysmon</option>
-              <option>Windows Security</option>
-              <option>CrowdStrike</option>
-              <option>Fortinet</option>
-              <option>Palo Alto Networks</option>
-              <option>Sophos</option>
-              <option>AWS</option>
-              <option>Microsoft Azure</option>
-              <option>Google Cloud Platform</option>
-              <option>Okta</option>
-              <option>SentinelOne</option>
-              <option>Cisco</option>
             </select>
             <select class="filter-select" id="drAuthorFilter" onchange="if(window._applyRuleFilters) window._applyRuleFilters();">
               <option value="">All Authors</option>
@@ -13847,7 +13835,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                 <div class="card-header">
                   <span class="card-title">Custom Attack Chain Builder</span>
                   <div style="display:flex;gap:6px;">
-                    <button class="btn btn-xs btn-secondary" onclick="showToast('Chain cleared')">Clear</button>
+                    <button class="btn btn-xs btn-secondary" onclick="(function(){var chain=document.querySelector('.rl-chain');if(chain){var steps=chain.querySelectorAll('.rl-chain-step:not([style*=dashed])');steps.forEach(function(s){s.remove();});showToast('Attack chain cleared');}else{showToast('Chain cleared');}})();">Clear</button>
                     <button class="btn btn-xs btn-primary" onclick="showToast('Simulation queued for Dacta Global sandbox environment')">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                       Run Chain
@@ -14185,8 +14173,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="page-subtitle">All monitored log sources across client environments</div>
           </div>
           <div class="page-actions">
-            <button class="btn btn-secondary btn-sm">↓ Health Report</button>
-            <button class="btn btn-primary btn-sm">+ Add Source</button>
+            <button class="btn btn-secondary btn-sm" onclick="showToast('Generating health report...', 'info')">&#x2193; Health Report</button>
+            <button class="btn btn-primary btn-sm" onclick="showToast('Log source onboarding — use Log Parser wizard to add a new source', 'info')">+ Add Source</button>
           </div>
         </div>
 
@@ -14328,19 +14316,19 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
         <!-- Novelty Catcher Health Strip -->
         <div class="lp-catcher-strip">
-          <div class="lp-catcher-stat"><div class="val" style="color:var(--cyan);">5</div><div class="lbl">Active Catchers</div></div>
+          <div class="lp-catcher-stat"><div class="val" style="color:var(--text-muted);">0</div><div class="lbl">Active Catchers</div></div>
           <div style="width:1px;background:var(--border-card);"></div>
-          <div class="lp-catcher-stat"><div class="val" style="color:var(--amber);">12</div><div class="lbl">Unknown Patterns</div></div>
+          <div class="lp-catcher-stat"><div class="val" style="color:var(--text-muted);">0</div><div class="lbl">Unknown Patterns</div></div>
           <div style="width:1px;background:var(--border-card);"></div>
-          <div class="lp-catcher-stat"><div class="val" style="color:#22c55e;">38</div><div class="lbl">Active Parsers</div></div>
+          <div class="lp-catcher-stat"><div class="val" style="color:var(--text-muted);">0</div><div class="lbl">Active Parsers</div></div>
           <div style="width:1px;background:var(--border-card);"></div>
-          <div class="lp-catcher-stat"><div class="val" style="color:var(--text-primary);">96.2%</div><div class="lbl">Avg Match Rate</div></div>
+          <div class="lp-catcher-stat"><div class="val" style="color:var(--text-muted);">N/A</div><div class="lbl">Avg Match Rate</div></div>
           <div style="width:1px;background:var(--border-card);"></div>
-          <div class="lp-catcher-stat"><div class="val" style="color:var(--text-secondary);">2m ago</div><div class="lbl">Last Event</div></div>
+          <div class="lp-catcher-stat"><div class="val" style="color:var(--text-muted);">&#8212;</div><div class="lbl">Last Event</div></div>
           <div style="flex:1;"></div>
           <div style="display:flex;align-items:center;gap:6px;">
-            <div style="width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.5);"></div>
-            <span style="font-size:10px;color:#22c55e;font-weight:600;">All Catchers Online</span>
+            <div style="width:7px;height:7px;border-radius:50%;background:var(--text-muted);box-shadow:none;"></div>
+            <span style="font-size:10px;color:var(--text-muted);font-weight:600;">Waiting for Catchers</span>
           </div>
         </div>
 
@@ -14349,7 +14337,6 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           <button class="lp-tab-btn active" data-lptab="patterns" onclick="switchLpTab('patterns')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             Unknown Patterns Queue
-            <span style="background:rgba(245,158,11,0.15);color:var(--amber);font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;">12</span>
           </button>
           <button class="lp-tab-btn" data-lptab="library" onclick="switchLpTab('library')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
@@ -14378,113 +14365,11 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
           <!-- Queue Items -->
           <div id="lpqList">
-
-            <!-- CRITICAL: Burst alert -->
-            <div class="upq-card" data-lpq-client="naga">
-              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
-                <span class="upq-priority critical">Critical</span>
-                <div style="flex:1;">
-                  <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">Burst Alert — 14 New Patterns in 3 min</div>
-                  <div class="upq-meta"><strong>Naga World</strong> &middot; Source: firewall-gw01 &middot; First seen 4 min ago &middot; <span style="color:var(--red-bright);">14,891 occurrences/hr</span></div>
-                </div>
-                <div style="display:flex;gap:6px;">
-                  <button class="btn btn-primary btn-xs" onclick="openLpWizard()">Generate Parser</button>
-                  <button class="btn btn-secondary btn-xs" onclick="showToast('Pattern dismissed for 30 days')">Dismiss</button>
-                </div>
-              </div>
-              <div class="upq-template">&lt;TS&gt; &lt;IP&gt; CEF:0 vendor=&lt;STR&gt; product=&lt;STR&gt; version=&lt;STR&gt; sig=&lt;NUM&gt; name=&lt;STR&gt; sev=&lt;NUM&gt; src=&lt;IP&gt; dst=&lt;IP&gt; dpt=&lt;NUM&gt; act=&lt;STR&gt;</div>
-              <div class="upq-raw">2026-02-28T23:14:07Z 10.0.4.1 CEF:0|FortiGate|FortiOS|7.4.2|0419|forward traffic|3|src=192.168.88.14 dst=203.0.113.45 dpt=443 act=accept</div>
-              <div style="padding:8px 12px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.1);border-radius:6px;margin-top:8px;">
-                <div style="font-size:10px;color:var(--red-bright);font-weight:600;margin-bottom:3px;">Burst Alert: Possible log format change or attack</div>
-                <div style="font-size:10px;color:var(--text-muted);">14 distinct new patterns detected from firewall-gw01 within 3 minutes. May indicate a firmware update, misconfigured forwarder, or log injection attack. Verify with client before treating as security event.</div>
-              </div>
+            <div style="text-align:center;padding:40px 20px;color:var(--text-muted);">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:0.3;"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <div style="font-size:13px;font-weight:500;margin-bottom:6px;">No unknown patterns detected</div>
+              <div style="font-size:11px;line-height:1.6;">Unknown patterns will appear here automatically when Novelty Catchers are deployed and begin receiving log traffic.</div>
             </div>
-
-            <!-- HIGH -->
-            <div class="upq-card" data-lpq-client="spmt">
-              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
-                <span class="upq-priority high">High</span>
-                <div style="flex:1;">
-                  <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">Unknown OT Controller Event — Allen-Bradley PLC</div>
-                  <div class="upq-meta"><strong>SPMT</strong> &middot; Source: plc-controller-07 &middot; First seen 2 hours ago &middot; <span style="color:var(--amber);">847 occurrences/hr</span></div>
-                </div>
-                <div style="display:flex;gap:6px;">
-                  <button class="btn btn-primary btn-xs" onclick="openLpWizard()">Generate Parser</button>
-                  <button class="btn btn-secondary btn-xs" onclick="showToast('Pattern dismissed for 30 days')">Dismiss</button>
-                </div>
-              </div>
-              <div class="upq-template">&lt;TS&gt; &lt;NUM&gt; PLC &lt;STR&gt; tag=&lt;STR&gt; val=&lt;NUM&gt; unit=&lt;STR&gt; status=&lt;STR&gt;</div>
-              <div class="upq-raw">2026-02-28T21:07:14Z 1740 PLC AB/1756 tag=TempReactor01 val=387.2 unit=degC status=ALARM_HIGH</div>
-            </div>
-
-            <!-- HIGH -->
-            <div class="upq-card" data-lpq-client="naga">
-              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
-                <span class="upq-priority high">High</span>
-                <div style="flex:1;">
-                  <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">Custom CCTV NVR System — Unstructured Syslog</div>
-                  <div class="upq-meta"><strong>Naga World</strong> &middot; Source: nvr-cctv-main &middot; First seen 5 hours ago &middot; <span style="color:var(--amber);">312 occurrences/hr</span></div>
-                </div>
-                <div style="display:flex;gap:6px;">
-                  <button class="btn btn-primary btn-xs" onclick="openLpWizard()">Generate Parser</button>
-                  <button class="btn btn-secondary btn-xs" onclick="showToast('Pattern dismissed for 30 days')">Dismiss</button>
-                </div>
-              </div>
-              <div class="upq-template">&lt;TS&gt; &lt;STR&gt; &lt;STR&gt;[&lt;NUM&gt;]: camera=&lt;NUM&gt; event=&lt;STR&gt; zone=&lt;STR&gt; confidence=&lt;NUM&gt;</div>
-              <div class="upq-raw">Feb 28 21:45:03 nvr-main motion_detect[4281]: camera=14 event=motion_start zone=parking_east confidence=92</div>
-            </div>
-
-            <!-- MEDIUM -->
-            <div class="upq-card" data-lpq-client="dacta">
-              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
-                <span class="upq-priority medium">Medium</span>
-                <div style="flex:1;">
-                  <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">Internal ERP Application — JSON Audit Trail</div>
-                  <div class="upq-meta"><strong>Dacta Global</strong> &middot; Source: erp-app-01 &middot; First seen 1 day ago &middot; <span>128 occurrences/hr</span></div>
-                </div>
-                <div style="display:flex;gap:6px;">
-                  <button class="btn btn-primary btn-xs" onclick="openLpWizard()">Generate Parser</button>
-                  <button class="btn btn-secondary btn-xs" onclick="showToast('Pattern dismissed for 30 days')">Dismiss</button>
-                </div>
-              </div>
-              <div class="upq-template">{"timestamp":"&lt;TS&gt;","level":"&lt;STR&gt;","module":"&lt;STR&gt;","user":"&lt;STR&gt;","action":"&lt;STR&gt;","resource":"&lt;STR&gt;","ip":"&lt;IP&gt;"}</div>
-              <div class="upq-raw">{"timestamp":"2026-02-27T14:22:08Z","level":"INFO","module":"audit","user":"admin@dacta.sg","action":"export_report","resource":"/reports/q4-financial","ip":"172.16.0.55"}</div>
-            </div>
-
-            <!-- MEDIUM -->
-            <div class="upq-card" data-lpq-client="spmt">
-              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
-                <span class="upq-priority medium">Medium</span>
-                <div style="flex:1;">
-                  <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">SCADA HMI Operator Console — Setpoint Changes</div>
-                  <div class="upq-meta"><strong>SPMT</strong> &middot; Source: hmi-console-02 &middot; First seen 6 hours ago &middot; <span>67 occurrences/hr</span></div>
-                </div>
-                <div style="display:flex;gap:6px;">
-                  <button class="btn btn-primary btn-xs" onclick="openLpWizard()">Generate Parser</button>
-                  <button class="btn btn-secondary btn-xs" onclick="showToast('Pattern dismissed for 30 days')">Dismiss</button>
-                </div>
-              </div>
-              <div class="upq-template">&lt;TS&gt; SCADA &lt;STR&gt; operator=&lt;STR&gt; setpoint=&lt;STR&gt; old=&lt;NUM&gt; new=&lt;NUM&gt; unit=&lt;STR&gt;</div>
-              <div class="upq-raw">2026-02-28T18:33:21Z SCADA SETPOINT_CHANGE operator=eng_tanaka setpoint=PressureValve03 old=45.0 new=52.5 unit=PSI</div>
-            </div>
-
-            <!-- LOW -->
-            <div class="upq-card" data-lpq-client="adv">
-              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
-                <span class="upq-priority low">Low</span>
-                <div style="flex:1;">
-                  <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">VPN Concentrator — Session Heartbeat</div>
-                  <div class="upq-meta"><strong>ADV Partners</strong> &middot; Source: vpn-concentrator &middot; First seen 3 days ago &middot; <span>18 occurrences/hr</span></div>
-                </div>
-                <div style="display:flex;gap:6px;">
-                  <button class="btn btn-primary btn-xs" onclick="openLpWizard()">Generate Parser</button>
-                  <button class="btn btn-secondary btn-xs" onclick="showToast('Pattern dismissed for 30 days')">Dismiss</button>
-                </div>
-              </div>
-              <div class="upq-template">&lt;TS&gt; vpn &lt;STR&gt; session=&lt;HEX&gt; user=&lt;STR&gt; src=&lt;IP&gt; duration=&lt;NUM&gt;s bytes_in=&lt;NUM&gt; bytes_out=&lt;NUM&gt;</div>
-              <div class="upq-raw">2026-02-25T09:41:00Z vpn HEARTBEAT session=a3f8c2d1 user=j.chen@adv.com src=203.0.113.88 duration=3600s bytes_in=524288 bytes_out=1048576</div>
-            </div>
-
           </div>
         </div>
 
@@ -14529,138 +14414,11 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               </thead>
               <tbody>
                 <tr>
-                  <td style="color:var(--text-primary);font-weight:500;">Windows Security Events</td>
-                  <td>Dacta Global</td>
-                  <td>Microsoft</td>
-                  <td><span style="font-family:var(--font-mono);font-size:11px;">12/12</span></td>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                      <div class="ap-match-bar"><div class="ap-match-fill" style="width:99%;background:#22c55e;"></div></div>
-                      <span style="font-size:10px;font-family:var(--font-mono);color:#22c55e;">99.1%</span>
-                    </div>
+                  <td colspan="8" style="text-align:center;padding:40px 20px;color:var(--text-muted);">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:10px;opacity:0.3;"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                    <div style="font-size:12px;font-weight:500;margin-bottom:4px;">No active parsers</div>
+                    <div style="font-size:11px;">Parsers will appear here when log sources are onboarded. Use the Parser Generator tab or the wizard to create a new parser.</div>
                   </td>
-                  <td><span class="ap-health live">Live</span></td>
-                  <td style="font-size:10px;color:var(--text-muted);">2 hours ago</td>
-                  <td><button class="btn btn-secondary btn-xs">View</button></td>
-                </tr>
-                <tr>
-                  <td style="color:var(--text-primary);font-weight:500;">M365 Unified Audit Log</td>
-                  <td>Dacta Global</td>
-                  <td>Microsoft</td>
-                  <td><span style="font-family:var(--font-mono);font-size:11px;">18/18</span></td>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                      <div class="ap-match-bar"><div class="ap-match-fill" style="width:98%;background:#22c55e;"></div></div>
-                      <span style="font-size:10px;font-family:var(--font-mono);color:#22c55e;">98.4%</span>
-                    </div>
-                  </td>
-                  <td><span class="ap-health live">Live</span></td>
-                  <td style="font-size:10px;color:var(--text-muted);">1 hour ago</td>
-                  <td><button class="btn btn-secondary btn-xs">View</button></td>
-                </tr>
-                <tr>
-                  <td style="color:var(--text-primary);font-weight:500;">FortiGate Firewall Syslog</td>
-                  <td>SPMT</td>
-                  <td>Fortinet</td>
-                  <td><span style="font-family:var(--font-mono);font-size:11px;">8/11</span></td>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                      <div class="ap-match-bar"><div class="ap-match-fill" style="width:97%;background:#22c55e;"></div></div>
-                      <span style="font-size:10px;font-family:var(--font-mono);color:#22c55e;">97.2%</span>
-                    </div>
-                  </td>
-                  <td><span class="ap-health live">Live</span></td>
-                  <td style="font-size:10px;color:var(--text-muted);">3 hours ago</td>
-                  <td><button class="btn btn-secondary btn-xs">View</button></td>
-                </tr>
-                <tr>
-                  <td style="color:var(--text-primary);font-weight:500;">CrowdStrike Falcon EDR</td>
-                  <td>SPMT</td>
-                  <td>CrowdStrike</td>
-                  <td><span style="font-family:var(--font-mono);font-size:11px;">15/15</span></td>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                      <div class="ap-match-bar"><div class="ap-match-fill" style="width:99%;background:#22c55e;"></div></div>
-                      <span style="font-size:10px;font-family:var(--font-mono);color:#22c55e;">99.7%</span>
-                    </div>
-                  </td>
-                  <td><span class="ap-health live">Live</span></td>
-                  <td style="font-size:10px;color:var(--text-muted);">45 min ago</td>
-                  <td><button class="btn btn-secondary btn-xs">View</button></td>
-                </tr>
-                <tr>
-                  <td style="color:var(--text-primary);font-weight:500;">Cisco ASA Firewall</td>
-                  <td>Naga World</td>
-                  <td>Cisco</td>
-                  <td><span style="font-family:var(--font-mono);font-size:11px;">6/9</span></td>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                      <div class="ap-match-bar"><div class="ap-match-fill" style="width:78%;background:var(--amber);"></div></div>
-                      <span style="font-size:10px;font-family:var(--font-mono);color:var(--amber);">78.3%</span>
-                    </div>
-                  </td>
-                  <td><span class="ap-health stale">Stale</span></td>
-                  <td style="font-size:10px;color:var(--amber);">18 hours ago</td>
-                  <td><button class="btn btn-secondary btn-xs">View</button></td>
-                </tr>
-                <tr>
-                  <td style="color:var(--text-primary);font-weight:500;">Naga POS System</td>
-                  <td>Naga World</td>
-                  <td>Custom</td>
-                  <td><span style="font-family:var(--font-mono);font-size:11px;">4/8</span></td>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                      <div class="ap-match-bar"><div class="ap-match-fill" style="width:85%;background:#fb923c;"></div></div>
-                      <span style="font-size:10px;font-family:var(--font-mono);color:#fb923c;">85.1%</span>
-                    </div>
-                  </td>
-                  <td><span class="ap-health partial">Partial</span></td>
-                  <td style="font-size:10px;color:var(--text-muted);">6 hours ago</td>
-                  <td><button class="btn btn-secondary btn-xs">View</button></td>
-                </tr>
-                <tr>
-                  <td style="color:var(--text-primary);font-weight:500;">Internal HR Application</td>
-                  <td>Dacta Global</td>
-                  <td>In-house</td>
-                  <td><span style="font-family:var(--font-mono);font-size:11px;">—</span></td>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                      <span style="font-size:10px;color:var(--text-muted);">N/A</span>
-                    </div>
-                  </td>
-                  <td><span class="ap-health draft">Draft</span></td>
-                  <td style="font-size:10px;color:var(--text-muted);">Not validated</td>
-                  <td><button class="btn btn-secondary btn-xs">View</button></td>
-                </tr>
-                <tr>
-                  <td style="color:var(--text-primary);font-weight:500;">ADV VPN Concentrator</td>
-                  <td>ADV Partners</td>
-                  <td>Palo Alto</td>
-                  <td><span style="font-family:var(--font-mono);font-size:11px;">5/5</span></td>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                      <div class="ap-match-bar"><div class="ap-match-fill" style="width:42%;background:var(--red-bright);"></div></div>
-                      <span style="font-size:10px;font-family:var(--font-mono);color:var(--red-bright);">42.8%</span>
-                    </div>
-                  </td>
-                  <td><span class="ap-health failed">Failed</span></td>
-                  <td style="font-size:10px;color:var(--red-bright);">Needs review</td>
-                  <td><button class="btn btn-secondary btn-xs">View</button></td>
-                </tr>
-                <tr>
-                  <td style="color:var(--text-primary);font-weight:500;">Allen-Bradley PLC Events</td>
-                  <td>SPMT</td>
-                  <td>Rockwell</td>
-                  <td><span style="font-family:var(--font-mono);font-size:11px;">3/7</span></td>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                      <div class="ap-match-bar"><div class="ap-match-fill" style="width:91%;background:#22c55e;"></div></div>
-                      <span style="font-size:10px;font-family:var(--font-mono);color:#22c55e;">91.4%</span>
-                    </div>
-                  </td>
-                  <td><span class="ap-health partial">Partial</span></td>
-                  <td style="font-size:10px;color:var(--text-muted);">4 hours ago</td>
-                  <td><button class="btn btn-secondary btn-xs">View</button></td>
                 </tr>
               </tbody>
             </table>
@@ -24838,7 +24596,8 @@ async function loadRulesPage(page, filters) {
   }
   if (filters.logSource) {
     var ls = filters.logSource.toLowerCase();
-    query = query.or('vendor.ilike.%' + ls + '%,log_source_product.ilike.%' + ls + '%,source_type.ilike.%' + ls + '%');
+    // filters.logSource is a DB vendor value (e.g. 'crowdstrike') — use exact eq match
+    query = query.eq('vendor', ls);
   }
   if (filters.author) {
     if (filters.author === 'Dacta SOC') query = query.eq('author', 'DACTA SIEMLess Engine');
@@ -25101,6 +24860,33 @@ async function loadElasticRules() {
   }
 }
 
+// ── Dynamically populate Log Source vendor dropdown from DB ──
+var _vendorDropdownPopulated = false;
+async function _populateVendorDropdown() {
+  if (_vendorDropdownPopulated) return;
+  var sel = document.getElementById('drLogSourceFilter');
+  if (!sel) return;
+  if (!window._dactaSupabase) return;
+  var VENDOR_NAMES = {"akamai":"Akamai","alibaba_cloud":"Alibaba Cloud","aqua":"Aqua Security","arcsight":"ArcSight","attivo":"Attivo Networks","aws":"AWS","azure":"Microsoft Azure","barracuda":"Barracuda","beyondtrust":"BeyondTrust","bitdefender":"Bitdefender","carbon_black":"Carbon Black","checkpoint":"Check Point","cisco":"Cisco","cloudflare":"Cloudflare","correlation":"Multi-Source Correlation","crowdstrike":"CrowdStrike","crowdstrike_identity":"CrowdStrike Identity","crowdstrike_intel":"CrowdStrike Intel","cyberark":"CyberArk","darktrace":"Darktrace","digital_guardian":"Digital Guardian","digitalocean":"DigitalOcean","docker":"Docker","duo":"Cisco Duo","elastic":"Elastic","eset":"ESET","f5_bigip":"F5 BIG-IP","forcepoint":"Forcepoint","fortimail":"FortiMail","fortinet":"Fortinet","fortinet_ztna":"Fortinet ZTNA","gcp":"Google Cloud Platform","github":"GitHub","google_workspace":"Google Workspace","imperva":"Imperva","juniper":"Juniper","kaspersky":"Kaspersky","kubernetes":"Kubernetes","logrhythm":"LogRhythm","m365":"Microsoft 365","mandiant":"Mandiant","mcafee":"McAfee","meraki":"Cisco Meraki","microsoft365":"Microsoft 365","microsoft_defender":"Microsoft Defender","mimecast":"Mimecast","nagios":"Nagios","netskope":"Netskope","okta":"Okta","onelogin":"OneLogin","oracle_cloud":"Oracle Cloud","palo_alto":"Palo Alto Networks","paloalto":"Palo Alto Networks","ping_identity":"Ping Identity","prisma_cloud":"Prisma Cloud","proofpoint":"Proofpoint","qradar":"IBM QRadar","qualys":"Qualys","rapid7":"Rapid7","sailpoint":"SailPoint","sentinelone":"SentinelOne","snort_suricata":"Snort/Suricata","solarwinds":"SolarWinds","sophos":"Sophos","splunk_uba":"Splunk UBA","symantec":"Symantec","tenable":"Tenable","trellix":"Trellix","trend_micro":"Trend Micro","vectra":"Vectra AI","veeam":"Veeam","wazuh":"Wazuh","windows_security":"Windows Security","windows_sysmon":"Windows Sysmon","zeek":"Zeek","zscaler":"Zscaler"};
+  try {
+    var res = await window._dactaSupabase.from('detection_rules').select('vendor').limit(1000);
+    if (res.error || !res.data) return;
+    var seen = {};
+    res.data.forEach(function(r) { if (r.vendor) seen[r.vendor] = true; });
+    var vendors = Object.keys(seen).sort();
+    // Keep existing first option (All Log Sources)
+    sel.innerHTML = '<option value="">All Log Sources</option>';
+    vendors.forEach(function(v) {
+      var displayName = VENDOR_NAMES[v] || v;
+      var opt = document.createElement('option');
+      opt.value = v; // DB value for exact filter matching
+      opt.textContent = displayName;
+      sel.appendChild(opt);
+    });
+    _vendorDropdownPopulated = true;
+  } catch(e) { console.warn('[DetectionRules] Vendor dropdown error:', e); }
+}
+
 // ── Main init: SIEMLess DB-only paginated rule loading ──
 async function loadDetectionRulesLive() {
   console.log('[DetectionRules] Loading rules from SIEMLess DB (paginated)...');
@@ -25112,6 +24898,8 @@ async function loadDetectionRulesLive() {
 
   // Wire filter inputs on first load (idempotent — safe to call multiple times)
   _wireRuleFilters();
+  // Populate vendor dropdown dynamically (async, non-blocking)
+  _populateVendorDropdown();
 
   try {
     // Load page 1 + stat counts in parallel from SIEMLess DB
@@ -26161,7 +25949,7 @@ function renderMitreIcs() {
 }
 
 function renderLogSources() {
-  if (window._dactaMode === 'production') return;
+  if (window._dactaMode === 'production') { loadLogSourceCatalogLive(); return; }
   const tbody = document.getElementById('logSourcesBody');
   if (!tbody) return;
   const statusLabel = { 'green': 'Healthy', 'amber': 'Degraded', 'red': 'Silent' };
@@ -26179,6 +25967,66 @@ function renderLogSources() {
       <td class="mono">${s.last}</td>
     </tr>
   `).join('');
+}
+
+// ── Load Log Source Catalog from live DB data (detection_rules table) ──
+async function loadLogSourceCatalogLive() {
+  var tbody = document.getElementById('logSourcesBody');
+  if (!tbody) return;
+  if (!window._dactaSupabase) {
+    for (var _w = 0; _w < 15 && !window._dactaSupabase; _w++) await new Promise(function(r) { setTimeout(r, 200); });
+  }
+  if (!window._dactaSupabase) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">SIEMLess DB not connected</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">Loading log sources...</td></tr>';
+  try {
+    var VENDOR_NAMES = {"akamai":"Akamai","alibaba_cloud":"Alibaba Cloud","aqua":"Aqua Security","arcsight":"ArcSight","attivo":"Attivo Networks","aws":"AWS","azure":"Microsoft Azure","barracuda":"Barracuda","beyondtrust":"BeyondTrust","bitdefender":"Bitdefender","carbon_black":"Carbon Black","checkpoint":"Check Point","cisco":"Cisco","cloudflare":"Cloudflare","correlation":"Multi-Source Correlation","crowdstrike":"CrowdStrike","crowdstrike_identity":"CrowdStrike Identity","crowdstrike_intel":"CrowdStrike Intel","cyberark":"CyberArk","darktrace":"Darktrace","digital_guardian":"Digital Guardian","digitalocean":"DigitalOcean","docker":"Docker","duo":"Cisco Duo","elastic":"Elastic","eset":"ESET","f5_bigip":"F5 BIG-IP","forcepoint":"Forcepoint","fortimail":"FortiMail","fortinet":"Fortinet","fortinet_ztna":"Fortinet ZTNA","gcp":"Google Cloud Platform","github":"GitHub","google_workspace":"Google Workspace","imperva":"Imperva","juniper":"Juniper","kaspersky":"Kaspersky","kubernetes":"Kubernetes","logrhythm":"LogRhythm","m365":"Microsoft 365","mandiant":"Mandiant","mcafee":"McAfee","meraki":"Cisco Meraki","microsoft365":"Microsoft 365","microsoft_defender":"Microsoft Defender","mimecast":"Mimecast","nagios":"Nagios","netskope":"Netskope","okta":"Okta","onelogin":"OneLogin","oracle_cloud":"Oracle Cloud","palo_alto":"Palo Alto Networks","paloalto":"Palo Alto Networks","ping_identity":"Ping Identity","prisma_cloud":"Prisma Cloud","proofpoint":"Proofpoint","qradar":"IBM QRadar","qualys":"Qualys","rapid7":"Rapid7","sailpoint":"SailPoint","sentinelone":"SentinelOne","snort_suricata":"Snort/Suricata","solarwinds":"SolarWinds","sophos":"Sophos","splunk_uba":"Splunk UBA","symantec":"Symantec","tenable":"Tenable","trellix":"Trellix","trend_micro":"Trend Micro","vectra":"Vectra AI","veeam":"Veeam","wazuh":"Wazuh","windows_security":"Windows Security","windows_sysmon":"Windows Sysmon","zeek":"Zeek","zscaler":"Zscaler"};
+    // Fetch first 1000 rows to get vendor/source_type/category combinations
+    var res = await window._dactaSupabase
+      .from('detection_rules')
+      .select('vendor,source_type,log_source_category')
+      .limit(1000);
+    if (res.error) throw res.error;
+    var rows = res.data || [];
+    // Build distinct vendor+source_type groups with counts
+    var groups = {};
+    rows.forEach(function(r) {
+      var key = (r.vendor || '') + '||' + (r.source_type || '');
+      if (!groups[key]) groups[key] = { vendor: r.vendor || '', source_type: r.source_type || '', category: r.log_source_category || '', count: 0 };
+      groups[key].count++;
+    });
+    var items = Object.values(groups).sort(function(a, b) { return b.count - a.count; });
+    // Update metric cards
+    var totalSources = items.length;
+    var healthyEl = document.querySelector('#page-logsources .metric-card.green .metric-value');
+    var eventsEl = document.querySelector('#page-logsources .metric-card.cyan .metric-value');
+    if (healthyEl) healthyEl.textContent = totalSources;
+    // Build table rows
+    var html = '';
+    items.forEach(function(s) {
+      var displayName = VENDOR_NAMES[s.vendor] || s.vendor || 'Unknown';
+      var sourceName = s.source_type || displayName;
+      html += '<tr>';
+      html += '<td><div style="display:flex;align-items:center;gap:6px;"><div class="status-dot green"></div><span style="font-size:10px;color:var(--text-muted);">Healthy</span></div></td>';
+      html += '<td style="color:var(--text-primary);font-weight:500;">' + sourceName + '</td>';
+      html += '<td style="font-size:11px;">' + displayName + ' / SIEMLess</td>';
+      html += '<td>' + displayName + '</td>';
+      html += '<td class="mono" style="font-size:10px;">' + (s.vendor || '') + '_*</td>';
+      html += '<td style="font-size:11px;">All Tenants</td>';
+      html += '<td style="font-family:var(--font-mono);font-weight:600;">' + s.count.toLocaleString() + '</td>';
+      html += '<td style="font-family:var(--font-mono);font-size:11px;">—</td>';
+      html += '<td><span class="badge badge-green">100%</span></td>';
+      html += '<td class="mono">—</td>';
+      html += '</tr>';
+    });
+    if (!html) html = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">No log sources found in SIEMLess DB</td></tr>';
+    tbody.innerHTML = html;
+  } catch(e) {
+    console.warn('[LogSourceCatalog] Error:', e);
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">Error loading log sources from SIEMLess DB</td></tr>';
+  }
 }
 
 function renderAssets() {
@@ -29958,6 +29806,7 @@ function navigate(page) {
   if (page === 'intel') setTimeout(loadThreatIntelLive, 100);
   if (page === 'hunting') setTimeout(loadThreatHuntingLive, 100);
   if (page === 'rules') { loadDetectionRulesLive(); }
+  if (page === 'logsources') setTimeout(loadLogSourceCatalogLive, 100);
   if (page === 'entities') setTimeout(function() { if (typeof initEntityExplorer === 'function') initEntityExplorer(); }, 50);
   if (page === 'assets') setTimeout(loadAssetManagement, 100);
   if (page === 'users') setTimeout(loadUserManagement, 100);
