@@ -1,8 +1,8 @@
 // Vercel Serverless Function — DACTA Copilot AI Proxy
-// Agentic Claude-powered copilot with tool-use for Elastic SIEM, OpenCTI, and Jira
+// Agentic Claude-powered copilot with tool-use for Elastic SIEM, DACTA TIP, and Jira
 // GDPR/PDPA-compliant: PII is tokenized before reaching any LLM.
 // Required env vars: ANTHROPIC_API_KEY, ELASTIC_URL, ELASTIC_API_KEY, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_INSTANCE
-// Optional: OPENCTI_URL, OPENCTI_TOKEN
+// Optional: OPENCTI_URL, OPENCTI_TOKEN (DACTA TIP credentials)
 
 const { PiiVault } = require('./lib/pii-vault.js');
 
@@ -17,7 +17,7 @@ const JIRA_INSTANCE = process.env.JIRA_INSTANCE || 'dactaglobal-sg.atlassian.net
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-// OpenCTI — fallback to base64-encoded defaults if env vars not set
+// DACTA TIP — fallback to base64-encoded defaults if env vars not set
 function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
 const OPENCTI_URL = process.env.OPENCTI_URL || _d('aHR0cDovLzYxLjEzLjIxNC4xOTg6ODA4MA==');
 const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || _d('NjE4OTZjMTQtNWM0OS00NDQ2LTllMDEtYTI4MWRmNTNmY2Qz');
@@ -44,7 +44,7 @@ const SYSTEM_PROMPT = `You are DACTA Copilot, an AI-powered SOC investigation as
 
 ## Available Data Sources
 - **Elastic SIEM**: Real-time log data from client environments. Supports KQL and Elasticsearch DSL queries. Data is organized by client namespace (e.g., dacta-*, nagaworld-*, foxwood-*).
-- **OpenCTI (DACTA TIP)**: Threat intelligence platform with IOC indicators, MITRE ATT&CK techniques, and threat reports.
+- **DACTA TIP**: Threat intelligence platform with IOC indicators, MITRE ATT&CK techniques, and threat reports.
 - **Jira Service Management**: Incident tickets, alert history, and escalation records. Project key is DAC.
 
 ## Client Context
@@ -58,9 +58,9 @@ When a client is selected, scope your SIEM queries to that client's namespace. A
 - SPMT (namespace: spmt) — SOCaaS, has EDR + Firewall
 
 ## Important Rules
-1. ALWAYS use tools to verify claims. Never say "this IP is malicious" without checking OpenCTI and Elastic first.
+1. ALWAYS use tools to verify claims. Never say "this IP is malicious" without checking DACTA TIP and Elastic first.
 2. When searching logs, use appropriate index patterns based on the selected client.
-3. For IP lookups, check BOTH OpenCTI (threat intel) AND Elastic (log presence).
+3. For IP lookups, check BOTH DACTA TIP (threat intel) AND Elastic (log presence).
 4. For ticket searches, construct appropriate JQL queries.
 5. When you find something interesting in logs, proactively suggest follow-up queries the analyst could run.
 6. If the user asks about a specific host, search across multiple data sources to build a complete picture.
@@ -104,7 +104,7 @@ const TOOLS = [
   },
   {
     name: "lookup_ioc_opencti",
-    description: "Look up an Indicator of Compromise (IOC) in OpenCTI threat intelligence platform. Checks if an IP address, domain, file hash (MD5/SHA1/SHA256), or URL has been flagged as malicious or suspicious. Returns threat score, indicator type, and associated threat reports.",
+    description: "Look up an Indicator of Compromise (IOC) in DACTA TIP threat intelligence platform. Checks if an IP address, domain, file hash (MD5/SHA1/SHA256), or URL has been flagged as malicious or suspicious. Returns threat score, indicator type, and associated threat reports.",
     input_schema: {
       type: "object",
       properties: {
@@ -123,7 +123,7 @@ const TOOLS = [
   },
   {
     name: "lookup_mitre_technique",
-    description: "Look up a MITRE ATT&CK technique by its ID (e.g., T1059, T1059.001) in OpenCTI. Returns technique name, description, kill chain phases/tactics, and associated procedures.",
+    description: "Look up a MITRE ATT&CK technique by its ID (e.g., T1059, T1059.001) in DACTA TIP. Returns technique name, description, kill chain phases/tactics, and associated procedures.",
     input_schema: {
       type: "object",
       properties: {
@@ -294,7 +294,7 @@ async function executeLookupIOC(params) {
       verdict: indicators.length > 0 ? 'FLAGGED_IN_THREAT_INTEL' : 'NOT_FOUND_IN_THREAT_INTEL'
     };
   } catch (err) {
-    return { error: `OpenCTI lookup failed: ${err.message}`, ioc_value: value };
+    return { error: `DACTA TIP lookup failed: ${err.message}`, ioc_value: value };
   }
 }
 

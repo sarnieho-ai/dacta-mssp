@@ -1,8 +1,8 @@
-// Vercel Serverless Function — OpenCTI GraphQL Proxy
-// Proxies OpenCTI GraphQL queries from the frontend, hiding credentials server-side
+// Vercel Serverless Function — DACTA TIP GraphQL Proxy
+// Proxies DACTA TIP GraphQL queries from the frontend, hiding credentials server-side
 // Supports: observable lookups (IP, hash, domain), indicator queries, report searches
 
-const _OU = 'aHR0cDovLzYxLjEzLjIxNC4xOTg6ODA4MA=='; // opencti URL
+const _OU = 'aHR0cDovLzYxLjEzLjIxNC4xOTg6ODA4MA=='; // DACTA TIP URL
 const _OK = 'NjE4OTZjMTQtNWM0OS00NDQ2LTllMDEtYTI4MWRmNTNmY2Qz'; // api token
 
 function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     const data = await response.json();
     return res.status(response.status).json(data);
   } catch (err) {
-    console.error('OpenCTI proxy error:', err);
+    console.error('DACTA TIP proxy error:', err);
     return res.status(500).json({ error: err.message });
   }
 }

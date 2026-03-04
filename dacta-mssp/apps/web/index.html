@@ -8620,7 +8620,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 }
 
 </style>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.supabase.co https://*.atlassian.net https://*.atlassian.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.atlassian.net https://*.atlassian.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://*.opencti.io http://61.13.214.198:*;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.supabase.co https://*.atlassian.net https://*.atlassian.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.atlassian.net https://*.atlassian.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com http://61.13.214.198:*;">
     </head>
 <body>
 
@@ -11615,12 +11615,12 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               console.error('[Coverage] Load error:', e);
             }
           }
-          // ── Emerging Threats (Live from OpenCTI) ─────────────
+          // ── Emerging Threats (Live from DACTA TIP) ─────────────
           async function loadEmergingThreats() {
             var panel = document.getElementById('dr-panel-emerging');
             if(!panel) return;
             var list = document.getElementById('etThreatList');
-            if(list) list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px;"><div class="jira-spinner" style="margin:0 auto 10px;"></div>Loading from OpenCTI...</div>';
+            if(list) list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px;"><div class="jira-spinner" style="margin:0 auto 10px;"></div>Loading from DACTA TIP...</div>';
             try {
               var resp = await fetch('/api/opencti', {
                 method:'POST', headers:{'Content-Type':'application/json'},
@@ -11635,7 +11635,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                 var statusOptions = ['new','testing','validated'];
                 var status = statusOptions[idx % statusOptions.length];
                 var statusLabels = {new:'New', testing:'In Testing', validated:'Validated'};
-                return '<div class="et-threat-card" data-et-status="'+status+'" id="etCard'+idx+'">'+'<div class="et-tc-header"><div><div class="et-tc-title">'+r.name+'</div><div class="et-tc-date">'+created+'</div></div><span class="et-status-badge '+status+'">'+statusLabels[status]+'</span></div>'+(r.description?'<div class="et-tc-desc">'+r.description.substring(0,200)+(r.description.length>200?'...':'')+'</div>':'<div class="et-tc-desc">Threat report from OpenCTI intelligence feed.</div>')+'<div style="display:flex;gap:6px;margin-top:10px;"><button class="btn btn-xs btn-secondary" onclick="editETRule(this,'+idx+')">Edit Rule</button><button class="btn btn-xs btn-secondary" onclick="rejectETRule(this,'+idx+')" style="color:var(--red-bright);">Reject</button><button class="btn btn-xs btn-primary" onclick="testETRule(this,'+idx+')">Test Rule &rarr;</button></div></div>';
+                return '<div class="et-threat-card" data-et-status="'+status+'" id="etCard'+idx+'">'+'<div class="et-tc-header"><div><div class="et-tc-title">'+r.name+'</div><div class="et-tc-date">'+created+'</div></div><span class="et-status-badge '+status+'">'+statusLabels[status]+'</span></div>'+(r.description?'<div class="et-tc-desc">'+r.description.substring(0,200)+(r.description.length>200?'...':'')+'</div>':'<div class="et-tc-desc">Threat report from DACTA TIP intelligence feed.</div>')+'<div style="display:flex;gap:6px;margin-top:10px;"><button class="btn btn-xs btn-secondary" onclick="editETRule(this,'+idx+')">Edit Rule</button><button class="btn btn-xs btn-secondary" onclick="rejectETRule(this,'+idx+')" style="color:var(--red-bright);">Reject</button><button class="btn btn-xs btn-primary" onclick="testETRule(this,'+idx+')">Test Rule &rarr;</button></div></div>';
               }).join('');
               if(list) list.innerHTML = html;
               // Update stats
@@ -25863,7 +25863,7 @@ async function renderEmergingThreats() {
   var sv = document.getElementById('etStatValidated'); if (sv) sv.textContent = prod;
   var sd = document.getElementById('etStatDraft'); if (sd) sd.textContent = draft;
   var stot = document.getElementById('etStatTotal'); if (stot) stot.textContent = total;
-  // Try OpenCTI first
+  // Try DACTA TIP first
   var threats = null;
   try {
     var resp = await fetch('/api/opencti', {
@@ -25878,11 +25878,11 @@ async function renderEmergingThreats() {
       threats = ocData.data.reports.edges.map(function(e) { return e.node; });
     }
   } catch (e) {
-    console.warn('[EmergingThreats] OpenCTI unavailable, falling back to rulesData', e);
+    console.warn('[EmergingThreats] DACTA TIP unavailable, falling back to rulesData', e);
   }
   var html = '';
   if (threats && threats.length > 0) {
-    // Render OpenCTI threat reports as cards
+    // Render DACTA TIP threat reports as cards
     threats.forEach(function(t) {
       var labels = (t.objectLabel && t.objectLabel.edges) ? t.objectLabel.edges.map(function(l) { return l.node.value; }) : [];
       var labelHtml = labels.slice(0, 4).map(function(lv) {
@@ -25893,7 +25893,7 @@ async function renderEmergingThreats() {
       html += '<div class="et-tc-header"><div style="flex:1;">';
       html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><span class="et-status-badge new">New</span>' + labelHtml + '</div>';
       html += '<div class="et-tc-title">' + t.name + '</div>';
-      html += '<div class="et-tc-date">Published: ' + pubDate + ' &middot; Source: OpenCTI TIP</div>';
+      html += '<div class="et-tc-date">Published: ' + pubDate + ' &middot; Source: DACTA TIP</div>';
       html += '</div></div>';
       if (t.description) {
         html += '<div class="et-tc-desc">' + t.description.substring(0, 300) + (t.description.length > 300 ? '...' : '') + '</div>';
@@ -25939,7 +25939,7 @@ async function renderEmergingThreats() {
       });
     });
     if (shown === 0) {
-      html = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">No active threat signals detected. Connect OpenCTI or wait for Elastic data.</div>';
+      html = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">No active threat signals detected. Connect DACTA TIP or wait for Elastic data.</div>';
     }
   }
   container.innerHTML = html;
@@ -26423,12 +26423,12 @@ function submitRegisterAsset() {
 }
 
 // ============================================================
-//  THREAT INTELLIGENCE & HUNTING — LIVE OpenCTI DATA
+//  THREAT INTELLIGENCE & HUNTING — LIVE DACTA TIP DATA
 // ============================================================
 async function loadThreatIntelLive() {
   var page = document.getElementById('page-intel');
   if (!page) return;
-  console.log('[ThreatIntel] Loading live data from OpenCTI + Elastic...');
+  console.log('[ThreatIntel] Loading live data from DACTA TIP + Elastic...');
 
   // Show loading state in all tab panels
   page.querySelectorAll('.tip-tab-panel').forEach(function(panel) {
@@ -26443,7 +26443,7 @@ async function loadThreatIntelLive() {
   });
 
   try {
-    // Parallel fetch: indicators, malware, reports, threat actors, attack patterns from OpenCTI
+    // Parallel fetch: indicators, malware, reports, threat actors, attack patterns from DACTA TIP
     var [indResp, malResp, repResp, actorResp, attackResp, vulnResp] = await Promise.all([
       fetch('/api/opencti', {
         method: 'POST',
@@ -26725,10 +26725,10 @@ async function loadThreatIntelLive() {
     }
 
     console.log('[ThreatIntel] Loaded: ' + indicators.length + ' indicators, ' + malwares.length + ' malware, ' + reports.length + ' reports, ' + threatActors.length + ' actors, ' + attackPatterns.length + ' attack patterns');
-    showToast('Threat Intel loaded from OpenCTI \u2014 ' + indicators.length + ' indicators, ' + threatActors.length + ' actors');
+    showToast('Threat Intel loaded from DACTA TIP \u2014 ' + indicators.length + ' indicators, ' + threatActors.length + ' actors');
 
   } catch (err) {
-    console.error('[ThreatIntel] Error loading OpenCTI data:', err);
+    console.error('[ThreatIntel] Error loading DACTA TIP data:', err);
     page.querySelectorAll('.tip-live-loader').forEach(function(el) {
       el.innerHTML = '<span style="font-size:11px;color:var(--amber);">Failed to load: ' + err.message + '</span>';
     });
@@ -26752,7 +26752,7 @@ function tipEnrichIOC(iocValue) {
 }
 
 async function loadThreatHuntingLive() {
-  // Threat Hunting page can also pull from OpenCTI for context
+  // Threat Hunting page can also pull from DACTA TIP for context
   var page = document.getElementById('page-hunting');
   if (!page) return;
   console.log('[ThreatHunting] Initializing with live context...');
@@ -26782,7 +26782,7 @@ async function loadIntegrationHub() {
       cardName: 'JIRA Service Management'
     },
     {
-      name: 'OpenCTI',
+      name: 'DACTA TIP',
       endpoint: '/api/opencti',
       body: { query: '{ about { version } }' },
       cardName: 'DACTA TIP'
@@ -35353,8 +35353,8 @@ async function copilotCheckSources() {
   } catch(e) { sources.push('Elastic \u2717'); }
   try {
     var r2 = await fetch('/api/opencti', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({query:'{ about { version } }'}) });
-    sources.push(r2.ok ? 'OpenCTI \u2713' : 'OpenCTI \u2717');
-  } catch(e) { sources.push('OpenCTI \u2717'); }
+    sources.push(r2.ok ? 'DACTA TIP \u2713' : 'DACTA TIP \u2717');
+  } catch(e) { sources.push('DACTA TIP \u2717'); }
   try {
     var r3 = await fetch('/api/jira', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'search',jql:'project=DAC',maxResults:1}) });
     sources.push(r3.ok ? 'Jira \u2713' : 'Jira \u2717');
@@ -38653,7 +38653,7 @@ async function openInvestigation(ticketKey) {
           '<div style="width:48px;height:48px;border:3px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
           '<div style="font-size:13px;color:var(--cyan);font-family:var(--font-mono);text-align:center;font-weight:500;">Initializing AI Investigation Engine</div>' +
           '<div style="width:240px;height:5px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:3px;animation:invProgressBar 8s ease-in-out forwards;"></div></div>' +
-          '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Querying log sources &middot; OpenCTI enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
+          '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Querying log sources &middot; DACTA TIP enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
         '</div>' +
         // ── Alert Graph (Chronicle-style force-directed graph) ──
         '<div class="card" style="padding:14px;border-color:rgba(0,212,255,0.15);" id="alertGraphCard">' +
@@ -39284,7 +39284,7 @@ async function queryElastic(action, index, body) {
   } catch (err) { console.error('[Elastic] Query failed:', err); return null; }
 }
 
-// ── OpenCTI GraphQL Helper ──
+// ── DACTA TIP GraphQL Helper ──
 async function queryOpenCTI(gqlQuery, variables) {
   try {
     var resp = await fetch('/api/opencti', {
@@ -39292,9 +39292,9 @@ async function queryOpenCTI(gqlQuery, variables) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: gqlQuery, variables: variables || {} })
     });
-    if (!resp.ok) { console.warn('[OpenCTI] HTTP ' + resp.status); return null; }
+    if (!resp.ok) { console.warn('[DACTA TIP] HTTP ' + resp.status); return null; }
     return await resp.json();
-  } catch (err) { console.error('[OpenCTI] Query failed:', err); return null; }
+  } catch (err) { console.error('[DACTA TIP] Query failed:', err); return null; }
 }
 
 // Helper: extract IOCs (IPs, domains, hashes, files, hosts) from text
@@ -39418,7 +39418,7 @@ function analyzeCommandContext(text) {
 
 // ── Simulate Elastic/SIEM log queries ──
 // ═══════════════════════════════════════════════════════════════
-// REAL Elastic SIEM + OpenCTI Lookup (async — queries live data)
+// REAL Elastic SIEM + DACTA TIP Lookup (async — queries live data)
 // ═══════════════════════════════════════════════════════════════
 async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   var logs = {
@@ -39668,12 +39668,12 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     logs.authEvents.push({ status: 'INFO', user: 'N/A', result: 'User context requires EDR telemetry. Not available for this client.', live: true });
   }
 
-  // ── QUERY 6: OpenCTI IOC Lookups ──
+  // ── QUERY 6: DACTA TIP IOC Lookups ──
   var lookupIPs = (logs.rawAlerts.length > 0 ? logs.rawAlerts[0].relatedIPs : iocs.ips) || [];
   for (var oi = 0; oi < lookupIPs.length; oi++) {
     var lip = lookupIPs[oi];
     if (lip.startsWith('10.') || lip.startsWith('172.') || lip.startsWith('192.168.') || lip.startsWith('127.')) continue;
-    var qDO = { name: 'OpenCTI IP: ' + lip, index: 'OpenCTI', query: 'search("' + lip + '")', status: 'running' };
+    var qDO = { name: 'DACTA TIP IP: ' + lip, index: 'DACTA TIP', query: 'search("' + lip + '")', status: 'running' };
     logs.queryDetails.push(qDO); logs.queriesRun++;
     var ocR = await queryOpenCTI('{ stixCyberObservables(first: 5, search: "' + lip + '") { edges { node { id entity_type observable_value objectLabel { value } createdBy { name } } } } }');
     if (ocR && ocR.data && ocR.data.stixCyberObservables) {
@@ -39682,16 +39682,16 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       qDO.status = 'success'; qDO.hits = oEdges.length;
       var oLabels = [];
       oEdges.forEach(function(e) { (e.node.objectLabel || []).forEach(function(l) { if (!oLabels.includes(l.value)) oLabels.push(l.value); }); });
-      logs.openctiResults.push({ type: 'IP', value: lip, found: oEdges.length > 0, labels: oLabels, source: oEdges.length > 0 ? ((oEdges[0].node.createdBy || {}).name || 'OpenCTI') : '' });
+      logs.openctiResults.push({ type: 'IP', value: lip, found: oEdges.length > 0, labels: oLabels, source: oEdges.length > 0 ? ((oEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '' });
     } else { qDO.status = 'error'; }
   }
 
-  // Hash lookups in OpenCTI
+  // Hash lookups in DACTA TIP
   var lookupHashes = (logs.rawAlerts.length > 0 ? logs.rawAlerts[0].relatedHashes : iocs.hashes) || [];
   var validH = lookupHashes.filter(function(h) { return h.length >= 32 && h !== '0000000000000000000000000000000000000000'; });
   for (var hi2 = 0; hi2 < Math.min(validH.length, 3); hi2++) {
     var lh = validH[hi2];
-    var qDH = { name: 'OpenCTI Hash: ' + lh.substring(0, 12) + '...', index: 'OpenCTI', query: 'search hash', status: 'running' };
+    var qDH = { name: 'DACTA TIP Hash: ' + lh.substring(0, 12) + '...', index: 'DACTA TIP', query: 'search hash', status: 'running' };
     logs.queryDetails.push(qDH); logs.queriesRun++;
     var hcR = await queryOpenCTI('{ stixCyberObservables(first: 5, search: "' + lh + '") { edges { node { id entity_type observable_value objectLabel { value } createdBy { name } } } } }');
     if (hcR && hcR.data && hcR.data.stixCyberObservables) {
@@ -39700,7 +39700,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       qDH.status = 'success'; qDH.hits = hEdges.length;
       var hLbls = [];
       hEdges.forEach(function(e) { (e.node.objectLabel || []).forEach(function(l) { if (!hLbls.includes(l.value)) hLbls.push(l.value); }); });
-      logs.openctiResults.push({ type: 'Hash', value: lh, found: hEdges.length > 0, labels: hLbls, source: hEdges.length > 0 ? ((hEdges[0].node.createdBy || {}).name || 'OpenCTI') : '' });
+      logs.openctiResults.push({ type: 'Hash', value: lh, found: hEdges.length > 0, labels: hLbls, source: hEdges.length > 0 ? ((hEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '' });
     } else { qDH.status = 'error'; }
   }
 
@@ -40143,7 +40143,7 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (_invHasFirewall && _invFwConn) {
     invToolsList.push((_invFwConn.vendor || 'Firewall') + ' Logs');
   }
-  invToolsList.push('OpenCTI');
+  invToolsList.push('DACTA TIP');
   var invToolsLabel = invToolsList.join(' + ');
   console.log('[AI Investigation] Org: ' + org + ' | Namespace: ' + invNamespace + ' | EDR: ' + _invHasEDR + ' | Firewall: ' + _invHasFirewall + ' | Tools: ' + invToolsLabel);
 
@@ -40180,8 +40180,8 @@ async function runAIInvestigation(ticketKey, issueData) {
   var iocs = extractIOCs(fullText);
   var techniques = detectTechniques(fullText);
   var cmdCtx = analyzeCommandContext(fullText);
-  // Real Elastic SIEM + OpenCTI lookup (async)
-  console.log('[AI Investigation] Starting real Elastic SIEM + OpenCTI queries...');
+  // Real Elastic SIEM + DACTA TIP lookup (async)
+  console.log('[AI Investigation] Starting real Elastic SIEM + DACTA TIP queries...');
   var elasticLogs;
   try {
     elasticLogs = await realElasticLookup(ticketKey, iocs, techniques, issueData);
@@ -40460,7 +40460,7 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (enrichCard && elasticLogs) {
     var eHTML = '';
     if (elasticLogs.openctiConnected) {
-      eHTML += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><div style="width:6px;height:6px;border-radius:50%;background:#10b981;"></div><span style="font-size:10px;color:#10b981;font-weight:600;">OpenCTI CONNECTED</span></div>';
+      eHTML += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><div style="width:6px;height:6px;border-radius:50%;background:#10b981;"></div><span style="font-size:10px;color:#10b981;font-weight:600;">DACTA TIP CONNECTED</span></div>';
     }
     if (elasticLogs.openctiResults && elasticLogs.openctiResults.length > 0) {
       elasticLogs.openctiResults.forEach(function(oc) {
@@ -40987,7 +40987,7 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
     actionsTaken.push('1. Alert triaged and escalated by Dacta SG SOC');
     if (iocs.hosts && iocs.hosts.length > 0) actionsTaken.push('2. Affected host(s) flagged for isolation review');
     if (iocs.users && iocs.users.length > 0) actionsTaken.push('3. Affected user account(s) flagged for review');
-    actionsTaken.push((actionsTaken.length + 1) + '. IOC enrichment via OpenCTI and threat intelligence feeds completed');
+    actionsTaken.push((actionsTaken.length + 1) + '. IOC enrichment via DACTA TIP and threat intelligence feeds completed');
   } else {
     actionsTaken.push('1. Alert triaged by Dacta SG SOC');
     actionsTaken.push('2. AI investigation completed — ' + verdict.split('\u2014')[0].trim());
@@ -41283,7 +41283,7 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
   var qCount = elasticLogs.queriesRun || 0;
   html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">' +
     '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;' + (elConn ? 'background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);') + '">' + (elConn ? '\u25CF ELASTIC SIEM LIVE' : '\u25CB ELASTIC OFFLINE') + '</span>' +
-    '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;' + (ocConn ? 'background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);') + '">' + (ocConn ? '\u25CF OPENCTI LIVE' : '\u25CB OPENCTI NO HITS') + '</span>' +
+    '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;' + (ocConn ? 'background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);') + '">' + (ocConn ? '\u25CF DACTA TIP LIVE' : '\u25CB DACTA TIP NO HITS') + '</span>' +
     '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;color:var(--text-muted);background:var(--surface-1);border:1px solid var(--border-subtle);">' + qCount + ' QUERIES EXECUTED</span>' +
   '</div>';
 
@@ -41399,10 +41399,10 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
 
   html += '</div>'; // end elastic section
 
-  // ── OpenCTI Results ──
+  // ── DACTA TIP Results ──
   if (elasticLogs.openctiResults && elasticLogs.openctiResults.length > 0) {
     html += '<div style="margin-top:8px;padding:10px 12px;background:rgba(139,92,246,0.02);border:1px solid rgba(139,92,246,0.12);border-radius:6px;">' +
-      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8b5cf6;margin-bottom:8px;">\uD83D\uDD0E OPENCTI THREAT INTELLIGENCE' + (ocConn ? ' (LIVE)' : '') + '</div>';
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8b5cf6;margin-bottom:8px;">\uD83D\uDD0E DACTA TIP THREAT INTELLIGENCE' + (ocConn ? ' (LIVE)' : '') + '</div>';
     elasticLogs.openctiResults.forEach(function(oc) {
       var found = oc.found;
       html += '<div style="margin-bottom:6px;padding:6px 8px;background:var(--surface-1);border-radius:4px;border:1px solid var(--border-subtle);">' +
