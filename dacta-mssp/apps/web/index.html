@@ -27887,12 +27887,16 @@ async function loadAIUsagePage() {
   if (!page) return;
 
   // --- Populate month filter dropdown ---
+  // Use local year/month (not toISOString which converts to UTC and can roll back a month in UTC+ timezones)
+  function _localYM(date) {
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+  }
   var monthSel = document.getElementById('aiUsageMonthFilter');
   if (monthSel && monthSel.options.length === 0) {
     var now = new Date();
     for (var mi = 0; mi < 6; mi++) {
       var d = new Date(now.getFullYear(), now.getMonth() - mi, 1);
-      var val = d.toISOString().slice(0, 7); // YYYY-MM
+      var val = _localYM(d);
       var label = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
       var opt = document.createElement('option');
       opt.value = val;
@@ -27901,7 +27905,7 @@ async function loadAIUsagePage() {
     }
   }
 
-  var selectedMonth = (monthSel && monthSel.value) ? monthSel.value : new Date().toISOString().slice(0, 7);
+  var selectedMonth = (monthSel && monthSel.value) ? monthSel.value : _localYM(new Date());
 
   // --- Fetch from server-side API (bypasses RLS, always works) ---
   var cacheKey = selectedMonth;
