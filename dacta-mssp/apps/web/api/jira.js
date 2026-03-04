@@ -285,7 +285,19 @@ export default async function handler(req, res) {
         jqlParts.push(body.assignee === 'Unassigned' ? 'assignee is EMPTY' : `assignee = "${body.assignee}"`);
       }
       if (body.label && body.label !== 'all') jqlParts.push(`labels = "${body.label}"`);
-      if (body.search) jqlParts.push(`summary ~ "${body.search}"`);
+      if (body.search) {
+        const s = body.search.trim();
+        // Direct key search (e.g. DAC-18833)
+        if (/^[A-Z]+-\d+$/i.test(s)) {
+          jqlParts.push(`key = "${s.toUpperCase()}"`);
+        } else {
+          // Use text ~ for broad search (summary + description + comments)
+          // Wrap each word with wildcard for partial matching
+          const words = s.split(/\s+/).filter(Boolean);
+          const wildcardTerms = words.map(w => `"${w}*"`).join(' AND ');
+          jqlParts.push(`text ~ ${wildcardTerms}`);
+        }
+      }
 
       const jql = jqlParts.join(' AND ') + ' ORDER BY created DESC';
       const data = await searchJql(jql, [

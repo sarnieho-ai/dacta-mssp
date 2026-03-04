@@ -2690,6 +2690,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 .tq-summary { padding:10px 16px; background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:0 0 10px 10px; font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .tq-summary span { color:var(--text-secondary); }
 .tq-summary .sep { color:var(--border-card); }
+.tq-search-suggestion:hover { background:rgba(0,212,255,0.05) !important; }
+.tq-search-suggestion:last-child { border-bottom:none !important; }
 
 /* Pulse dot for P1 */
 @keyframes tq-pulse-red { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.6)} 50%{box-shadow:0 0 0 5px rgba(239,68,68,0)} }
@@ -9366,7 +9368,12 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           <select class="filter-select"><option>AI Confidence: All</option><option>High (&gt;80%)</option><option>Medium (50–80%)</option><option>Low (&lt;50%)</option></select>
           <select class="tq-bulk-select"><option>Bulk Actions</option><option>Assign</option><option>Change Priority</option><option>Close</option></select>
           <select id="tqPageSize" class="filter-select" style="width:auto;" title="Results per page"><option value="25">25 / page</option><option value="50" selected>50 / page</option><option value="100">100 / page</option><option value="200">200 / page</option></select>
-          <input id="tqFilterSearch" class="filter-input" placeholder="Search tickets..." style="margin-left:auto;width:200px;">
+          <div id="tqSearchWrap" style="position:relative;margin-left:auto;">
+            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.4;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="tqFilterSearch" class="filter-input" placeholder="Search by ID, title, org, analyst..." style="width:260px;padding-left:30px;padding-right:28px;" autocomplete="off">
+            <button id="tqSearchClear" onclick="document.getElementById('tqFilterSearch').value='';_triageClientSearch='';this.style.display='none';_hideTriageSearchSuggestions();rerenderTriageTable();populateLiveTriage();document.getElementById('tqFilterSearch').focus();" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;align-items:center;justify-content:center;font-size:16px;line-height:1;width:18px;height:18px;border-radius:50%;" title="Clear search (Esc)">&times;</button>
+            <div id="tqSearchSuggestions" style="display:none;position:absolute;right:0;top:100%;width:320px;max-height:220px;overflow-y:auto;background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:100;margin-top:4px;"></div>
+          </div>
         </div>
 
         <!-- Rich Alert Table -->
@@ -37360,6 +37367,7 @@ var _triageCurrentIssues = [];
 var _triagePageNum = 1;
 var _triagePageTokens = { 1: null }; // page number -> nextPageToken for that page
 var _triageIsLastPage = false;
+var _triageClientSearch = ''; // client-side search term for instant filtering
 
 async function populateLiveTriage(pageOrAppend) {
   if (window._dactaMode !== 'production') return;
@@ -37399,7 +37407,7 @@ async function populateLiveTriage(pageOrAppend) {
   if (analystEl && analystEl.value !== 'All Analysts') {
     filters.assignee = analystEl.value;
   }
-  if (searchEl && searchEl.value.trim()) filters.search = searchEl.value.trim();
+  if (searchEl && searchEl.value.trim().length >= 3) filters.search = searchEl.value.trim();
   if (dateFromEl && dateFromEl.value) filters.dateFrom = dateFromEl.value;
   if (dateToEl && dateToEl.value) filters.dateTo = dateToEl.value;
 
@@ -37547,6 +37555,70 @@ function goToTriagePage(page) {
   populateLiveTriage(page);
 }
 
+// ── Search suggestions helpers ──
+function _updateTriageSearchSuggestions(query) {
+  var dropdown = document.getElementById('tqSearchSuggestions');
+  if (!dropdown || !query || query.length < 1) { _hideTriageSearchSuggestions(); return; }
+  if (!_triageCurrentIssues || !_triageCurrentIssues.length) { _hideTriageSearchSuggestions(); return; }
+
+  var q = query.toLowerCase();
+  var matches = _triageCurrentIssues.filter(function(t) {
+    return t.key.toLowerCase().indexOf(q) !== -1 ||
+           t.summary.toLowerCase().indexOf(q) !== -1 ||
+           t.org.toLowerCase().indexOf(q) !== -1 ||
+           t.assignee.toLowerCase().indexOf(q) !== -1 ||
+           t.status.toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 8);
+
+  if (matches.length === 0) {
+    dropdown.innerHTML = '<div style="padding:12px 14px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No matches in current page</div>';
+    dropdown.style.display = 'block';
+    return;
+  }
+
+  var html = matches.map(function(t) {
+    var highlightKey = t.key.replace(new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<mark style="background:rgba(0,212,255,0.2);color:var(--cyan);border-radius:2px;">$1</mark>');
+    var highlightSummary = t.summary.replace(new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<mark style="background:rgba(0,212,255,0.2);color:var(--cyan);border-radius:2px;">$1</mark>');
+    var truncSummary = highlightSummary.length > 60 ? highlightSummary.substring(0, 60) + '…' : highlightSummary;
+    return '<div class="tq-search-suggestion" onclick="_selectTriageSearchSuggestion(\'' + t.key + '\')" style="padding:8px 14px;cursor:pointer;border-bottom:1px solid var(--border-subtle);font-size:11px;display:flex;gap:8px;align-items:center;">' +
+      '<span style="color:var(--cyan);font-family:var(--font-mono);font-weight:600;white-space:nowrap;">' + highlightKey + '</span>' +
+      '<span style="color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + truncSummary + '</span>' +
+      '<span class="badge ' + jiraStatusBadge(t.status) + '" style="font-size:9px;flex-shrink:0;">' + t.status + '</span>' +
+    '</div>';
+  }).join('');
+
+  dropdown.innerHTML = html;
+  dropdown.style.display = 'block';
+}
+
+function _hideTriageSearchSuggestions() {
+  var dropdown = document.getElementById('tqSearchSuggestions');
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+function _selectTriageSearchSuggestion(key) {
+  var searchEl = document.getElementById('tqFilterSearch');
+  if (searchEl) {
+    searchEl.value = key;
+    _triageClientSearch = key;
+    var clearBtn = document.getElementById('tqSearchClear');
+    if (clearBtn) clearBtn.style.display = 'flex';
+  }
+  _hideTriageSearchSuggestions();
+  rerenderTriageTable();
+}
+
+function clearTriageSearch() {
+  var searchEl = document.getElementById('tqFilterSearch');
+  if (searchEl) searchEl.value = '';
+  _triageClientSearch = '';
+  var clearBtn = document.getElementById('tqSearchClear');
+  if (clearBtn) clearBtn.style.display = 'none';
+  _hideTriageSearchSuggestions();
+  rerenderTriageTable();
+  populateLiveTriage();
+}
+
 // ── Setup triage filters ──
 function setupTriageFilters() {
   var prioEl = document.getElementById('tqFilterPriority');
@@ -37620,7 +37692,38 @@ function setupTriageFilters() {
     var searchTimeout;
     searchEl.oninput = function() {
       clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(function() { populateLiveTriage(); }, 500);
+      var val = searchEl.value.trim();
+      // Update clear button visibility
+      var clearBtn = document.getElementById('tqSearchClear');
+      if (clearBtn) clearBtn.style.display = val ? 'flex' : 'none';
+      // Update suggestion dropdown
+      _updateTriageSearchSuggestions(val);
+      // Always do instant client-side filter of current page
+      _triageClientSearch = val;
+      rerenderTriageTable();
+      // For longer queries, also do server-side search after debounce
+      if (val.length >= 3 || val.length === 0) {
+        searchTimeout = setTimeout(function() { populateLiveTriage(); }, 600);
+      }
+    };
+    searchEl.onkeydown = function(e) {
+      if (e.key === 'Escape') {
+        searchEl.value = '';
+        _triageClientSearch = '';
+        var clearBtn = document.getElementById('tqSearchClear');
+        if (clearBtn) clearBtn.style.display = 'none';
+        _hideTriageSearchSuggestions();
+        rerenderTriageTable();
+        populateLiveTriage();
+      }
+    };
+    searchEl.onfocus = function() {
+      var val = searchEl.value.trim();
+      if (val.length >= 1) _updateTriageSearchSuggestions(val);
+    };
+    searchEl.onblur = function() {
+      // Delay hide so clicks on suggestions register
+      setTimeout(_hideTriageSearchSuggestions, 200);
     };
   }
 
@@ -37681,7 +37784,15 @@ function rerenderTriageTable() {
   var tbody = triagePage.querySelector('table tbody');
   if (!tbody) return;
   var filtered = _triageCurrentIssues;
-  if (_triageQueueFilter) filtered = _triageCurrentIssues.filter(function(t) { return t.queueOrigin === _triageQueueFilter; });
+  if (_triageQueueFilter) filtered = filtered.filter(function(t) { return t.queueOrigin === _triageQueueFilter; });
+  // Client-side search filter
+  if (_triageClientSearch) {
+    var terms = _triageClientSearch.toLowerCase().split(/\s+/).filter(Boolean);
+    filtered = filtered.filter(function(t) {
+      var haystack = [t.key, t.summary, t.org, t.assignee, t.status, t.priority, t.priorityShort].join(' ').toLowerCase();
+      return terms.every(function(term) { return haystack.indexOf(term) !== -1; });
+    });
+  }
   var rowsHTML = filtered.map(function(t) {
     var isP1 = t.priorityShort === 'P1';
     var isCanceled = t.status === 'Canceled';
@@ -37701,7 +37812,10 @@ function rerenderTriageTable() {
     '</tr>';
   }).join('');
   tbody.innerHTML = rowsHTML;
-  if (filtered.length === 0) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div></td></tr>';
+  if (filtered.length === 0) {
+    var emptyMsg = _triageClientSearch ? 'No tickets match "' + _triageClientSearch.replace(/</g,'&lt;') + '"' : 'No tickets match the current filters';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">' + emptyMsg + '</div></td></tr>';
+  }
   var tqSum = triagePage.querySelector('.tq-summary');
   if (tqSum) {
     var openC = filtered.filter(function(t) { return t.status === 'Open'; }).length;
