@@ -8526,6 +8526,28 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
     </div>
     <div class="login-heading">Sign in to your account</div>
     <div class="login-error" id="loginError"></div>
+
+    <!-- SSO LOGIN SECTION -->
+    <div id="ssoLoginSection" style="display:none;width:100%;">
+      <button type="button" class="login-btn" id="ssoAzureBtn" onclick="handleSSOLogin('azure')" style="width:100%;margin-bottom:8px;background:rgba(0,120,212,0.15);border:1px solid rgba(0,120,212,0.4);color:#4da3ff;display:flex;align-items:center;justify-content:center;gap:8px;">
+        <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0h11v11H0z" fill="#f25022"/><path d="M12 0h11v11H12z" fill="#7fba00"/><path d="M0 12h11v11H0z" fill="#00a4ef"/><path d="M12 12h11v11H12z" fill="#ffb900"/></svg>
+        Sign in with Azure AD
+      </button>
+      <button type="button" class="login-btn" id="ssoOktaBtn" onclick="handleSSOLogin('okta')" style="width:100%;margin-bottom:8px;background:rgba(0,125,193,0.12);border:1px solid rgba(0,125,193,0.35);color:#0097e6;display:flex;align-items:center;justify-content:center;gap:8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.389 0 0 5.389 0 12s5.389 12 12 12 12-5.389 12-12S18.611 0 12 0zm0 18c-3.314 0-6-2.686-6-6s2.686-6 6-6 6 2.686 6 6-2.686 6-6 6z"/></svg>
+        Sign in with Okta
+      </button>
+      <button type="button" class="login-btn" id="ssoGoogleBtn" onclick="handleSSOLogin('google')" style="width:100%;margin-bottom:8px;background:rgba(66,133,244,0.12);border:1px solid rgba(66,133,244,0.35);color:#60a5fa;display:flex;align-items:center;justify-content:center;gap:8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09A6.96 6.96 0 015.47 12c0-.72.12-1.42.34-2.09V7.07H2.18A11.96 11.96 0 001 12c0 1.94.46 3.77 1.18 5.42l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Sign in with Google Workspace
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin:12px 0 8px;">
+        <div style="flex:1;height:1px;background:var(--border-subtle);"></div>
+        <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">or use credentials</span>
+        <div style="flex:1;height:1px;background:var(--border-subtle);"></div>
+      </div>
+    </div>
+
     <form class="login-form" id="loginForm" onsubmit="handleLogin(event)">
       <div class="login-field">
         <label class="login-label" for="loginEmail">Email</label>
@@ -8541,6 +8563,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
         </div>
       </div>
       <button type="submit" class="login-btn" id="loginBtn">Sign In</button>
+      <div style="text-align:center;margin-top:6px;"><span id="breakGlassLabel" style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:0.5px;display:none;">BREAK GLASS ACCOUNT</span></div>
     </form>
     <div class="login-footer">
       <div class="login-footer-line">Protected by DACTA SIEMLess &middot; Omni Platform v2.0</div>
@@ -21958,45 +21981,50 @@ Analyst: K. Rasmussen | 2026-02-28
         <div class="page-header">
           <div>
             <div class="page-title">AI Usage Dashboard</div>
-            <div class="page-subtitle">Live Tracking · Real-time</div>
+            <div class="page-subtitle" id="aiUsageSubtitle">Loading from SIEMLess DB…</div>
           </div>
           <div class="page-actions">
-            <select class="filter-select"><option>February 2026</option><option>January 2026</option><option>December 2025</option></select>
-            <button class="btn btn-secondary btn-sm">↓ Export</button>
+            <select class="filter-select" id="aiUsageMonthFilter" onchange="loadAIUsagePage()"></select>
+            <button class="btn btn-secondary btn-sm" onclick="exportAIUsageCSV()">↓ Export</button>
           </div>
         </div>
 
         <!-- Top metrics -->
         <div class="metrics-row" style="margin-bottom:20px;">
-          <div class="metric-card cyan"><div class="metric-label">Total Cost</div><div class="metric-value">$0<span style="font-size:16px;">.00</span></div><div class="metric-sub">this month</div></div>
-          <div class="metric-card purple"><div class="metric-label">Total Requests</div><div class="metric-value">0</div></div>
-          <div class="metric-card green"><div class="metric-label">Verdict Accepted</div><div class="metric-value">—</div><div class="metric-sub">of AI verdicts</div></div>
-          <div class="metric-card amber"><div class="metric-label">Parser Validated</div><div class="metric-value">—</div><div class="metric-sub">accuracy</div></div>
+          <div class="metric-card cyan"><div class="metric-label">Total Cost</div><div class="metric-value" id="aiMetricCost">$0<span style="font-size:16px;">.00</span></div><div class="metric-sub">this period</div></div>
+          <div class="metric-card purple"><div class="metric-label">Total Requests</div><div class="metric-value" id="aiMetricRequests">0</div></div>
+          <div class="metric-card green"><div class="metric-label">Tokens In</div><div class="metric-value" id="aiMetricTokensIn">0</div><div class="metric-sub">input tokens</div></div>
+          <div class="metric-card amber"><div class="metric-label">Tokens Out</div><div class="metric-value" id="aiMetricTokensOut">0</div><div class="metric-sub">output tokens</div></div>
         </div>
 
         <div class="grid-2" style="margin-bottom:16px;">
-          <!-- By Provider -->
+          <!-- By Model -->
           <div class="card">
-            <div class="card-header"><span class="card-title">Usage by Provider</span></div>
-            <div style="height:200px;position:relative;"><canvas id="aiProviderChart"></canvas></div>
-            <div class="ai-legend" style="margin-top:12px;">
-              <div style="font-size:11px;color:var(--text-muted);text-align:center;padding:12px;">No AI calls tracked yet — data populates in real-time as investigations run</div>
-            </div>
+            <div class="card-header"><span class="card-title">Usage by Model</span></div>
+            <div style="height:220px;position:relative;"><canvas id="aiProviderChart"></canvas></div>
+            <div id="aiModelLegend" class="ai-legend" style="margin-top:12px;"></div>
           </div>
 
-          <!-- By Function -->
+          <!-- By Function / Task Type -->
           <div class="card">
-            <div class="card-header"><span class="card-title">Usage by Function</span></div>
-            <div style="padding:16px;text-align:center;font-size:11px;color:var(--text-muted);">
-              No function usage data yet — will populate as AI features are used
-            </div>
+            <div class="card-header"><span class="card-title">Model Breakdown</span></div>
+            <div id="aiModelBreakdown" style="padding:12px;display:grid;grid-template-columns:1fr;gap:8px;"></div>
           </div>
         </div>
 
         <!-- Daily usage chart -->
-        <div class="card">
+        <div class="card" style="margin-bottom:16px;">
           <div class="card-header"><span class="card-title">Daily AI Request Volume</span></div>
-          <div style="height:180px;position:relative;"><canvas id="aiDailyChart"></canvas></div>
+          <div style="height:200px;position:relative;"><canvas id="aiDailyChart"></canvas></div>
+        </div>
+
+        <!-- Recent calls log -->
+        <div class="card">
+          <div class="card-header"><span class="card-title">Recent AI Calls</span><span id="aiLogSummary" style="font-size:10px;color:var(--text-muted);margin-left:8px;"></span></div>
+          <div class="table-wrap" style="max-height:340px;overflow-y:auto;"><table>
+            <thead><tr><th>Time</th><th>Model</th><th>Task</th><th>Tokens In</th><th>Tokens Out</th><th>Latency</th></tr></thead>
+            <tbody id="aiUsageLogBody"></tbody>
+          </table></div>
         </div>
       </div><!-- end aiusage -->
 
@@ -22090,6 +22118,7 @@ Analyst: K. Rasmussen | 2026-02-28
                     <th>Name</th>
                     <th>Email</th>
                     <th>Role</th>
+                    <th>Jira Account</th>
                     <th>Assigned Orgs</th>
                     <th>Status</th>
                     <th>Last Login</th>
@@ -22097,7 +22126,7 @@ Analyst: K. Rasmussen | 2026-02-28
                   </tr>
                 </thead>
                 <tbody id="um-users-tbody">
-                  <tr><td colspan="7" style="text-align:center;padding:24px;"><div style="font-size:10px;color:var(--text-muted);">Loading…</div></td></tr>
+                  <tr><td colspan="8" style="text-align:center;padding:24px;"><div style="font-size:10px;color:var(--text-muted);">Loading…</div></td></tr>
                 </tbody>
               </table>
             </div>
@@ -22756,6 +22785,61 @@ Analyst: K. Rasmussen | 2026-02-28
             </div>
           </div>
         </div>
+
+        <!-- SSO / SAML Configuration -->
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header" style="margin-bottom:14px;"><span class="card-title">SSO / SAML Authentication</span><span class="badge badge-green">Identity</span></div>
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--bg-elevated);border-radius:8px;">
+              <div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Enable SSO Login</div><div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Show SSO buttons on login page. Email/password remains as break glass.</div></div>
+              <div id="ssoMasterToggle" onclick="toggleSSOEnabled()" style="width:36px;height:20px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:10px;cursor:pointer;position:relative;"><div id="ssoMasterKnob" style="width:16px;height:16px;background:var(--text-muted);border-radius:50%;position:absolute;left:2px;top:1px;transition:all 0.2s;"></div></div>
+            </div>
+
+            <div id="ssoProviderCards" style="display:none;">
+              <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">Identity Providers</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <!-- Azure AD -->
+                <div style="padding:12px;background:var(--bg-elevated);border-radius:8px;border:1px solid var(--border-subtle);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;"><svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0h11v11H0z" fill="#f25022"/><path d="M12 0h11v11H12z" fill="#7fba00"/><path d="M0 12h11v11H0z" fill="#00a4ef"/><path d="M12 12h11v11H12z" fill="#ffb900"/></svg><span style="font-size:12px;font-weight:600;color:var(--text-primary);">Azure AD (Entra ID)</span></div>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-muted);cursor:pointer;"><input type="checkbox" id="ssoAzureEnabled" class="sso-provider-check" data-provider="azure_ad"> Enabled</label>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Domain</div><input class="filter-input sso-cfg-input" id="ssoAzureDomain" data-provider="azure_ad" data-field="domain" placeholder="dacta.sg" style="width:100%;font-size:11px;"></div>
+                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Provider ID (optional)</div><input class="filter-input sso-cfg-input" id="ssoAzureProviderId" data-provider="azure_ad" data-field="provider_id" placeholder="From Supabase SSO setup" style="width:100%;font-size:11px;"></div>
+                  </div>
+                </div>
+                <!-- Okta -->
+                <div style="padding:12px;background:var(--bg-elevated);border-radius:8px;border:1px solid var(--border-subtle);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="#0097e6"><path d="M12 0C5.389 0 0 5.389 0 12s5.389 12 12 12 12-5.389 12-12S18.611 0 12 0zm0 18c-3.314 0-6-2.686-6-6s2.686-6 6-6 6 2.686 6 6-2.686 6-6 6z"/></svg><span style="font-size:12px;font-weight:600;color:var(--text-primary);">Okta</span></div>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-muted);cursor:pointer;"><input type="checkbox" id="ssoOktaEnabled" class="sso-provider-check" data-provider="okta"> Enabled</label>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Domain</div><input class="filter-input sso-cfg-input" id="ssoOktaDomain" data-provider="okta" data-field="domain" placeholder="company.okta.com" style="width:100%;font-size:11px;"></div>
+                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Provider ID (optional)</div><input class="filter-input sso-cfg-input" id="ssoOktaProviderId" data-provider="okta" data-field="provider_id" placeholder="From Supabase SSO setup" style="width:100%;font-size:11px;"></div>
+                  </div>
+                </div>
+                <!-- Google Workspace -->
+                <div style="padding:12px;background:var(--bg-elevated);border-radius:8px;border:1px solid var(--border-subtle);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.34-1.36-.34-2.09 0-.73.12-1.43.34-2.09V7.07H2.18A11.96 11.96 0 001 12c0 1.94.46 3.77 1.18 5.42l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg><span style="font-size:12px;font-weight:600;color:var(--text-primary);">Google Workspace</span></div>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-muted);cursor:pointer;"><input type="checkbox" id="ssoGoogleEnabled" class="sso-provider-check" data-provider="google_workspace"> Enabled</label>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Domain</div><input class="filter-input sso-cfg-input" id="ssoGoogleDomain" data-provider="google_workspace" data-field="domain" placeholder="dacta.sg" style="width:100%;font-size:11px;"></div>
+                    <div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Provider ID (optional)</div><input class="filter-input sso-cfg-input" id="ssoGoogleProviderId" data-provider="google_workspace" data-field="provider_id" placeholder="From Supabase SSO setup" style="width:100%;font-size:11px;"></div>
+                  </div>
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveSSOConfig()" style="margin-top:12px;width:100%;">Save SSO Configuration</button>
+              <div style="font-size:9px;color:var(--text-muted);margin-top:8px;padding:8px;background:var(--bg-input);border-radius:6px;font-family:var(--font-mono);">
+                Note: SSO/SAML providers must also be configured in the authentication backend. Domain-based routing requires the IdP metadata URL to be registered. Contact platform admin for setup.
+              </div>
+            </div>
+          </div>
+        </div>
+
         </div><!-- end stgPanelSecurity -->
       </div><!-- end settings -->
 
@@ -26930,6 +27014,101 @@ async function saveAllSettings() {
   showToast('All settings saved globally', 'success');
 }
 
+// ============================================================
+//  SSO / SAML SETTINGS — ADMIN UI
+// ============================================================
+var _ssoSettingsEnabled = false;
+
+function toggleSSOEnabled() {
+  _ssoSettingsEnabled = !_ssoSettingsEnabled;
+  var knob = document.getElementById('ssoMasterKnob');
+  var toggle = document.getElementById('ssoMasterToggle');
+  var cards = document.getElementById('ssoProviderCards');
+  if (_ssoSettingsEnabled) {
+    if (knob) { knob.style.left = '18px'; knob.style.background = 'var(--green)'; }
+    if (toggle) { toggle.style.background = 'rgba(16,185,129,0.3)'; toggle.style.borderColor = 'rgba(16,185,129,0.5)'; }
+    if (cards) cards.style.display = 'block';
+  } else {
+    if (knob) { knob.style.left = '2px'; knob.style.background = 'var(--text-muted)'; }
+    if (toggle) { toggle.style.background = 'var(--bg-input)'; toggle.style.borderColor = 'var(--border-card)'; }
+    if (cards) cards.style.display = 'none';
+  }
+}
+
+async function saveSSOConfig() {
+  try {
+    var cfg = { enabled: _ssoSettingsEnabled, providers: {} };
+    ['azure_ad', 'okta', 'google_workspace'].forEach(function(provKey) {
+      var check = document.querySelector('.sso-provider-check[data-provider="' + provKey + '"]');
+      if (check && check.checked) {
+        var domainInput = document.querySelector('.sso-cfg-input[data-provider="' + provKey + '"][data-field="domain"]');
+        var pidInput = document.querySelector('.sso-cfg-input[data-provider="' + provKey + '"][data-field="provider_id"]');
+        cfg.providers[provKey] = {
+          enabled: true,
+          domain: domainInput ? domainInput.value.trim() : '',
+          provider_id: pidInput ? pidInput.value.trim() : ''
+        };
+      }
+    });
+    // Save to platform_settings table
+    if (window._supabaseRef) {
+      var { error } = await window._supabaseRef.from('platform_settings').upsert({
+        key: 'sso_config',
+        value: cfg,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+      if (error) {
+        console.warn('[SSO] Save error:', error.message);
+        // Fallback to localStorage
+        localStorage.setItem('dacta_sso_config', JSON.stringify(cfg));
+      }
+    } else {
+      localStorage.setItem('dacta_sso_config', JSON.stringify(cfg));
+    }
+    showToast('SSO configuration saved', 'success');
+  } catch(e) {
+    showToast('Failed to save SSO config: ' + e.message, 'error');
+  }
+}
+
+// Load SSO settings into the admin UI on Settings page open
+async function loadSSOSettingsUI() {
+  try {
+    var cfg = null;
+    if (window._supabaseRef) {
+      var resp = await window._supabaseRef.from('platform_settings').select('*').eq('key', 'sso_config').maybeSingle();
+      if (resp.data && resp.data.value) {
+        cfg = typeof resp.data.value === 'string' ? JSON.parse(resp.data.value) : resp.data.value;
+      }
+    }
+    if (!cfg) {
+      try { cfg = JSON.parse(localStorage.getItem('dacta_sso_config')); } catch(e) {}
+    }
+    if (!cfg) return;
+
+    // Set master toggle
+    if (cfg.enabled) {
+      _ssoSettingsEnabled = false; // toggleSSOEnabled will flip it
+      toggleSSOEnabled();
+    }
+
+    // Populate provider checkboxes and fields
+    ['azure_ad', 'okta', 'google_workspace'].forEach(function(provKey) {
+      var provCfg = cfg.providers && cfg.providers[provKey];
+      var check = document.querySelector('.sso-provider-check[data-provider="' + provKey + '"]');
+      if (check) check.checked = !!provCfg;
+      if (provCfg) {
+        var domainInput = document.querySelector('.sso-cfg-input[data-provider="' + provKey + '"][data-field="domain"]');
+        var pidInput = document.querySelector('.sso-cfg-input[data-provider="' + provKey + '"][data-field="provider_id"]');
+        if (domainInput && provCfg.domain) domainInput.value = provCfg.domain;
+        if (pidInput && provCfg.provider_id) pidInput.value = provCfg.provider_id;
+      }
+    });
+  } catch(e) {
+    console.warn('[SSO] loadSSOSettingsUI error:', e.message);
+  }
+}
+
 // Load persisted connector configs on startup
 async function loadPersistedConnectors() {
   try {
@@ -27020,6 +27199,9 @@ async function loadSettingsPage() {
 
     // Render first org's connectors
     renderSettingsConnectors();
+
+    // Load SSO admin settings UI
+    loadSSOSettingsUI();
 
     console.log('[Settings] Live connector registry loaded: ' + orgCount + ' orgs');
   } catch(err) {
@@ -27572,76 +27754,249 @@ function trackAIUsage(model, tokensIn, tokensOut, purpose, latencyMs, sessionId)
   });
 }
 
+// Cost per 1K tokens by model (blended estimate)
+var _aiModelCosts = {
+  'Claude Opus': 0.075, 'Claude Sonnet': 0.015, 'Claude Haiku': 0.003,
+  'GPT 5.2': 0.03, 'GPT-4o': 0.01, 'GPT-4': 0.06,
+  'Gemini 3.1 Pro': 0.00625, 'Gemini Pro': 0.00625,
+  'Copilot-Search': 0.005, 'DeepSeek': 0.002, 'Perplexity': 0.005
+};
+function _aiCostPer1K(model) {
+  if (_aiModelCosts[model]) return _aiModelCosts[model];
+  for (var k in _aiModelCosts) { if (model.toLowerCase().indexOf(k.toLowerCase()) >= 0) return _aiModelCosts[k]; }
+  return 0.015; // default
+}
+var _aiModelColorMap = {
+  'Claude': { bg: 'rgba(224,108,117,0.75)', border: '#e06c75' },
+  'GPT':    { bg: 'rgba(78,201,176,0.75)',  border: '#4ec9b0' },
+  'Gemini': { bg: 'rgba(139,92,246,0.75)',  border: '#8b5cf6' },
+  'Copilot':{ bg: 'rgba(86,156,214,0.75)',  border: '#569cd6' },
+  'DeepSeek':{ bg: 'rgba(220,220,170,0.75)',border: '#dcdcaa' },
+  'Perplexity':{ bg: 'rgba(86,156,214,0.75)', border: '#569cd6' }
+};
+function _aiModelColor(model) {
+  for (var k in _aiModelColorMap) { if (model.indexOf(k) >= 0) return _aiModelColorMap[k]; }
+  return { bg: 'rgba(0,212,255,0.75)', border: '#00d4ff' };
+}
+
+// Cache for fetched data to avoid redundant queries
+var _aiUsageDBCache = null;
+var _aiUsageCacheKey = '';
+
 async function loadAIUsagePage() {
   var page = document.getElementById('page-aiusage');
-  if (!page) return;
+  if (!page || !window._dactaSupabase) return;
+  var sb = window._dactaSupabase;
 
-  var usage = _aiUsage;
-  // Always render — show empty state if no calls tracked yet
-
-  // Update metric cards: Total Cost (estimate $0.015/1k tokens), Total Requests, etc.
-  var metricVals = page.querySelectorAll('.metric-value');
-  var totalTokens = usage.totalTokensIn + usage.totalTokensOut;
-  var estimatedCost = (totalTokens / 1000 * 0.015).toFixed(2);
-  if (metricVals.length >= 1) metricVals[0].innerHTML = '$' + (estimatedCost < 10 ? estimatedCost : Math.floor(estimatedCost)) + '<span style="font-size:16px;">' + (estimatedCost < 10 ? '' : '.' + String(estimatedCost).split('.')[1]) + '</span>';
-  if (metricVals.length >= 2) metricVals[1].textContent = usage.totalCalls.toLocaleString();
-
-  // Find or create the live usage log table
-  var existingLog = page.querySelector('#aiLiveUsageLog');
-  if (!existingLog && usage.calls.length > 0) {
-    // Insert a live usage table after the daily chart
-    var dailyCard = page.querySelector('#aiDailyChart');
-    if (dailyCard) {
-      var logCard = document.createElement('div');
-      logCard.className = 'card';
-      logCard.style.cssText = 'margin-top:16px;';
-      logCard.innerHTML = '<div class="card-header" style="margin-bottom:12px;">' +
-        '<span class="card-title">Live AI Call Log — This Session</span>' +
-        '<span style="font-size:10px;color:var(--text-muted);margin-left:8px;">' + usage.totalCalls + ' calls · ' + totalTokens.toLocaleString() + ' tokens</span>' +
-        '<span style="margin-left:auto;">' + jiraLiveBadge() + '</span>' +
-      '</div>' +
-      '<div class="table-wrap"><table>' +
-        '<thead><tr><th>Time</th><th>Model</th><th>Tokens In</th><th>Tokens Out</th><th>Purpose</th></tr></thead>' +
-        '<tbody id="aiLiveUsageLog"></tbody>' +
-      '</table></div>';
-      dailyCard.closest('.card').after(logCard);
+  // --- Populate month filter dropdown ---
+  var monthSel = document.getElementById('aiUsageMonthFilter');
+  if (monthSel && monthSel.options.length === 0) {
+    var now = new Date();
+    for (var mi = 0; mi < 6; mi++) {
+      var d = new Date(now.getFullYear(), now.getMonth() - mi, 1);
+      var val = d.toISOString().slice(0, 7); // YYYY-MM
+      var label = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      var opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = label;
+      monthSel.appendChild(opt);
     }
   }
 
-  // Populate table
-  var tbody = document.getElementById('aiLiveUsageLog');
-  if (tbody && usage.calls.length > 0) {
-    var html = '';
-    usage.calls.slice().reverse().forEach(function(c) {
-      var ts = new Date(c.ts).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      var modelColor = c.model.includes('Claude') ? '#e06c75' : c.model.includes('GPT') ? '#4ec9b0' : '#569cd6';
-      html += '<tr>' +
-        '<td style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);">' + ts + '</td>' +
-        '<td style="font-size:11px;color:' + modelColor + ';font-weight:500;">' + c.model + '</td>' +
-        '<td style="font-size:10px;font-family:var(--font-mono);">' + c.tokensIn.toLocaleString() + '</td>' +
-        '<td style="font-size:10px;font-family:var(--font-mono);">' + c.tokensOut.toLocaleString() + '</td>' +
-        '<td style="font-size:10px;color:var(--text-secondary);">' + c.purpose + '</td>' +
-      '</tr>';
-    });
-    tbody.innerHTML = html;
+  var selectedMonth = monthSel ? monthSel.value : new Date().toISOString().slice(0, 7);
+  var startDate = selectedMonth + '-01T00:00:00Z';
+  var endParts = selectedMonth.split('-');
+  var endDate = new Date(parseInt(endParts[0]), parseInt(endParts[1]), 1).toISOString(); // first day of next month
+
+  // --- Fetch from SIEMLess DB (with cache) ---
+  var cacheKey = selectedMonth;
+  var rows;
+  if (_aiUsageCacheKey === cacheKey && _aiUsageDBCache) {
+    rows = _aiUsageDBCache;
+  } else {
+    try {
+      var res = await sb.from('llm_usage_log')
+        .select('*')
+        .gte('created_at', startDate)
+        .lt('created_at', endDate)
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      rows = (res.data && res.data.length > 0) ? res.data : [];
+      _aiUsageDBCache = rows;
+      _aiUsageCacheKey = cacheKey;
+    } catch (e) {
+      console.warn('[AIUsage] Fetch error:', e);
+      rows = [];
+    }
   }
 
-  // Update model breakdown in usage by function section
-  var modelBreakdown = page.querySelector('#aiModelBreakdown, .ai-model-grid');
-  if (modelBreakdown && Object.keys(usage.byModel).length > 0) {
-    var mHTML = '';
-    Object.keys(usage.byModel).forEach(function(model) {
-      var m = usage.byModel[model];
-      var modelColor = model.includes('Claude') ? '#e06c75' : model.includes('GPT') ? '#4ec9b0' : '#569cd6';
-      mHTML += '<div style="padding:10px 12px;background:var(--bg-elevated);border-radius:6px;border:1px solid var(--border-subtle);">' +
-        '<div style="font-size:11px;font-weight:600;color:' + modelColor + ';">' + model + '</div>' +
-        '<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">' + m.calls + ' calls · ' + (m.tokensIn + m.tokensOut).toLocaleString() + ' tokens</div>' +
-      '</div>';
+  // Also merge in-memory session calls that haven't been persisted yet
+  if (_aiUsage && _aiUsage.calls && _aiUsage.calls.length > 0) {
+    var existingIds = new Set(rows.map(function(r) { return r.id; }));
+    _aiUsage.calls.forEach(function(c) {
+      var cDate = c.ts ? c.ts.slice(0, 7) : '';
+      if (cDate === selectedMonth && !existingIds.has(c.id)) {
+        rows.push({
+          model: c.model, task_type: c.purpose || 'copilot_query',
+          input_tokens: c.tokensIn, output_tokens: c.tokensOut,
+          latency_ms: null, created_at: c.ts, _session: true
+        });
+      }
     });
-    modelBreakdown.innerHTML = mHTML;
   }
 
-  console.log('[AIUsage] Page updated: ' + usage.totalCalls + ' calls, ' + totalTokens.toLocaleString() + ' tokens');
+  // --- Aggregate data ---
+  var totalRequests = rows.length;
+  var totalTokensIn = 0, totalTokensOut = 0, totalCost = 0;
+  var byModel = {}, byDay = {}, byTask = {};
+
+  rows.forEach(function(r) {
+    var tIn = r.input_tokens || 0;
+    var tOut = r.output_tokens || 0;
+    totalTokensIn += tIn;
+    totalTokensOut += tOut;
+    var cost = ((tIn + tOut) / 1000) * _aiCostPer1K(r.model || 'unknown');
+    totalCost += cost;
+
+    var m = r.model || 'Unknown';
+    if (!byModel[m]) byModel[m] = { calls: 0, tokensIn: 0, tokensOut: 0, cost: 0 };
+    byModel[m].calls++;
+    byModel[m].tokensIn += tIn;
+    byModel[m].tokensOut += tOut;
+    byModel[m].cost += cost;
+
+    var dayKey = (r.created_at || '').slice(0, 10);
+    if (dayKey) {
+      if (!byDay[dayKey]) byDay[dayKey] = { calls: 0, tokensIn: 0, tokensOut: 0 };
+      byDay[dayKey].calls++;
+      byDay[dayKey].tokensIn += tIn;
+      byDay[dayKey].tokensOut += tOut;
+    }
+
+    var task = r.task_type || 'other';
+    if (!byTask[task]) byTask[task] = 0;
+    byTask[task]++;
+  });
+
+  // --- Update subtitle ---
+  var subtitle = document.getElementById('aiUsageSubtitle');
+  if (subtitle) subtitle.textContent = totalRequests > 0
+    ? 'Live Data \u00b7 ' + totalRequests + ' requests this period'
+    : 'No usage data for this period';
+
+  // --- Update metric cards ---
+  var costEl = document.getElementById('aiMetricCost');
+  if (costEl) {
+    var costStr = totalCost.toFixed(2);
+    var costParts = costStr.split('.');
+    costEl.innerHTML = '$' + costParts[0] + '<span style="font-size:16px;">.' + costParts[1] + '</span>';
+  }
+  var reqEl = document.getElementById('aiMetricRequests');
+  if (reqEl) reqEl.textContent = totalRequests.toLocaleString();
+  var tiEl = document.getElementById('aiMetricTokensIn');
+  if (tiEl) tiEl.textContent = totalTokensIn.toLocaleString();
+  var toEl = document.getElementById('aiMetricTokensOut');
+  if (toEl) toEl.textContent = totalTokensOut.toLocaleString();
+
+  // --- Update Model Breakdown cards ---
+  var breakdownEl = document.getElementById('aiModelBreakdown');
+  if (breakdownEl) {
+    if (Object.keys(byModel).length === 0) {
+      breakdownEl.innerHTML = '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-muted);">No usage data for this period</div>';
+    } else {
+      var bHTML = '';
+      var sortedModels = Object.keys(byModel).sort(function(a, b) { return byModel[b].calls - byModel[a].calls; });
+      sortedModels.forEach(function(model) {
+        var m = byModel[model];
+        var mc = _aiModelColor(model);
+        var pct = totalRequests > 0 ? ((m.calls / totalRequests) * 100).toFixed(1) : '0';
+        bHTML += '<div style="padding:12px;background:var(--bg-elevated);border-radius:8px;border:1px solid var(--border-subtle);border-left:3px solid ' + mc.border + ';">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<span style="font-size:12px;font-weight:600;color:' + mc.border + ';">' + model + '</span>' +
+            '<span style="font-size:10px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:10px;">' + pct + '%</span>' +
+          '</div>' +
+          '<div style="display:flex;gap:16px;margin-top:8px;font-size:10px;color:var(--text-muted);">' +
+            '<span>' + m.calls + ' calls</span>' +
+            '<span>' + (m.tokensIn + m.tokensOut).toLocaleString() + ' tokens</span>' +
+            '<span>$' + m.cost.toFixed(3) + '</span>' +
+          '</div>' +
+          '<div style="margin-top:6px;height:4px;background:rgba(255,255,255,0.04);border-radius:2px;overflow:hidden;">' +
+            '<div style="height:100%;width:' + pct + '%;background:' + mc.border + ';border-radius:2px;"></div>' +
+          '</div>' +
+        '</div>';
+      });
+      breakdownEl.innerHTML = bHTML;
+    }
+  }
+
+  // --- Update Model Legend under doughnut ---
+  var legendEl = document.getElementById('aiModelLegend');
+  if (legendEl) {
+    if (Object.keys(byModel).length === 0) {
+      legendEl.innerHTML = '<div style="font-size:11px;color:var(--text-muted);text-align:center;padding:8px;">No data yet</div>';
+    } else {
+      var lHTML = '<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;padding:4px 8px;">';
+      Object.keys(byModel).forEach(function(model) {
+        var mc = _aiModelColor(model);
+        lHTML += '<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-secondary);">' +
+          '<span style="width:8px;height:8px;border-radius:50%;background:' + mc.border + ';display:inline-block;"></span>' +
+          model + ' (' + byModel[model].calls + ')' +
+        '</div>';
+      });
+      lHTML += '</div>';
+      legendEl.innerHTML = lHTML;
+    }
+  }
+
+  // --- Update Charts ---
+  // Destroy old charts so they can be recreated with fresh data
+  if (charts.aiProvider) { charts.aiProvider.destroy(); charts.aiProvider = null; }
+  if (charts.aiDaily) { charts.aiDaily.destroy(); charts.aiDaily = null; }
+  _renderAICharts(byModel, byDay);
+
+  // --- Populate Recent Calls table ---
+  var logBody = document.getElementById('aiUsageLogBody');
+  var logSummary = document.getElementById('aiLogSummary');
+  if (logBody) {
+    if (rows.length === 0) {
+      logBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);font-size:11px;padding:24px;">No AI calls recorded for this period</td></tr>';
+    } else {
+      var logHTML = '';
+      rows.slice(0, 100).forEach(function(r) {
+        var ts = new Date(r.created_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        var mc = _aiModelColor(r.model || '');
+        var latStr = r.latency_ms ? (r.latency_ms / 1000).toFixed(1) + 's' : '—';
+        var taskLabel = (r.task_type || 'unknown').replace(/_/g, ' ');
+        logHTML += '<tr>' +
+          '<td style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);white-space:nowrap;">' + ts + '</td>' +
+          '<td style="font-size:11px;color:' + mc.border + ';font-weight:500;">' + (r.model || 'Unknown') + '</td>' +
+          '<td style="font-size:10px;color:var(--text-secondary);text-transform:capitalize;">' + taskLabel + '</td>' +
+          '<td style="font-size:10px;font-family:var(--font-mono);">' + (r.input_tokens || 0).toLocaleString() + '</td>' +
+          '<td style="font-size:10px;font-family:var(--font-mono);">' + (r.output_tokens || 0).toLocaleString() + '</td>' +
+          '<td style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);">' + latStr + '</td>' +
+        '</tr>';
+      });
+      logBody.innerHTML = logHTML;
+    }
+    if (logSummary) logSummary.textContent = rows.length > 0 ? rows.length + ' calls · ' + (totalTokensIn + totalTokensOut).toLocaleString() + ' total tokens' : '';
+  }
+
+  console.log('[AIUsage] Loaded from DB: ' + totalRequests + ' requests, $' + totalCost.toFixed(2) + ' est. cost');
+}
+
+function exportAIUsageCSV() {
+  if (!_aiUsageDBCache || _aiUsageDBCache.length === 0) { showToast('No data to export', 'warn'); return; }
+  var csv = 'Timestamp,Model,Task Type,Tokens In,Tokens Out,Latency (ms),Est. Cost\n';
+  _aiUsageDBCache.forEach(function(r) {
+    var cost = (((r.input_tokens || 0) + (r.output_tokens || 0)) / 1000 * _aiCostPer1K(r.model || '')).toFixed(4);
+    csv += [r.created_at, r.model, r.task_type, r.input_tokens || 0, r.output_tokens || 0, r.latency_ms || '', cost].join(',') + '\n';
+  });
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ai_usage_' + (_aiUsageCacheKey || 'export') + '.csv';
+  a.click();
+  showToast('CSV exported', 'success');
 }
 
 // ============================================================
@@ -27761,84 +28116,92 @@ function initPrivacyCharts() {
 }
 
 function initAICharts() {
-  // Production guard removed — visuals render with live data
-  const ctx = document.getElementById('aiProviderChart');
-  if (!ctx || charts.aiProvider) return;
-  // Build provider chart from live data
-  var aiProvLabels = [], aiProvData = [], aiProvBg = [], aiProvBorder = [];
-  var providerColors = { 'Claude': ['rgba(224,108,117,0.75)', '#e06c75'], 'Anthropic': ['rgba(224,108,117,0.75)', '#e06c75'], 'GPT': ['rgba(78,201,176,0.75)', '#4ec9b0'], 'OpenAI': ['rgba(78,201,176,0.75)', '#4ec9b0'], 'Perplexity': ['rgba(86,156,214,0.75)', '#569cd6'], 'DeepSeek': ['rgba(220,220,170,0.75)', '#dcdcaa'], 'Gemini': ['rgba(139,92,246,0.75)', '#8b5cf6'], 'Google': ['rgba(139,92,246,0.75)', '#8b5cf6'] };
-  var defaultC = ['rgba(0,212,255,0.75)', '#00d4ff'];
-  if (_aiUsage && _aiUsage.byModel && Object.keys(_aiUsage.byModel).length > 0) {
-    Object.keys(_aiUsage.byModel).forEach(function(m) {
-      aiProvLabels.push(m);
-      aiProvData.push(_aiUsage.byModel[m].calls);
-      var matched = defaultC;
-      Object.keys(providerColors).forEach(function(k) { if (m.toLowerCase().indexOf(k.toLowerCase()) >= 0) matched = providerColors[k]; });
-      aiProvBg.push(matched[0]);
-      aiProvBorder.push(matched[1]);
-    });
-  } else {
-    aiProvLabels = ['No data yet'];
-    aiProvData = [1];
-    aiProvBg = ['rgba(100,116,139,0.3)'];
-    aiProvBorder = ['#64748b'];
-  }
-  charts.aiProvider = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: aiProvLabels,
-      datasets: [{
-        data: aiProvData,
-        backgroundColor: aiProvBg,
-        borderColor: aiProvBorder,
-        borderWidth: 1.5, hoverOffset: 6
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { backgroundColor: '#1a2235', titleColor: '#e8edf5', bodyColor: '#8892a4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
-      }, cutout: '70%'
-    }
-  });
+  // Charts are now rendered by loadAIUsagePage after DB fetch.
+  // This function is kept as a no-op for nav compatibility.
+  // loadAIUsagePage calls _renderAICharts(byModel, byDay) directly.
+}
 
-  const ctx2 = document.getElementById('aiDailyChart');
-  if (!ctx2 || charts.aiDaily) return;
-  // Build daily chart from live byDay data
-  var dailyLabels = [], dailyVals = [];
-  if (_aiUsage && _aiUsage.byDay && Object.keys(_aiUsage.byDay).length > 0) {
-    var sortedDays = Object.keys(_aiUsage.byDay).sort();
-    sortedDays.forEach(function(d) { dailyLabels.push(d.slice(5)); dailyVals.push(_aiUsage.byDay[d].calls); });
-  } else {
-    var today = new Date().toISOString().slice(5, 10);
-    dailyLabels = [today];
-    dailyVals = [0];
-  }
-  charts.aiDaily = new Chart(ctx2, {
-    type: 'line',
-    data: {
-      labels: dailyLabels,
-      datasets: [{
-        label: 'Requests',
-        data: dailyVals,
-        borderColor: 'rgba(0,212,255,0.8)',
-        backgroundColor: 'rgba(0,212,255,0.07)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 2,
-        borderWidth: 1.5,
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a2235', titleColor: '#e8edf5', bodyColor: '#8892a4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 } },
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 } }, beginAtZero: true }
-      }
+function _renderAICharts(byModel, byDay) {
+  var providerColors = {
+    'Claude': ['rgba(224,108,117,0.75)', '#e06c75'],
+    'GPT':    ['rgba(78,201,176,0.75)', '#4ec9b0'],
+    'Gemini': ['rgba(139,92,246,0.75)', '#8b5cf6'],
+    'Copilot':['rgba(86,156,214,0.75)', '#569cd6'],
+    'DeepSeek':['rgba(220,220,170,0.75)','#dcdcaa'],
+    'Perplexity':['rgba(86,156,214,0.75)','#569cd6']
+  };
+  var defaultC = ['rgba(0,212,255,0.75)', '#00d4ff'];
+
+  // --- Provider/Model doughnut ---
+  var ctx = document.getElementById('aiProviderChart');
+  if (ctx) {
+    var aiProvLabels = [], aiProvData = [], aiProvBg = [], aiProvBorder = [];
+    if (byModel && Object.keys(byModel).length > 0) {
+      Object.keys(byModel).forEach(function(m) {
+        aiProvLabels.push(m);
+        aiProvData.push(byModel[m].calls);
+        var matched = defaultC;
+        Object.keys(providerColors).forEach(function(k) { if (m.toLowerCase().indexOf(k.toLowerCase()) >= 0) matched = providerColors[k]; });
+        aiProvBg.push(matched[0]);
+        aiProvBorder.push(matched[1]);
+      });
+    } else {
+      aiProvLabels = ['No data yet'];
+      aiProvData = [1];
+      aiProvBg = ['rgba(100,116,139,0.3)'];
+      aiProvBorder = ['#64748b'];
     }
-  });
+    charts.aiProvider = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: aiProvLabels,
+        datasets: [{ data: aiProvData, backgroundColor: aiProvBg, borderColor: aiProvBorder, borderWidth: 1.5, hoverOffset: 6 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { backgroundColor: '#1a2235', titleColor: '#e8edf5', bodyColor: '#8892a4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
+        }, cutout: '70%'
+      }
+    });
+  }
+
+  // --- Daily line chart ---
+  var ctx2 = document.getElementById('aiDailyChart');
+  if (ctx2) {
+    var dailyLabels = [], dailyVals = [];
+    if (byDay && Object.keys(byDay).length > 0) {
+      var sortedDays = Object.keys(byDay).sort();
+      sortedDays.forEach(function(d) { dailyLabels.push(d.slice(5)); dailyVals.push(byDay[d].calls); });
+    } else {
+      var today = new Date().toISOString().slice(5, 10);
+      dailyLabels = [today];
+      dailyVals = [0];
+    }
+    charts.aiDaily = new Chart(ctx2, {
+      type: 'line',
+      data: {
+        labels: dailyLabels,
+        datasets: [{
+          label: 'Requests',
+          data: dailyVals,
+          borderColor: 'rgba(0,212,255,0.8)',
+          backgroundColor: 'rgba(0,212,255,0.07)',
+          fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2,
+          pointBackgroundColor: 'rgba(0,212,255,0.9)',
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a2235', titleColor: '#e8edf5', bodyColor: '#8892a4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 } },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 } } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 } }, beginAtZero: true }
+        }
+      }
+    });
+  }
 }
 
 // ============================================================
@@ -28007,7 +28370,7 @@ async function loadUserManagement() {
     var tbody = document.getElementById('um-users-tbody');
     if (!tbody) return;
     if (!list || list.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;font-size:10px;color:var(--text-muted);">No users found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;font-size:10px;color:var(--text-muted);">No users found</td></tr>';
       return;
     }
     var html = '';
@@ -28018,6 +28381,17 @@ async function loadUserManagement() {
       var isActive = u.status !== 'disabled';
       var dotClass = isActive ? 'green' : 'gray';
       var mfaBadge = u.mfa_enabled ? '<span class="um-mfa-badge">\uD83D\uDD12 MFA</span>' : '';
+      // Jira account link cell
+      var jiraCell = '';
+      if (u.jira_account_id && u.jira_display_name) {
+        jiraCell = '<div style="display:flex;align-items:center;gap:4px;">' +
+          '<div class="status-dot green" style="display:inline-block;"></div>' +
+          '<span style="font-size:10px;color:var(--green);">' + escapeHtml(u.jira_display_name) + '</span>' +
+          '<button class="btn btn-sm" data-uid="' + escapeHtml(u.id) + '" onclick="umUnlinkJira(\'' + escapeHtml(u.id) + '\')" style="font-size:8px;padding:1px 5px;margin-left:4px;background:rgba(239,68,68,0.08);color:var(--red-bright);border:1px solid rgba(239,68,68,0.2);">Unlink</button>' +
+          '</div>';
+      } else {
+        jiraCell = '<button class="btn btn-sm um-link-jira-btn" data-uid="' + escapeHtml(u.id) + '" data-email="' + escapeHtml(u.email || '') + '" style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);">Link Jira</button>';
+      }
       html += '<tr data-uid="' + escapeHtml(u.id) + '" data-role="' + escapeHtml(u.role) + '">' +
         '<td><div style="display:flex;align-items:center;gap:8px;">' +
           '<div class="user-avatar" style="width:26px;height:26px;font-size:10px;background:' + grad + ';">' + escapeHtml(initials) + '</div>' +
@@ -28026,6 +28400,7 @@ async function loadUserManagement() {
           '</div></div></td>' +
         '<td style="font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);">' + escapeHtml(u.email || '\u2014') + '</td>' +
         '<td>' + umRoleBadge(u.role, u.id) + '</td>' +
+        '<td>' + jiraCell + '</td>' +
         '<td>' + umOrgChips(u.assigned_orgs) + '</td>' +
         '<td><div style="display:flex;align-items:center;gap:6px;"><div class="status-dot ' + dotClass + '" style="display:inline-block;"></div>' +
           '<span style="font-size:10px;color:var(--text-muted);">' + (isActive ? 'Active' : 'Disabled') + '</span></div></td>' +
@@ -28134,7 +28509,161 @@ async function loadUserManagement() {
     document.addEventListener('click', function() {
       document.querySelectorAll('#page-users .um-role-dropdown').forEach(function(d){ d.classList.remove('open'); });
     }, { once: false });
+
+    // Jira Link buttons
+    document.querySelectorAll('#page-users .um-link-jira-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var uid = this.getAttribute('data-uid');
+        var email = this.getAttribute('data-email');
+        umOpenJiraLinkModal(uid, email);
+      });
+    });
   }
+
+  // ============================================================
+  //  JIRA ACCOUNT LINK / UNLINK
+  // ============================================================
+  var _umJiraUsers = null; // cache
+
+  async function umOpenJiraLinkModal(uid, email) {
+    try {
+      // Load Jira users if not cached
+      if (!_umJiraUsers) {
+        showToast('Loading Jira users...', 'info');
+        _umJiraUsers = await DactaJira.fetchAssignableUsers();
+      }
+      if (!_umJiraUsers || !Array.isArray(_umJiraUsers) || _umJiraUsers.length === 0) {
+        showToast('No Jira users found', 'warn');
+        return;
+      }
+      // Build modal
+      var ov = document.createElement('div');
+      ov.id = 'jiraLinkModalOverlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+      ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+
+      // Sort: email match first, then alphabetical
+      var emailLower = (email || '').toLowerCase();
+      var sorted = _umJiraUsers.slice().sort(function(a, b) {
+        var aMatch = (a.emailAddress && a.emailAddress.toLowerCase() === emailLower) ? 0 : 1;
+        var bMatch = (b.emailAddress && b.emailAddress.toLowerCase() === emailLower) ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+        return (a.displayName || '').localeCompare(b.displayName || '');
+      });
+
+      var uHtml = sorted.map(function(u) {
+        var isMatch = u.emailAddress && u.emailAddress.toLowerCase() === emailLower;
+        var matchLabel = isMatch ? ' <span style="font-size:8px;color:var(--green);font-weight:600;">EMAIL MATCH</span>' : '';
+        var dn = (u.displayName || '').replace(/'/g, "\\'");
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;' + (isMatch ? 'background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);' : '') + '" onmouseover="this.style.background=\'rgba(0,212,255,0.08)\'" onmouseout="this.style.background=\'' + (isMatch ? 'rgba(16,185,129,0.06)' : '') + '\'" onclick="umDoJiraLink(\'' + escapeHtml(uid) + '\',\'' + u.accountId + '\',\'' + dn + '\',\'' + (u.emailAddress || '').replace(/'/g, "\\'") + '\')">' +
+          '<div style="width:28px;height:28px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cyan);font-weight:600;">' + (u.displayName || '?').charAt(0) + '</div>' +
+          '<div><div style="font-size:12px;color:var(--text-primary);">' + escapeHtml(u.displayName || 'Unknown') + matchLabel + '</div>' +
+          '<div style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">' + escapeHtml(u.emailAddress || u.accountId || '') + '</div></div></div>';
+      }).join('');
+
+      ov.innerHTML = '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;width:400px;max-height:520px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+        '<div style="padding:16px 20px;border-bottom:1px solid var(--border);"><div style="font-size:14px;font-weight:600;color:var(--text-primary);">Link Jira Account</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Select the Jira user to link with <span style="color:var(--cyan);">' + escapeHtml(email || uid) + '</span></div></div>' +
+        '<div style="padding:8px 10px;border-bottom:1px solid var(--border);"><button class="btn btn-sm" onclick="umAutoLinkAllJira()" style="font-size:9px;padding:3px 10px;background:rgba(16,185,129,0.08);color:var(--green);border:1px solid rgba(16,185,129,0.2);width:100%;">\u26A1 Auto-Link All Users by Email</button></div>' +
+        '<div style="padding:8px 10px;max-height:380px;overflow-y:auto;">' + uHtml + '</div></div>';
+      document.body.appendChild(ov);
+    } catch(e) {
+      showToast('Failed to load Jira users: ' + e.message, 'error');
+    }
+  }
+
+  // Execute the Jira link
+  window.umDoJiraLink = async function(uid, accountId, displayName, jiraEmail) {
+    var ov = document.getElementById('jiraLinkModalOverlay');
+    if (ov) ov.remove();
+    try {
+      await _supabase.from('users').update({
+        jira_account_id: accountId,
+        jira_display_name: displayName,
+        jira_email: jiraEmail,
+        jira_linked_at: new Date().toISOString()
+      }).eq('id', uid);
+      // Update local state
+      for (var i = 0; i < _users.length; i++) {
+        if (_users[i].id === uid) {
+          _users[i].jira_account_id = accountId;
+          _users[i].jira_display_name = displayName;
+          _users[i].jira_email = jiraEmail;
+          break;
+        }
+      }
+      showToast('Jira account linked: ' + displayName, 'success');
+      umRenderUsers(_users);
+    } catch(e) {
+      showToast('Failed to link: ' + e.message, 'error');
+    }
+  };
+
+  // Unlink Jira account
+  window.umUnlinkJira = async function(uid) {
+    try {
+      await _supabase.from('users').update({
+        jira_account_id: null,
+        jira_display_name: null,
+        jira_email: null,
+        jira_linked_at: null
+      }).eq('id', uid);
+      for (var i = 0; i < _users.length; i++) {
+        if (_users[i].id === uid) {
+          _users[i].jira_account_id = null;
+          _users[i].jira_display_name = null;
+          _users[i].jira_email = null;
+          break;
+        }
+      }
+      showToast('Jira account unlinked', 'success');
+      umRenderUsers(_users);
+    } catch(e) {
+      showToast('Failed to unlink: ' + e.message, 'error');
+    }
+  };
+
+  // Auto-link all users by email match
+  window.umAutoLinkAllJira = async function() {
+    var ov = document.getElementById('jiraLinkModalOverlay');
+    if (ov) ov.remove();
+    try {
+      if (!_umJiraUsers) {
+        showToast('Loading Jira users...', 'info');
+        _umJiraUsers = await DactaJira.fetchAssignableUsers();
+      }
+      if (!_umJiraUsers || _umJiraUsers.length === 0) { showToast('No Jira users found', 'warn'); return; }
+
+      // Build email lookup map
+      var jiraByEmail = {};
+      _umJiraUsers.forEach(function(ju) {
+        if (ju.emailAddress) jiraByEmail[ju.emailAddress.toLowerCase()] = ju;
+      });
+
+      var linked = 0, skipped = 0;
+      for (var i = 0; i < _users.length; i++) {
+        var u = _users[i];
+        if (u.jira_account_id) { skipped++; continue; } // already linked
+        var match = u.email ? jiraByEmail[u.email.toLowerCase()] : null;
+        if (match) {
+          await _supabase.from('users').update({
+            jira_account_id: match.accountId,
+            jira_display_name: match.displayName || '',
+            jira_email: match.emailAddress || '',
+            jira_linked_at: new Date().toISOString()
+          }).eq('id', u.id);
+          u.jira_account_id = match.accountId;
+          u.jira_display_name = match.displayName || '';
+          u.jira_email = match.emailAddress || '';
+          linked++;
+        }
+      }
+      showToast(linked + ' users linked' + (skipped ? ', ' + skipped + ' already linked' : ''), linked > 0 ? 'success' : 'info');
+      umRenderUsers(_users);
+    } catch(e) {
+      showToast('Auto-link failed: ' + e.message, 'error');
+    }
+  };
 
   // ============================================================
   //  CHANGE ROLE
@@ -30187,6 +30716,11 @@ async function loadOrgsFromSupabase() {
           ingestion: loadDataIngestion()
         };
       }
+
+      // Auto-link Jira account in background (non-blocking)
+      if (typeof _autoLinkJiraAccount === 'function') {
+        _autoLinkJiraAccount(user).catch(function(e) { console.warn('[JiraLink]', e.message); });
+      }
       
       safeInit();
     }
@@ -30271,6 +30805,168 @@ async function loadOrgsFromSupabase() {
         showLogin();
       });
     };
+
+    // ============================================================
+    //  SSO / SAML LOGIN
+    // ============================================================
+
+    // Load SSO configuration from platform_settings and show/hide SSO buttons
+    async function _loadSSOConfig() {
+      try {
+        var resp = await _supabase.from('platform_settings').select('*').eq('key', 'sso_config').maybeSingle();
+        var cfg = (resp.data && resp.data.value) ? (typeof resp.data.value === 'string' ? JSON.parse(resp.data.value) : resp.data.value) : null;
+        if (!cfg || !cfg.enabled) {
+          // SSO not configured — hide SSO section
+          var ssoSection = document.getElementById('ssoLoginSection');
+          if (ssoSection) ssoSection.style.display = 'none';
+          return null;
+        }
+        // Show SSO section and toggle provider buttons
+        var ssoSection = document.getElementById('ssoLoginSection');
+        if (ssoSection) ssoSection.style.display = 'block';
+        var azureBtn = document.getElementById('ssoAzureBtn');
+        var oktaBtn  = document.getElementById('ssoOktaBtn');
+        var googleBtn = document.getElementById('ssoGoogleBtn');
+        if (azureBtn)  azureBtn.style.display  = (cfg.providers && cfg.providers.azure_ad)         ? 'flex' : 'none';
+        if (oktaBtn)   oktaBtn.style.display   = (cfg.providers && cfg.providers.okta)             ? 'flex' : 'none';
+        if (googleBtn) googleBtn.style.display  = (cfg.providers && cfg.providers.google_workspace) ? 'flex' : 'none';
+        // Show break glass label on the email/password form
+        var bgl = document.getElementById('breakGlassLabel');
+        if (bgl) bgl.style.display = 'inline';
+        window._ssoConfig = cfg;
+        return cfg;
+      } catch(e) {
+        console.warn('[SSO] Failed to load SSO config:', e.message);
+        return null;
+      }
+    }
+
+    // Trigger SSO sign-in via Supabase Auth
+    window.handleSSOLogin = async function(provider) {
+      var errorEl = document.getElementById('loginError');
+      try {
+        if (errorEl) { errorEl.textContent = ''; errorEl.classList.remove('show'); }
+        var cfg = window._ssoConfig;
+        if (!cfg || !cfg.providers || !cfg.providers[provider === 'azure' ? 'azure_ad' : provider === 'google' ? 'google_workspace' : provider]) {
+          if (errorEl) { errorEl.textContent = 'SSO provider not configured. Contact your administrator.'; errorEl.classList.add('show'); }
+          return;
+        }
+        var providerCfg = cfg.providers[provider === 'azure' ? 'azure_ad' : provider === 'google' ? 'google_workspace' : provider];
+        // Supabase signInWithSSO supports domain-based and provider_id-based
+        var ssoParams = {};
+        if (providerCfg.domain) {
+          ssoParams.domain = providerCfg.domain;
+        } else if (providerCfg.provider_id) {
+          ssoParams.providerId = providerCfg.provider_id;
+        } else {
+          if (errorEl) { errorEl.textContent = 'SSO provider misconfigured — missing domain or provider_id.'; errorEl.classList.add('show'); }
+          return;
+        }
+        ssoParams.options = { redirectTo: window.location.origin };
+        var result = await _supabase.auth.signInWithSSO(ssoParams);
+        if (result.error) {
+          if (errorEl) { errorEl.textContent = result.error.message || 'SSO authentication failed.'; errorEl.classList.add('show'); }
+          return;
+        }
+        // If Supabase returns a URL, redirect to IdP
+        if (result.data && result.data.url) {
+          window.location.href = result.data.url;
+        }
+      } catch(e) {
+        console.error('[SSO] Login error:', e);
+        if (errorEl) { errorEl.textContent = 'SSO error: ' + e.message; errorEl.classList.add('show'); }
+      }
+    };
+
+    // ============================================================
+    //  JIRA ACCOUNT AUTO-LINK (post-login)
+    // ============================================================
+
+    // After successful authentication, try to link the user's Jira account
+    async function _autoLinkJiraAccount(authUser) {
+      try {
+        if (!authUser || !authUser.email) return;
+        var email = authUser.email.toLowerCase();
+
+        // Check if user already has a Jira link
+        var userResp = await _supabase.from('users').select('id, jira_account_id, jira_display_name, sso_provider').eq('email', email).maybeSingle();
+        if (!userResp.data) {
+          console.log('[JiraLink] No users table row for', email);
+          return;
+        }
+        var userRow = userResp.data;
+        // If already linked, store in session and skip
+        if (userRow.jira_account_id) {
+          window._currentAnalystJira = {
+            accountId: userRow.jira_account_id,
+            displayName: userRow.jira_display_name || '',
+            email: email
+          };
+          console.log('[JiraLink] Already linked:', userRow.jira_display_name);
+          return;
+        }
+
+        // Fetch Jira assignable users and match by email
+        var jiraUsers = await DactaJira.fetchAssignableUsers();
+        if (!jiraUsers || !Array.isArray(jiraUsers)) {
+          console.warn('[JiraLink] Could not fetch Jira users');
+          return;
+        }
+
+        // Try exact email match first
+        var match = null;
+        for (var i = 0; i < jiraUsers.length; i++) {
+          if (jiraUsers[i].emailAddress && jiraUsers[i].emailAddress.toLowerCase() === email) {
+            match = jiraUsers[i];
+            break;
+          }
+        }
+        // Fallback: match by display name similarity
+        if (!match) {
+          var displayName = (authUser.user_metadata && (authUser.user_metadata.full_name || authUser.user_metadata.name)) || '';
+          if (displayName) {
+            var dnLower = displayName.toLowerCase();
+            for (var j = 0; j < jiraUsers.length; j++) {
+              if (jiraUsers[j].displayName && jiraUsers[j].displayName.toLowerCase() === dnLower) {
+                match = jiraUsers[j];
+                break;
+              }
+            }
+          }
+        }
+
+        if (match) {
+          // Update the users table with Jira info
+          var updateData = {
+            jira_account_id: match.accountId,
+            jira_display_name: match.displayName || '',
+            jira_email: match.emailAddress || email,
+            jira_linked_at: new Date().toISOString()
+          };
+          // Also update SSO fields if this is an SSO login
+          if (authUser.app_metadata && authUser.app_metadata.provider && authUser.app_metadata.provider !== 'email') {
+            updateData.sso_provider = authUser.app_metadata.provider;
+            updateData.sso_subject_id = authUser.id;
+            updateData.auth_id = authUser.id;
+          }
+          await _supabase.from('users').update(updateData).eq('id', userRow.id);
+          window._currentAnalystJira = {
+            accountId: match.accountId,
+            displayName: match.displayName || '',
+            email: match.emailAddress || email
+          };
+          console.log('[JiraLink] Auto-linked:', match.displayName, '(' + match.accountId + ')');
+          showToast('Jira account linked: ' + (match.displayName || email), 'success');
+        } else {
+          console.log('[JiraLink] No Jira match found for', email);
+        }
+      } catch(e) {
+        console.warn('[JiraLink] Auto-link error:', e.message);
+      }
+    }
+
+    // Load SSO config on page load (controls which buttons appear)
+    _loadSSOConfig();
   }
 
   // Password show/hide toggle (available immediately)
@@ -36720,6 +37416,7 @@ async function openEscalateModal(ticketKey, currentStatus) {
     }).join('');
     ov.innerHTML = '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
       '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"><div style="font-size:14px;font-weight:600;color:var(--text-primary);">Transition ' + ticketKey + '</div><div style="cursor:pointer;color:var(--text-muted);font-size:18px;" onclick="this.closest(\'#escalateModalOverlay\').remove()">&times;</div></div>' +
+      (window._currentAnalystJira && window._currentAnalystJira.displayName ? '<div style="padding:8px 20px 0;"><div style="font-size:10px;display:flex;align-items:center;gap:6px;color:var(--green);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Acting as: <strong>' + window._currentAnalystJira.displayName + '</strong> (Jira)</div></div>' : '<div style="padding:8px 20px 0;"><div style="font-size:10px;color:var(--text-muted);">\u26A0 No Jira account linked — actions attributed to service account</div></div>') +
       '<div style="padding:14px 20px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Current: <strong style="color:var(--text-primary);">' + currentStatus + '</strong></div><div style="display:flex;flex-direction:column;gap:8px;">' + btns + '</div></div>' +
       '<div style="padding:10px 20px 16px;border-top:1px solid var(--border);margin-top:8px;"><div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Add comment (optional):</div>' +
       '<textarea id="escalateComment" placeholder="Notes..." style="width:100%;height:60px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text-primary);font-size:11px;font-family:var(--font-mono);resize:none;"></textarea></div></div>';
@@ -36733,8 +37430,34 @@ async function doTransition(ticketKey, transitionId, toName) {
   showToast('Moving ' + ticketKey + ' to ' + toName + '...', 'info');
   try {
     await DactaJira.transitionIssue(ticketKey, transitionId);
-    if (comment) await DactaJira.addComment(ticketKey, comment);
-    showToast(ticketKey + ' → ' + toName, 'success');
+
+    // Build attributed comment with analyst identity
+    var analystInfo = window._currentAnalystJira || null;
+    var analystLabel = '';
+    if (analystInfo && analystInfo.displayName) {
+      analystLabel = '[SIEMLess — ' + toName + ' by ' + analystInfo.displayName + ']';
+    } else {
+      // Fallback to logged-in user email
+      try {
+        var sess = await _supabase.auth.getSession();
+        var userEmail = (sess.data && sess.data.session && sess.data.session.user) ? sess.data.session.user.email : '';
+        if (userEmail) analystLabel = '[SIEMLess — ' + toName + ' by ' + userEmail + ']';
+      } catch(ae) { /* skip */ }
+    }
+    var fullComment = analystLabel ? (analystLabel + (comment ? '\n' + comment : '')) : comment;
+    if (fullComment) await DactaJira.addComment(ticketKey, fullComment);
+
+    // Auto-assign to analyst's Jira account on escalation
+    var isEscalation = toName.toLowerCase().indexOf('escalat') !== -1;
+    if (isEscalation && analystInfo && analystInfo.accountId) {
+      try {
+        await DactaJira.assignIssue(ticketKey, analystInfo.accountId);
+        var issue2 = _triageCurrentIssues.find(function(t) { return t.key === ticketKey; });
+        if (issue2) { issue2.assignee = analystInfo.displayName; issue2.assigneeId = analystInfo.accountId; }
+      } catch(ae2) { console.warn('[Escalation] Auto-assign failed:', ae2.message); }
+    }
+
+    showToast(ticketKey + ' → ' + toName + (analystInfo ? ' (by ' + analystInfo.displayName + ')' : ''), 'success');
     var issue = _triageCurrentIssues.find(function(t) { return t.key === ticketKey; });
     if (issue) issue.status = toName;
     rerenderTriageTable();

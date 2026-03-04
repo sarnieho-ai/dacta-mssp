@@ -656,6 +656,7 @@ export default async function handler(req, res) {
       const mapped = (Array.isArray(users) ? users : []).map(u => ({
         accountId: u.accountId,
         displayName: u.displayName,
+        emailAddress: u.emailAddress || null,
         avatar: (u.avatarUrls || {})['24x24'] || null
       }));
       return res.status(200).json(mapped);

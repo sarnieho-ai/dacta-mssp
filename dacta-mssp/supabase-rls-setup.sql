@@ -1,159 +1,195 @@
 -- ============================================================
--- DACTA SIEMLess — Supabase RLS & Security Policies
--- Run this in Supabase Dashboard → SQL Editor
+-- DACTA SIEMLess — RLS Security Lockdown (IDEMPOTENT)
+-- Safe to run multiple times. Drops existing policies first.
+-- Run in Supabase Dashboard → SQL Editor
 -- ============================================================
 
--- 1. Enable RLS on all tables
-ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE integrations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE sla_configs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE llm_usage_log ENABLE ROW LEVEL SECURITY;
+-- ============================================================
+-- STEP 1: Drop ALL existing policies (safe if they don't exist)
+-- ============================================================
+DO $$ 
+DECLARE
+    pol RECORD;
+BEGIN
+    FOR pol IN 
+        SELECT policyname, tablename 
+        FROM pg_policies 
+        WHERE schemaname = 'public'
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename);
+    END LOOP;
+END $$;
+
+-- ============================================================
+-- STEP 2: Enable RLS on ALL 28 tables
+-- ============================================================
 ALTER TABLE ai_investigation_briefs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ticket_comments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ticket_timeline ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE detection_rules ENABLE ROW LEVEL SECURITY;
-ALTER TABLE geo_alerts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE emerging_threats ENABLE ROW LEVEL SECURITY;
-ALTER TABLE threat_intel_feeds ENABLE ROW LEVEL SECURITY;
-ALTER TABLE threat_intel_iocs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE geo_alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE integrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE investigation_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE llm_usage_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE log_novelties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE log_parser_configs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE log_parser_patterns ENABLE ROW LEVEL SECURITY;
-ALTER TABLE log_novelties ENABLE ROW LEVEL SECURITY;
-ALTER TABLE mitre_techniques ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mitre_org_hits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mitre_techniques ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notification_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE org_connectors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE response_playbooks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rule_validation_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sla_configs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE threat_intel_feeds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE threat_intel_iocs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_timeline ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- 2. Authenticated users can read all data (SOC platform — all analysts need full visibility)
--- Organizations
-CREATE POLICY "Authenticated read organizations" ON organizations FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert organizations" ON organizations FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update organizations" ON organizations FOR UPDATE TO authenticated USING (true);
-CREATE POLICY "Authenticated delete organizations" ON organizations FOR DELETE TO authenticated USING (true);
+-- ============================================================
+-- STEP 3: Create policies — AUTHENTICATED gets full access
+--         ANON gets NOTHING (no policies = no access with RLS on)
+-- ============================================================
 
--- Integrations
-CREATE POLICY "Authenticated read integrations" ON integrations FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert integrations" ON integrations FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update integrations" ON integrations FOR UPDATE TO authenticated USING (true);
-CREATE POLICY "Authenticated delete integrations" ON integrations FOR DELETE TO authenticated USING (true);
+-- ai_investigation_briefs
+CREATE POLICY "auth_select_ai_investigation_briefs" ON ai_investigation_briefs FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_ai_investigation_briefs" ON ai_investigation_briefs FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_ai_investigation_briefs" ON ai_investigation_briefs FOR UPDATE TO authenticated USING (true);
 
--- SLA Configs
-CREATE POLICY "Authenticated read sla_configs" ON sla_configs FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert sla_configs" ON sla_configs FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update sla_configs" ON sla_configs FOR UPDATE TO authenticated USING (true);
-CREATE POLICY "Authenticated delete sla_configs" ON sla_configs FOR DELETE TO authenticated USING (true);
+-- assets
+CREATE POLICY "auth_select_assets" ON assets FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_assets" ON assets FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_assets" ON assets FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "auth_delete_assets" ON assets FOR DELETE TO authenticated USING (true);
 
--- Audit Log (read for all, write for authenticated)
-CREATE POLICY "Authenticated read audit_log" ON audit_log FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert audit_log" ON audit_log FOR INSERT TO authenticated WITH CHECK (true);
+-- audit_log
+CREATE POLICY "auth_select_audit_log" ON audit_log FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_audit_log" ON audit_log FOR INSERT TO authenticated WITH CHECK (true);
 
--- LLM Usage Log
-CREATE POLICY "Authenticated read llm_usage_log" ON llm_usage_log FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert llm_usage_log" ON llm_usage_log FOR INSERT TO authenticated WITH CHECK (true);
+-- cases
+CREATE POLICY "auth_select_cases" ON cases FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_cases" ON cases FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_cases" ON cases FOR UPDATE TO authenticated USING (true);
 
--- AI Investigation Briefs
-CREATE POLICY "Authenticated read ai_investigation_briefs" ON ai_investigation_briefs FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert ai_investigation_briefs" ON ai_investigation_briefs FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update ai_investigation_briefs" ON ai_investigation_briefs FOR UPDATE TO authenticated USING (true);
+-- detection_rules
+CREATE POLICY "auth_select_detection_rules" ON detection_rules FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_detection_rules" ON detection_rules FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_detection_rules" ON detection_rules FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "auth_delete_detection_rules" ON detection_rules FOR DELETE TO authenticated USING (true);
 
--- Assets
-CREATE POLICY "Authenticated read assets" ON assets FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert assets" ON assets FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update assets" ON assets FOR UPDATE TO authenticated USING (true);
-CREATE POLICY "Authenticated delete assets" ON assets FOR DELETE TO authenticated USING (true);
+-- emerging_threats
+CREATE POLICY "auth_select_emerging_threats" ON emerging_threats FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_emerging_threats" ON emerging_threats FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_emerging_threats" ON emerging_threats FOR UPDATE TO authenticated USING (true);
 
--- Tickets
-CREATE POLICY "Authenticated read tickets" ON tickets FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert tickets" ON tickets FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update tickets" ON tickets FOR UPDATE TO authenticated USING (true);
+-- geo_alerts
+CREATE POLICY "auth_select_geo_alerts" ON geo_alerts FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_geo_alerts" ON geo_alerts FOR INSERT TO authenticated WITH CHECK (true);
 
--- Ticket Comments
-CREATE POLICY "Authenticated read ticket_comments" ON ticket_comments FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert ticket_comments" ON ticket_comments FOR INSERT TO authenticated WITH CHECK (true);
+-- integrations
+CREATE POLICY "auth_select_integrations" ON integrations FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_integrations" ON integrations FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_integrations" ON integrations FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "auth_delete_integrations" ON integrations FOR DELETE TO authenticated USING (true);
 
--- Ticket Timeline
-CREATE POLICY "Authenticated read ticket_timeline" ON ticket_timeline FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert ticket_timeline" ON ticket_timeline FOR INSERT TO authenticated WITH CHECK (true);
+-- investigation_cache
+CREATE POLICY "auth_select_investigation_cache" ON investigation_cache FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_investigation_cache" ON investigation_cache FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_investigation_cache" ON investigation_cache FOR UPDATE TO authenticated USING (true);
 
--- Cases
-CREATE POLICY "Authenticated read cases" ON cases FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert cases" ON cases FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update cases" ON cases FOR UPDATE TO authenticated USING (true);
+-- llm_usage_log
+CREATE POLICY "auth_select_llm_usage_log" ON llm_usage_log FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_llm_usage_log" ON llm_usage_log FOR INSERT TO authenticated WITH CHECK (true);
 
--- Detection Rules
-CREATE POLICY "Authenticated read detection_rules" ON detection_rules FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert detection_rules" ON detection_rules FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update detection_rules" ON detection_rules FOR UPDATE TO authenticated USING (true);
-CREATE POLICY "Authenticated delete detection_rules" ON detection_rules FOR DELETE TO authenticated USING (true);
+-- log_novelties
+CREATE POLICY "auth_select_log_novelties" ON log_novelties FOR SELECT TO authenticated USING (true);
 
--- Geo Alerts
-CREATE POLICY "Authenticated read geo_alerts" ON geo_alerts FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert geo_alerts" ON geo_alerts FOR INSERT TO authenticated WITH CHECK (true);
+-- log_parser_configs
+CREATE POLICY "auth_select_log_parser_configs" ON log_parser_configs FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_log_parser_configs" ON log_parser_configs FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_log_parser_configs" ON log_parser_configs FOR UPDATE TO authenticated USING (true);
 
--- Emerging Threats
-CREATE POLICY "Authenticated read emerging_threats" ON emerging_threats FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert emerging_threats" ON emerging_threats FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update emerging_threats" ON emerging_threats FOR UPDATE TO authenticated USING (true);
+-- log_parser_patterns
+CREATE POLICY "auth_select_log_parser_patterns" ON log_parser_patterns FOR SELECT TO authenticated USING (true);
 
--- Threat Intel
-CREATE POLICY "Authenticated read threat_intel_feeds" ON threat_intel_feeds FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert threat_intel_feeds" ON threat_intel_feeds FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated read threat_intel_iocs" ON threat_intel_iocs FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert threat_intel_iocs" ON threat_intel_iocs FOR INSERT TO authenticated WITH CHECK (true);
+-- mitre_org_hits
+CREATE POLICY "auth_select_mitre_org_hits" ON mitre_org_hits FOR SELECT TO authenticated USING (true);
 
--- Investigation Cache
-CREATE POLICY "Authenticated read investigation_cache" ON investigation_cache FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert investigation_cache" ON investigation_cache FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update investigation_cache" ON investigation_cache FOR UPDATE TO authenticated USING (true);
+-- mitre_techniques
+CREATE POLICY "auth_select_mitre_techniques" ON mitre_techniques FOR SELECT TO authenticated USING (true);
 
--- Log Parser
-CREATE POLICY "Authenticated read log_parser_configs" ON log_parser_configs FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert log_parser_configs" ON log_parser_configs FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update log_parser_configs" ON log_parser_configs FOR UPDATE TO authenticated USING (true);
-CREATE POLICY "Authenticated read log_parser_patterns" ON log_parser_patterns FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated read log_novelties" ON log_novelties FOR SELECT TO authenticated USING (true);
+-- notification_rules
+CREATE POLICY "auth_select_notification_rules" ON notification_rules FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_notification_rules" ON notification_rules FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_notification_rules" ON notification_rules FOR UPDATE TO authenticated USING (true);
 
--- MITRE
-CREATE POLICY "Authenticated read mitre_techniques" ON mitre_techniques FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated read mitre_org_hits" ON mitre_org_hits FOR SELECT TO authenticated USING (true);
+-- org_connectors
+CREATE POLICY "auth_select_org_connectors" ON org_connectors FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_org_connectors" ON org_connectors FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_org_connectors" ON org_connectors FOR UPDATE TO authenticated USING (true);
 
--- Notification Rules
-CREATE POLICY "Authenticated read notification_rules" ON notification_rules FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert notification_rules" ON notification_rules FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update notification_rules" ON notification_rules FOR UPDATE TO authenticated USING (true);
+-- organizations
+CREATE POLICY "auth_select_organizations" ON organizations FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_organizations" ON organizations FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_organizations" ON organizations FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "auth_delete_organizations" ON organizations FOR DELETE TO authenticated USING (true);
 
--- Org Connectors
-CREATE POLICY "Authenticated read org_connectors" ON org_connectors FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert org_connectors" ON org_connectors FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update org_connectors" ON org_connectors FOR UPDATE TO authenticated USING (true);
+-- reports
+CREATE POLICY "auth_select_reports" ON reports FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_reports" ON reports FOR INSERT TO authenticated WITH CHECK (true);
 
--- Reports
-CREATE POLICY "Authenticated read reports" ON reports FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert reports" ON reports FOR INSERT TO authenticated WITH CHECK (true);
+-- response_playbooks
+CREATE POLICY "auth_select_response_playbooks" ON response_playbooks FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_response_playbooks" ON response_playbooks FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_response_playbooks" ON response_playbooks FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "auth_delete_response_playbooks" ON response_playbooks FOR DELETE TO authenticated USING (true);
 
--- Rule Validation Queue
-CREATE POLICY "Authenticated read rule_validation_queue" ON rule_validation_queue FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated insert rule_validation_queue" ON rule_validation_queue FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated update rule_validation_queue" ON rule_validation_queue FOR UPDATE TO authenticated USING (true);
+-- rule_validation_queue
+CREATE POLICY "auth_select_rule_validation_queue" ON rule_validation_queue FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_rule_validation_queue" ON rule_validation_queue FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_rule_validation_queue" ON rule_validation_queue FOR UPDATE TO authenticated USING (true);
 
--- Users table — users can read all, but only update their own profile
-CREATE POLICY "Authenticated read users" ON users FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Users update own profile" ON users FOR UPDATE TO authenticated USING (auth.uid() = id);
-CREATE POLICY "Authenticated insert users" ON users FOR INSERT TO authenticated WITH CHECK (true);
+-- sla_configs
+CREATE POLICY "auth_select_sla_configs" ON sla_configs FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_sla_configs" ON sla_configs FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_sla_configs" ON sla_configs FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "auth_delete_sla_configs" ON sla_configs FOR DELETE TO authenticated USING (true);
 
--- 3. BLOCK anonymous access entirely (anon role gets nothing after RLS is on)
--- This is automatic: with RLS enabled and policies only for 'authenticated',
--- the 'anon' role has no SELECT/INSERT/UPDATE/DELETE access.
+-- threat_intel_feeds
+CREATE POLICY "auth_select_threat_intel_feeds" ON threat_intel_feeds FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_threat_intel_feeds" ON threat_intel_feeds FOR INSERT TO authenticated WITH CHECK (true);
 
--- 4. Create indexes for performance (addresses Supabase performance advisories)
+-- threat_intel_iocs
+CREATE POLICY "auth_select_threat_intel_iocs" ON threat_intel_iocs FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_threat_intel_iocs" ON threat_intel_iocs FOR INSERT TO authenticated WITH CHECK (true);
+
+-- ticket_comments
+CREATE POLICY "auth_select_ticket_comments" ON ticket_comments FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_ticket_comments" ON ticket_comments FOR INSERT TO authenticated WITH CHECK (true);
+
+-- ticket_timeline
+CREATE POLICY "auth_select_ticket_timeline" ON ticket_timeline FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_ticket_timeline" ON ticket_timeline FOR INSERT TO authenticated WITH CHECK (true);
+
+-- tickets
+CREATE POLICY "auth_select_tickets" ON tickets FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_tickets" ON tickets FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_tickets" ON tickets FOR UPDATE TO authenticated USING (true);
+
+-- users (read all, but only update own profile)
+CREATE POLICY "auth_select_users" ON users FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert_users" ON users FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update_own_users" ON users FOR UPDATE TO authenticated USING (auth.uid() = id);
+
+-- ============================================================
+-- STEP 4: Performance indexes (IF NOT EXISTS = safe to re-run)
+-- ============================================================
 CREATE INDEX IF NOT EXISTS idx_tickets_org_id ON tickets(org_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
 CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at DESC);
@@ -168,4 +204,4 @@ CREATE INDEX IF NOT EXISTS idx_assets_org_id ON assets(org_id);
 CREATE INDEX IF NOT EXISTS idx_integrations_org_id ON integrations(org_id);
 CREATE INDEX IF NOT EXISTS idx_detection_rules_org_id ON detection_rules(org_id);
 CREATE INDEX IF NOT EXISTS idx_emerging_threats_published_at ON emerging_threats(published_at DESC);
-CREATE INDEX IF NOT EXISTS idx_organizations_code ON organizations(code);
+CREATE INDEX IF NOT EXISTS idx_organizations_short_name ON organizations(short_name);
