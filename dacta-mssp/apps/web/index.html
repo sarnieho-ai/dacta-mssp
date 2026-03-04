@@ -27884,8 +27884,7 @@ var _aiUsageCacheKey = '';
 
 async function loadAIUsagePage() {
   var page = document.getElementById('page-aiusage');
-  if (!page || !window._dactaSupabase) return;
-  var sb = window._dactaSupabase;
+  if (!page) return;
 
   // --- Populate month filter dropdown ---
   var monthSel = document.getElementById('aiUsageMonthFilter');
@@ -27903,24 +27902,22 @@ async function loadAIUsagePage() {
   }
 
   var selectedMonth = monthSel ? monthSel.value : new Date().toISOString().slice(0, 7);
-  var startDate = selectedMonth + '-01T00:00:00Z';
-  var endParts = selectedMonth.split('-');
-  var endDate = new Date(parseInt(endParts[0]), parseInt(endParts[1]), 1).toISOString(); // first day of next month
 
-  // --- Fetch from SIEMLess DB (with cache) ---
+  // --- Fetch from server-side API (bypasses RLS, always works) ---
   var cacheKey = selectedMonth;
   var rows;
-  if (_aiUsageCacheKey === cacheKey && _aiUsageDBCache) {
+  if (_aiUsageCacheKey === cacheKey && _aiUsageDBCache && _aiUsageDBCache.length > 0) {
     rows = _aiUsageDBCache;
   } else {
     try {
-      var res = await sb.from('llm_usage_log')
-        .select('*')
-        .gte('created_at', startDate)
-        .lt('created_at', endDate)
-        .order('created_at', { ascending: false })
-        .limit(1000);
-      rows = (res.data && res.data.length > 0) ? res.data : [];
+      var resp = await fetch('/api/ai-usage?month=' + encodeURIComponent(selectedMonth));
+      if (resp.ok) {
+        var json = await resp.json();
+        rows = (json.data && json.data.length > 0) ? json.data : [];
+      } else {
+        console.warn('[AIUsage] API error:', resp.status);
+        rows = [];
+      }
       _aiUsageDBCache = rows;
       _aiUsageCacheKey = cacheKey;
     } catch (e) {
