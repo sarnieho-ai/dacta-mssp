@@ -6777,10 +6777,10 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
 
 /* ============================================================
-   DACTA COPILOT PAGE
+   DACTA COPILOT PAGE (Redesigned — clean chat layout)
    ============================================================ */
 
-/* Page layout override — no padding for Copilot */
+/* Page layout */
 #page-copilot {
   padding: 0;
   display: none;
@@ -6792,1218 +6792,332 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   display: flex;
 }
 
-/* ---- Copilot Page Header ---- */
+/* ---- Copilot Header ---- */
 .copilot-header {
-  padding: 16px 24px 0;
+  padding: 16px 24px 12px;
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.copilot-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
 }
-.copilot-title-row {
+.copilot-header-left {
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.copilot-logo-badge {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(0,212,255,0.2) 0%, rgba(139,92,246,0.25) 100%);
-  border: 1px solid rgba(0,212,255,0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  box-shadow: 0 0 20px rgba(0,212,255,0.15), inset 0 1px 0 rgba(255,255,255,0.08);
-  position: relative;
+.copilot-header-logo {
+  font-size: 28px;
+  line-height: 1;
 }
-.copilot-logo-badge::after {
-  content: '';
-  position: absolute;
-  top: -2px; right: -2px;
-  width: 8px; height: 8px;
-  background: var(--green);
-  border-radius: 50%;
-  border: 2px solid var(--bg-surface);
-  box-shadow: 0 0 6px var(--green);
-}
-.copilot-title-text h1 {
-  font-family: var(--font-display);
-  font-size: 17px;
+.copilot-header-title h1 {
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  margin: 0;
 }
-.copilot-title-text h1 span {
-  background: linear-gradient(90deg, var(--cyan) 0%, #a78bfa 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.copilot-header-title h1 span {
+  color: var(--cyan);
 }
-.copilot-title-text p {
+.copilot-header-subtitle {
   font-size: 11px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  margin-top: 1px;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.copilot-status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  display: inline-block;
 }
 .copilot-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.copilot-shortcut-badge {
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 5px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.copilot-shortcut-badge kbd {
-  background: var(--bg-elevated);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 3px;
-  padding: 1px 4px;
-  font-size: 10px;
-  color: var(--cyan);
-}
 
-/* ---- Domain Selector Bar ---- */
-.copilot-domain-bar {
-  display: flex;
-  gap: 6px;
-  padding: 0 24px;
-  flex-shrink: 0;
-  margin-top: 12px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-.copilot-domain-bar::-webkit-scrollbar { height: 0; }
-.domain-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 7px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  font-size: 11.5px;
-  font-weight: 500;
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: all var(--transition);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.domain-btn:hover {
-  background: var(--bg-elevated);
-  border-color: var(--border-card);
-  color: var(--text-primary);
-}
-.domain-btn.active {
-  background: var(--cyan-dim);
-  border-color: rgba(0,212,255,0.35);
-  color: var(--cyan);
-  box-shadow: 0 0 12px rgba(0,212,255,0.1), inset 0 1px 0 rgba(0,212,255,0.1);
-  position: relative;
-}
-.domain-btn.active::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60%;
-  height: 2px;
-  background: var(--cyan);
-  border-radius: 2px;
-  box-shadow: 0 0 6px rgba(0,212,255,0.6);
-}
-.copilot-domain-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  padding: 2px 24px 0;
-  font-family: var(--font-mono);
-  min-height: 18px;
-}
-.domain-btn .domain-icon {
-  font-size: 14px;
-  line-height: 1;
-}
-
-/* ---- Main Copilot Body ---- */
-.copilot-body {
-  display: flex;
+/* ---- Chat Container ---- */
+.copilot-chat-container {
   flex: 1;
-  gap: 16px;
-  overflow: hidden;
-  min-height: 0;
-  height: calc(100vh - 220px);
-  margin-top: 12px;
-  padding: 0 24px 16px;
-}
-
-/* ---- Conversation Area ---- */
-.copilot-conversation {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
-  border-radius: 12px;
   overflow: hidden;
-  position: relative;
-}
-.copilot-conv-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-  background: rgba(255,255,255,0.015);
-}
-.copilot-conv-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.copilot-session-indicator {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 10px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-.copilot-session-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 6px var(--green);
-  animation: pulseDot 2s ease-in-out infinite;
-}
-@keyframes pulseDot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  min-height: 0;
 }
 
+/* ---- Messages Area ---- */
 .copilot-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 16px;
+  padding: 24px 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
+.copilot-messages::-webkit-scrollbar { width: 5px; }
+.copilot-messages::-webkit-scrollbar-track { background: transparent; }
+.copilot-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
 
-/* ---- Message Bubbles ---- */
+/* ---- Empty State ---- */
+.copilot-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 80px 24px;
+  gap: 12px;
+}
+.copilot-empty-icon {
+  font-size: 48px;
+  opacity: 0.35;
+}
+.copilot-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.copilot-empty-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  max-width: 460px;
+  text-align: center;
+  line-height: 1.7;
+}
+.copilot-empty-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+.copilot-chip {
+  font-size: 11px;
+  padding: 5px 14px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-body);
+  border: 1px solid;
+}
+.copilot-chip:hover { filter: brightness(1.3); }
+.copilot-chip-cyan { background: rgba(0,212,255,0.08); border-color: rgba(0,212,255,0.2); color: var(--cyan); }
+.copilot-chip-purple { background: rgba(139,92,246,0.08); border-color: rgba(139,92,246,0.2); color: #a78bfa; }
+.copilot-chip-green { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.2); color: var(--green); }
+.copilot-chip-amber { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); color: var(--amber); }
+
+/* ---- Message Rows ---- */
 .msg-row {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 24px;
 }
 .msg-row.analyst {
-  flex-direction: row-reverse;
+  justify-content: flex-end;
 }
 .msg-avatar {
-  width: 28px;
-  height: 28px;
+  width: 28px; height: 28px;
   border-radius: 8px;
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  margin-top: 2px;
+  font-size: 14px;
+  flex-shrink: 0;
 }
-.msg-avatar.copilot-av {
-  background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(139,92,246,0.25));
-  border: 1px solid rgba(0,212,255,0.25);
-  box-shadow: 0 0 10px rgba(0,212,255,0.1);
-}
-.msg-avatar.analyst-av {
-  background: rgba(245,158,11,0.15);
+.analyst-av {
+  background: rgba(245,158,11,0.12);
   border: 1px solid rgba(245,158,11,0.25);
+  order: 2;
+}
+.copilot-av {
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.2);
 }
 .msg-content {
+  min-width: 0;
   max-width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex: 1;
 }
 .msg-row.analyst .msg-content {
-  align-items: flex-end;
+  flex: unset;
+  max-width: 75%;
 }
 .msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
   font-size: 10px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 .msg-sender {
   font-weight: 600;
   color: var(--text-secondary);
 }
+
+/* User bubble — small right-aligned */
 .msg-bubble-analyst {
   background: rgba(245,158,11,0.08);
   border: 1px solid rgba(245,158,11,0.15);
-  border-radius: 10px 4px 10px 10px;
-  padding: 10px 14px;
+  border-radius: 14px 14px 4px 14px;
+  padding: 10px 16px;
   font-size: 13px;
   color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-weight: 500;
   line-height: 1.5;
+  display: inline-block;
 }
+
+/* Copilot response — open, no box */
 .msg-bubble-copilot {
-  background: rgba(0,212,255,0.04);
-  border: 1px solid rgba(0,212,255,0.12);
-  border-radius: 4px 10px 10px 10px;
-  padding: 14px 16px;
-  font-size: 12.5px;
-  color: var(--text-primary);
-  line-height: 1.6;
-  width: 100%;
-  max-width: 100%;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
   overflow-wrap: break-word;
   word-break: break-word;
 }
-.msg-bubble-copilot > div {
-  overflow-x: auto;
+.msg-bubble-copilot strong {
+  color: var(--text-primary);
+}
+.msg-bubble-copilot ul, .msg-bubble-copilot ol {
+  margin: 6px 0 6px 18px;
+  padding: 0;
+}
+.msg-bubble-copilot li {
+  margin-bottom: 3px;
+}
+.msg-bubble-copilot code, .msg-bubble-copilot .mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
-/* ---- IOC Enrichment Card ---- */
-.ioc-enrichment-card {
+/* Enrichment / result cards inside copilot responses */
+.copilot-result-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-card);
   border-radius: 10px;
-  overflow: hidden;
-  margin-top: 4px;
+  padding: 14px;
+  margin: 10px 0;
 }
-.ioc-card-header {
-  padding: 12px 14px;
-  background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.04));
-  border-bottom: 1px solid rgba(239,68,68,0.2);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.ioc-verdict {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.ioc-verdict-badge {
-  background: rgba(239,68,68,0.15);
-  color: #ff6b6b;
-  border: 1px solid rgba(239,68,68,0.4);
-  padding: 4px 10px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  letter-spacing: 0.08em;
-  box-shadow: 0 0 10px rgba(239,68,68,0.2), inset 0 0 8px rgba(239,68,68,0.05);
-  animation: redPulse 2s ease-in-out infinite;
-}
-@keyframes redPulse {
-  0%, 100% { box-shadow: 0 0 10px rgba(239,68,68,0.2), inset 0 0 8px rgba(239,68,68,0.05); }
-  50% { box-shadow: 0 0 18px rgba(239,68,68,0.35), inset 0 0 12px rgba(239,68,68,0.1); }
-}
-.ioc-ip-display {
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: 0.02em;
-}
-.ioc-confidence {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-.ioc-conf-bar {
-  width: 60px;
-  height: 4px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.ioc-conf-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--red) 0%, #ff6b6b 100%);
-  border-radius: 4px;
-  box-shadow: 0 0 6px rgba(239,68,68,0.5);
-}
-
-.ioc-sources-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.ioc-source-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
-  transition: background var(--transition);
-}
-.ioc-source-row:hover { background: rgba(255,255,255,0.02); }
-.ioc-source-row:nth-child(even) { border-right: none; }
-.ioc-source-row:last-child, .ioc-source-row:nth-last-child(2):nth-child(odd) {
-  border-bottom: none;
-}
-.ioc-source-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 5px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  margin-top: 1px;
-}
-.src-vt { background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.2); }
-.src-abuse { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); }
-.src-shodan { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); }
-.src-misp { background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); }
-.src-tfox { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); }
-.src-dns { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); }
-.src-geo { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); }
-.src-dacta { background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.25); }
-
-.ioc-source-body { flex: 1; min-width: 0; }
-.ioc-source-name {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 2px;
-}
-.ioc-source-value {
-  font-size: 12px;
-  color: var(--text-primary);
-  line-height: 1.4;
-  font-family: var(--font-body);
-}
-.ioc-source-value.mono { font-family: var(--font-mono); font-size: 11px; }
-.ioc-indicator {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 4px;
-}
-.ind-red { background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,0.6); }
-.ind-amber { background: var(--amber); box-shadow: 0 0 6px rgba(245,158,11,0.6); }
-.ind-green { background: var(--green); box-shadow: 0 0 6px rgba(16,185,129,0.6); }
-.ind-cyan { background: var(--cyan); box-shadow: 0 0 6px rgba(0,212,255,0.6); }
-.ind-purple { background: var(--purple); box-shadow: 0 0 6px rgba(139,92,246,0.6); }
-
-.ioc-mitre-row {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.ioc-mitre-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  width: 90px;
-  flex-shrink: 0;
-}
-.mitre-tag {
-  background: rgba(139,92,246,0.12);
-  border: 1px solid rgba(139,92,246,0.25);
-  color: #a78bfa;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  padding: 2px 7px;
-  border-radius: 4px;
-  font-weight: 600;
-}
-
-.ioc-related-row {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.ioc-related-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  width: 90px;
-  flex-shrink: 0;
-}
-.related-ioc-chip {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-card);
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 2px 7px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-.related-ioc-chip:hover {
-  border-color: var(--border-accent);
-  color: var(--cyan);
-}
-
-.ioc-dacta-history {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: rgba(0,212,255,0.03);
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-.dacta-hist-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-.dacta-hist-text {
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-.dacta-hist-text strong { color: var(--cyan); font-family: var(--font-mono); }
-
-.ioc-actions {
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.ioc-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: all var(--transition);
-  border: none;
-}
-.ioc-btn-warroom {
-  background: rgba(0,212,255,0.1);
-  border: 1px solid rgba(0,212,255,0.3);
-  color: var(--cyan);
-}
-.ioc-btn-warroom:hover {
-  background: rgba(0,212,255,0.18);
-  box-shadow: 0 0 12px rgba(0,212,255,0.2);
-}
-.ioc-btn-block {
-  background: rgba(239,68,68,0.1);
-  border: 1px solid rgba(239,68,68,0.3);
-  color: #ff6b6b;
-}
-.ioc-btn-block:hover { background: rgba(239,68,68,0.18); box-shadow: 0 0 10px rgba(239,68,68,0.2); }
-.ioc-btn-siem {
-  background: rgba(245,158,11,0.1);
-  border: 1px solid rgba(245,158,11,0.3);
-  color: var(--amber);
-}
-.ioc-btn-siem:hover { background: rgba(245,158,11,0.18); }
-.ioc-btn-stix {
-  background: rgba(139,92,246,0.1);
-  border: 1px solid rgba(139,92,246,0.25);
-  color: #a78bfa;
-}
-.ioc-btn-stix:hover { background: rgba(139,92,246,0.18); }
-
-/* ---- KQL Response Card ---- */
-.kql-response {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.kql-block {
-  background: #0a0e1a;
-  border: 1px solid rgba(0,212,255,0.15);
-  border-radius: 8px;
-  overflow: hidden;
-}
-.kql-block-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 7px 12px;
-  background: rgba(0,212,255,0.06);
-  border-bottom: 1px solid rgba(0,212,255,0.1);
-}
-.kql-lang-badge {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--cyan);
-  letter-spacing: 0.08em;
-}
-.kql-copy-btn {
-  background: none;
-  border: 1px solid rgba(255,255,255,0.1);
-  color: var(--text-muted);
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all var(--transition);
-  font-family: var(--font-body);
-}
-.kql-copy-btn:hover { border-color: var(--cyan); color: var(--cyan); }
-.kql-block pre {
-  padding: 12px 14px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.7;
-  color: var(--text-secondary);
-  overflow-x: auto;
-  margin: 0;
-}
-.kql-block pre .kw { color: var(--cyan); }
-.kql-block pre .str { color: #a3e635; }
-.kql-block pre .op { color: #fb923c; }
-.kql-block pre .fn { color: #a78bfa; }
-.kql-block pre .num { color: #fbbf24; }
-.kql-block pre .cmt { color: var(--text-muted); font-style: italic; }
-
-.kql-explanation {
-  background: rgba(245,158,11,0.04);
-  border: 1px solid rgba(245,158,11,0.12);
-  border-radius: 7px;
-  padding: 10px 12px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.kql-results-table {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-card);
-  border-radius: 8px;
-  overflow: hidden;
-}
-.kql-results-header {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: rgba(255,255,255,0.015);
-}
-.kql-results-count {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-primary);
-}
-.kql-results-count strong { color: var(--red-bright); }
-.kql-results-meta {
-  font-size: 10px;
-  color: var(--text-muted);
-}
-.kql-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.kql-table th {
-  padding: 6px 10px;
-  text-align: left;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  border-bottom: 1px solid var(--border-subtle);
-  background: rgba(255,255,255,0.01);
-}
-.kql-table td {
-  padding: 7px 10px;
-  font-size: 11.5px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-  color: var(--text-secondary);
-}
-.kql-table tr:hover td { background: rgba(255,255,255,0.02); }
-.kql-table td.mono { font-family: var(--font-mono); font-size: 11px; }
-.kql-table td.suspicious {
-  color: var(--red-bright);
-  font-weight: 600;
-}
-.kql-highlight-row td { background: rgba(239,68,68,0.04) !important; }
-.kql-suggestion {
-  background: rgba(0,212,255,0.05);
-  border: 1px solid rgba(0,212,255,0.15);
-  border-radius: 7px;
-  padding: 10px 12px;
-  font-size: 12px;
-  color: var(--cyan);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.kql-suggestion-btn {
-  margin-left: auto;
-  background: rgba(0,212,255,0.12);
-  border: 1px solid rgba(0,212,255,0.3);
-  color: var(--cyan);
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-weight: 600;
-  transition: all var(--transition);
-  white-space: nowrap;
-}
-.kql-suggestion-btn:hover { background: rgba(0,212,255,0.2); box-shadow: 0 0 10px rgba(0,212,255,0.2); }
-
-/* ---- MITRE Technique Card ---- */
-.mitre-card {
-  background: var(--bg-surface);
-  border: 1px solid rgba(139,92,246,0.2);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.mitre-card-header {
-  padding: 12px 14px;
-  background: linear-gradient(135deg, rgba(139,92,246,0.12), rgba(139,92,246,0.04));
-  border-bottom: 1px solid rgba(139,92,246,0.15);
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.mitre-technique-id {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  color: #a78bfa;
-  letter-spacing: 0.05em;
-}
-.mitre-technique-name {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  margin-top: 3px;
-}
-.mitre-tactic-badges {
-  display: flex;
-  gap: 5px;
-  margin-top: 6px;
-  flex-wrap: wrap;
-}
-.mitre-tactic-badge {
-  background: rgba(139,92,246,0.12);
-  border: 1px solid rgba(139,92,246,0.25);
-  color: #a78bfa;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.mitre-card-body {
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.mitre-desc {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  line-height: 1.65;
-}
-.mitre-detection-section {
-  background: rgba(16,185,129,0.04);
-  border: 1px solid rgba(16,185,129,0.12);
-  border-radius: 7px;
-  padding: 10px 12px;
-}
-.mitre-section-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--green);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 6px;
-}
-.mitre-detection-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.mitre-detection-list li {
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  padding-left: 16px;
-  position: relative;
-  line-height: 1.5;
-}
-.mitre-detection-list li::before {
-  content: '›';
-  position: absolute;
-  left: 4px;
-  color: var(--green);
-}
-.mitre-related-section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.mitre-related-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-.mitre-related-tag {
-  background: rgba(139,92,246,0.1);
-  border: 1px solid rgba(139,92,246,0.2);
-  color: #c4b5fd;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  padding: 2px 7px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-.mitre-related-tag:hover { background: rgba(139,92,246,0.2); }
-.mitre-card-actions {
-  padding: 10px 14px;
-  border-top: 1px solid var(--border-subtle);
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.mitre-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition);
-  border: none;
-}
-.mitre-btn-search {
-  background: rgba(245,158,11,0.1);
-  border: 1px solid rgba(245,158,11,0.3);
-  color: var(--amber);
-}
-.mitre-btn-search:hover { background: rgba(245,158,11,0.18); }
-.mitre-btn-rule {
-  background: rgba(16,185,129,0.1);
-  border: 1px solid rgba(16,185,129,0.25);
-  color: var(--green);
-}
-.mitre-btn-rule:hover { background: rgba(16,185,129,0.18); }
 
 /* ---- Input Area ---- */
 .copilot-input-area {
-  padding: 12px 16px;
-  border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: rgba(255,255,255,0.01);
+  padding: 12px 24px 16px;
+  background: var(--bg-page);
+  border-top: 1px solid var(--border-subtle);
 }
-.copilot-input-modes {
-  display: flex;
-  gap: 2px;
-  align-items: center;
-}
-.copilot-mode-btn {
-  padding: 3px 9px;
-  font-size: 10.5px;
-  font-weight: 600;
-  font-family: var(--font-body);
-  border: 1px solid transparent;
-  background: none;
-  color: var(--text-muted);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-.copilot-mode-btn.active {
-  background: var(--bg-elevated);
-  border-color: var(--border-card);
-  color: var(--text-primary);
-}
-.copilot-mode-sep { font-size: 10px; color: var(--text-muted); margin: 0 3px; }
 .copilot-input-row {
   display: flex;
-  gap: 8px;
   align-items: flex-end;
+  gap: 8px;
+  max-width: 800px;
+  margin: 0 auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  padding: 8px 8px 8px 4px;
+  transition: border-color 0.15s ease;
+}
+.copilot-input-row:focus-within {
+  border-color: rgba(0,212,255,0.35);
+  box-shadow: 0 0 0 1px rgba(0,212,255,0.1);
 }
 .copilot-org-select {
-  flex-shrink: 0;
-  background: var(--bg-input);
-  border: 1px solid var(--border-card);
-  border-radius: 7px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
   color: var(--text-secondary);
-  font-family: var(--font-mono);
   font-size: 11px;
-  padding: 8px 10px;
+  font-family: var(--font-mono);
+  padding: 6px 8px;
   cursor: pointer;
-  transition: border-color var(--transition);
-  appearance: none;
-  width: 130px;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 140px;
 }
-.copilot-org-select:hover { border-color: var(--border-accent); }
+.copilot-org-select:focus {
+  outline: none;
+  border-color: rgba(0,212,255,0.3);
+}
 .copilot-text-input {
   flex: 1;
-  background: var(--bg-input);
-  border: 1px solid var(--border-card);
-  border-radius: 9px;
+  background: none;
+  border: none;
+  outline: none;
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: 13px;
-  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
   resize: none;
-  height: 42px;
-  line-height: 1.4;
-  transition: border-color var(--transition), box-shadow var(--transition);
-  outline: none;
-}
-.copilot-text-input:focus {
-  border-color: rgba(0,212,255,0.35);
-  box-shadow: 0 0 0 3px rgba(0,212,255,0.06);
+  padding: 4px 8px;
+  max-height: 120px;
+  min-height: 24px;
 }
 .copilot-text-input::placeholder {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .copilot-send-btn {
-  width: 42px;
-  height: 42px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, var(--cyan) 0%, rgba(0,180,220,0.9) 100%);
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  background: var(--cyan);
   border: none;
-  color: #080c18;
-  font-size: 16px;
+  color: #0a0e1a;
+  font-size: 15px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
   flex-shrink: 0;
-  transition: all var(--transition);
-  box-shadow: 0 0 16px rgba(0,212,255,0.3);
+  transition: all 0.15s ease;
 }
 .copilot-send-btn:hover {
-  box-shadow: 0 0 24px rgba(0,212,255,0.5);
-  transform: scale(1.04);
+  background: #33e0ff;
+  transform: scale(1.05);
 }
-.copilot-send-btn:active { transform: scale(0.96); }
+.copilot-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
 
-/* ---- Saved Searches (below chat) ---- */
-.copilot-saved-searches {
-  flex-shrink: 0;
-  border-top: 1px solid var(--border-subtle);
-  max-height: 140px;
-  overflow: hidden;
-  transition: max-height var(--transition-slow);
-}
-.copilot-saved-searches.collapsed {
-  max-height: 38px;
-}
-.saved-searches-toggle {
+/* ---- Thinking indicator ---- */
+.copilot-thinking {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 9px 16px;
-  cursor: pointer;
-  font-size: 10.5px;
-  font-weight: 600;
+  gap: 8px;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  transition: color var(--transition);
-}
-.saved-searches-toggle:hover { color: var(--text-secondary); }
-.saved-searches-chevron {
-  font-size: 10px;
-  transition: transform var(--transition);
-}
-.copilot-saved-searches.collapsed .saved-searches-chevron {
-  transform: rotate(-90deg);
-}
-.saved-searches-list {
-  display: flex;
-  gap: 6px;
-  padding: 0 16px 10px;
-  overflow-x: auto;
-}
-.saved-searches-list::-webkit-scrollbar { height: 0; }
-.saved-search-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 7px;
-  border: 1px solid var(--border-card);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.saved-search-chip:hover {
-  border-color: var(--border-accent);
-  color: var(--text-primary);
-  background: var(--bg-elevated);
-}
-.search-chip-lang {
+  font-size: 12px;
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  padding: 1px 5px;
-  border-radius: 3px;
 }
-
-/* ---- Context Panel (right) ---- */
-.copilot-context-panel {
-  width: 280px;
-  flex-shrink: 0;
+.thinking-dots {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-}
-.copilot-context-panel::-webkit-scrollbar { width: 4px; }
-
-.ctx-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
-  border-radius: 10px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.ctx-card-header {
-  padding: 9px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: rgba(255,255,255,0.01);
-}
-.ctx-card-body {
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.ctx-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.ctx-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-.ctx-value {
-  font-size: 11px;
-  color: var(--text-primary);
-  font-weight: 500;
-  text-align: right;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ctx-value.mono { font-family: var(--font-mono); font-size: 10.5px; }
-.ctx-value.cyan { color: var(--cyan); }
-.ctx-value.amber { color: var(--amber); }
-.ctx-divider { height: 1px; background: var(--border-subtle); margin: 2px 0; }
-
-/* Data Sources */
-.ds-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-}
-.ds-item:last-child { border-bottom: none; }
-.ds-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  flex-shrink: 0;
-}
-.ds-name {
-  flex: 1;
-  font-size: 11.5px;
-  color: var(--text-secondary);
-}
-.ds-status {
-  display: flex;
-  align-items: center;
   gap: 4px;
-  font-size: 10px;
-  font-weight: 600;
 }
-.ds-dot {
-  width: 6px; height: 6px;
+.thinking-dot {
+  width: 5px; height: 5px;
   border-radius: 50%;
+  background: var(--cyan);
+  animation: thinkBounce 1.2s ease-in-out infinite;
 }
-.ds-dot.connected { background: var(--green); box-shadow: 0 0 5px var(--green); }
-.ds-dot.api { background: var(--cyan); box-shadow: 0 0 5px var(--cyan); }
-.ds-dot.warning { background: var(--amber); box-shadow: 0 0 5px var(--amber); }
-.ds-status.connected-txt { color: var(--green); }
-.ds-status.api-txt { color: var(--cyan); }
-
-/* Recent IOCs */
-.recent-ioc-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-  cursor: pointer;
-  transition: background var(--transition);
-}
-.recent-ioc-item:last-child { border-bottom: none; }
-.recent-ioc-item:hover { background: rgba(255,255,255,0.02); border-radius: 5px; }
-.recent-ioc-type {
-  width: 20px; height: 20px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  flex-shrink: 0;
-}
-.ioc-type-ip { background: rgba(239,68,68,0.12); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
-.ioc-type-domain { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
-.ioc-type-hash { background: rgba(139,92,246,0.12); color: #a78bfa; border: 1px solid rgba(139,92,246,0.2); }
-.recent-ioc-value {
-  flex: 1;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.recent-ioc-verdict {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 3px;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-.verdict-mal {
-  background: rgba(239,68,68,0.15);
-  color: #ff6b6b;
-  border: 1px solid rgba(239,68,68,0.3);
-}
-.verdict-sus {
-  background: rgba(245,158,11,0.15);
-  color: var(--amber);
-  border: 1px solid rgba(245,158,11,0.3);
-}
-.verdict-clean {
-  background: rgba(16,185,129,0.12);
-  color: var(--green);
-  border: 1px solid rgba(16,185,129,0.2);
+.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes thinkBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
 }
 
-/* Quick Actions */
-.quick-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 10px;
-  border-radius: 7px;
-  border: 1px solid var(--border-card);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: 11.5px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition);
-  width: 100%;
-  text-align: left;
-  font-family: var(--font-body);
-}
-.quick-action-btn:hover {
-  background: var(--bg-elevated);
-  border-color: var(--border-accent);
-  color: var(--text-primary);
-}
-.quick-action-icon { font-size: 14px; flex-shrink: 0; }
-
-/* ---- Command Bar Overlay ---- */
+/* ---- Command Bar Overlay (keep) ---- */
 .copilot-cmdbar-overlay {
   position: fixed;
   inset: 0;
@@ -8058,9 +7172,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   border-radius: 4px;
   flex-shrink: 0;
 }
-.cmdbar-suggestions {
-  padding: 8px 0;
-}
+.cmdbar-suggestions { padding: 8px 0; }
 .cmdbar-suggestion-group-label {
   padding: 4px 16px;
   font-size: 9.5px;
@@ -8116,32 +7228,6 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   padding: 1px 4px;
   color: var(--text-secondary);
   font-size: 10px;
-}
-
-/* Thinking animation for copilot */
-.copilot-thinking {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  color: var(--text-muted);
-  font-size: 11.5px;
-}
-.thinking-dots {
-  display: flex;
-  gap: 4px;
-}
-.thinking-dot {
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: var(--cyan);
-  animation: thinkBounce 1.2s ease-in-out infinite;
-}
-.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
-.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
-@keyframes thinkBounce {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-  40% { transform: scale(1); opacity: 1; }
 }
 
 /* ============================================================
@@ -24718,642 +23804,65 @@ Analyst: K. Rasmussen | 2026-02-28
 
         <!-- Copilot Header -->
         <div class="copilot-header">
-          <div class="copilot-header-top">
-            <div class="copilot-title-row">
-              <div class="copilot-logo-badge">&#x1F916;</div>
-              <div class="copilot-title-text">
-                <h1>DACTA <span>Copilot</span></h1>
-                <p>AI-Powered Investigation Intelligence · Session #COP-2026-0228</p>
+          <div class="copilot-header-left">
+            <div class="copilot-header-logo">&#x1F916;</div>
+            <div class="copilot-header-title">
+              <h1>DACTA <span>Copilot</span></h1>
+              <div class="copilot-header-subtitle">
+                <span class="copilot-status-dot"></span>
+                <span id="copilotSubtitle">AI-Powered Investigation Assistant &middot; Ready</span>
+                <span id="copilotDataStatus" style="font-size:10px;color:var(--text-muted);"></span>
               </div>
             </div>
-            <div class="copilot-header-actions">
-              <div class="copilot-shortcut-badge"><kbd>Ctrl</kbd><kbd>K</kbd> Command Bar</div>
-              <button class="btn btn-secondary btn-sm" onclick="openCopilotCmd()">&#x2318; Command Bar</button>
-              <button class="btn btn-secondary btn-sm">&#x1F5C4; Export Session</button>
-              <button class="btn btn-secondary btn-sm" onclick="clearCopilotScreen()" style="background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:#f87171;">&#x1F5D1; Clear Screen</button>
-              <button class="btn btn-primary btn-sm">+ New Session</button>
-            </div>
+          </div>
+          <div class="copilot-header-actions">
+            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);padding:3px 8px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:6px;"><kbd style="background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:3px;padding:1px 4px;font-size:9px;">Ctrl</kbd><kbd style="background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:3px;padding:1px 4px;font-size:9px;">K</kbd></div>
+            <button class="btn btn-secondary btn-sm" onclick="clearCopilotScreen()" style="background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:#f87171;font-size:11px;">Clear</button>
+            <button class="btn btn-primary btn-sm" onclick="clearCopilotScreen()" style="font-size:11px;">+ New Session</button>
           </div>
         </div>
 
-        <!-- Domain Selector Bar -->
-        <div class="copilot-domain-bar">
-          <button class="domain-btn" onclick="selectDomain(this, 'all')">
-            <span class="domain-icon">&#x26A1;</span> All Domains
-          </button>
-          <button class="domain-btn active" onclick="selectDomain(this, 'logsearch')">
-            <span class="domain-icon">&#x1F50D;</span> Log Search
-          </button>
-          <button class="domain-btn" onclick="selectDomain(this, 'threatintel')">
-            <span class="domain-icon">&#x1F6E1;&#xFE0F;</span> Threat Intel
-          </button>
-          <button class="domain-btn" onclick="selectDomain(this, 'scriptanalysis')">
-            <span class="domain-icon">&#x1F9EC;</span> Script Analysis
-          </button>
-          <button class="domain-btn" onclick="selectDomain(this, 'mitre')">
-            <span class="domain-icon">&#x1F5FA;&#xFE0F;</span> MITRE ATT&amp;CK
-          </button>
-          <button class="domain-btn" onclick="selectDomain(this, 'assetintel')">
-            <span class="domain-icon">&#x1F5A5;&#xFE0F;</span> Asset Intel
-          </button>
-          <button class="domain-btn" onclick="selectDomain(this, 'ticketintel')">
-            <span class="domain-icon">&#x1F4CB;</span> Ticket Intel
-          </button>
-          <button class="domain-btn" onclick="selectDomain(this, 'knowledge')">
-            <span class="domain-icon">&#x1F4DA;</span> Knowledge
-          </button>
+        <!-- Chat Container -->
+        <div class="copilot-chat-container">
+
+          <!-- Messages -->
+          <div class="copilot-messages" id="copilotMessages">
+            <!-- Empty state rendered by JS -->
+          </div>
+
+          <!-- Input Area -->
+          <div class="copilot-input-area">
+            <div class="copilot-input-row">
+              <select class="copilot-org-select" id="copilotOrgSelect"><option value="">All Clients</option></select>
+              <textarea class="copilot-text-input" id="copilotInput" placeholder="Ask anything... Check IP, search logs, MITRE lookup, search tickets..." rows="1" onkeydown="copilotInputKeydown(event)"></textarea>
+              <button class="copilot-send-btn" onclick="copilotSend()">&#x27A4;</button>
+            </div>
+          </div>
+
         </div>
-        <div class="copilot-domain-desc" id="copilotDomainDesc">Search Elastic SIEM logs with natural language or KQL queries</div>
 
-        <!-- Main Copilot Body -->
-        <div class="copilot-body">
-
-          <!-- Left: Conversation Area -->
-          <div class="copilot-conversation">
-            <!-- Conv header -->
-            <div class="copilot-conv-header">
-              <div class="copilot-conv-title">
-                &#x1F5E8;&#xFE0F; Investigation Session
-                <span class="badge badge-cyan" style="font-size:9px;padding:2px 7px;">NagaWorld · TKT-847</span>
-              </div>
-              <div class="copilot-session-indicator">
-                <div class="copilot-session-dot"></div>
-                Copilot Active
-              </div>
+        <!-- Command Bar Overlay (keep) -->
+        <div class="copilot-cmdbar-overlay" id="copilotCmdOverlay" onclick="closeCopilotCmd(event)">
+          <div class="copilot-cmdbar" onclick="event.stopPropagation()">
+            <div class="cmdbar-input-row">
+              <span class="cmdbar-icon">&#x26A1;</span>
+              <input class="cmdbar-input" id="cmdbarInput" placeholder="Type a command..." oninput="updateCmdBar(this.value)" />
+              <span class="cmdbar-esc">ESC</span>
             </div>
-
-            <!-- Messages -->
-            <div class="copilot-messages" id="copilotMessages">
-
-              <!-- System welcome -->
-              <div style="text-align:center;padding:8px 0;">
-                <div style="display:inline-flex;align-items:center;gap:8px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:20px;padding:5px 14px;font-size:11px;color:var(--text-muted);">
-                  <span style="color:var(--green);font-size:13px;">&#x25CF;</span>
-                  Session started · NagaWorld context loaded · 6 data sources active
-                </div>
-              </div>
-
-              <!-- MESSAGE 1: Analyst -->
-              <div class="msg-row analyst">
-                <div class="msg-avatar analyst-av">&#x1F464;</div>
-                <div class="msg-content">
-                  <div class="msg-meta">
-                    <span class="msg-sender">J. Lim (Analyst)</span>
-                    <span>14:32:07 SGT</span>
-                  </div>
-                  <div class="msg-bubble-analyst">Check IP 185.220.101.34</div>
-                </div>
-              </div>
-
-              <!-- MESSAGE 1: Copilot Response — IOC Enrichment -->
-              <div class="msg-row">
-                <div class="msg-avatar copilot-av">&#x1F916;</div>
-                <div class="msg-content" style="max-width:100%;">
-                  <div class="msg-meta">
-                    <span class="msg-sender">DACTA Copilot</span>
-                    <span>14:32:09 SGT · 1.8s</span>
-                    <span class="badge badge-red" style="font-size:9px;padding:1px 5px;">MALICIOUS</span>
-                  </div>
-                  <div class="msg-bubble-copilot">
-                    <div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:10px;line-height:1.5;">
-                      IOC enrichment complete. Cross-referenced across 6 threat intelligence sources. This IP has <strong style="color:var(--red-bright);">multiple confirmed malicious indicators</strong> including active C2 association.
-                    </div>
-
-                    <!-- IOC Enrichment Card -->
-                    <div class="ioc-enrichment-card">
-                      <!-- Card Header -->
-                      <div class="ioc-card-header">
-                        <div class="ioc-verdict">
-                          <div class="ioc-verdict-badge">&#x26D4; MALICIOUS</div>
-                          <div>
-                            <div class="ioc-ip-display">185.220.101.34</div>
-                            <div style="font-size:10px;color:var(--text-muted);margin-top:2px;font-family:var(--font-mono);">Type: IPv4 · Autonomous System: AS24940</div>
-                          </div>
-                        </div>
-                        <div class="ioc-confidence">
-                          <div>
-                            <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Confidence</div>
-                            <div class="ioc-conf-bar">
-                              <div class="ioc-conf-fill" style="width:95%;"></div>
-                            </div>
-                          </div>
-                          <div style="font-size:13px;font-weight:700;color:var(--red-bright);font-family:var(--font-mono);">95%</div>
-                        </div>
-                      </div>
-
-                      <!-- Sources Grid -->
-                      <div class="ioc-sources-grid">
-                        <div class="ioc-source-row">
-                          <div class="ioc-source-icon src-vt">&#x1F9EA;</div>
-                          <div class="ioc-source-body">
-                            <div class="ioc-source-name">VirusTotal</div>
-                            <div class="ioc-source-value"><strong style="color:var(--red-bright);">12/89</strong> vendors flagged</div>
-                          </div>
-                          <div class="ioc-indicator ind-red"></div>
-                        </div>
-
-                        <div class="ioc-source-row">
-                          <div class="ioc-source-icon src-abuse">&#x1F6A8;</div>
-                          <div class="ioc-source-body">
-                            <div class="ioc-source-name">AbuseIPDB</div>
-                            <div class="ioc-source-value"><strong style="color:var(--red-bright);">97%</strong> confidence · 347 reports/90d</div>
-                          </div>
-                          <div class="ioc-indicator ind-red"></div>
-                        </div>
-
-                        <div class="ioc-source-row">
-                          <div class="ioc-source-icon src-shodan">&#x1F4E1;</div>
-                          <div class="ioc-source-body">
-                            <div class="ioc-source-name">Shodan</div>
-                            <div class="ioc-source-value">Tor exit node · Port 443 open · Self-signed cert</div>
-                          </div>
-                          <div class="ioc-indicator ind-amber"></div>
-                        </div>
-
-                        <div class="ioc-source-row">
-                          <div class="ioc-source-icon src-misp">&#x1F578;&#xFE0F;</div>
-                          <div class="ioc-source-body">
-                            <div class="ioc-source-name">MISP</div>
-                            <div class="ioc-source-value"><strong style="color:#ff6b6b;">3 matching events</strong> (ransomware-related)</div>
-                          </div>
-                          <div class="ioc-indicator ind-red"></div>
-                        </div>
-
-                        <div class="ioc-source-row">
-                          <div class="ioc-source-icon src-tfox">&#x1F98A;</div>
-                          <div class="ioc-source-body">
-                            <div class="ioc-source-name">ThreatFox</div>
-                            <div class="ioc-source-value"><strong style="color:#ff6b6b;">LockBit 3.0</strong> C2 infrastructure</div>
-                          </div>
-                          <div class="ioc-indicator ind-red"></div>
-                        </div>
-
-                        <div class="ioc-source-row">
-                          <div class="ioc-source-icon src-dns">&#x1F310;</div>
-                          <div class="ioc-source-body">
-                            <div class="ioc-source-name">Passive DNS</div>
-                            <div class="ioc-source-value mono">dynserv[.]net</div>
-                          </div>
-                          <div class="ioc-indicator ind-amber"></div>
-                        </div>
-
-                        <div class="ioc-source-row">
-                          <div class="ioc-source-icon src-geo">&#x1F4CD;</div>
-                          <div class="ioc-source-body">
-                            <div class="ioc-source-name">Geolocation</div>
-                            <div class="ioc-source-value">Frankfurt, DE · <span class="mono">AS24940 Hetzner</span></div>
-                          </div>
-                          <div class="ioc-indicator ind-cyan"></div>
-                        </div>
-
-                        <div class="ioc-source-row">
-                          <div class="ioc-source-icon src-vt">&#x23F1;&#xFE0F;</div>
-                          <div class="ioc-source-body">
-                            <div class="ioc-source-name">Timeline</div>
-                            <div class="ioc-source-value mono">First: 2025-11-14 · Last: 2026-02-27</div>
-                          </div>
-                          <div class="ioc-indicator ind-amber"></div>
-                        </div>
-                      </div>
-
-                      <!-- MITRE Row -->
-                      <div class="ioc-mitre-row">
-                        <div class="ioc-mitre-label">MITRE ATT&amp;CK</div>
-                        <div style="display:flex;gap:5px;flex-wrap:wrap;">
-                          <span class="mitre-tag">T1071.001</span>
-                          <span class="mitre-tag">T1573</span>
-                          <span class="mitre-tag">T1090</span>
-                          <span style="font-size:10.5px;color:var(--text-muted);align-self:center;font-style:italic;">Web Protocol C2 · Encrypted Channel · Proxy</span>
-                        </div>
-                      </div>
-
-                      <!-- Related IOCs -->
-                      <div class="ioc-related-row">
-                        <div class="ioc-related-label">Related IOCs</div>
-                        <span class="related-ioc-chip">dynserv[.]net</span>
-                        <span class="related-ioc-chip">185.220.101.42</span>
-                        <span class="related-ioc-chip">a1b2c3d4e5f6...</span>
-                        <span style="font-size:10px;color:var(--text-muted);cursor:pointer;">+7 more ›</span>
-                      </div>
-
-                      <!-- DACTA History -->
-                      <div class="ioc-dacta-history">
-                        <div class="dacta-hist-icon">&#x1F4CA;</div>
-                        <div class="dacta-hist-text">
-                          <strong>DACTA History:</strong> This IP was also seen in <strong>WR-2025-017</strong> (NagaWorld, ransomware campaign, Nov 2025) — confirmed C2 node. Analyst note: "Blocked at perimeter, no lateral movement confirmed."
-                        </div>
-                      </div>
-
-                      <!-- Actions -->
-                      <div class="ioc-actions">
-                        <button class="ioc-action-btn ioc-btn-warroom" onclick="showToast('Added to War Room IOC list')">&#x2B50; Add to War Room</button>
-                        <button class="ioc-action-btn ioc-btn-block" onclick="showToast('Block rule queued for review')">&#x1F6AB; Block at Firewall</button>
-                        <button class="ioc-action-btn ioc-btn-siem" onclick="showToast('Searching NagaWorld SIEM...')">&#x1F50E; Search in Client SIEM</button>
-                        <button class="ioc-action-btn ioc-btn-stix" onclick="showToast('Exporting as STIX 2.1...')">&#x1F4E4; Export STIX</button>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-              </div>
-
-              <!-- MESSAGE 2: Analyst -->
-              <div class="msg-row analyst">
-                <div class="msg-avatar analyst-av">&#x1F464;</div>
-                <div class="msg-content">
-                  <div class="msg-meta">
-                    <span class="msg-sender">J. Lim (Analyst)</span>
-                    <span>14:34:22 SGT</span>
-                  </div>
-                  <div class="msg-bubble-analyst">Show me all failed RDP logins to NW-DC-01 in the last 48 hours</div>
-                </div>
-              </div>
-
-              <!-- MESSAGE 2: Copilot Response — KQL -->
-              <div class="msg-row">
-                <div class="msg-avatar copilot-av">&#x1F916;</div>
-                <div class="msg-content" style="max-width:100%;">
-                  <div class="msg-meta">
-                    <span class="msg-sender">DACTA Copilot</span>
-                    <span>14:34:24 SGT · 2.1s</span>
-                    <span class="badge badge-cyan" style="font-size:9px;padding:1px 5px;">LOG SEARCH</span>
-                  </div>
-                  <div class="msg-bubble-copilot">
-                    <div class="kql-response">
-                      <div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:4px;">
-                        Generated KQL query for <strong style="color:var(--text-primary);">Elastic SIEM (NagaWorld)</strong> targeting failed RDP authentication events on <strong style="color:var(--cyan);font-family:var(--font-mono);">NW-DC-01</strong> over the last 48 hours:
-                      </div>
-
-                      <!-- KQL Code Block -->
-                      <div class="kql-block">
-                        <div class="kql-block-header">
-                          <span class="kql-lang-badge">KQL · Elastic SIEM</span>
-                          <button class="kql-copy-btn" onclick="showToast('Query copied to clipboard')">&#x1F4CB; Copy</button>
-                        </div>
-                        <pre><span class="cmt">// Failed RDP logins — NW-DC-01 — last 48h</span>
-<span class="kw">event.code</span> : <span class="str">"4625"</span>
-  <span class="op">AND</span> <span class="kw">winlog.event_data.LogonType</span> : <span class="str">"10"</span>
-  <span class="op">AND</span> <span class="kw">host.name</span> : <span class="str">"NW-DC-01"</span>
-  <span class="op">AND</span> <span class="kw">@timestamp</span> &gt;= <span class="fn">now()</span><span class="op">-</span><span class="num">48h</span>
-  <span class="op">AND</span> <span class="kw">winlog.event_data.Status</span> : (<span class="str">"0xC000006D"</span> <span class="op">OR</span> <span class="str">"0xC0000064"</span> <span class="op">OR</span> <span class="str">"0xC000006A"</span>)
-<span class="op">|</span> <span class="fn">stats</span> count() <span class="kw">as</span> event_count,
-         <span class="fn">values</span>(<span class="kw">winlog.event_data.TargetUserName</span>) <span class="kw">as</span> attempted_users
-  <span class="kw">by</span> <span class="kw">source.ip</span>
-<span class="op">|</span> <span class="fn">sort</span> event_count <span class="op">desc</span></pre>
-                      </div>
-
-                      <!-- Plain English Explanation -->
-                      <div class="kql-explanation">
-                        <span style="font-size:16px;flex-shrink:0;">&#x1F4A1;</span>
-                        <div>
-                          Searching for Windows Security Event 4625 (logon failure) with Logon Type 10 (RemoteInteractive/RDP) against NW-DC-01, filtered by known failure status codes for bad credentials. Results grouped by source IP and sorted by frequency.
-                        </div>
-                      </div>
-
-                      <!-- Results Table -->
-                      <div class="kql-results-table">
-                        <div class="kql-results-header">
-                          <div class="kql-results-count"><strong>147</strong> events from <strong style="color:var(--amber);">12</strong> unique source IPs</div>
-                          <div class="kql-results-meta">&#x1F4C5; 2026-02-26 14:34 – 2026-02-28 14:34 SGT</div>
-                        </div>
-                        <table class="kql-table">
-                          <thead>
-                            <tr>
-                              <th>Source IP</th>
-                              <th>Attempts</th>
-                              <th>Attempted Usernames</th>
-                              <th>Last Seen</th>
-                              <th>Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr class="kql-highlight-row">
-                              <td class="mono suspicious">185.220.101.34</td>
-                              <td class="suspicious">43</td>
-                              <td class="mono" style="font-size:10px;">administrator, admin, svc_backup</td>
-                              <td class="mono" style="font-size:10px;">14:31:52</td>
-                              <td><span class="badge badge-red" style="font-size:9px;">&#x26A0; KNOWN C2</span></td>
-                            </tr>
-                            <tr class="kql-highlight-row">
-                              <td class="mono suspicious">91.240.118.207</td>
-                              <td class="suspicious">31</td>
-                              <td class="mono" style="font-size:10px;">administrator, nwdomain\admin</td>
-                              <td class="mono" style="font-size:10px;">13:58:11</td>
-                              <td><span class="badge badge-amber" style="font-size:9px;">SUSPICIOUS</span></td>
-                            </tr>
-                            <tr class="kql-highlight-row">
-                              <td class="mono suspicious">45.141.152.18</td>
-                              <td class="suspicious">28</td>
-                              <td class="mono" style="font-size:10px;">guest, test, administrator</td>
-                              <td class="mono" style="font-size:10px;">11:22:44</td>
-                              <td><span class="badge badge-amber" style="font-size:9px;">SUSPICIOUS</span></td>
-                            </tr>
-                            <tr>
-                              <td class="mono">203.0.113.55</td>
-                              <td>12</td>
-                              <td class="mono" style="font-size:10px;">nw_svc_user</td>
-                              <td class="mono" style="font-size:10px;">09:14:03</td>
-                              <td><span class="badge badge-blue" style="font-size:9px;">REVIEW</span></td>
-                            </tr>
-                            <tr>
-                              <td colspan="5" style="text-align:center;color:var(--text-muted);font-size:11px;padding:8px;font-style:italic;">
-                                + 8 more source IPs with &lt; 8 attempts each
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <!-- Suggestion -->
-                      <div class="kql-suggestion">
-                        <span style="font-size:14px;">&#x1F916;</span>
-                        <span>3 suspicious IPs have &gt;20 attempts. Want me to enrich all three and check for prior IOC history?</span>
-                        <button class="kql-suggestion-btn" onclick="showToast('Enriching 3 IPs...')">Enrich All 3 ›</button>
-                      </div>
-
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- MESSAGE 3: Analyst -->
-              <div class="msg-row analyst">
-                <div class="msg-avatar analyst-av">&#x1F464;</div>
-                <div class="msg-content">
-                  <div class="msg-meta">
-                    <span class="msg-sender">J. Lim (Analyst)</span>
-                    <span>14:36:48 SGT</span>
-                  </div>
-                  <div class="msg-bubble-analyst">What is T1053.005?</div>
-                </div>
-              </div>
-
-              <!-- MESSAGE 3: Copilot Response — MITRE -->
-              <div class="msg-row">
-                <div class="msg-avatar copilot-av">&#x1F916;</div>
-                <div class="msg-content" style="max-width:100%;">
-                  <div class="msg-meta">
-                    <span class="msg-sender">DACTA Copilot</span>
-                    <span>14:36:49 SGT · 0.9s</span>
-                    <span class="badge badge-purple" style="font-size:9px;padding:1px 5px;">MITRE ATT&amp;CK</span>
-                  </div>
-                  <div class="msg-bubble-copilot">
-                    <div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">
-                      Technique found in the MITRE ATT&amp;CK knowledge base. This technique is <strong style="color:var(--amber);">relevant to the current investigation context</strong> — commonly used by LockBit 3.0 for persistence.
-                    </div>
-
-                    <!-- MITRE Card -->
-                    <div class="mitre-card">
-                      <div class="mitre-card-header">
-                        <div>
-                          <div class="mitre-technique-id">T1053.005</div>
-                          <div class="mitre-technique-name">Scheduled Task / Job: Scheduled Task</div>
-                          <div class="mitre-tactic-badges">
-                            <span class="mitre-tactic-badge">Persistence</span>
-                            <span class="mitre-tactic-badge">Execution</span>
-                            <span class="mitre-tactic-badge">Privilege Escalation</span>
-                          </div>
-                        </div>
-                        <div style="text-align:right;flex-shrink:0;">
-                          <div style="font-size:10px;color:var(--text-muted);">ATT&amp;CK v14</div>
-                          <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Sub-technique of T1053</div>
-                          <div style="margin-top:6px;"><span class="badge badge-amber" style="font-size:10px;">Medium Prevalence</span></div>
-                        </div>
-                      </div>
-
-                      <div class="mitre-card-body">
-                        <div class="mitre-desc">
-                          Adversaries may abuse the Windows Task Scheduler to perform task scheduling for initial or recurring execution of malicious code. There are multiple ways to access the Task Scheduler in Windows: <span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan);">schtasks /create</span>, the Task Scheduler GUI (<span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan);">taskschd.msc</span>), or Windows Management Instrumentation (WMI). Scheduled tasks can also be set to execute code remotely from a UNC path.
-                        </div>
-
-                        <div class="mitre-detection-section">
-                          <div class="mitre-section-label">&#x1F50D; Detection Methods</div>
-                          <ul class="mitre-detection-list">
-                            <li>Monitor for <span style="font-family:var(--font-mono);color:var(--green);">schtasks.exe</span> creation with unusual parameters or parent processes</li>
-                            <li>Windows Event IDs <span style="font-family:var(--font-mono);color:var(--green);">4698, 4699, 4700, 4701, 4702</span> (scheduled task lifecycle events)</li>
-                            <li>Monitor <span style="font-family:var(--font-mono);color:var(--green);">\Windows\System32\Tasks\</span> directory for unexpected XML files</li>
-                            <li>Look for tasks with encoded payloads or PowerShell download cradles</li>
-                          </ul>
-                        </div>
-
-                        <div class="mitre-related-section">
-                          <span class="mitre-related-label">Related:</span>
-                          <span class="mitre-related-tag">T1053</span>
-                          <span class="mitre-related-tag">T1547.001</span>
-                          <span class="mitre-related-tag">T1569.002</span>
-                          <span class="mitre-related-tag">T1059.001</span>
-                        </div>
-                      </div>
-
-                      <div class="mitre-card-actions">
-                        <button class="mitre-action-btn mitre-btn-search" onclick="showToast('Searching for T1053.005 indicators in NagaWorld SIEM...')">
-                          &#x1F50E; Hunt in NagaWorld SIEM
-                        </button>
-                        <button class="mitre-action-btn mitre-btn-rule" onclick="showToast('Generating detection rule for T1053.005...')">
-                          &#x1F6E1; Generate Detection Rule
-                        </button>
-                        <button class="mitre-action-btn" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;" onclick="showToast('Opening MITRE ATT&CK Navigator...')">
-                          &#x1F5FA;&#xFE0F; ATT&amp;CK Navigator
-                        </button>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-              </div>
-
-            </div><!-- end copilot-messages -->
-
-            <!-- Saved Searches -->
-            <div class="copilot-saved-searches collapsed" id="copilotSavedSearches">
-              <div class="saved-searches-toggle" onclick="toggleSavedSearches()">
-                <span>&#x1F4BE; Saved Search Templates</span>
-                <span class="saved-searches-chevron">&#x25BE;</span>
-              </div>
-              <div class="saved-searches-list">
-                <div class="saved-search-chip" onclick="insertSavedSearch('Brute Force Detection')">
-                  &#x1F4A5; Brute Force Detection
-                  <span class="search-chip-lang">KQL</span>
-                </div>
-                <div class="saved-search-chip" onclick="insertSavedSearch('Lateral Movement Hunt')">
-                  &#x27A1;&#xFE0F; Lateral Movement Hunt
-                  <span class="search-chip-lang">KQL</span>
-                </div>
-                <div class="saved-search-chip" onclick="insertSavedSearch('Phishing Email Analysis')">
-                  &#x1F41F; Phishing Email Analysis
-                  <span class="search-chip-lang">M365 KQL</span>
-                </div>
-                <div class="saved-search-chip" onclick="insertSavedSearch('Ransomware Indicators')">
-                  &#x1F480; Ransomware Indicators
-                  <span class="search-chip-lang">Sigma</span>
-                </div>
-                <div class="saved-search-chip" onclick="insertSavedSearch('Scheduled Task Creation')">
-                  &#x23F0; Scheduled Task Creation
-                  <span class="search-chip-lang">KQL</span>
-                </div>
-                <div class="saved-search-chip" onclick="insertSavedSearch('PowerShell Encoded Payloads')">
-                  &#x1F4DC; PowerShell Encoded
-                  <span class="search-chip-lang">KQL</span>
-                </div>
-              </div>
+            <div class="cmdbar-suggestions">
+              <div class="cmdbar-suggestion-group-label">Quick Actions</div>
+              <div class="cmdbar-item" onclick="document.getElementById('copilotInput').value='Check IP ';document.getElementById('copilotInput').focus();closeCopilotCmd();"><div class="cmdbar-item-icon">&#x1F50D;</div><div class="cmdbar-item-label">Check IP / IOC</div></div>
+              <div class="cmdbar-item" onclick="document.getElementById('copilotInput').value='Show me ';document.getElementById('copilotInput').focus();closeCopilotCmd();"><div class="cmdbar-item-icon">&#x1F4CA;</div><div class="cmdbar-item-label">Search Logs</div></div>
+              <div class="cmdbar-item" onclick="document.getElementById('copilotInput').value='What is T';document.getElementById('copilotInput').focus();closeCopilotCmd();"><div class="cmdbar-item-icon">&#x1F5FA;</div><div class="cmdbar-item-label">MITRE Technique Lookup</div></div>
+              <div class="cmdbar-item" onclick="document.getElementById('copilotInput').value='Show tickets ';document.getElementById('copilotInput').focus();closeCopilotCmd();"><div class="cmdbar-item-icon">&#x1F4CB;</div><div class="cmdbar-item-label">Search Jira Tickets</div></div>
             </div>
-
-            <!-- Input Area -->
-            <div class="copilot-input-area">
-              <div class="copilot-input-modes">
-                <button class="copilot-mode-btn active" id="modeNL" onclick="switchMode('nl')">Natural Language</button>
-                <span class="copilot-mode-sep">|</span>
-                <button class="copilot-mode-btn" id="modeRaw" onclick="switchMode('raw')">Raw Query</button>
-                <span class="copilot-mode-sep">|</span>
-                <button class="copilot-mode-btn" id="modeGuided" onclick="switchMode('guided')">Guided Builder</button>
-              </div>
-              <div class="copilot-input-row">
-                <select class="copilot-org-select" id="copilotOrgSelect"><option>Loading clients...</option></select>
-                <textarea class="copilot-text-input" id="copilotInput" placeholder="Ask the Copilot anything... e.g. 'Check IP 8.8.8.8', 'Show me failed logins', 'What is T1059?'" rows="1" onkeydown="copilotInputKeydown(event)"></textarea>
-                <button class="copilot-send-btn" onclick="copilotSend()">&#x27A4;</button>
-              </div>
+            <div class="cmdbar-footer">
+              <span><kbd>&#x2191;</kbd><kbd>&#x2193;</kbd> Navigate</span>
+              <span><kbd>&#x21B5;</kbd> Select</span>
+              <span><kbd>Esc</kbd> Close</span>
             </div>
-
-          </div><!-- end copilot-conversation -->
-
-          <!-- Right: Context Panel -->
-          <div class="copilot-context-panel">
-
-            <!-- Active Investigation Context -->
-            <div class="ctx-card">
-              <div class="ctx-card-header">
-                &#x1F4CB; Active Context
-                <span style="font-size:10px;color:var(--green);cursor:pointer;">&#x270F;&#xFE0F;</span>
-              </div>
-              <div class="ctx-card-body">
-                <div class="ctx-row">
-                  <span class="ctx-label">Client</span>
-                  <span class="ctx-value cyan">NagaWorld</span>
-                </div>
-                <div class="ctx-row">
-                  <span class="ctx-label">Ticket</span>
-                  <span class="ctx-value mono amber" style="cursor:pointer;" onclick="navigate('investigation')">TKT-847 ↗</span>
-                </div>
-                <div class="ctx-row">
-                  <span class="ctx-label">War Room</span>
-                  <span class="ctx-value mono" style="cursor:pointer;color:var(--purple);" onclick="navigate('warroom')">WR-2026-003 ↗</span>
-                </div>
-                <div class="ctx-divider"></div>
-                <div class="ctx-row">
-                  <span class="ctx-label">Priority</span>
-                  <span class="badge badge-p1" style="font-size:9px;">P1 CRITICAL</span>
-                </div>
-                <div class="ctx-row">
-                  <span class="ctx-label">Analyst</span>
-                  <span class="ctx-value">J. Lim</span>
-                </div>
-                <div class="ctx-row">
-                  <span class="ctx-label">SLA</span>
-                  <span class="ctx-value" style="color:var(--red-bright);font-family:var(--font-mono);font-weight:700;">01:47 left</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Connected Data Sources -->
-            <div class="ctx-card">
-              <div class="ctx-card-header">
-                &#x1F9F0; Data Sources
-                <span style="color:var(--green);font-size:10px;">6/6 Active</span>
-              </div>
-              <div class="ctx-card-body" style="gap:3px;">
-                <div class="ds-item" id="dsItemElastic">
-                  <div class="ds-icon" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);">&#x1F9F2;</div>
-                  <span class="ds-name">Elastic SIEM</span>
-                  <div class="ds-status connected-txt"><div class="ds-dot connected"></div>Live</div>
-                </div>
-                <div class="ds-item" id="dsItemTrendVision">
-                  <div class="ds-icon" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);">&#x1F6E1;</div>
-                  <span class="ds-name">Trend Vision One</span>
-                  <div class="ds-status connected-txt"><div class="ds-dot connected"></div>Live</div>
-                </div>
-                <div class="ds-item" id="dsItemVT">
-                  <div class="ds-icon" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);">&#x1F9EA;</div>
-                  <span class="ds-name">VirusTotal</span>
-                  <div class="ds-status api-txt"><div class="ds-dot api"></div>API</div>
-                </div>
-                <div class="ds-item" id="dsItemAbuseIPDB">
-                  <div class="ds-icon" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);">&#x1F6A8;</div>
-                  <span class="ds-name">AbuseIPDB</span>
-                  <div class="ds-status api-txt"><div class="ds-dot api"></div>API</div>
-                </div>
-                <div class="ds-item" id="dsItemAD">
-                  <div class="ds-icon" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);">&#x1F465;</div>
-                  <span class="ds-name">Active Directory</span>
-                  <div class="ds-status connected-txt"><div class="ds-dot connected"></div>Live</div>
-                </div>
-                <div class="ds-item" id="dsItemMISP">
-                  <div class="ds-icon" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);">&#x1F578;&#xFE0F;</div>
-                  <span class="ds-name">MISP</span>
-                  <div class="ds-status connected-txt"><div class="ds-dot connected"></div>Live</div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Recent IOCs -->
-            <div class="ctx-card">
-              <div class="ctx-card-header">
-                &#x1F52C; Recent IOCs
-                <span style="font-size:10px;color:var(--cyan);cursor:pointer;" onclick="showAllRecentIOCs()">View All</span>
-              </div>
-              <div class="ctx-card-body" style="gap:3px;">
-                <div class="recent-ioc-item">
-                  <div class="recent-ioc-type ioc-type-ip">IP</div>
-                  <span class="recent-ioc-value">185.220.101.34</span>
-                  <span class="recent-ioc-verdict verdict-mal">MAL</span>
-                </div>
-                <div class="recent-ioc-item">
-                  <div class="recent-ioc-type ioc-type-ip">IP</div>
-                  <span class="recent-ioc-value">91.240.118.207</span>
-                  <span class="recent-ioc-verdict verdict-sus">SUS</span>
-                </div>
-                <div class="recent-ioc-item">
-                  <div class="recent-ioc-type ioc-type-ip">IP</div>
-                  <span class="recent-ioc-value">45.141.152.18</span>
-                  <span class="recent-ioc-verdict verdict-sus">SUS</span>
-                </div>
-                <div class="recent-ioc-item">
-                  <div class="recent-ioc-type ioc-type-domain">DOM</div>
-                  <span class="recent-ioc-value">dynserv[.]net</span>
-                  <span class="recent-ioc-verdict verdict-mal">MAL</span>
-                </div>
-                <div class="recent-ioc-item">
-                  <div class="recent-ioc-type ioc-type-hash">HSH</div>
-                  <span class="recent-ioc-value">a1b2c3d4e5f6...</span>
-                  <span class="recent-ioc-verdict verdict-mal">MAL</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="ctx-card">
-              <div class="ctx-card-header">&#x26A1; Quick Actions</div>
-              <div class="ctx-card-body" style="gap:5px;">
-                <button class="quick-action-btn" onclick="navigate('warroom')">
-                  <span class="quick-action-icon">&#x2694;&#xFE0F;</span> Open War Room WR-2026-003
-                </button>
-                <button class="quick-action-btn" onclick="copilotAsk('Generate a comprehensive incident summary for the current investigation context, including timeline, affected assets, indicators of compromise, and recommended next steps.')">
-                  <span class="quick-action-icon">&#x1F4DD;</span> Generate Incident Summary
-                </button>
-                <button class="quick-action-btn" onclick="exportSessionIOCs()">
-                  <span class="quick-action-icon">&#x1F4E4;</span> Export Session IOCs
-                </button>
-                <button class="quick-action-btn" onclick="copilotAsk('Draft a professional client notification email summarizing the current security incident, current status, actions taken, and recommended client-side actions.')">
-                  <span class="quick-action-icon">&#x1F4E7;</span> Draft Client Notification
-                </button>
-                <button class="quick-action-btn" onclick="selectDomain(document.querySelector('.domain-btn[onclick*=knowledge]'),'knowledge'); copilotAsk('Ransomware response playbook')">
-                  <span class="quick-action-icon">&#x1F4DA;</span> Open Ransomware Playbook
-                </button>
-              </div>
-            </div>
-
-          </div><!-- end copilot-context-panel -->
-
-        </div><!-- end copilot-body -->
+          </div>
+        </div>
 
       </div><!-- end page-copilot -->
 
@@ -32070,53 +30579,16 @@ function applyProductionMode() {
   // ────────────────────────────────────────────────
   var copilotPage = document.getElementById('page-copilot');
   if (copilotPage) {
-    // Clear session ID
-    var sessionText = copilotPage.querySelector('.copilot-title-text p');
-    if (sessionText) sessionText.textContent = 'AI-Powered Investigation Intelligence \u00b7 Ready';
-
-    // Clear conversation messages (keep the messages container)
-    var msgContainer = copilotPage.querySelector('#copilotMessages, .copilot-messages');
+    // Render clean empty state
+    var msgContainer = document.getElementById('copilotMessages');
     if (msgContainer) {
-      msgContainer.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:12px;flex:1;">' +
-        '<div style="font-size:40px;opacity:0.4;">\ud83e\udd16</div>' +
-        '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">DACTA Copilot Ready</div>' +
-        '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);max-width:400px;text-align:center;line-height:1.6;">Start a new investigation session. Ask questions about IOCs, search logs, query MITRE ATT&CK, or analyze scripts.</div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:4px;">' +
-          '<span style="font-size:10px;padding:3px 10px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:12px;color:var(--cyan);cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'Check IP \';document.getElementById(\'copilotInput\').focus();">Check IP...</span>' +
-          '<span style="font-size:10px;padding:3px 10px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:12px;color:#a78bfa;cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'What is \';document.getElementById(\'copilotInput\').focus();">MITRE Lookup</span>' +
-          '<span style="font-size:10px;padding:3px 10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.15);border-radius:12px;color:var(--green);cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'Show me all \';document.getElementById(\'copilotInput\').focus();">Log Search</span>' +
-        '</div>' +
-      '</div>';
+      msgContainer.innerHTML = '';
+      copilotRenderEmpty();
     }
-
-    // Clear conversation header context badge
-    var convHeader = copilotPage.querySelector('.copilot-conv-header');
-    if (convHeader) {
-      var ctxBadge = convHeader.querySelector('.badge');
-      if (ctxBadge) ctxBadge.style.display = 'none';
-    }
-
-    // Clear Active Context panel
-    var ctxCards = copilotPage.querySelectorAll('.ctx-card');
-    ctxCards.forEach(function(card) {
-      var header = card.querySelector('.ctx-card-header');
-      if (!header) return;
-      var headerText = header.textContent.trim();
-
-      if (headerText.includes('Active Context')) {
-        var body = card.querySelector('.ctx-card-body');
-        if (body) body.innerHTML = '<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No active investigation context</div>';
-      }
-      if (headerText.includes('Recent IOCs')) {
-        var body = card.querySelector('.ctx-card-body');
-        if (body) body.innerHTML = '<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No IOCs in session</div>';
-      }
-    });
-
-    // Clear results panels if any
-    copilotPage.querySelectorAll('.copilot-result-panel').forEach(function(el) {
-      el.innerHTML = emptyState('\ud83e\udd16', 'Ready for investigation queries');
-    });
+    // Populate client selector from ORG_CONNECTORS
+    copilotPopulateClients();
+    // Check data source status
+    copilotCheckSources();
   }
 
   // ────────────────────────────────────────────────
@@ -35981,163 +34453,65 @@ function showToast(message, type) {
 
 // --- Domain Selector ---
 var _copilotDomain = 'logsearch'; // default active domain
-function selectDomain(btn, domain) {
-  document.querySelectorAll('.domain-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  _copilotDomain = domain;
-  // Update input placeholder based on domain
-  var placeholders = {
-    all: 'Ask the Copilot anything... e.g. "Check IP 8.8.8.8", "Show failed logins", "What is T1059?"',
-    logsearch: 'Search logs... e.g. "Show failed RDP logins to DC-01 in last 24h"',
-    threatintel: 'Enrich IOC... e.g. "Check IP 185.220.101.34" or "Analyze domain evil.com"',
-    scriptanalysis: 'Decode/analyze... paste base64, PowerShell, or script snippet here',
-    mitre: 'Lookup MITRE technique... e.g. "What is T1059.001?" or "Persistence techniques"',
-    assetintel: 'Lookup asset/user... e.g. "Who is john.santos?" or "Info on NW-DC-01"',
-    ticketintel: 'Query tickets... e.g. "Show all P1 tickets this week" or "TKT-847 timeline"',
-    knowledge: 'Search playbooks... e.g. "Ransomware response playbook" or "KQL cheat sheet"'
-  };
-  var input = document.getElementById('copilotInput');
-  if (input && placeholders[domain]) input.placeholder = placeholders[domain];
-  // Update domain description
-  var descriptions = {
-    all: 'Query across all connected data sources simultaneously',
-    logsearch: 'Search Elastic SIEM logs with natural language or KQL queries',
-    threatintel: 'Enrich IOCs (IPs, domains, hashes) via OpenCTI, VirusTotal, AbuseIPDB',
-    scriptanalysis: 'Decode and analyze suspicious scripts, PowerShell, Base64 payloads',
-    mitre: 'Look up MITRE ATT&CK techniques, tactics, and detection guidance',
-    assetintel: 'Query host and user information from Elastic endpoint data',
-    ticketintel: 'Search and analyze Jira incident tickets and timelines',
-    knowledge: 'Search incident response playbooks, KQL templates, and SOC documentation'
-  };
-  var descEl = document.getElementById('copilotDomainDesc');
-  if (descEl) descEl.textContent = descriptions[domain] || '';
+// ============================================================
+//  COPILOT — Redesigned Functions
+// ============================================================
+
+
+function copilotRenderEmpty() {
+  var msgs = document.getElementById('copilotMessages');
+  if (!msgs) return;
+  msgs.innerHTML = '<div class="copilot-empty-state">' +
+    '<div class="copilot-empty-icon">\ud83e\udd16</div>' +
+    '<div class="copilot-empty-title">DACTA Copilot Ready</div>' +
+    '<div class="copilot-empty-desc">Ask questions about IOCs, search SIEM logs, lookup MITRE ATT&CK techniques, query Jira tickets, or analyze scripts.</div>' +
+    '<div class="copilot-empty-chips">' +
+      '<span class="copilot-chip copilot-chip-cyan" onclick="document.getElementById(\'copilotInput\').value=\'Check IP \';document.getElementById(\'copilotInput\').focus();">\ud83d\udd0d Check IP</span>' +
+      '<span class="copilot-chip copilot-chip-green" onclick="document.getElementById(\'copilotInput\').value=\'Show me failed logins\';document.getElementById(\'copilotInput\').focus();">\ud83d\udcca Log Search</span>' +
+      '<span class="copilot-chip copilot-chip-purple" onclick="document.getElementById(\'copilotInput\').value=\'What is T1059?\';document.getElementById(\'copilotInput\').focus();">\ud83d\uddfa MITRE Lookup</span>' +
+      '<span class="copilot-chip copilot-chip-amber" onclick="document.getElementById(\'copilotInput\').value=\'Show P1 tickets\';document.getElementById(\'copilotInput\').focus();">\ud83d\udccb Search Tickets</span>' +
+    '</div>' +
+  '</div>';
 }
 
-// --- Input Mode Toggle ---
-function switchMode(mode) {
-  var idMap = { nl: 'modeNL', raw: 'modeRaw', guided: 'modeGuided' };
-  ['nl','raw','guided'].forEach(function(m) {
-    var btn = document.getElementById(idMap[m]);
-    if (btn) btn.classList.toggle('active', m === mode);
+function copilotPopulateClients() {
+  var sel = document.getElementById('copilotOrgSelect');
+  if (!sel || !window.ORG_CONNECTORS) return;
+  sel.innerHTML = '<option value="">All Clients</option>';
+  Object.keys(window.ORG_CONNECTORS).forEach(function(id) {
+    var org = window.ORG_CONNECTORS[id];
+    var name = org.name || org.code || id;
+    sel.innerHTML += '<option value="' + escapeHtml(id) + '">' + escapeHtml(name) + '</option>';
   });
-  window._copilotMode = mode;
-  var textarea = document.getElementById('copilotInput');
-  if (mode === 'guided') {
-    var guidedHTML = '<div id="copilotGuidedBuilder" style="display:flex;gap:8px;flex:1;align-items:center;flex-wrap:wrap;">' +
-      '<select class="filter-select" id="gbLogSource" style="min-width:120px;"><option value="">Log Source</option><option value="crowdstrike.alert">CrowdStrike</option><option value="fortinet_fortigate.log">FortiGate</option><option value="panw.panos">Palo Alto</option><option value="windows.sysmon">Sysmon</option><option value="*">All Sources</option></select>' +
-      '<select class="filter-select" id="gbTimeRange" style="min-width:100px;"><option value="24h">Last 24h</option><option value="48h">Last 48h</option><option value="7d">Last 7d</option><option value="30d">Last 30d</option></select>' +
-      '<input class="filter-input" id="gbHostFilter" placeholder="Host filter..." style="min-width:120px;flex:1;">' +
-      '<select class="filter-select" id="gbQueryType" style="min-width:100px;"><option value="events">All Events</option><option value="alerts">Alerts Only</option><option value="auth_failures">Auth Failures</option><option value="network">Network</option></select>' +
-      '</div>';
-    if (textarea) {
-      textarea.style.display = 'none';
-      var existing = document.getElementById('copilotGuidedBuilder');
-      if (existing) existing.remove();
-      textarea.insertAdjacentHTML('afterend', guidedHTML);
-    }
-  } else {
-    if (textarea) textarea.style.display = '';
-    var gb = document.getElementById('copilotGuidedBuilder');
-    if (gb) gb.remove();
-    if (mode === 'raw') {
-      if (textarea) textarea.placeholder = 'Enter Elastic query... e.g. source.ip: "10.0.0.1" AND event.code: "4625"';
-    } else {
-      var activeBtn = document.querySelector('.domain-btn.active');
-      if (activeBtn) selectDomain(activeBtn, _copilotDomain);
-    }
-  }
 }
 
-// --- Saved Searches Toggle ---
-function toggleSavedSearches() {
-  var el = document.getElementById('copilotSavedSearches');
-  if (el) el.classList.toggle('collapsed');
+async function copilotCheckSources() {
+  var statusEl = document.getElementById('copilotDataStatus');
+  var sources = [];
+  // Check Elastic
+  try {
+    var r = await fetch('/api/elastic', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'search',index:'logs-*',body:{size:0}}) });
+    sources.push(r.ok ? 'Elastic SIEM \u2713' : 'Elastic \u2717');
+  } catch(e) { sources.push('Elastic \u2717'); }
+  // Check OpenCTI
+  try {
+    var r2 = await fetch('/api/opencti', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({query:'{ about { version } }'}) });
+    sources.push(r2.ok ? 'OpenCTI \u2713' : 'OpenCTI \u2717');
+  } catch(e) { sources.push('OpenCTI \u2717'); }
+  // Check Jira
+  try {
+    var r3 = await fetch('/api/jira?action=health');
+    sources.push(r3.ok ? 'Jira \u2713' : 'Jira \u2717');
+  } catch(e) { sources.push('Jira \u2717'); }
+  if (statusEl) statusEl.textContent = sources.join(' \u00b7 ');
 }
 
-// --- Insert Saved Search ---
-function insertSavedSearch(name) {
-  var input = document.getElementById('copilotInput');
-  if (input) {
-    input.value = 'Run saved search: ' + name;
-    input.focus();
-  }
-}
-
-// --- Copilot Clear Screen ---
 function clearCopilotScreen() {
-  var msgContainer = document.querySelector('#copilotMessages, .copilot-messages');
-  if (msgContainer) {
-    msgContainer.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:12px;flex:1;">' +
-      '<div style="font-size:40px;opacity:0.4;">\ud83e\udd16</div>' +
-      '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">DACTA Copilot Ready</div>' +
-      '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);max-width:400px;text-align:center;line-height:1.6;">Start a new investigation session. Ask questions about IOCs, search logs, query MITRE ATT&CK, or analyze scripts.</div>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:4px;">' +
-        '<span style="font-size:10px;padding:3px 10px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:12px;color:var(--cyan);cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'Check IP \';document.getElementById(\'copilotInput\').focus();">Check IP...</span>' +
-        '<span style="font-size:10px;padding:3px 10px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:12px;color:#a78bfa;cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'What is \';document.getElementById(\'copilotInput\').focus();">MITRE Lookup</span>' +
-        '<span style="font-size:10px;padding:3px 10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.15);border-radius:12px;color:var(--green);cursor:pointer;" onclick="document.getElementById(\'copilotInput\').value=\'Show me all \';document.getElementById(\'copilotInput\').focus();">Log Search</span>' +
-      '</div>' +
-    '</div>';
-  }
-  // Clear context badge
-  var convHeader = document.querySelector('.copilot-conv-header');
-  if (convHeader) {
-    var ctxBadge = convHeader.querySelector('.badge');
-    if (ctxBadge) ctxBadge.style.display = 'none';
-  }
-  // Clear Active Context + Recent IOCs sidebar panels
-  document.querySelectorAll('#page-copilot .ctx-card').forEach(function(card) {
-    var header = card.querySelector('.ctx-card-header');
-    if (!header) return;
-    var txt = header.textContent.trim();
-    if (txt.includes('Active Context')) {
-      var b = card.querySelector('.ctx-card-body');
-      if (b) b.innerHTML = '<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No active investigation context</div>';
-    }
-    if (txt.includes('Recent IOCs')) {
-      var b = card.querySelector('.ctx-card-body');
-      if (b) b.innerHTML = '<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No IOCs in session</div>';
-    }
-  });
-  showToast('Copilot screen cleared');
+  _copilotIOCs = [];
+  copilotRenderEmpty();
+  showToast('Session cleared', 'info');
 }
 
-// --- Copilot Command Bar ---
-function openCopilotCmd() {
-  var overlay = document.getElementById('copilotCmdOverlay');
-  if (overlay) {
-    overlay.classList.add('open');
-    setTimeout(function() {
-      var input = document.getElementById('cmdbarInput');
-      if (input) input.focus();
-    }, 50);
-  }
-}
-
-function closeCopilotCmd(e) {
-  var overlay = document.getElementById('copilotCmdOverlay');
-  if (overlay) overlay.classList.remove('open');
-}
-
-function updateCmdBar(val) {
-  // Could filter suggestions based on val — placeholder for future
-}
-
-// --- Keyboard shortcut Ctrl+K / Cmd+K for Command Bar ---
-document.addEventListener('keydown', function(e) {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-    // Only trigger if copilot page is active
-    var copilotPage = document.getElementById('page-copilot');
-    if (copilotPage && copilotPage.classList.contains('active')) {
-      e.preventDefault();
-      openCopilotCmd();
-    }
-  }
-  if (e.key === 'Escape') {
-    closeCopilotCmd();
-  }
-});
-
-// --- Copilot Input Keydown ---
 function copilotInputKeydown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -36145,23 +34519,7 @@ function copilotInputKeydown(e) {
   }
 }
 
-// --- Copilot Send Message ---
 function copilotSend() {
-  if (window._copilotMode === 'guided') {
-    var src = document.getElementById('gbLogSource');
-    var time = document.getElementById('gbTimeRange');
-    var host = document.getElementById('gbHostFilter');
-    var qtype = document.getElementById('gbQueryType');
-    var parts = [];
-    if (src && src.value) parts.push('data_stream.dataset: "' + src.value + '"');
-    if (host && host.value) parts.push('host.name: "' + host.value.trim() + '"');
-    if (qtype && qtype.value === 'alerts') parts.push('event.kind: "alert"');
-    if (qtype && qtype.value === 'auth_failures') parts.push('event.code: ("4625" OR "4771")');
-    if (qtype && qtype.value === 'network') parts.push('network.transport: *');
-    var query = parts.length > 0 ? parts.join(' AND ') : '*';
-    copilotAsk('[Guided] ' + query + ' | Last ' + (time ? time.value : '24h'));
-    return;
-  }
   var input = document.getElementById('copilotInput');
   if (!input || !input.value.trim()) return;
   var text = input.value.trim();
@@ -36173,105 +34531,28 @@ async function copilotAsk(text) {
   var messages = document.getElementById('copilotMessages');
   if (!messages) return;
 
-  // --- Raw Query Mode: direct Elastic query_string ---
-  if (window._copilotMode === 'raw') {
-    var analystRowRaw = document.createElement('div');
-    analystRowRaw.className = 'msg-row analyst';
-    analystRowRaw.innerHTML = '<div class="msg-avatar analyst-av">&#x1F464;</div>' +
-      '<div class="msg-content"><div class="msg-meta"><span class="msg-sender">Analyst</span>' +
-      '<span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT</span></div>' +
-      '<div class="msg-bubble-analyst">' + escapeHtml(text) + '</div></div>';
-    messages.appendChild(analystRowRaw);
-    var thinkRowRaw = document.createElement('div');
-    thinkRowRaw.className = 'msg-row';
-    thinkRowRaw.id = 'copilotThinkRow';
-    thinkRowRaw.innerHTML = '<div class="msg-avatar copilot-av">&#x1F916;</div><div class="msg-content"><div class="copilot-thinking"><div class="thinking-dots"><div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div></div><span>Running raw Elastic query...</span></div></div>';
-    messages.appendChild(thinkRowRaw);
-    messages.scrollTop = messages.scrollHeight;
-    var startRaw = Date.now();
-    try {
-      var esResp = await fetch('/api/elastic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'search',
-          index: 'logs-*',
-          body: {
-            size: 10,
-            query: { query_string: { query: text, default_field: 'message', lenient: true } },
-            sort: [{ '@timestamp': 'desc' }]
-          }
-        })
-      });
-      var esResult = await esResp.json();
-      var rawHits = esResult.hits ? esResult.hits : { total: { value: 0 }, hits: [] };
-      var rawTotal = typeof rawHits.total === 'object' ? rawHits.total.value : rawHits.total;
-      var rawHTML = '<div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:10px;">Raw Elastic query returned <strong style="color:var(--cyan);">' + rawTotal.toLocaleString() + '</strong> total hits.</div>';
-      rawHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-family:var(--font-mono);font-size:11px;color:var(--cyan);word-break:break-all;">' + escapeHtml(text) + '</div>';
-      if (rawHits.hits && rawHits.hits.length > 0) {
-        rawHTML += '<div style="display:flex;flex-direction:column;gap:4px;">';
-        rawHits.hits.forEach(function(h) {
-          var src = h._source || {};
-          var ts = src['@timestamp'] ? new Date(src['@timestamp']).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-          var msg = src.message || JSON.stringify(src).substring(0, 300);
-          if (msg.length > 300) msg = msg.substring(0, 297) + '...';
-          rawHTML += '<div style="padding:6px 10px;background:var(--surface-0);border:1px solid var(--border-subtle);border-radius:5px;font-size:10px;font-family:var(--font-mono);color:var(--text-secondary);line-height:1.4;overflow-wrap:break-word;">' +
-            '<span style="color:var(--text-muted);">' + ts + '</span> ' + escapeHtml(msg) + '</div>';
-        });
-        rawHTML += '</div>';
-      } else {
-        rawHTML += '<div style="font-size:11px;color:var(--text-muted);font-style:italic;">No matching documents found.</div>';
-      }
-      var elapsedRaw = ((Date.now() - startRaw) / 1000).toFixed(1);
-      var thinkRaw = document.getElementById('copilotThinkRow');
-      if (thinkRaw) thinkRaw.remove();
-      var rawRow = document.createElement('div');
-      rawRow.className = 'msg-row';
-      rawRow.innerHTML = '<div class="msg-avatar copilot-av">&#x1F916;</div>' +
-        '<div class="msg-content" style="max-width:100%;">' +
-        '<div class="msg-meta"><span class="msg-sender">DACTA Copilot</span>' +
-        '<span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT \u00b7 ' + elapsedRaw + 's</span>' +
-        '<span style="font-size:8px;padding:1px 5px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:3px;color:var(--red-bright);">RAW QUERY</span></div>' +
-        '<div class="msg-bubble-copilot">' + rawHTML + '</div></div>';
-      messages.appendChild(rawRow);
-      messages.scrollTop = messages.scrollHeight;
-    } catch(rawErr) {
-      var thinkRaw2 = document.getElementById('copilotThinkRow');
-      if (thinkRaw2) thinkRaw2.remove();
-      console.error('[Copilot] Raw query error:', rawErr);
-    }
-    return;
-  }
+  // Clear empty state if present
+  var emptyEl = messages.querySelector('.copilot-empty-state');
+  if (emptyEl) emptyEl.remove();
 
-  // --- Guided Mode: route as Elastic query ---
-  if (text.startsWith('[Guided]')) {
-    var guidedQuery = text.replace(/^\[Guided\]\s*/, '').replace(/\s*\|.*$/, '');
-    var guidedTimeMatch = text.match(/Last (\d+[hdm])/);
-    var guidedText = 'Guided Builder Query: ' + guidedQuery;
-    var savedMode = window._copilotMode;
-    window._copilotMode = null; // prevent recursion
-    await copilotAsk(guidedText);
-    window._copilotMode = savedMode;
-    return;
-  }
-
+  // Add analyst message (right-aligned)
   var analystRow = document.createElement('div');
   analystRow.className = 'msg-row analyst';
-  analystRow.innerHTML = '<div class="msg-avatar analyst-av">&#x1F464;</div>' +
+  analystRow.innerHTML = '<div class="msg-avatar analyst-av">\ud83d\udc64</div>' +
     '<div class="msg-content">' +
-    '<div class="msg-meta"><span class="msg-sender">Analyst</span>' +
-    '<span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT</span></div>' +
-    '<div class="msg-bubble-analyst">' + escapeHtml(text) + '</div></div>';
+    '<div class="msg-meta" style="justify-content:flex-end;"><span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT</span>' +
+    '<span class="msg-sender">You</span></div>' +
+    '<div style="text-align:right;"><div class="msg-bubble-analyst">' + escapeHtml(text) + '</div></div></div>';
   messages.appendChild(analystRow);
 
   // Show thinking indicator
   var thinkRow = document.createElement('div');
   thinkRow.className = 'msg-row';
   thinkRow.id = 'copilotThinkRow';
-  thinkRow.innerHTML = '<div class="msg-avatar copilot-av">&#x1F916;</div>' +
+  thinkRow.innerHTML = '<div class="msg-avatar copilot-av">\ud83e\udd16</div>' +
     '<div class="msg-content"><div class="copilot-thinking">' +
     '<div class="thinking-dots"><div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div></div>' +
-    '<span>Querying ' + (_copilotDomain === 'all' ? 'all data sources' : _copilotDomain === 'logsearch' ? 'Elastic SIEM logs' : _copilotDomain === 'threatintel' ? 'threat intelligence feeds' : _copilotDomain === 'mitre' ? 'MITRE ATT&CK database' : _copilotDomain === 'scriptanalysis' ? 'script analysis engine' : _copilotDomain === 'assetintel' ? 'asset inventory' : _copilotDomain === 'ticketintel' ? 'Jira tickets' : _copilotDomain === 'knowledge' ? 'knowledge base' : 'live data sources') + '...</span></div></div>';
+    '<span>Searching...</span></div></div>';
   messages.appendChild(thinkRow);
   messages.scrollTop = messages.scrollHeight;
 
@@ -36279,22 +34560,28 @@ async function copilotAsk(text) {
   var lower = text.toLowerCase();
   var responseHTML = '';
 
-  try {
-    // Detect query type
-    var ipMatch = text.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
-    var mitreMatch = text.match(/[Tt](\d{4})(?:\.(\d{3}))?/);
-    var domainMatch = _copilotDomain;
+  // Auto-detect query type (no domain tabs needed)
+  var ipMatch = text.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
+  var mitreMatch = text.match(/[Tt](\d{4})(?:\.(\d{3}))?/);
+  var isTicketQuery = lower.includes('ticket') || lower.includes('jira') || lower.match(/p[1-4]/i) || lower.includes('incident') || lower.includes('alert') || lower.includes('dac-');
+  var isScriptQuery = lower.includes('script') || lower.includes('powershell') || lower.includes('base64') || lower.includes('invoke-') || lower.includes('iex');
+  var isKBQuery = lower.includes('playbook') || lower.includes('runbook') || lower.includes('procedure') || lower.includes('how to respond');
 
-    if (domainMatch === 'scriptanalysis') {
+  // Get selected client for Elastic queries
+  var clientSel = document.getElementById('copilotOrgSelect');
+  var selectedClient = clientSel ? clientSel.value : '';
+
+  try {
+    if (isScriptQuery) {
       // ── Script Analysis ──
-      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">Analyzing script/payload content:</div>';
-      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;">';
-      responseHTML += '<div style="padding:10px;background:rgba(0,0,0,0.3);border-radius:6px;margin-bottom:10px;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);white-space:pre-wrap;max-height:200px;overflow-y:auto;">' + escapeHtml(text) + '</div>';
+      responseHTML = '<div style="margin-bottom:10px;">Analyzing script/payload content:</div>';
+      responseHTML += '<div class="copilot-result-card">';
+      responseHTML += '<div style="padding:10px;background:rgba(0,0,0,0.3);border-radius:6px;margin-bottom:10px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);white-space:pre-wrap;max-height:200px;overflow-y:auto;">' + escapeHtml(text) + '</div>';
       var decoded = '';
       try { decoded = atob(text.replace(/\s/g, '')); } catch(e) {}
       if (decoded && decoded.length > 5 && /[\x20-\x7E]/.test(decoded.substring(0,10))) {
-        responseHTML += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;"><strong style="color:var(--cyan);">Base64 Decoded:</strong></div>';
-        responseHTML += '<div style="padding:8px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.1);border-radius:6px;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);white-space:pre-wrap;max-height:150px;overflow-y:auto;">' + escapeHtml(decoded) + '</div>';
+        responseHTML += '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;"><strong style="color:var(--cyan);">Base64 Decoded:</strong></div>';
+        responseHTML += '<div style="padding:8px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.1);border-radius:6px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);white-space:pre-wrap;max-height:150px;overflow-y:auto;">' + escapeHtml(decoded) + '</div>';
       }
       var suspicious = [];
       var lowerS = text.toLowerCase();
@@ -36302,20 +34589,18 @@ async function copilotAsk(text) {
       if (lowerS.includes('-enc') || lowerS.includes('-encodedcommand')) suspicious.push('Encoded command parameter');
       if (lowerS.includes('mimikatz') || lowerS.includes('sekurlsa')) suspicious.push('Credential dumping tool reference');
       if (lowerS.includes('net user') || lowerS.includes('net localgroup')) suspicious.push('User enumeration commands');
-      if (lowerS.includes('cmd /c') || lowerS.includes('cmd.exe')) suspicious.push('Command shell execution');
-      if (lowerS.includes('reg add') || lowerS.includes('reg delete')) suspicious.push('Registry modification');
       if (suspicious.length > 0) {
-        responseHTML += '<div style="margin-top:10px;font-size:11px;color:var(--amber);font-weight:600;">Suspicious Indicators:</div>';
-        responseHTML += '<ul style="margin:4px 0 0 16px;padding:0;font-size:10px;color:var(--text-secondary);line-height:1.8;">';
+        responseHTML += '<div style="margin-top:10px;color:var(--amber);font-weight:600;">Suspicious Indicators:</div>';
+        responseHTML += '<ul style="margin:4px 0 0 16px;padding:0;color:var(--text-secondary);line-height:1.8;">';
         suspicious.forEach(function(s) { responseHTML += '<li>' + s + '</li>'; });
         responseHTML += '</ul>';
       } else {
-        responseHTML += '<div style="margin-top:8px;font-size:11px;color:var(--green);">No obviously suspicious patterns detected in the input.</div>';
+        responseHTML += '<div style="margin-top:8px;color:var(--green);">No obviously suspicious patterns detected.</div>';
       }
       responseHTML += '</div>';
-      trackAIUsage('Copilot-Script', 300, 200, 'Script: ' + text.substring(0, 30));
+      if (typeof trackAIUsage === 'function') trackAIUsage('Copilot-Script', 300, 200, 'Script: ' + text.substring(0, 30));
 
-    } else if (domainMatch === 'ticketintel') {
+    } else if (isTicketQuery) {
       // ── Ticket Intel ── query Jira
       var jql = 'project = DAC AND type = "[System] Incident" ORDER BY created DESC';
       var prioM = text.match(/p([1-4])/i);
@@ -36323,113 +34608,66 @@ async function copilotAsk(text) {
       var jiraResp = await fetch('/api/jira', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'search', jql: jql, maxResults: 5 })
+        body: JSON.stringify({ action: 'search', jql: jql, maxResults: 10 })
       });
       var jiraData = await jiraResp.json();
       var issues = (jiraData && jiraData.issues) ? jiraData.issues : [];
-      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">Jira ticket search: <strong style="color:var(--text-primary);">' + escapeHtml(text) + '</strong></div>';
-      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;">';
-      responseHTML += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;"><strong style="color:var(--cyan);">' + issues.length + '</strong> tickets found</div>';
-      issues.slice(0, 5).forEach(function(iss) {
-        var f = iss.fields || {};
-        var sev = (f.customfield_10050 && f.customfield_10050.value) ? f.customfield_10050.value : f.priority ? f.priority.name : '\u2014';
-        responseHTML += '<div style="padding:8px 10px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.08);border-radius:6px;margin-bottom:4px;font-size:10px;">';
-        responseHTML += '<div style="display:flex;align-items:center;gap:8px;">';
-        responseHTML += '<span style="font-family:var(--font-mono);color:var(--cyan);font-weight:700;">' + iss.key + '</span>';
-        responseHTML += '<span style="color:var(--text-primary);font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(f.summary || '') + '</span>';
-        var sevL = sev.toLowerCase();
-        responseHTML += '<span class="badge badge-' + (sevL.includes('critical') || sev.includes('1') ? 'red' : sevL.includes('high') || sev.includes('2') ? 'amber' : 'blue') + '" style="font-size:8px;">' + sev + '</span>';
-        responseHTML += '</div></div>';
-      });
-      responseHTML += '</div>';
-      trackAIUsage('Copilot-Tickets', 200, 400, 'Tickets: ' + text.substring(0, 30));
-
-    } else if (domainMatch === 'assetintel') {
-      // ── Asset Intel ── search Elastic for host/user info
-      var assetQuery = text.replace(/^(who is|info on|lookup|search)\s*/i, '').trim();
-      var esRespA = await fetch('/api/elastic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'search', index: 'logs-*',
-          body: { size: 5, query: { bool: { should: [
-            { match: { 'host.name': assetQuery } },
-            { match: { 'user.name': assetQuery } },
-            { match: { 'source.ip': assetQuery } },
-            { match: { message: assetQuery } }
-          ] } }, sort: [{ '@timestamp': 'desc' }],
-          aggs: { by_host: { terms: { field: 'host.name', size: 5 } }, by_dataset: { terms: { field: 'data_stream.dataset', size: 5 } } } }
-        })
-      });
-      var esAsset = await esRespA.json();
-      var assetHits = esAsset.hits ? (typeof esAsset.hits.total === 'object' ? esAsset.hits.total.value : esAsset.hits.total) : 0;
-      var hostBuckets = esAsset.aggregations && esAsset.aggregations.by_host ? esAsset.aggregations.by_host.buckets : [];
-      var dsBucketsA = esAsset.aggregations && esAsset.aggregations.by_dataset ? esAsset.aggregations.by_dataset.buckets : [];
-      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">Asset/user lookup for: <strong style="color:var(--cyan);font-family:var(--font-mono);">' + escapeHtml(assetQuery) + '</strong></div>';
-      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;">';
-      responseHTML += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><span style="font-size:18px;font-family:var(--font-mono);font-weight:700;color:var(--cyan);">' + assetHits.toLocaleString() + '</span><span style="font-size:12px;color:var(--text-muted);">total events</span></div>';
-      if (hostBuckets.length > 0) {
-        responseHTML += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Associated Hosts:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">';
-        hostBuckets.forEach(function(h) { responseHTML += '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);font-family:var(--font-mono);">' + h.key + ': ' + h.doc_count + '</span>'; });
+      responseHTML = '<div style="margin-bottom:10px;">Jira ticket search: <strong>' + escapeHtml(text) + '</strong></div>';
+      responseHTML += '<div style="margin-bottom:8px;"><strong style="color:var(--cyan);">' + issues.length + '</strong> tickets found</div>';
+      if (issues.length > 0) {
+        responseHTML += '<div class="copilot-result-card" style="display:flex;flex-direction:column;gap:4px;">';
+        issues.slice(0, 10).forEach(function(iss) {
+          var f = iss.fields || {};
+          var sev = (f.customfield_10050 && f.customfield_10050.value) ? f.customfield_10050.value : f.priority ? f.priority.name : '\u2014';
+          var status = f.status ? f.status.name : '';
+          var sevL = sev.toLowerCase();
+          var sevClass = sevL.includes('critical') || sev.includes('1') ? 'red' : sevL.includes('high') || sev.includes('2') ? 'amber' : 'blue';
+          responseHTML += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.08);border-radius:6px;">';
+          responseHTML += '<span style="font-family:var(--font-mono);color:var(--cyan);font-weight:700;font-size:11px;">' + iss.key + '</span>';
+          responseHTML += '<span style="color:var(--text-primary);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(f.summary || '') + '</span>';
+          responseHTML += '<span class="badge badge-' + sevClass + '" style="font-size:9px;">' + sev + '</span>';
+          if (status) responseHTML += '<span style="font-size:9px;color:var(--text-muted);">' + status + '</span>';
+          responseHTML += '</div>';
+        });
         responseHTML += '</div>';
+      } else {
+        responseHTML += '<div style="color:var(--text-muted);font-style:italic;">No matching tickets found.</div>';
       }
-      if (dsBucketsA.length > 0) {
-        responseHTML += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Data Sources:</div><div style="display:flex;gap:6px;flex-wrap:wrap;">';
-        dsBucketsA.forEach(function(d) { responseHTML += '<span style="font-size:9px;padding:2px 8px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:10px;color:#a78bfa;">' + d.key + ': ' + d.doc_count + '</span>'; });
-        responseHTML += '</div>';
-      }
-      responseHTML += '</div>';
-      trackAIUsage('Copilot-Asset', 300, 500, 'Asset: ' + assetQuery);
+      if (typeof trackAIUsage === 'function') trackAIUsage('Copilot-Tickets', 200, 400, 'Tickets: ' + text.substring(0, 30));
 
-    } else if (domainMatch === 'knowledge') {
-      // ── Knowledge Base ── show playbook info
+    } else if (isKBQuery) {
+      // ── Knowledge Base ──
       var kbQuery = text.toLowerCase();
       var playbooks = {
         ransomware: { title: 'Ransomware Response Playbook', phases: ['Identification: Detect encryption activity, check for ransom notes', 'Containment: Isolate affected systems, block lateral movement', 'Eradication: Remove malware, reset compromised credentials', 'Recovery: Restore from clean backups, validate integrity', 'Lessons Learned: Update detection rules, brief stakeholders'] },
-        phishing: { title: 'Phishing Response Playbook', phases: ['Detection: Email gateway alert, user report, sandbox detonation', 'Analysis: Check sender, links, attachments, header analysis', 'Containment: Block sender, purge from mailboxes, reset credentials if clicked', 'User Notification: Alert affected users, provide guidance', 'IOC Extraction: URLs, domains, file hashes \u2192 feed to SIEM'] },
-        bec: { title: 'BEC / Email Compromise Playbook', phases: ['Identification: Detect unauthorized inbox rules, login anomalies', 'Containment: Reset password, revoke sessions, remove forwarding rules', 'Financial: Contact bank for wire recall if applicable', 'Investigation: Review email audit logs, identify scope', 'Notification: Regulatory reporting, client notification if needed'] },
+        phishing: { title: 'Phishing Response Playbook', phases: ['Detection: Email gateway alert, user report, sandbox detonation', 'Analysis: Check sender, links, attachments, header analysis', 'Containment: Block sender, purge from mailboxes, reset credentials if clicked', 'User Notification: Alert affected users, provide guidance', 'IOC Extraction: URLs, domains, file hashes > feed to SIEM'] },
         'default': { title: 'General Incident Response Playbook', phases: ['Preparation: Ensure tooling and contacts are ready', 'Detection & Analysis: Validate alert, determine scope', 'Containment: Short-term and long-term containment', 'Eradication: Remove threat artifacts', 'Recovery: Restore normal operations', 'Post-Incident: Document lessons learned'] }
       };
       var kbMatch = playbooks['default'];
       for (var pbKey in playbooks) { if (pbKey !== 'default' && kbQuery.includes(pbKey)) { kbMatch = playbooks[pbKey]; break; } }
-      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">Knowledge Base result for: <strong style="color:var(--text-primary);">' + escapeHtml(text) + '</strong></div>';
-      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;">';
-      responseHTML += '<div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:10px;">' + kbMatch.title + '</div>';
-      responseHTML += '<div style="display:flex;flex-direction:column;gap:6px;">';
+      responseHTML = '<div style="margin-bottom:10px;">Knowledge Base: <strong>' + escapeHtml(text) + '</strong></div>';
+      responseHTML += '<div class="copilot-result-card">';
+      responseHTML += '<div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:12px;">' + kbMatch.title + '</div>';
+      responseHTML += '<div style="display:flex;flex-direction:column;gap:8px;">';
       kbMatch.phases.forEach(function(p, idx) {
-        responseHTML += '<div style="display:flex;gap:8px;align-items:flex-start;"><span style="min-width:20px;height:20px;border-radius:50%;background:rgba(0,212,255,0.12);border:1px solid rgba(0,212,255,0.25);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--cyan);">' + (idx+1) + '</span><span style="font-size:11px;color:var(--text-secondary);line-height:1.5;">' + p + '</span></div>';
+        responseHTML += '<div style="display:flex;gap:10px;align-items:flex-start;"><span style="min-width:22px;height:22px;border-radius:50%;background:rgba(0,212,255,0.12);border:1px solid rgba(0,212,255,0.25);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--cyan);flex-shrink:0;">' + (idx+1) + '</span><span style="color:var(--text-secondary);line-height:1.5;">' + p + '</span></div>';
       });
       responseHTML += '</div></div>';
-      trackAIUsage('Copilot-KB', 100, 200, 'KB: ' + text.substring(0, 30));
+      if (typeof trackAIUsage === 'function') trackAIUsage('Copilot-KB', 100, 200, 'KB: ' + text.substring(0, 30));
 
-    } else if ((domainMatch === 'threatintel' && (ipMatch || lower.startsWith('check ip') || lower.startsWith('ip:'))) || (domainMatch === 'all' && (ipMatch || lower.startsWith('check ip') || lower.startsWith('ip:')))) {
-      // ── IOC Enrichment ──
+    } else if (ipMatch || lower.startsWith('check ip') || lower.startsWith('ip:')) {
+      // ── IOC Enrichment (auto-detected) ──
       var ip = ipMatch ? ipMatch[1] : text.replace(/^(check ip|ip:)\s*/i, '').trim();
       var [octiResp, elasticResp] = await Promise.all([
         fetch('/api/opencti', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: '{ indicators(first: 5, filters: { mode: and, filters: [{ key: "pattern", values: ["' + ip + '"], operator: eq }] }) { edges { node { id name pattern x_opencti_score pattern_type created_at objectMarking { id definition } } } } }'
-          })
+          body: JSON.stringify({ query: '{ indicators(first: 5, filters: { mode: and, filters: [{ key: "pattern", values: ["' + ip + '"], operator: eq }] }) { edges { node { id name pattern x_opencti_score pattern_type created_at } } } }' })
         }),
         fetch('/api/elastic', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'search',
-            index: 'logs-*',
-            body: {
-              size: 5,
-              query: { bool: { should: [
-                { term: { 'source.ip': ip } },
-                { term: { 'destination.ip': ip } },
-                { match: { message: ip } }
-              ] } },
-              sort: [{ '@timestamp': 'desc' }],
-              aggs: { by_source: { terms: { field: 'data_stream.dataset', size: 5 } } }
-            }
-          })
+          body: JSON.stringify({ action: 'search', index: 'logs-*', body: { size: 5, query: { bool: { should: [{ term: { 'source.ip': ip } }, { term: { 'destination.ip': ip } }, { match: { message: ip } }] } }, sort: [{ '@timestamp': 'desc' }], aggs: { by_source: { terms: { field: 'data_stream.dataset', size: 5 } } } } })
         })
       ]);
 
@@ -36444,359 +34682,181 @@ async function copilotAsk(text) {
       var verdictColor = octiInds.length > 0 ? 'var(--red-bright)' : (totalHits > 0 ? 'var(--amber)' : 'var(--text-muted)');
       var score = octiInds.length > 0 ? octiInds[0].x_opencti_score : 0;
 
-      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">IOC enrichment for <strong style="color:var(--cyan);font-family:var(--font-mono);">' + ip + '</strong> \u2014 queried OpenCTI and Elastic SIEM.</div>';
-      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;margin-bottom:8px;">';
-      responseHTML += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
+      responseHTML = '<div style="margin-bottom:10px;">IOC enrichment for <strong style="font-family:var(--font-mono);color:var(--cyan);">' + ip + '</strong> \u2014 queried OpenCTI + Elastic SIEM.</div>';
+      responseHTML += '<div class="copilot-result-card">';
+      responseHTML += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">';
       responseHTML += '<span style="font-size:11px;padding:3px 8px;border-radius:4px;font-weight:700;color:' + verdictColor + ';background:' + verdictColor + '15;border:1px solid ' + verdictColor + '30;">' + verdict + '</span>';
-      responseHTML += '<span style="font-size:13px;font-family:var(--font-mono);color:var(--text-primary);font-weight:600;">' + ip + '</span>';
-      if (score > 0) responseHTML += '<span style="margin-left:auto;font-size:11px;color:' + verdictColor + ';font-family:var(--font-mono);">Score: ' + score + '/100</span>';
+      responseHTML += '<span style="font-size:14px;font-family:var(--font-mono);color:var(--text-primary);font-weight:600;">' + ip + '</span>';
+      if (score > 0) responseHTML += '<span style="margin-left:auto;font-size:12px;color:' + verdictColor + ';font-family:var(--font-mono);">Score: ' + score + '/100</span>';
       responseHTML += '</div>';
 
       if (octiInds.length > 0) {
-        responseHTML += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;"><strong style="color:var(--red-bright);">' + octiInds.length + ' indicator(s)</strong> found in OpenCTI:</div>';
+        responseHTML += '<div style="margin-bottom:10px;"><strong style="color:var(--red-bright);">' + octiInds.length + ' indicator(s)</strong> found in OpenCTI:</div>';
         octiInds.forEach(function(ind) {
-          responseHTML += '<div style="padding:6px 10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.1);border-radius:6px;margin-bottom:4px;font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);">' + (ind.pattern || ind.name) + '</div>';
+          responseHTML += '<div style="padding:6px 10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.1);border-radius:6px;margin-bottom:4px;font-size:11px;color:var(--text-secondary);font-family:var(--font-mono);">' + (ind.pattern || ind.name) + '</div>';
         });
       } else {
-        responseHTML += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">No matching indicators in OpenCTI.</div>';
+        responseHTML += '<div style="color:var(--text-muted);margin-bottom:8px;">No matching indicators in OpenCTI.</div>';
       }
 
-      responseHTML += '<div style="margin-top:8px;font-size:11px;color:var(--text-secondary);"><strong>' + totalHits.toLocaleString() + '</strong> log events found in Elastic SIEM.</div>';
+      responseHTML += '<div style="margin-top:10px;"><strong>' + totalHits.toLocaleString() + '</strong> log events in Elastic SIEM.</div>';
       if (datasets.length > 0) {
         responseHTML += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">';
-        datasets.forEach(function(d) {
-          responseHTML += '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + d.key + ': ' + d.doc_count + '</span>';
-        });
+        datasets.forEach(function(d) { responseHTML += '<span style="font-size:10px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);font-family:var(--font-mono);">' + d.key + ': ' + d.doc_count + '</span>'; });
         responseHTML += '</div>';
       }
       responseHTML += '</div>';
 
-      trackAIUsage('Copilot-IOC', 500, 800, 'IOC: ' + ip);
-      // Track IOC in session
-      var iocVerdict = octiInds.length > 0 ? 'FLAGGED' : (totalHits > 0 ? 'SUSPICIOUS' : 'CLEAN');
-      _copilotIOCs.push({ type: 'IP', value: ip, verdict: iocVerdict, source: 'OpenCTI/Elastic', ts: new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) });
+      if (typeof trackAIUsage === 'function') trackAIUsage('Copilot-IOC', 500, 800, 'IOC: ' + ip);
+      _copilotIOCs.push({ type: 'IP', value: ip, verdict: verdict, source: 'OpenCTI/Elastic', ts: new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) });
 
-    } else if (mitreMatch && (domainMatch === 'threatintel' || domainMatch === 'mitre' || domainMatch === 'all')) {
-      // ── MITRE Technique Lookup ──
+    } else if (mitreMatch) {
+      // ── MITRE Technique Lookup (auto-detected) ──
       var techId = 'T' + mitreMatch[1] + (mitreMatch[2] ? '.' + mitreMatch[2] : '');
       var octiResp2 = await fetch('/api/opencti', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: '{ attackPatterns(first: 5, filters: { mode: and, filters: [{ key: "x_mitre_id", values: ["' + techId + '"], operator: eq }] }) { edges { node { id name description x_mitre_id killChainPhases { id kill_chain_name phase_name } } } } }'
-        })
+        body: JSON.stringify({ query: '{ attackPatterns(first: 5, filters: { mode: and, filters: [{ key: "x_mitre_id", values: ["' + techId + '"], operator: eq }] }) { edges { node { id name description x_mitre_id killChainPhases { id kill_chain_name phase_name } } } } }' })
       });
       var octiData2 = await octiResp2.json();
       var patterns = (octiData2.data && octiData2.data.attackPatterns && octiData2.data.attackPatterns.edges) ? octiData2.data.attackPatterns.edges.map(function(e) { return e.node; }) : [];
 
-      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">MITRE ATT&CK lookup for <strong style="color:#a78bfa;font-family:var(--font-mono);">' + techId + '</strong>:</div>';
+      responseHTML = '<div style="margin-bottom:10px;">MITRE ATT&CK lookup for <strong style="font-family:var(--font-mono);color:#a78bfa;">' + techId + '</strong></div>';
       if (patterns.length > 0) {
-        patterns.forEach(function(p) {
-          var phases = (p.killChainPhases || []).map(function(kc) { return kc.phase_name; });
-          responseHTML += '<div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:14px;margin-bottom:8px;">';
-          responseHTML += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
-          responseHTML += '<span style="font-size:11px;font-family:var(--font-mono);padding:3px 8px;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.25);border-radius:4px;color:#a78bfa;font-weight:700;">' + (p.x_mitre_id || techId) + '</span>';
-          responseHTML += '<span style="font-size:13px;font-weight:600;color:var(--text-primary);">' + (p.name || 'Unknown Technique') + '</span>';
+        var p = patterns[0];
+        var tactics = (p.killChainPhases || []).map(function(kc) { return kc.phase_name; });
+        responseHTML += '<div class="copilot-result-card" style="border-color:rgba(139,92,246,0.2);">';
+        responseHTML += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
+        responseHTML += '<span style="font-size:14px;font-weight:700;font-family:var(--font-mono);color:#a78bfa;">' + (p.x_mitre_id || techId) + '</span>';
+        responseHTML += '<span style="font-size:14px;font-weight:600;color:var(--text-primary);">' + (p.name || '') + '</span>';
+        responseHTML += '</div>';
+        if (tactics.length > 0) {
+          responseHTML += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;">';
+          tactics.forEach(function(t) { responseHTML += '<span style="font-size:10px;padding:2px 8px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:10px;color:#a78bfa;text-transform:capitalize;">' + t.replace(/-/g, ' ') + '</span>'; });
           responseHTML += '</div>';
-          if (phases.length > 0) {
-            responseHTML += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">';
-            phases.forEach(function(ph) {
-              responseHTML += '<span style="font-size:9px;padding:2px 6px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:3px;color:#a78bfa;">' + ph + '</span>';
-            });
-            responseHTML += '</div>';
-          }
-          if (p.description) {
-            responseHTML += '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;">' + (p.description.length > 500 ? p.description.substring(0, 497) + '...' : p.description) + '</div>';
-          }
-          responseHTML += '</div>';
-        });
+        }
+        if (p.description) {
+          var desc = p.description.length > 500 ? p.description.substring(0, 500) + '...' : p.description;
+          responseHTML += '<div style="color:var(--text-secondary);line-height:1.6;font-size:12px;">' + escapeHtml(desc) + '</div>';
+        }
+        responseHTML += '</div>';
       } else {
-        responseHTML += '<div style="padding:12px;background:var(--bg-surface);border:1px solid var(--border-card);border-radius:8px;font-size:11px;color:var(--text-muted);">No matching attack patterns found in OpenCTI for ' + techId + '. The technique may not be indexed in this instance.</div>';
+        responseHTML += '<div class="copilot-result-card"><div style="color:var(--text-muted);">Technique ' + techId + ' not found in OpenCTI. It may not be loaded in the threat intelligence platform.</div></div>';
       }
-      trackAIUsage('Copilot-MITRE', 300, 600, 'MITRE: ' + techId);
+      if (typeof trackAIUsage === 'function') trackAIUsage('Copilot-MITRE', 300, 500, 'MITRE: ' + techId);
 
-    } else if (domainMatch === 'logsearch' || (domainMatch === 'all' && (lower.includes('login') || lower.includes('rdp') || lower.includes('search') || lower.includes('show me') || lower.startsWith('search:') || lower.includes('failed') || lower.includes('firewall') || lower.includes('alert')))) {
-      // ── Log Search ──
-      var queryBody = {};
-      if (lower.includes('login') || lower.includes('rdp') || lower.includes('failed')) {
-        queryBody = { bool: { must: [
-          { match: { message: text } }
-        ] } };
-      } else {
-        queryBody = { query_string: { query: text.replace(/^search:\s*/i, ''), default_field: 'message' } };
+    } else {
+      // ── Default: Elastic Log Search (auto-routed) ──
+      var searchBody = {
+        size: 10,
+        query: { bool: { must: [{ query_string: { query: text, default_field: 'message', lenient: true } }] } },
+        sort: [{ '@timestamp': 'desc' }],
+        aggs: {
+          by_client: { terms: { field: 'observer.name', size: 10 } },
+          by_dataset: { terms: { field: 'data_stream.dataset', size: 5 } }
+        }
+      };
+      // If a specific client is selected, filter by it
+      if (selectedClient && window.ORG_CONNECTORS && window.ORG_CONNECTORS[selectedClient]) {
+        var orgInfo = window.ORG_CONNECTORS[selectedClient];
+        if (orgInfo.index) {
+          searchBody.query.bool.must.push({ term: { 'data_stream.namespace': orgInfo.index.replace('logs-', '').replace('-*', '') } });
+        }
       }
 
       var esResp = await fetch('/api/elastic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'search',
-          index: 'logs-*',
-          body: {
-            size: 5,
-            query: queryBody,
-            sort: [{ '@timestamp': 'desc' }],
-            aggs: {
-              by_namespace: { terms: { field: 'data_stream.namespace', size: 5 } },
-              by_dataset: { terms: { field: 'data_stream.dataset', size: 5 } }
-            }
-          }
-        })
+        body: JSON.stringify({ action: 'search', index: 'logs-*', body: searchBody })
       });
-      var esData2 = await esResp.json();
-      var hits2 = esData2.hits ? esData2.hits : { total: { value: 0 }, hits: [] };
-      var total2 = typeof hits2.total === 'object' ? hits2.total.value : hits2.total;
-      var nsBuckets = esData2.aggregations && esData2.aggregations.by_namespace ? esData2.aggregations.by_namespace.buckets : [];
-      var dsBuckets = esData2.aggregations && esData2.aggregations.by_dataset ? esData2.aggregations.by_dataset.buckets : [];
+      var esResult = await esResp.json();
+      var hits = esResult.hits ? esResult.hits : { total: { value: 0 }, hits: [] };
+      var totalCount = typeof hits.total === 'object' ? hits.total.value : hits.total;
+      var clientBuckets = esResult.aggregations && esResult.aggregations.by_client ? esResult.aggregations.by_client.buckets : [];
+      var dsBuckets = esResult.aggregations && esResult.aggregations.by_dataset ? esResult.aggregations.by_dataset.buckets : [];
 
-      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">Searched Elastic SIEM for: <strong style="color:var(--text-primary);">' + escapeHtml(text) + '</strong></div>';
-      responseHTML += '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:10px;padding:14px;">';
-      responseHTML += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
-      responseHTML += '<span style="font-size:18px;font-family:var(--font-mono);font-weight:700;color:var(--cyan);">' + total2.toLocaleString() + '</span>';
-      responseHTML += '<span style="font-size:12px;color:var(--text-muted);">matching events</span>';
-      responseHTML += '</div>';
+      responseHTML = '<div style="margin-bottom:10px;">Searched Elastic SIEM for: <strong>' + escapeHtml(text) + '</strong></div>';
+      responseHTML += '<div style="margin-bottom:12px;"><span style="font-size:18px;font-weight:700;color:var(--cyan);font-family:var(--font-mono);">' + totalCount.toLocaleString() + '</span> <span style="color:var(--text-muted);">matching events</span></div>';
 
-      if (nsBuckets.length > 0) {
-        responseHTML += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">By Client:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">';
-        nsBuckets.forEach(function(ns) {
-          responseHTML += '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + ns.key + ': ' + ns.doc_count.toLocaleString() + '</span>';
-        });
+      if (clientBuckets.length > 0) {
+        responseHTML += '<div style="margin-bottom:8px;color:var(--text-muted);font-size:11px;">By client:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
+        clientBuckets.forEach(function(b) { responseHTML += '<span style="font-size:10px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);font-family:var(--font-mono);">' + b.key + ': ' + b.doc_count.toLocaleString() + '</span>'; });
+        responseHTML += '</div>';
+      }
+      if (dsBuckets.length > 0) {
+        responseHTML += '<div style="margin-bottom:8px;color:var(--text-muted);font-size:11px;">By data source:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
+        dsBuckets.forEach(function(d) { responseHTML += '<span style="font-size:10px;padding:2px 8px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:10px;color:#a78bfa;">' + d.key + ': ' + d.doc_count.toLocaleString() + '</span>'; });
         responseHTML += '</div>';
       }
 
-      if (hits2.hits && hits2.hits.length > 0) {
-        responseHTML += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Recent Events:</div>';
-        hits2.hits.slice(0, 3).forEach(function(h) {
+      if (hits.hits && hits.hits.length > 0) {
+        responseHTML += '<div style="color:var(--text-muted);font-size:11px;margin-bottom:6px;">Recent events:</div>';
+        hits.hits.forEach(function(h) {
           var src = h._source || {};
           var ts = src['@timestamp'] ? new Date(src['@timestamp']).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-          var msg = src.message || JSON.stringify(src).substring(0, 200);
-          if (msg.length > 200) msg = msg.substring(0, 197) + '...';
-          responseHTML += '<div style="padding:8px 10px;background:var(--surface-0);border:1px solid var(--border-subtle);border-radius:6px;margin-bottom:4px;font-size:10px;font-family:var(--font-mono);color:var(--text-secondary);line-height:1.4;">' +
-            '<span style="color:var(--text-muted);">' + ts + '</span> ' + escapeHtml(msg) +
-          '</div>';
+          var msg = src.message || JSON.stringify(src).substring(0, 300);
+          if (msg.length > 300) msg = msg.substring(0, 297) + '...';
+          responseHTML += '<div style="padding:6px 10px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:5px;font-size:11px;font-family:var(--font-mono);color:var(--text-secondary);line-height:1.4;overflow-wrap:break-word;margin-bottom:3px;">' +
+            '<span style="color:var(--text-muted);">' + ts + '</span> ' + escapeHtml(msg) + '</div>';
         });
       }
-      responseHTML += '</div>';
-      trackAIUsage('Copilot-Search', 600, 500, 'Search: ' + text.substring(0, 30));
-
-    } else {
-      // ── General Query ──
-      var esResp2 = await fetch('/api/elastic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'search',
-          index: 'logs-*',
-          body: {
-            size: 3,
-            query: { query_string: { query: text, default_field: 'message', lenient: true } },
-            sort: [{ '@timestamp': 'desc' }],
-            aggs: { by_namespace: { terms: { field: 'data_stream.namespace', size: 5 } } }
-          }
-        })
-      });
-      var esData3 = await esResp2.json();
-      var total3 = esData3.hits && esData3.hits.total ? (typeof esData3.hits.total === 'object' ? esData3.hits.total.value : esData3.hits.total) : 0;
-
-      responseHTML = '<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.6;">';
-      responseHTML += 'Searched across connected data sources for: <strong style="color:var(--text-primary);">' + escapeHtml(text) + '</strong>';
-      responseHTML += '<div style="margin-top:8px;"><strong style="color:var(--cyan);">' + total3.toLocaleString() + '</strong> matching events found in Elastic SIEM.</div>';
-      if (esData3.hits && esData3.hits.hits && esData3.hits.hits.length > 0) {
-        responseHTML += '<div style="margin-top:8px;font-size:10px;color:var(--text-muted);">Latest events:</div>';
-        esData3.hits.hits.forEach(function(h) {
-          var src = h._source || {};
-          var ts = src['@timestamp'] ? new Date(src['@timestamp']).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-          var msg = src.message || JSON.stringify(src).substring(0, 150);
-          if (msg.length > 150) msg = msg.substring(0, 147) + '...';
-          responseHTML += '<div style="padding:6px 10px;background:var(--surface-0);border:1px solid var(--border-subtle);border-radius:6px;margin-top:4px;font-size:10px;font-family:var(--font-mono);color:var(--text-secondary);">' + ts + ' \u00b7 ' + escapeHtml(msg) + '</div>';
-        });
-      }
-      responseHTML += '<div style="margin-top:10px;" class="kql-suggestion"><span>&#x1F4A1;</span><span>Try: <span style="font-family:var(--font-mono);color:var(--cyan);">ip:</span> for IOC checks, <span style="font-family:var(--font-mono);color:var(--cyan);">T1059</span> for MITRE, <span style="font-family:var(--font-mono);color:var(--cyan);">search:</span> for log queries.</span></div>';
-      responseHTML += '</div>';
-      trackAIUsage('Copilot-General', 400, 300, 'General: ' + text.substring(0, 30));
+      if (typeof trackAIUsage === 'function') trackAIUsage('Copilot-Search', 500, 800, 'Search: ' + text.substring(0, 30));
     }
-  } catch (err) {
-    console.error('[Copilot] Live query error:', err);
-    responseHTML = '<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">I encountered an error querying live data: <span style="color:var(--amber);">' + err.message + '</span><br>Please verify your Elastic and OpenCTI connections are active in the Integration Hub.</div>';
+  } catch(err) {
+    console.error('[Copilot]', err);
+    responseHTML = '<div style="color:var(--red-bright);">Error: ' + escapeHtml(err.message) + '</div>';
   }
+
+  // Remove thinking row, add response
+  var thinkEl = document.getElementById('copilotThinkRow');
+  if (thinkEl) thinkEl.remove();
 
   var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  var elapsedMs = Date.now() - startTime;
-
-  var think = document.getElementById('copilotThinkRow');
-  if (think) think.remove();
-
-  var responseRow = document.createElement('div');
-  responseRow.className = 'msg-row';
-  responseRow.innerHTML = '<div class="msg-avatar copilot-av">&#x1F916;</div>' +
-    '<div class="msg-content" style="max-width:100%;">' +
+  var copilotRow = document.createElement('div');
+  copilotRow.className = 'msg-row';
+  copilotRow.innerHTML = '<div class="msg-avatar copilot-av">\ud83e\udd16</div>' +
+    '<div class="msg-content">' +
     '<div class="msg-meta"><span class="msg-sender">DACTA Copilot</span>' +
-    '<span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT \u00b7 ' + elapsed + 's</span>' +
-    '<span style="font-size:8px;padding:1px 5px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:3px;color:var(--green);">LIVE</span></div>' +
+    '<span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT \u00b7 ' + elapsed + 's</span></div>' +
     '<div class="msg-bubble-copilot">' + responseHTML + '</div></div>';
-  messages.appendChild(responseRow);
+  messages.appendChild(copilotRow);
   messages.scrollTop = messages.scrollHeight;
-
-  // Log to SIEMLess DB audit_log (fire-and-forget)
-  var _responseSummary = responseHTML ? responseHTML.replace(/<[^>]+>/g, '').substring(0, 200) : '';
-  logToSupabase('audit_log', {
-    user_email: _getCurrentUserEmail(),
-    action: 'copilot_query',
-    resource_type: 'investigation',
-    resource_id: _copilotSessionId,
-    details: {
-      query: text,
-      domain: window._copilotDomain || 'all',
-      mode: window._copilotMode || 'guided',
-      response_summary: _responseSummary,
-      latency_ms: elapsedMs
-    }
-  });
 }
-
-function escapeHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function getCopilotGenericIOCResponse(text) {
-  return `<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:8px;">Enrichment in progress across VirusTotal, AbuseIPDB, Shodan, MISP, and ThreatFox. Results will include geolocation, passive DNS, and historical IOC context.</div>
-  <div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px;">
-    <div style="font-size:24px;">&#x1F9EA;</div>
-    <div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">IOC Enrichment</div>
-    <div style="font-size:13px;color:var(--text-primary);margin-top:3px;font-family:var(--font-mono);">${escapeHtml(text)}</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Full enrichment results would appear above with verdicts, source attribution, and action buttons.</div></div>
-  </div>`;
-}
-
-function getCopilotGenericLogResponse(text) {
-  return `<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:8px;">Translating to KQL and executing against <strong style="color:var(--cyan);">NagaWorld Elastic SIEM</strong>. Results will include raw counts, unique source IPs, and automated anomaly highlighting.</div>
-  <div class="kql-suggestion">
-    <span style="font-size:14px;">&#x1F916;</span>
-    <span>Query generated and ready. Use the search templates below for common hunting patterns, or refine your natural language query.</span>
-  </div>`;
-}
-
-function getCopilotGenericMitreResponse(text) {
-  return `<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin-bottom:8px;">Looking up MITRE ATT&amp;CK knowledge base. Results include tactic classification, detection methods, and related techniques.</div>
-  <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:8px;padding:12px;">
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;font-weight:700;letter-spacing:0.1em;">MITRE ATT&amp;CK</div>
-    <div style="font-size:13px;color:var(--text-primary);font-family:var(--font-mono);">${escapeHtml(text)}</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Full technique card would render with tactic tags, description, detection methods, and action buttons.</div>
-  </div>`;
-}
-
-function getCopilotGenericResponse(text) {
-  return `<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.6;">
-    I've received your query. To provide the best results, I'm checking:
-    <ul style="margin:8px 0 8px 16px;display:flex;flex-direction:column;gap:4px;">
-      <li>Connected SIEM data sources</li>
-      <li>Threat intelligence feeds</li>
-      <li>Historical investigation context for NagaWorld</li>
-      <li>Relevant playbooks and knowledge base</li>
-    </ul>
-    <div class="kql-suggestion" style="margin-top:8px;">
-      <span>&#x1F4A1;</span>
-      <span>Try using prefixes: <span style="font-family:var(--font-mono);color:var(--cyan);">ip:</span> for IOC checks, <span style="font-family:var(--font-mono);color:var(--cyan);">t:</span> for MITRE techniques, <span style="font-family:var(--font-mono);color:var(--cyan);">search:</span> for log queries.</span>
-    </div>
-  </div>`;
-}
-
-// Scroll messages to bottom on copilot page init
-async function loadCopilotClients() {
-  try {
-    var resp = await fetch('/api/jira', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'search', jql: 'project = DAC AND type = "[System] Incident" ORDER BY created DESC', maxResults: 100 })
-    });
-    var data = await resp.json();
-    var orgs = new Set();
-    (data.issues || []).forEach(function(iss) {
-      var orgField = iss.fields && iss.fields.customfield_10002;
-      if (orgField && orgField.length > 0) {
-        orgField.forEach(function(o) { if (o.name) orgs.add(o.name); });
-      }
-    });
-    var sel = document.getElementById('copilotOrgSelect');
-    if (sel) {
-      sel.innerHTML = '<option value="">All Clients</option>';
-      Array.from(orgs).sort().forEach(function(org) {
-        sel.innerHTML += '<option value="' + org + '">&#x1F3E2; ' + org + '</option>';
-      });
-    }
-  } catch(e) { console.error('[Copilot] Client load error:', e); }
-}
-
-var _copilotIOCs = [];
 
 function initCopilotPage() {
-  setTimeout(function() {
-    var msgs = document.getElementById('copilotMessages');
-    if (msgs) msgs.scrollTop = msgs.scrollHeight;
-  }, 100);
-  // Load live clients
-  loadCopilotClients();
-  // Update data source statuses
-  updateCopilotDataSources();
-  // Populate Active Context from investigation if available
-  if (window._copilotContext && window._copilotContext.ticketKey) {
-    DactaJira.fetchIssue(window._copilotContext.ticketKey).then(function(issue) {
-      if (!issue || !issue.fields) return;
-      var f = issue.fields;
-      var ctxCards = document.querySelectorAll('#page-copilot .ctx-card');
-      ctxCards.forEach(function(card) {
-        var hdr = card.querySelector('.ctx-card-header');
-        if (hdr && hdr.textContent.includes('Active Context')) {
-          var body = card.querySelector('.ctx-card-body');
-          if (body) {
-            var org = (f.customfield_10002 && f.customfield_10002[0]) ? f.customfield_10002[0].name : '\u2014';
-            var prio = f.priority ? f.priority.name : '\u2014';
-            body.innerHTML = '<div class="ctx-row"><span class="ctx-label">Client</span><span class="ctx-value cyan">' + org + '</span></div>' +
-              '<div class="ctx-row"><span class="ctx-label">Ticket</span><span class="ctx-value mono amber" style="cursor:pointer;" onclick="navigate(\'investigation\')"> ' + issue.key + ' \u2197</span></div>' +
-              '<div class="ctx-divider"></div>' +
-              '<div class="ctx-row"><span class="ctx-label">Priority</span><span class="badge ' + jiraPriorityBadge(prio) + '" style="font-size:9px;">' + prio + '</span></div>' +
-              '<div class="ctx-row"><span class="ctx-label">Status</span><span class="ctx-value">' + (f.status ? f.status.name : '\u2014') + '</span></div>' +
-              '<div class="ctx-row"><span class="ctx-label">Summary</span><span class="ctx-value" style="font-size:10px;">' + (f.summary || '').substring(0, 60) + '</span></div>';
-          }
-        }
-      });
-    }).catch(function(e) { console.error('[Copilot] Context load error:', e); });
-    // Update conversation header badge
-    var convBadge = document.querySelector('.copilot-conv-header .badge');
-    if (convBadge) {
-      convBadge.textContent = window._copilotContext.ticketKey;
-      convBadge.style.display = '';
-    }
+  copilotRenderEmpty();
+  copilotPopulateClients();
+  copilotCheckSources();
+}
+
+// Command Bar (keep)
+function openCopilotCmd() {
+  var overlay = document.getElementById('copilotCmdOverlay');
+  if (overlay) {
+    overlay.classList.add('open');
+    setTimeout(function() {
+      var input = document.getElementById('cmdbarInput');
+      if (input) input.focus();
+    }, 50);
   }
 }
-
-// --- updateCopilotDataSources ---
-async function updateCopilotDataSources() {
-  var dsItems = document.querySelectorAll('#page-copilot .ds-item');
-  // Test Elastic
-  try {
-    var r = await fetch('/api/elastic', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'search',index:'logs-*',body:{size:0}}) });
-    var ok = r.ok;
-    if (dsItems[0]) { dsItems[0].querySelector('.ds-status').innerHTML = ok ? '<div class="ds-dot connected"></div>Live' : '<div class="ds-dot" style="background:var(--red-bright);"></div>Error'; }
-  } catch(e) { if (dsItems[0]) dsItems[0].querySelector('.ds-status').innerHTML = '<div class="ds-dot" style="background:var(--red-bright);"></div>Offline'; }
-  // Test OpenCTI
-  try {
-    var r2 = await fetch('/api/opencti', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({query:'{ about { version } }'}) });
-    var ok2 = r2.ok;
-    if (dsItems[5]) { dsItems[5].querySelector('.ds-status').innerHTML = ok2 ? '<div class="ds-dot connected"></div>Live' : '<div class="ds-dot" style="background:var(--red-bright);"></div>Error'; }
-  } catch(e) { if (dsItems[5]) dsItems[5].querySelector('.ds-status').innerHTML = '<div class="ds-dot" style="background:var(--red-bright);"></div>Offline'; }
-  // Update count
-  var connectedCount = document.querySelectorAll('#page-copilot .ds-dot.connected').length;
-  var totalCount = dsItems.length;
-  document.querySelectorAll('#page-copilot .ctx-card-header').forEach(function(h) {
-    if (h.textContent.includes('Data Sources')) {
-      var countSpan = h.querySelector('span');
-      if (countSpan) countSpan.textContent = connectedCount + '/' + totalCount + ' Active';
-    }
-  });
+function closeCopilotCmd(e) {
+  var overlay = document.getElementById('copilotCmdOverlay');
+  if (overlay) overlay.classList.remove('open');
 }
+function updateCmdBar(val) {}
 
-// --- showAllRecentIOCs ---
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    var copilotPage = document.getElementById('page-copilot');
+    if (copilotPage && copilotPage.classList.contains('active')) {
+      e.preventDefault();
+      openCopilotCmd();
+    }
+  }
+  if (e.key === 'Escape') closeCopilotCmd();
+});
+
 function showAllRecentIOCs() {
   var overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
