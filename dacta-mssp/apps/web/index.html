@@ -11530,7 +11530,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="page-subtitle">Loading rules... · Sigma-first, cross-platform detection-as-code</div>
           </div>
           <div class="page-actions">
-            <button class="btn btn-secondary btn-sm" onclick="loadDetectionRulesLive(); showToast('Syncing rule repository from Supabase...', 'info');">
+            <button class="btn btn-secondary btn-sm" onclick="loadDetectionRulesLive(); showToast('Syncing rule repository from SIEMLess DB...', 'info');">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
               Sync Repository
             </button>
@@ -11670,7 +11670,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             </div>
           </div>
 
-          <!-- Rules with Updated Syntax — LIVE from Supabase -->
+          <!-- Rules with Updated Syntax — LIVE from SIEMLess DB -->
           <div class="card">
             <div class="card-header">
               <span class="card-title">Rules with Updated Syntax</span>
@@ -11681,7 +11681,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             </div>
             <div style="margin-bottom:10px;padding:10px 14px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.08);border-radius:8px;">
               <div style="font-size:10px;color:var(--text-secondary);line-height:1.7;">
-                SIEMLess compares <strong style="color:var(--text-primary);">rule_content</strong> field references against known vendor log schemas. When vendor documentation updates field names, event IDs, or log formats, affected rules in the repository are flagged here. This check runs against the live Supabase rule repository on each page load.
+                SIEMLess compares <strong style="color:var(--text-primary);">rule_content</strong> field references against known vendor log schemas. When vendor documentation updates field names, event IDs, or log formats, affected rules in the repository are flagged here. This check runs against the live SIEMLess DB rule repository on each page load.
               </div>
             </div>
             <div style="display:flex;flex-direction:column;gap:6px;" id="syntaxUpdateList">
@@ -13555,7 +13555,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="page-subtitle">Breach &amp; Attack Simulation · Security Control Validation · Purple Teaming</div>
           </div>
           <div class="page-actions">
-            <button class="btn btn-secondary btn-sm" onclick="showToast('Loading last test results from Supabase...')">
+            <button class="btn btn-secondary btn-sm" onclick="showToast('Loading last test results from SIEMLess DB...')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               Test Reports
             </button>
@@ -25816,14 +25816,14 @@ function renderTriage() {
 //  DETECTION RULES — LIVE DATA FROM ELASTIC
 // ============================================================
 
-// Supabase versions cache: rule name -> { id, version, rule_content }
+// SIEMLess DB versions cache: rule name -> { id, version, rule_content }
 var _ruleVersionCache = {};
 var _ruleVersionsLoaded = false;
 
 async function syncDetectionRulesToSupabase(rules) {
   if (!window._dactaSupabase || !rules || rules.length === 0) return;
   try {
-    // Load all existing rules from Supabase to compare
+    // Load all existing rules from SIEMLess DB to compare
     var res = await window._dactaSupabase.from('detection_rules').select('id,name,version,rule_content');
     var existing = {};
     if (res.data) {
@@ -25902,13 +25902,13 @@ async function syncDetectionRulesToSupabase(rules) {
     }
     // Re-render with updated versions
     renderRules();
-    console.log('[RuleSync] Synced ' + rules.length + ' rules to Supabase');
-  } catch(e) { console.warn('[RuleSync] Supabase sync error:', e); }
+    console.log('[RuleSync] Synced ' + rules.length + ' rules to SIEMLess DB');
+  } catch(e) { console.warn('[RuleSync] SIEMLess DB sync error:', e); }
 }
 
 // Show rule version history from audit_log
 async function showRuleHistory(ruleId, ruleName) {
-  if (!window._dactaSupabase) { showToast('Supabase not connected', 'warn'); return; }
+  if (!window._dactaSupabase) { showToast('SIEMLess DB not connected', 'warn'); return; }
   try {
     var res = await window._dactaSupabase.from('audit_log')
       .select('created_at,user_email,action,details')
@@ -25970,7 +25970,7 @@ var _playbooksLoaded = false; // kept for compat — always true once first fetc
 // Slim columns for table listing (no heavy text blobs)
 var _rulesListColumns = 'id,name,syntax,severity,status,mitre_tactic,mitre_technique_id,vendor,author,version,avg_daily_hits,false_positive_rate,is_enabled,source_type,log_source_product,log_source_category';
 
-// ── Map raw Supabase row → display object (slim) ──
+// ── Map raw DB row → display object (slim) ──
 function mapRuleRow(r) {
   var sevMap = { 'critical': 'Critical', 'high': 'High', 'medium': 'Medium', 'low': 'Low', 'informational': 'Informational' };
   var syntaxMap = { 'sigma': 'Sigma', 'yara': 'YARA', 'threshold': 'Threshold', 'ml': 'ML', 'eql': 'EQL', 'correlation': 'Correlation', 'kql': 'Sigma', 'spl': 'Sigma' };
@@ -26001,11 +26001,11 @@ function mapRuleRow(r) {
 
 // ── Fetch ONE page of rules with server-side filter/sort ──
 async function loadRulesPage(page, filters) {
-  // Wait up to 3s for Supabase client init (may not be ready yet on first nav)
+  // Wait up to 3s for DB client init (may not be ready yet on first nav)
   if (!window._dactaSupabase) {
     for (var _w = 0; _w < 15 && !window._dactaSupabase; _w++) await new Promise(function(r) { setTimeout(r, 200); });
   }
-  if (!window._dactaSupabase) { console.warn('[DetectionRules] Supabase not initialized'); return { data: [], count: 0 }; }
+  if (!window._dactaSupabase) { console.warn('[DetectionRules] SIEMLess DB not initialized'); return { data: [], count: 0 }; }
   filters = filters || _rulesCurrentFilters;
   var perPage = _rulesPerPage;
   var from = (page - 1) * perPage;
@@ -26049,14 +26049,14 @@ async function loadRulesPage(page, filters) {
 
 // ── Load stat card counts via parallel lightweight queries ──
 async function loadRuleStatCounts() {
-  // Wait up to 3s for Supabase client init
+  // Wait up to 3s for DB client init
   if (!window._dactaSupabase) {
     for (var _w = 0; _w < 15 && !window._dactaSupabase; _w++) await new Promise(function(r) { setTimeout(r, 200); });
   }
-  if (!window._dactaSupabase) { console.warn('[DetectionRules] Supabase not ready for stat counts'); return; }
+  if (!window._dactaSupabase) { console.warn('[DetectionRules] SIEMLess DB not ready for stat counts'); return; }
   var sb = window._dactaSupabase;
   try {
-    // Use limit(1) instead of head:true — more reliable count across Supabase JS versions
+    // Use limit(1) instead of head:true — more reliable count across JS SDK versions
     var [totalRes, activeRes, edrRes, fwRes, critRes, cloudRes] = await Promise.all([
       sb.from('detection_rules').select('id', { count: 'exact' }).limit(1),
       sb.from('detection_rules').select('id', { count: 'exact' }).eq('status', 'active').limit(1),
@@ -26190,7 +26190,7 @@ async function showPlaybook(ruleDbId, ruleName) {
   document.getElementById('playbookContent').innerHTML = html;
 }
 
-// ── Elastic live rule loader (lightweight — no Supabase needed) ──
+// ── Elastic live rule loader (lightweight — no SIEMLess DB needed) ──
 async function loadElasticRules() {
   try {
     var resp = await fetch('/api/elastic', {
@@ -26261,14 +26261,14 @@ async function loadElasticRules() {
     });
     return elasticRules;
   } catch(err) {
-    console.warn('[DetectionRules] Elastic load failed, Supabase-only mode:', err.message);
+    console.warn('[DetectionRules] Elastic load failed, SIEMLess DB-only mode:', err.message);
     return [];
   }
 }
 
-// ── Main init: loads Elastic live rules + server-side paginated Supabase ──
+// ── Main init: loads Elastic live rules + server-side paginated SIEMLess DB ──
 async function loadDetectionRulesLive() {
-  console.log('[DetectionRules] Loading rules from Elastic + Supabase (paginated)...');
+  console.log('[DetectionRules] Loading rules from Elastic + SIEMLess DB (paginated)...');
   _rulesLoading = true;
 
   // Show loading indicator
@@ -26276,7 +26276,7 @@ async function loadDetectionRulesLive() {
   if (tbody) tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-muted);"><div style="font-size:13px;">Loading detection rules...</div></td></tr>';
 
   try {
-    // Fire Elastic + Supabase page + stat counts in parallel
+    // Fire Elastic + SIEMLess DB page + stat counts in parallel
     var [elasticRules, pageResult] = await Promise.all([
       loadElasticRules(),
       loadRulesPage(1, _rulesCurrentFilters),
@@ -26287,18 +26287,18 @@ async function loadDetectionRulesLive() {
     _rulesTotalCount = pageResult.count;
     _rulesPage = 1;
 
-    // Merge: Elastic rules at top, then Supabase paginated rules (deduped by name)
+    // Merge: Elastic rules at top, then SIEMLess DB paginated rules (deduped by name)
     if (elasticRules.length > 0) {
       var elasticNames = {};
       elasticRules.forEach(function(r) { elasticNames[r.name] = true; });
       var deduped = supabaseRows.filter(function(r) { return !elasticNames[r.name]; });
       rulesData = elasticRules.concat(deduped);
-      console.log('[DetectionRules] ' + elasticRules.length + ' from Elastic + ' + deduped.length + ' from Supabase page = ' + rulesData.length + ' displayed');
-      // Sync elastic rules to Supabase in background
+      console.log('[DetectionRules] ' + elasticRules.length + ' from Elastic + ' + deduped.length + ' from SIEMLess DB page = ' + rulesData.length + ' displayed');
+      // Sync elastic rules to SIEMLess DB in background
       if (typeof syncDetectionRulesToSupabase === 'function') syncDetectionRulesToSupabase(elasticRules);
     } else {
       rulesData = supabaseRows;
-      console.log('[DetectionRules] Supabase-only: ' + supabaseRows.length + ' rules on page 1 of ' + _rulesTotalCount.toLocaleString() + ' total');
+      console.log('[DetectionRules] SIEMLess DB-only: ' + supabaseRows.length + ' rules on page 1 of ' + _rulesTotalCount.toLocaleString() + ' total');
     }
 
     // Update page subtitle
@@ -26307,8 +26307,8 @@ async function loadDetectionRulesLive() {
       var sub = page.querySelector('.page-subtitle');
       if (sub) {
         var srcLabel = elasticRules.length > 0
-          ? elasticRules.length + ' live from Elastic + ' + (_rulesTotalCount || 0).toLocaleString() + ' from Supabase repo'
-          : _rulesTotalCount.toLocaleString() + ' rules from Supabase repository';
+          ? elasticRules.length + ' live from Elastic + ' + (_rulesTotalCount || 0).toLocaleString() + ' from SIEMLess DB repo'
+          : _rulesTotalCount.toLocaleString() + ' rules from SIEMLess DB repository';
         sub.innerHTML = srcLabel + ' ' + jiraLiveBadge();
       }
     }
@@ -26512,7 +26512,7 @@ async function checkSyntaxUpdates() {
 
 
 // ══════════════════════════════════════════════════════════════
-// RULE BUILDER — Save rule to Supabase
+// RULE BUILDER — Save rule to SIEMLess DB
 // ══════════════════════════════════════════════════════════════
 
 async function saveRuleToSupabase() {
@@ -26522,7 +26522,7 @@ async function saveRuleToSupabase() {
     return;
   }
   if (!window._dactaSupabase) {
-    showToast('Supabase not connected', 'warn');
+    showToast('SIEMLess DB not connected', 'warn');
     return;
   }
 
@@ -26881,7 +26881,7 @@ function exportRulePack() {
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a'); a.href = url; a.download = 'dacta_rules_export_' + new Date().toISOString().split('T')[0] + '.json'; a.click();
   URL.revokeObjectURL(url);
-  showToast('Exported ' + exportData.length + ' rules (current page). Use Supabase for full export.');
+  showToast('Exported ' + exportData.length + ' rules (current page). Use SIEMLess DB for full export.');
 }
 
 async function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
@@ -26950,7 +26950,7 @@ function translateRuleToTarget() {
 async function saveRuleAsDraft() {
   var code = document.getElementById('drIdeCode');
   if (!code || !code.textContent || code.textContent.length < 10) { showToast('No rule content to save', 'warn'); return; }
-  if (!window._dactaSupabase) { showToast('Supabase not connected', 'warn'); return; }
+  if (!window._dactaSupabase) { showToast('SIEMLess DB not connected', 'warn'); return; }
   // Save as draft (status = testing)
   await saveRuleToSupabase();
 }
@@ -27504,7 +27504,7 @@ async function loadLiveAuditLog() {
     var page = document.getElementById('page-audit');
     if (page) {
       var sub = page.querySelector('.page-subtitle');
-      if (sub) sub.innerHTML = _auditAllRows.length + ' recent entries \u00b7 <span style="color:var(--cyan);font-size:10px;">Live from Supabase</span> \u00b7 Auto-refreshes every 30s';
+      if (sub) sub.innerHTML = _auditAllRows.length + ' recent entries \u00b7 <span style="color:var(--cyan);font-size:10px;">Live from SIEMLess DB</span> \u00b7 Auto-refreshes every 30s';
     }
   } catch(e) { console.warn('[AuditTrail] Load error:', e); }
 }
@@ -28372,7 +28372,7 @@ function saveConnectorChanges(orgId) {
     });
   });
 
-  // Persist to Supabase
+  // Persist to SIEMLess DB
   persistConnectorConfig(orgId, org);
 
   // Also save to localStorage as fallback
@@ -28386,7 +28386,7 @@ function saveConnectorChanges(orgId) {
 async function persistConnectorConfig(orgId, org) {
   try {
     if (!window._supabaseRef) {
-      console.warn('[Settings] No Supabase ref — using localStorage only');
+      console.warn('[Settings] No DB ref — using localStorage only');
       return;
     }
     var payload = {
@@ -28399,14 +28399,14 @@ async function persistConnectorConfig(orgId, org) {
     };
     var { data, error } = await window._supabaseRef.from('org_connectors').upsert(payload, { onConflict: 'org_id' }).select();
     if (error) {
-      console.warn('[Settings] Supabase save failed:', error.message, error.details);
-      showToast('Saved locally. Supabase sync: ' + (error.message || 'failed'), 'warn');
+      console.warn('[Settings] SIEMLess DB save failed:', error.message, error.details);
+      showToast('Saved locally. SIEMLess DB sync: ' + (error.message || 'failed'), 'warn');
     } else {
-      console.log('[Settings] Saved to Supabase:', orgId, data);
+      console.log('[Settings] Saved to SIEMLess DB:', orgId, data);
     }
   } catch(e) {
     console.warn('[Settings] Persist error:', e.message);
-    showToast('Saved locally. Supabase error: ' + e.message, 'warn');
+    showToast('Saved locally. SIEMLess DB error: ' + e.message, 'warn');
   }
 }
 
@@ -28423,7 +28423,7 @@ async function saveAllSettings() {
 // Load persisted connector configs on startup
 async function loadPersistedConnectors() {
   try {
-    // Try Supabase first
+    // Try SIEMLess DB first
     if (window._supabaseRef) {
       var { data, error } = await window._supabaseRef.from('org_connectors').select('*');
       if (!error && data && data.length > 0) {
@@ -28487,7 +28487,7 @@ async function loadSettingsPage() {
       return;
     }
 
-    // Ensure Supabase-onboarded orgs are merged before rendering (parallel)
+    // Ensure DB-onboarded orgs are merged before rendering (parallel)
     await Promise.all([
       loadOrgsFromSupabase().catch(function(e) { console.warn('[Settings] loadOrgs error:', e.message); }),
       loadPersistedConnectors().catch(function(e) { console.warn('[Settings] loadConnectors error:', e.message); })
@@ -29008,7 +29008,7 @@ sessionStorage.removeItem('dacta_ai_usage');
 //  SUPABASE COMPLIANCE HELPERS
 // ============================================================
 
-// Fire-and-forget insert to any Supabase table
+// Fire-and-forget insert to any SIEMLess DB table
 function logToSupabase(table, data) {
   if (!window._dactaSupabase) return;
   try {
@@ -29018,7 +29018,7 @@ function logToSupabase(table, data) {
   } catch(e) { console.warn('[AuditLog] Error (' + table + '):', e); }
 }
 
-// Get current logged-in user email from Supabase session
+// Get current logged-in user email from SIEMLess DB session
 function _getCurrentUserEmail() {
   try {
     var emailEl = document.getElementById('userMenuEmail');
@@ -29047,7 +29047,7 @@ function trackAIUsage(model, tokensIn, tokensOut, purpose, latencyMs, sessionId)
   _aiUsage.calls.push({ ts: now.toISOString(), model: model, tokensIn: tokensIn, tokensOut: tokensOut, purpose: purpose });
   if (_aiUsage.calls.length > 100) _aiUsage.calls = _aiUsage.calls.slice(-100);
   try { sessionStorage.setItem('dacta_ai_usage', JSON.stringify(_aiUsage)); } catch(e) {}
-  // Persist to Supabase llm_usage_log (fire-and-forget)
+  // Persist to SIEMLess DB llm_usage_log (fire-and-forget)
   logToSupabase('llm_usage_log', {
     task_type: 'copilot_query',
     model: model,
@@ -29614,7 +29614,7 @@ async function loadUserManagement() {
     var oldRole = user.role;
     user.role = newRole;
 
-    // Try Supabase
+    // Try SIEMLess DB
     var saved = false;
     try {
       if (window._supabaseRef) {
@@ -29783,7 +29783,7 @@ async function loadUserManagement() {
       try {
         var res = await window._supabaseRef.from('platform_users').select('*').order('created_at', { ascending: false });
         if (!res.error && res.data && res.data.length > 0) dbUsers = res.data;
-      } catch(e) { console.warn('[UserMgmt] Supabase users fetch failed:', e); }
+      } catch(e) { console.warn('[UserMgmt] DB users fetch failed:', e); }
     }
     if (dbUsers) {
       _users = dbUsers;
@@ -29804,7 +29804,7 @@ async function loadUserManagement() {
       try {
         var aRes = await window._supabaseRef.from('rbac_audit_log').select('*').order('created_at', { ascending: false }).limit(200);
         if (!aRes.error && aRes.data && aRes.data.length > 0) dbAudit = aRes.data;
-      } catch(e) { console.warn('[UserMgmt] Supabase audit fetch failed:', e); }
+      } catch(e) { console.warn('[UserMgmt] DB audit fetch failed:', e); }
     }
     if (dbAudit) {
       _auditLog = dbAudit;
@@ -30038,7 +30038,7 @@ async function loadUserManagement() {
         created_at:   new Date().toISOString()
       };
 
-      // Try Supabase
+      // Try SIEMLess DB
       var saved = false;
       try {
         if (window._supabaseRef) {
@@ -30650,7 +30650,7 @@ function init() {
   }, 3000);
 }
 
-// init() is called by Supabase auth after session check (see SUPABASE AUTHENTICATION block below)
+// init() is called by SIEMLess DB auth after session check (see SIEMLESS DB AUTHENTICATION block below)
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -30738,7 +30738,7 @@ var ORG_CONNECTORS = {
 // Helper: get connectors for a namespace
 // Remove deleted orgs from hardcoded ORG_CONNECTORS on startup
 _deletedOrgIds.forEach(function(delId) { if (ORG_CONNECTORS[delId]) { console.log('[Onboarding] Removing deleted org:', ORG_CONNECTORS[delId].name); delete ORG_CONNECTORS[delId]; } });
-// Also check by name (for orgs added from Supabase with different IDs)
+// Also check by name (for orgs added from SIEMLess DB with different IDs)
 var _deletedOrgNames = JSON.parse(localStorage.getItem('deletedOrgNames') || '[]');
 _deletedOrgNames.forEach(function(name) {
   var lowerName = name.toLowerCase().trim();
@@ -30944,7 +30944,7 @@ function approveOnboardOrg(idx) {
 
   renderOnboardingPage();
 
-  // Also try to create in Supabase
+  // Also try to create in SIEMLess DB
   createOrgInSupabase(org.name, code, type, ns, sla, industry, region);
 }
 
@@ -31238,7 +31238,7 @@ function wizConfirmOnboard() {
 async function createOrgInSupabase(name, code, type, ns, sla, industry, region) {
   try {
     if (!window._supabaseRef) {
-      console.warn('[Onboarding] No Supabase ref — org saved to localStorage only');
+      console.warn('[Onboarding] No DB ref — org saved to localStorage only');
       return;
     }
     var { data, error } = await window._supabaseRef.from('organizations').insert({
@@ -31258,11 +31258,11 @@ async function createOrgInSupabase(name, code, type, ns, sla, industry, region) 
       metadata: { namespace: ns, jira_synced: true }
     }).select();
     if (error) {
-      console.error('[Onboarding] Supabase insert error:', error.message, error.details);
-      showToast('Org created locally. Supabase sync: ' + (error.message || 'failed'), 'warn');
+      console.error('[Onboarding] DB insert error:', error.message, error.details);
+      showToast('Org created locally. SIEMLess DB sync: ' + (error.message || 'failed'), 'warn');
     } else {
-      console.log('[Onboarding] Supabase insert success:', data);
-      // If Supabase returned the new row, merge its ID into ORG_CONNECTORS
+      console.log('[Onboarding] DB insert success:', data);
+      // If DB returned the new row, merge its ID into ORG_CONNECTORS
       if (data && data[0] && data[0].id) {
         var sbId = data[0].id;
         // Find the org we just added by name and re-key it
@@ -31278,14 +31278,14 @@ async function createOrgInSupabase(name, code, type, ns, sla, industry, region) 
             if (ao[obKey]) { ao[sbId] = ao[obKey]; delete ao[obKey]; }
             localStorage.setItem('dacta_approvedOrgs', JSON.stringify(ao));
           } catch(lse) {}
-          console.log('[Onboarding] Re-keyed org from', obKey, 'to Supabase ID:', sbId);
+          console.log('[Onboarding] Re-keyed org from', obKey, 'to SIEMLess DB ID:', sbId);
         }
       }
-      showToast('Organization synced to Supabase', 'success');
+      showToast('Organization synced to SIEMLess DB', 'success');
     }
   } catch(e) {
-    console.error('[Onboarding] Supabase insert failed:', e);
-    showToast('Org created locally. Supabase error: ' + e.message, 'warn');
+    console.error('[Onboarding] DB insert failed:', e);
+    showToast('Org created locally. SIEMLess DB error: ' + e.message, 'warn');
   }
 }
 
@@ -31323,7 +31323,7 @@ async function saveEditOrg(orgId) {
   if (updates.type) org.type = updates.type;
   if (updates.namespace) org.namespace = updates.namespace;
 
-  // Persist to Supabase
+  // Persist to SIEMLess DB
   try {
     if (window._supabaseRef && orgId.indexOf('ob-') !== 0) {
       await window._supabaseRef.from('organizations').update({
@@ -31332,10 +31332,10 @@ async function saveEditOrg(orgId) {
         service_model: org.type,
         contract_type: org.type === 'internal' ? 'internal' : 'mssp'
       }).eq('id', orgId);
-      console.log('[Onboarding] Updated Supabase:', org.name);
+      console.log('[Onboarding] Updated SIEMLess DB:', org.name);
     }
   } catch(e) {
-    console.error('[Onboarding] Supabase update failed:', e);
+    console.error('[Onboarding] DB update failed:', e);
   }
 
   // Re-render to reset UI
@@ -31372,20 +31372,20 @@ async function deleteOnboardedOrg(orgId) {
     localStorage.setItem('dismissedJiraOrgIds', JSON.stringify(_dismissedJiraOrgIds));
   }
 
-  // Remove from Supabase — try by name first (most reliable), then by short_name
+  // Remove from SIEMLess DB — try by name first (most reliable), then by short_name
   try {
     if (window._supabaseRef) {
       var delResp = await window._supabaseRef.from('organizations').delete().eq('name', org.name);
       if (!delResp.error) {
-        console.log('[Onboarding] Deleted from Supabase by name:', org.name);
+        console.log('[Onboarding] Deleted from SIEMLess DB by name:', org.name);
       } else {
         // Fallback: try by short_name
         await window._supabaseRef.from('organizations').delete().eq('short_name', org.code);
-        console.log('[Onboarding] Deleted from Supabase by short_name:', org.code);
+        console.log('[Onboarding] Deleted from SIEMLess DB by short_name:', org.code);
       }
     }
   } catch(e) {
-    console.error('[Onboarding] Supabase delete failed:', e);
+    console.error('[Onboarding] DB delete failed:', e);
   }
 
   // Re-render — org will move back to pending queue if still in Jira
@@ -31418,8 +31418,8 @@ async function loadOnboardingPage() {
   syncJiraOrgs();
 }
 
-// Load orgs from Supabase into ORG_CONNECTORS on startup
-// Merges Supabase orgs with hardcoded ones — Supabase is the persistence layer
+// Load orgs from SIEMLess DB into ORG_CONNECTORS on startup
+// Merges SIEMLess DB orgs with hardcoded ones — SIEMLess DB is the persistence layer
 async function loadOrgsFromSupabase() {
   // Load approved orgs from localStorage first (instant, reliable)
   try {
@@ -31441,7 +31441,7 @@ async function loadOrgsFromSupabase() {
     if (!window._supabaseRef) return;
     var resp = await window._supabaseRef.from('organizations').select('*').eq('status', 'active');
     var rows = (resp.data || []);
-    console.log('[Onboarding] Loaded ' + rows.length + ' orgs from Supabase');
+    console.log('[Onboarding] Loaded ' + rows.length + ' orgs from SIEMLess DB');
     rows.forEach(function(row) {
       // Check if this org is already in ORG_CONNECTORS by ID or name
       if (ORG_CONNECTORS[row.id]) return; // already present by ID
@@ -31452,7 +31452,7 @@ async function loadOrgsFromSupabase() {
       });
       if (nameMatch) return; // already present by name
 
-      // New org from Supabase — add it with default connectors
+      // New org from SIEMLess DB — add it with default connectors
       var ns = (row.metadata && row.metadata.namespace) || row.short_name.toLowerCase();
       ORG_CONNECTORS[row.id] = {
         code: row.short_name || row.name.substring(0,2).toUpperCase(),
@@ -31467,15 +31467,15 @@ async function loadOrgsFromSupabase() {
           { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } }
         ]
       };
-      console.log('[Onboarding] Merged from Supabase:', row.name);
+      console.log('[Onboarding] Merged from SIEMLess DB:', row.name);
     });
   } catch(e) {
-    console.error('[Onboarding] Failed to load orgs from Supabase:', e);
+    console.error('[Onboarding] Failed to load orgs from SIEMLess DB:', e);
   }
 }
 
 // ============================================================
-//  SUPABASE AUTHENTICATION
+//  SIEMLESS DB AUTHENTICATION
 // ============================================================
 (function() {
   var _initCalled = false;
@@ -31488,12 +31488,12 @@ async function loadOrgsFromSupabase() {
     }
   }
 
-  // Supabase config
+  // SIEMLess DB config
   var SUPABASE_URL = 'https://qiqrizggitcqwkwshmfy.supabase.co';
   var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpcXJpemdnaXRjcXdrd3NobWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNzkzMjEsImV4cCI6MjA4NzY1NTMyMX0.ZNN47SWAYvAzzY5Dn6VCYV8nzrTrqvvybp2aF4NFHCA';
 
 
-  // Wait for Supabase SDK to load, then initialize auth
+  // Wait for DB SDK to load, then initialize auth
   function initSupabaseAuth() {
     if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
       setTimeout(initSupabaseAuth, 100);
@@ -31504,7 +31504,7 @@ async function loadOrgsFromSupabase() {
     window._dactaSupabase = _supabase;
     window._supabaseRef = _supabase;
 
-    // Load any orgs from Supabase that aren't in the hardcoded ORG_CONNECTORS
+    // Load any orgs from SIEMLess DB that aren't in the hardcoded ORG_CONNECTORS
     loadOrgsFromSupabase();
     // Load cached investigation keys to populate triage AI status badges
     loadAllCachedKeys();
@@ -31691,7 +31691,7 @@ async function loadOrgsFromSupabase() {
   initSupabaseAuth();
 })();
 
-// REMOVED: direct init() call replaced by Supabase auth flow above
+// REMOVED: direct init() call replaced by SIEMLess DB auth flow above
 var demoToggle = document.getElementById('demoModeToggle');
 if (demoToggle) {
   demoToggle.addEventListener('change', function() {
@@ -36531,7 +36531,7 @@ async function copilotAsk(text) {
   messages.appendChild(responseRow);
   messages.scrollTop = messages.scrollHeight;
 
-  // Log to Supabase audit_log (fire-and-forget)
+  // Log to SIEMLess DB audit_log (fire-and-forget)
   var _responseSummary = responseHTML ? responseHTML.replace(/<[^>]+>/g, '').substring(0, 200) : '';
   logToSupabase('audit_log', {
     user_email: _getCurrentUserEmail(),
@@ -39878,11 +39878,11 @@ async function submitCreateTicket() {
 // INVESTIGATION CACHE, TRIAGE AI STATUS & FEEDBACK LOOP
 // ═══════════════════════════════════════════════════════════════════════
 
-// ── In-memory investigation cache (persisted to Supabase) ──
+// ── In-memory investigation cache (persisted to SIEMLess DB) ──
 var _investigationCache = {}; // { 'DAC-12345': { html, verdict, confidence, timestamp, feedback, overrideVerdict, overrideReason, promptNotes } }
 var _activeInvestigations = {}; // { 'DAC-12345': true } — tickets currently being investigated
 
-// Load cached investigations from localStorage as fallback when Supabase table doesn't exist
+// Load cached investigations from localStorage as fallback when SIEMLess DB table doesn't exist
 (function() {
   try {
     var lsCache = JSON.parse(localStorage.getItem('investigationCache') || '{}');
@@ -39891,10 +39891,10 @@ var _activeInvestigations = {}; // { 'DAC-12345': true } — tickets currently b
   } catch(e) { /* ignore */ }
 })();
 
-// ── Supabase persistence helpers ──
+// ── SIEMLess DB persistence helpers ──
 async function saveInvestigationCache(ticketKey, cacheEntry) {
   _investigationCache[ticketKey] = cacheEntry;
-  // Save to localStorage as fallback when Supabase table doesn't exist
+  // Save to localStorage as fallback when SIEMLess DB table doesn't exist
   try {
     var lsCacheAll = JSON.parse(localStorage.getItem('investigationCache') || '{}');
     // Store a lightweight version (no full HTML for localStorage size limits)
@@ -39924,17 +39924,17 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
       feedback_text: cacheEntry.feedbackText || null,
       metadata: cacheEntry.metadata || {}
     }, { onConflict: 'ticket_key' });
-    if (resp.error) console.warn('[InvCache] Supabase upsert error:', resp.error.message);
-    else console.log('[InvCache] Saved to Supabase:', ticketKey);
+    if (resp.error) console.warn('[InvCache] SIEMLess DB upsert error:', resp.error.message);
+    else console.log('[InvCache] Saved to SIEMLess DB:', ticketKey);
   } catch(e) {
-    console.warn('[InvCache] Supabase save failed (will use local cache):', e.message);
+    console.warn('[InvCache] SIEMLess DB save failed (will use local cache):', e.message);
   }
 }
 
 async function loadInvestigationCache(ticketKey) {
   // Check in-memory first
   if (_investigationCache[ticketKey]) return _investigationCache[ticketKey];
-  // Try Supabase
+  // Try SIEMLess DB
   try {
     if (!window._supabaseRef) return null;
     var resp = await window._supabaseRef.from('investigation_cache')
@@ -39957,7 +39957,7 @@ async function loadInvestigationCache(ticketKey) {
     }
   } catch(e) {
     // Table may not exist yet — that's fine, just use in-memory
-    console.log('[InvCache] Supabase load skipped:', e.message);
+    console.log('[InvCache] SIEMLess DB load skipped:', e.message);
   }
   return null;
 }
@@ -39977,7 +39977,7 @@ async function loadAllCachedKeys() {
           };
         }
       });
-      console.log('[InvCache] Loaded ' + resp.data.length + ' cached investigations from Supabase');
+      console.log('[InvCache] Loaded ' + resp.data.length + ' cached investigations from SIEMLess DB');
     }
   } catch(e) {
     console.log('[InvCache] Bulk load skipped:', e.message);
@@ -40148,7 +40148,7 @@ async function reInvestigate(ticketKey) {
   if (!ticketKey) return;
   // Remove from cache
   delete _investigationCache[ticketKey];
-  // Remove from Supabase cache
+  // Remove from SIEMLess DB cache
   try {
     if (window._supabaseRef) {
       await window._supabaseRef.from('investigation_cache').delete().eq('ticket_key', ticketKey);
@@ -42633,17 +42633,17 @@ function updateRoundHTML(container, num, totalRounds, state, content) {
 // SECURITY HARDENING (Issue 6)
 // ══════════════════════════════════════════════════════════════
 
-// --- 1. Auth Guard: Require authentication for all Supabase operations ---
+// --- 1. Auth Guard: Require authentication for all SIEMLess DB operations ---
 (function() {
   var _origFetch = window.fetch;
   window.fetch = function(url, opts) {
-    // Intercept Supabase REST calls to ensure auth token is present
+    // Intercept SIEMLess DB REST calls to ensure auth token is present
     if (typeof url === 'string' && url.indexOf('supabase.co/rest/') !== -1) {
       var headers = (opts && opts.headers) || {};
       var authHeader = headers['Authorization'] || headers['authorization'] || '';
       // If only anon key (no Bearer with user JWT), block write operations
       if (opts && opts.method && opts.method !== 'GET' && !authHeader.match(/Bearer ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/)) {
-        console.warn('[Security] Blocked unauthenticated write to Supabase');
+        console.warn('[Security] Blocked unauthenticated write to SIEMLess DB');
         return Promise.reject(new Error('Authentication required'));
       }
     }
@@ -42767,7 +42767,7 @@ function logSecurityEvent(action, details) {
     url: location.href
   };
   console.log('[Security Audit]', entry);
-  // Also write to Supabase audit_log if available
+  // Also write to SIEMLess DB audit_log if available
   if (window._supabaseRef) {
     window._supabaseRef.from('audit_log').insert({
       action: 'security_' + action,
