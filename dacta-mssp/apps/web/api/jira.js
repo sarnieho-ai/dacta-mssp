@@ -869,6 +869,66 @@ export default async function handler(req, res) {
       return res.status(r.status >= 400 ? r.status : 200).json(result);
     }
 
+    // ─── ACTION: orgMembers (fetch members of a JSM organization) ───
+    if (action === 'orgMembers') {
+      const orgId = req.query.orgId;
+      if (!orgId) return res.status(400).json({ error: 'Missing orgId parameter' });
+      
+      const members = [];
+      let start = 0;
+      const limit = 50;
+      let isLast = false;
+      
+      while (!isLast) {
+        try {
+          const r = await fetch(`${baseUrl}/rest/servicedeskapi/organization/${orgId}/user?start=${start}&limit=${limit}`, {
+            headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+          });
+          if (r.status === 200) {
+            const data = await r.json();
+            const values = data.values || [];
+            for (const u of values) {
+              members.push({
+                accountId: u.accountId || '',
+                displayName: u.displayName || u.name || '',
+                emailAddress: u.emailAddress || '',
+                active: u.active !== false
+              });
+            }
+            isLast = data.isLastPage !== false;
+            start += limit;
+          } else {
+            // If API returns error (e.g. 403, 404), break and return what we have
+            console.warn(`[orgMembers] API returned ${r.status} for org ${orgId}`);
+            break;
+          }
+        } catch(e) {
+          console.warn('[orgMembers] Error:', e.message);
+          break;
+        }
+      }
+      
+      // For any members without email, try individual user lookup
+      const resolvedMembers = await Promise.all(
+        members.map(async (m) => {
+          if (m.emailAddress && m.emailAddress.indexOf('@') !== -1) return m;
+          if (!m.accountId) return m;
+          try {
+            const ur = await fetch(`${baseUrl}/rest/api/3/user?accountId=${encodeURIComponent(m.accountId)}`, {
+              headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+            });
+            if (ur.status === 200) {
+              const ud = await ur.json();
+              if (ud.emailAddress) m.emailAddress = ud.emailAddress;
+            }
+          } catch(e) { /* skip */ }
+          return m;
+        })
+      );
+      
+      return res.status(200).json({ members: resolvedMembers, orgId: orgId, count: resolvedMembers.length });
+    }
+
     // ─── ACTION: organizations ───────────────────────────────
     if (action === 'organizations') {
       // Get all unique JSM organizations from DAC project tickets
