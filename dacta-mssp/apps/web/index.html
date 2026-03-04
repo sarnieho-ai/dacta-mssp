@@ -11670,135 +11670,29 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             </div>
           </div>
 
-          <!-- Rules with Updated Syntax -->
+          <!-- Rules with Updated Syntax — LIVE from Supabase -->
           <div class="card">
             <div class="card-header">
               <span class="card-title">Rules with Updated Syntax</span>
               <div style="display:flex;gap:8px;align-items:center;">
                 <span class="badge badge-amber" style="font-size:9px;" id="drOutdatedBadge">CHECKING...</span>
-                <span style="font-size:10px;color:var(--text-muted);">AI scans global vendor log schema changes daily · Last scan: 2 hrs ago</span>
+                <span style="font-size:10px;color:var(--text-muted);" id="drOutdatedTimestamp">Scanning rule repository...</span>
               </div>
             </div>
             <div style="margin-bottom:10px;padding:10px 14px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.08);border-radius:8px;">
               <div style="font-size:10px;color:var(--text-secondary);line-height:1.7;">
-                DACTA AI continuously monitors log schema documentation, changelogs, and release notes from <strong style="color:var(--text-primary);">all major vendors worldwide</strong> — including Microsoft, CrowdStrike, Palo Alto, Fortinet, Cisco, AWS, GCP, Azure, SentinelOne, Trend Micro, Elastic, Splunk, and 200+ others. When a vendor updates field names, event IDs, log formats, or deprecates syntax, any affected rules in the repository are flagged here for testing and update.
+                SIEMLess compares <strong style="color:var(--text-primary);">rule_content</strong> field references against known vendor log schemas. When vendor documentation updates field names, event IDs, or log formats, affected rules in the repository are flagged here. This check runs against the live Supabase rule repository on each page load.
               </div>
             </div>
             <div style="display:flex;flex-direction:column;gap:6px;" id="syntaxUpdateList">
-
-              <!-- Syntax Update 1: Critical - Windows Event ID change -->
-              <div style="padding:12px 14px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.12);border-radius:8px;">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                  <div style="width:7px;height:7px;border-radius:50%;background:var(--red-bright);flex-shrink:0;"></div>
-                  <div style="flex:1;">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">23 Sigma Rules — Windows Security Event ID Schema Change</div>
-                    <div style="font-size:10px;color:var(--text-muted);">Microsoft updated Event ID 4688 field mapping in Windows Server 2026 CU3 · Detected 6 hrs ago</div>
-                  </div>
-                  <span class="badge badge-red" style="font-size:9px;">23 Rules</span>
-                </div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:var(--text-muted);">Vendor: <strong style="color:var(--text-primary);">Microsoft</strong></span>
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:var(--text-muted);">Log: <strong style="color:var(--text-primary);">Windows Security</strong></span>
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.12);border-radius:4px;color:var(--red-bright);">Field Changed: <strong>NewProcessName → ProcessName</strong></span>
-                </div>
-                <div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-family:var(--font-mono);font-size:10px;line-height:1.7;">
-                  <div style="color:var(--red-bright);text-decoration:line-through;opacity:0.6;">- selection.NewProcessName|endswith: '\\cmd.exe'</div>
-                  <div style="color:#22c55e;">+ selection.ProcessName|endswith: '\\cmd.exe'</div>
-                  <div style="color:var(--text-muted);margin-top:4px;font-style:italic;">... and 22 more rules with similar field reference updates</div>
-                </div>
-                <div style="display:flex;gap:8px;justify-content:flex-end;">
-                  <button class="btn btn-xs btn-secondary" onclick="showToast('Viewing affected rules — switch to Rule Builder to review'); switchDrTab('builder');">View All Changes</button>
-                  <button class="btn btn-xs btn-primary" onclick="showToast('Rules sent to Testing Lab'); navigate('rulelab');">Send to Testing</button>
-                </div>
+              <div style="padding:20px;text-align:center;color:var(--text-muted);font-size:11px;" id="syntaxUpdateLoading">
+                <div style="font-size:13px;margin-bottom:4px;">Scanning rules...</div>
+                Checking field references across all vendors
               </div>
-
-              <!-- Syntax Update 2: FortiGate log format -->
-              <div style="padding:12px 14px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.12);border-radius:8px;">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                  <div style="width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0;"></div>
-                  <div style="flex:1;">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">8 Sigma Rules — FortiGate Log Format v7.6 Update</div>
-                    <div style="font-size:10px;color:var(--text-muted);">Fortinet restructured UTM log fields in FortiOS 7.6.1 release · Detected 14 hrs ago</div>
-                  </div>
-                  <span class="badge badge-amber" style="font-size:9px;">8 Rules</span>
-                </div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:var(--text-muted);">Vendor: <strong style="color:var(--text-primary);">Fortinet</strong></span>
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:var(--text-muted);">Log: <strong style="color:var(--text-primary);">FortiGate UTM / Traffic</strong></span>
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.12);border-radius:4px;color:var(--amber);">Fields Changed: <strong>srcip/dstip → src_ip/dst_ip + 3 more</strong></span>
-                </div>
-                <div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-family:var(--font-mono);font-size:10px;line-height:1.7;">
-                  <div style="color:var(--red-bright);text-decoration:line-through;opacity:0.6;">- selection.srcip: '10.0.0.0/8'</div>
-                  <div style="color:#22c55e;">+ selection.src_ip: '10.0.0.0/8'</div>
-                  <div style="color:var(--red-bright);text-decoration:line-through;opacity:0.6;">- selection.action: 'blocked'</div>
-                  <div style="color:#22c55e;">+ selection.utm_action: 'deny'</div>
-                </div>
-                <div style="display:flex;gap:8px;justify-content:flex-end;">
-                  <button class="btn btn-xs btn-secondary" onclick="showToast('Viewing affected rules'); switchDrTab('builder');">View All Changes</button>
-                  <button class="btn btn-xs btn-primary" onclick="showToast('Rules sent to Testing Lab'); navigate('rulelab');">Send to Testing</button>
-                </div>
-              </div>
-
-              <!-- Syntax Update 3: CrowdStrike Falcon -->
-              <div style="padding:12px 14px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.12);border-radius:8px;">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                  <div style="width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0;"></div>
-                  <div style="flex:1;">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">5 Sigma Rules — CrowdStrike Falcon Event Stream v3 API Migration</div>
-                    <div style="font-size:10px;color:var(--text-muted);">CrowdStrike deprecated Event Stream v2 fields in Falcon 7.x · Detected 1 day ago</div>
-                  </div>
-                  <span class="badge badge-amber" style="font-size:9px;">5 Rules</span>
-                </div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:var(--text-muted);">Vendor: <strong style="color:var(--text-primary);">CrowdStrike</strong></span>
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:var(--text-muted);">Log: <strong style="color:var(--text-primary);">Falcon Event Stream</strong></span>
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.12);border-radius:4px;color:var(--amber);">API: <strong>v2 → v3 (deprecated fields)</strong></span>
-                </div>
-                <div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-family:var(--font-mono);font-size:10px;line-height:1.7;">
-                  <div style="color:var(--red-bright);text-decoration:line-through;opacity:0.6;">- detection_name: 'ProcessRollup2'</div>
-                  <div style="color:#22c55e;">+ event_type: 'ProcessActivity' (v3 schema)</div>
-                  <div style="color:var(--text-muted);margin-top:4px;font-style:italic;">... and 4 more rules affected by v2 → v3 field migration</div>
-                </div>
-                <div style="display:flex;gap:8px;justify-content:flex-end;">
-                  <button class="btn btn-xs btn-secondary" onclick="showToast('Viewing affected rules'); switchDrTab('builder');">View All Changes</button>
-                  <button class="btn btn-xs btn-primary" onclick="showToast('Rules sent to Testing Lab'); navigate('rulelab');">Send to Testing</button>
-                </div>
-              </div>
-
-              <!-- Syntax Update 4: AWS CloudTrail - Already tested & updated -->
-              <div style="padding:12px 14px;background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:8px;opacity:0.7;">
-                <div style="display:flex;align-items:center;gap:10px;">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                  <div style="flex:1;">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">12 Rules — AWS CloudTrail eventVersion 2.0 Field Updates</div>
-                    <div style="font-size:10px;color:var(--text-muted);">Tested and updated into repo 3 days ago · All 12 rules passed validation</div>
-                  </div>
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);border-radius:4px;color:#22c55e;">Vendor: <strong>AWS</strong></span>
-                  <span class="badge badge-green" style="font-size:9px;">Updated</span>
-                </div>
-              </div>
-
-              <!-- Syntax Update 5: Trend Micro - Already tested & updated -->
-              <div style="padding:12px 14px;background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:8px;opacity:0.7;">
-                <div style="display:flex;align-items:center;gap:10px;">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                  <div style="flex:1;">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">3 Rules — Trend Vision One XDR Workbench Schema v4</div>
-                    <div style="font-size:10px;color:var(--text-muted);">Tested and updated into repo 5 days ago · All 3 rules passed validation</div>
-                  </div>
-                  <span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);border-radius:4px;color:#22c55e;">Vendor: <strong>Trend Micro</strong></span>
-                  <span class="badge badge-green" style="font-size:9px;">Updated</span>
-                </div>
-              </div>
-
             </div>
           </div>
-        </div>
 
-        <!-- ════════════════════════════════════════════════════════
-             TAB 2: RULE BUILDER  (IDE-like creation)
-             ════════════════════════════════════════════════════════ -->
-        <div class="dr-panel" id="dr-panel-builder" style="position:relative;">
+                <div class="dr-panel" id="dr-panel-builder" style="position:relative;">
           <!-- Grey overlay when no rule is loaded -->
           <div id="drBuilderGreyMask" style="position:absolute;inset:0;background:rgba(8,12,24,0.82);backdrop-filter:blur(3px);z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;border-radius:8px;min-height:500px;">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.25)" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
@@ -12353,9 +12247,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             btn.classList.add('active');
             showToast('Switched to ' + lang.toUpperCase() + ' view');
           }
-          function saveAndTestRule() {
-            var overlay = document.getElementById('saveTestModalOverlay');
-            if (overlay) overlay.style.display = 'flex';
+          async function saveAndTestRule() {
+            await saveRuleToSupabase();
           }
           function closeSaveTestModal() {
             var overlay = document.getElementById('saveTestModalOverlay');
@@ -26095,7 +25988,7 @@ function mapRuleRow(r) {
     ver: 'v' + (r.version || 1) + '.0',
     status: statusMap[r.status] || 'Testing',
     fp: (r.false_positive_rate !== null && r.false_positive_rate !== undefined) ? r.false_positive_rate + '%' : '\u2014',
-    hits: r.avg_daily_hits || 0,
+    hits: r.avg_daily_hits || 0,  // Real hits come from Elastic only
     _source: 'supabase',
     _vendor: r.vendor || '',
     _isEnabled: r.is_enabled !== false,
@@ -26437,6 +26330,9 @@ async function loadDetectionRulesLive() {
     });
     _ruleVersionsLoaded = true;
 
+    // Run live syntax check in background (non-blocking)
+    setTimeout(checkSyntaxUpdates, 500);
+
   } catch (err) {
     console.error('[DetectionRules] Error:', err);
   }
@@ -26444,6 +26340,268 @@ async function loadDetectionRulesLive() {
 }
 
 // ── Render current page of rules (data already fetched) ──
+// ══════════════════════════════════════════════════════════════
+// LIVE SYNTAX CHECK — scans rules for outdated field references
+// ══════════════════════════════════════════════════════════════
+
+// Known vendor field deprecations / schema changes to check against actual rules
+var _vendorFieldChecks = [
+  {
+    vendor: 'Microsoft',
+    log: 'Windows Security',
+    severity: 'critical',
+    description: 'Windows Security Event ID 4688 — field references',
+    checks: [
+      { old: 'NewProcessName', new: 'ProcessName', pattern: /NewProcessName/i },
+      { old: 'ParentProcessName', new: 'CreatorProcessName', pattern: /ParentProcessName/i }
+    ]
+  },
+  {
+    vendor: 'Fortinet',
+    log: 'FortiGate UTM / Traffic',
+    severity: 'high',
+    description: 'FortiOS 7.x UTM log field restructure',
+    checks: [
+      { old: 'srcip', new: 'src_ip', pattern: /\bsrcip\b/ },
+      { old: 'dstip', new: 'dst_ip', pattern: /\bdstip\b/ },
+      { old: 'action: blocked', new: 'utm_action: deny', pattern: /action[:\s]*['"]?blocked/i }
+    ]
+  },
+  {
+    vendor: 'CrowdStrike',
+    log: 'Falcon Event Stream',
+    severity: 'high',
+    description: 'Falcon Event Stream v2 → v3 field migration',
+    checks: [
+      { old: 'ProcessRollup2', new: 'ProcessActivity', pattern: /ProcessRollup2/i },
+      { old: 'detection_name', new: 'event_type', pattern: /detection_name/i }
+    ]
+  },
+  {
+    vendor: 'Palo Alto Networks',
+    log: 'PAN-OS Traffic/Threat',
+    severity: 'medium',
+    description: 'PAN-OS 11.x log field updates',
+    checks: [
+      { old: 'receive_time', new: 'cef_receive_time', pattern: /\breceive_time\b/ },
+      { old: 'src_zone', new: 'from_zone', pattern: /\bsrc_zone\b/ }
+    ]
+  },
+  {
+    vendor: 'AWS',
+    log: 'CloudTrail',
+    severity: 'medium',
+    description: 'CloudTrail event field updates',
+    checks: [
+      { old: 'responseElements.instanceId', new: 'responseElements.instancesSet', pattern: /responseElements\.instanceId/i }
+    ]
+  }
+];
+
+async function checkSyntaxUpdates() {
+  if (!window._dactaSupabase) return;
+  var sb = window._dactaSupabase;
+  var listEl = document.getElementById('syntaxUpdateList');
+  var badgeEl = document.getElementById('drOutdatedBadge');
+  var tsEl = document.getElementById('drOutdatedTimestamp');
+  if (!listEl) return;
+
+  // Collect all unique vendors from our checks
+  var vendorNames = _vendorFieldChecks.map(function(v) { return v.vendor; });
+  var results = [];
+  var totalAffected = 0;
+
+  try {
+    // For each vendor check, query rules with matching vendor and scan rule_content
+    for (var vi = 0; vi < _vendorFieldChecks.length; vi++) {
+      var vc = _vendorFieldChecks[vi];
+      // Fetch rules for this vendor that have rule_content
+      var res = await sb.from('detection_rules')
+        .select('id,name,rule_content,vendor,log_source_product')
+        .or('vendor.ilike.%' + vc.vendor + '%,log_source_product.ilike.%' + vc.log + '%')
+        .not('rule_content', 'is', null)
+        .limit(500);
+
+      if (res.error || !res.data) continue;
+
+      var affectedRules = [];
+      var matchedFields = [];
+
+      res.data.forEach(function(rule) {
+        var content = rule.rule_content || '';
+        if (content.length < 20) return;
+        var ruleAffected = false;
+        vc.checks.forEach(function(chk) {
+          if (chk.pattern.test(content)) {
+            ruleAffected = true;
+            if (matchedFields.indexOf(chk.old + ' → ' + chk.new) === -1) {
+              matchedFields.push(chk.old + ' → ' + chk.new);
+            }
+          }
+        });
+        if (ruleAffected) affectedRules.push(rule);
+      });
+
+      if (affectedRules.length > 0) {
+        results.push({
+          vendor: vc.vendor,
+          log: vc.log,
+          severity: vc.severity,
+          description: vc.description,
+          count: affectedRules.length,
+          fields: matchedFields,
+          rules: affectedRules.slice(0, 5) // Sample for display
+        });
+        totalAffected += affectedRules.length;
+      }
+    }
+
+    // Render results
+    if (results.length === 0) {
+      listEl.innerHTML = '<div style="padding:20px;text-align:center;"><div style="font-size:24px;margin-bottom:8px;">✓</div><div style="font-size:12px;color:var(--green);font-weight:600;">All rules up to date</div><div style="font-size:10px;color:var(--text-muted);margin-top:4px;">No outdated field references detected in the repository</div></div>';
+      if (badgeEl) { badgeEl.textContent = 'ALL CLEAR'; badgeEl.className = 'badge badge-green'; badgeEl.style.fontSize = '9px'; }
+    } else {
+      var html = '';
+      var sevColor = { critical: 'var(--red-bright)', high: 'var(--amber)', medium: 'var(--cyan)', low: 'var(--text-muted)' };
+      var sevBg = { critical: 'rgba(239,68,68,0.04)', high: 'rgba(245,158,11,0.04)', medium: 'rgba(0,212,255,0.03)', low: 'rgba(255,255,255,0.02)' };
+      var sevBorder = { critical: 'rgba(239,68,68,0.12)', high: 'rgba(245,158,11,0.12)', medium: 'rgba(0,212,255,0.08)', low: 'rgba(255,255,255,0.06)' };
+      var sevBadge = { critical: 'red', high: 'amber', medium: 'cyan', low: 'gray' };
+
+      results.forEach(function(r) {
+        html += '<div style="padding:12px 14px;background:' + (sevBg[r.severity]||sevBg.medium) + ';border:1px solid ' + (sevBorder[r.severity]||sevBorder.medium) + ';border-radius:8px;">';
+        html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
+        html += '<div style="width:7px;height:7px;border-radius:50%;background:' + (sevColor[r.severity]||sevColor.medium) + ';flex-shrink:0;"></div>';
+        html += '<div style="flex:1;">';
+        html += '<div style="font-size:12px;font-weight:600;color:var(--text-primary);">' + r.count + ' Sigma Rules — ' + r.description + '</div>';
+        html += '<div style="font-size:10px;color:var(--text-muted);">Vendor: ' + r.vendor + ' · Log: ' + r.log + '</div>';
+        html += '</div>';
+        html += '<span class="badge badge-' + (sevBadge[r.severity]||'amber') + '" style="font-size:9px;">' + r.count + ' Rules</span>';
+        html += '</div>';
+
+        // Field changes
+        html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">';
+        r.fields.forEach(function(f) {
+          html += '<span style="font-size:9px;font-family:var(--font-mono);padding:2px 7px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.12);border-radius:4px;color:' + (sevColor[r.severity]||'var(--amber)') + ';">Field: <strong>' + f + '</strong></span>';
+        });
+        html += '</div>';
+
+        // Sample affected rule names
+        html += '<div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-family:var(--font-mono);font-size:10px;line-height:1.7;max-height:80px;overflow:hidden;">';
+        r.rules.forEach(function(rule) {
+          html += '<div style="color:var(--text-muted);">• ' + (rule.name || '').substring(0, 80) + '</div>';
+        });
+        if (r.count > 5) html += '<div style="color:var(--text-muted);font-style:italic;">... and ' + (r.count - 5) + ' more rules</div>';
+        html += '</div>';
+
+        html += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
+        html += '<button class="btn btn-xs btn-secondary" onclick="showToast(\'' + r.count + ' affected rules from ' + r.vendor + '\')">View Affected</button>';
+        html += '<button class="btn btn-xs btn-primary" onclick="showToast(\'Rules flagged for review in Testing Lab\')">Flag for Review</button>';
+        html += '</div></div>';
+      });
+
+      listEl.innerHTML = html;
+      if (badgeEl) { badgeEl.textContent = totalAffected + ' OUTDATED'; badgeEl.className = 'badge badge-red'; badgeEl.style.fontSize = '9px'; }
+    }
+    if (tsEl) tsEl.textContent = 'Last scan: ' + new Date().toLocaleTimeString() + ' · ' + totalAffected + ' rules with outdated references';
+  } catch (e) {
+    console.warn('[SyntaxCheck] Error:', e);
+    listEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:11px;">Syntax check failed — ' + (e.message||'unknown error') + '</div>';
+    if (badgeEl) { badgeEl.textContent = 'ERROR'; badgeEl.className = 'badge badge-gray'; badgeEl.style.fontSize = '9px'; }
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// RULE BUILDER — Save rule to Supabase
+// ══════════════════════════════════════════════════════════════
+
+async function saveRuleToSupabase() {
+  var code = document.getElementById('drIdeCode');
+  if (!code || !code.textContent || code.textContent.trim().length < 20) {
+    showToast('No rule content to save — write or load a rule first', 'warn');
+    return;
+  }
+  if (!window._dactaSupabase) {
+    showToast('Supabase not connected', 'warn');
+    return;
+  }
+
+  var text = code.textContent;
+
+  // Parse basic YAML-like fields from the text
+  function extractField(name) {
+    var re = new RegExp('^\\s*' + name + '\\s*:\\s*(.+)', 'm');
+    var m = text.match(re);
+    return m ? m[1].trim().replace(/^['"]+|['"]+$/g, '') : '';
+  }
+
+  var title = extractField('title') || 'Untitled Rule';
+  var description = extractField('description') || '';
+  var author = extractField('author') || 'Custom';
+  var level = extractField('level') || 'medium';
+  var status_val = extractField('status') || 'test';
+  var category = extractField('category') || '';
+  var product = extractField('product') || '';
+
+  // Extract MITRE tags
+  var mitreTactic = '';
+  var mitreId = '';
+  var tagMatches = text.match(/attack\.[a-z_]+/g) || [];
+  tagMatches.forEach(function(t) {
+    if (t.match(/attack\.t\d{4}/i)) mitreId = t.replace('attack.', '').toUpperCase();
+    else mitreTactic = t.replace('attack.', '');
+  });
+
+  // Map status
+  var statusMap = { 'experimental': 'testing', 'test': 'testing', 'stable': 'active', 'production': 'active', 'deprecated': 'disabled' };
+  var dbStatus = statusMap[status_val.toLowerCase()] || 'testing';
+
+  // Determine syntax from active IDE tab
+  var syntaxVal = 'sigma';
+  var activeTab = document.querySelector('.dr-ide-tab.active');
+  if (activeTab) {
+    var tabText = activeTab.textContent.toLowerCase();
+    if (tabText.indexOf('eql') >= 0) syntaxVal = 'eql';
+    else if (tabText.indexOf('spl') >= 0) syntaxVal = 'spl';
+    else if (tabText.indexOf('yara') >= 0) syntaxVal = 'yara';
+  }
+
+  var ruleData = {
+    name: title,
+    description: description.substring(0, 500),
+    rule_content: text,
+    detection_logic: text.substring(0, 2000),
+    syntax: syntaxVal,
+    severity: level.toLowerCase(),
+    status: dbStatus,
+    author: author,
+    mitre_tactic: mitreTactic,
+    mitre_technique_id: mitreId,
+    source_type: product || category || 'custom',
+    log_source_product: product,
+    log_source_category: category || 'edr',
+    version: 1,
+    avg_daily_hits: 0,
+    is_enabled: true,
+    org_id: null
+  };
+
+  try {
+    showToast('Saving rule to repository...', 'info');
+    var res = await window._dactaSupabase.from('detection_rules').insert(ruleData).select('id,name').single();
+    if (res.error) throw res.error;
+    showToast('Rule "' + title + '" saved to repository');
+    console.log('[RuleBuilder] Saved rule:', res.data.id, title);
+
+    // Invalidate cache and refresh count
+    _ruleDetailCache = {};
+    loadRuleStatCounts();
+  } catch (e) {
+    showToast('Failed to save: ' + (e.message || 'Unknown error'), 'warn');
+    console.warn('[RuleBuilder] Save error:', e);
+  }
+}
+
 function renderRules() {
   var tbody = document.getElementById('drRepoTableBody');
   if (!tbody) return;
@@ -26598,9 +26756,18 @@ async function goToRulesPage(page) {
 // ── Rule Detail Modal (on-demand fetch) ──
 async function showRuleDetailModal(dbId) {
   showToast('Loading rule details...', 'info');
-  var r = await fetchRuleDetail(dbId);
+  var r = null;
+  if (dbId) {
+    r = await fetchRuleDetail(dbId);
+  }
+  // Fallback: find in current page data (for Elastic rules with no dbId)
+  if (!r) {
+    for (var _i = 0; _i < rulesData.length; _i++) {
+      if (rulesData[_i]._dbId === dbId || rulesData[_i].id === dbId) { r = rulesData[_i]; break; }
+    }
+  }
   if (!r) { showToast('Rule not found', 'warn'); return; }
-  var pb = _playbookCache[dbId] || await fetchPlaybook(dbId);
+  var pb = dbId ? (_playbookCache[dbId] || await fetchPlaybook(dbId)) : null;
   var pbSection = '';
   if (pb) {
     pbSection = '<div style="margin-top:16px;padding:12px;background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.15);border-radius:8px;">'
@@ -26652,10 +26819,15 @@ async function toggleRuleDetail(row, dbId) {
   if (existing && existing.classList.contains('rule-detail-row')) { existing.remove(); return; }
   document.querySelectorAll('.rule-detail-row').forEach(function(el) { el.remove(); });
 
-  // Fetch full detail + playbook on demand
-  var r = await fetchRuleDetail(dbId);
+  // Fetch full detail + playbook on demand; fallback to page data for Elastic rules
+  var r = dbId ? await fetchRuleDetail(dbId) : null;
+  if (!r) {
+    for (var _i = 0; _i < rulesData.length; _i++) {
+      if (rulesData[_i]._dbId === dbId || rulesData[_i].id === dbId) { r = rulesData[_i]; break; }
+    }
+  }
   if (!r) return;
-  var pb = _playbookCache[dbId] || await fetchPlaybook(dbId);
+  var pb = dbId ? (_playbookCache[dbId] || await fetchPlaybook(dbId)) : null;
 
   var detailRow = document.createElement('tr');
   detailRow.className = 'rule-detail-row';
@@ -26778,7 +26950,9 @@ function translateRuleToTarget() {
 async function saveRuleAsDraft() {
   var code = document.getElementById('drIdeCode');
   if (!code || !code.textContent || code.textContent.length < 10) { showToast('No rule content to save', 'warn'); return; }
-  showToast('Rule saved as draft to repository');
+  if (!window._dactaSupabase) { showToast('Supabase not connected', 'warn'); return; }
+  // Save as draft (status = testing)
+  await saveRuleToSupabase();
 }
 
 // Syntax-highlight rule content for display in the IDE code panel
