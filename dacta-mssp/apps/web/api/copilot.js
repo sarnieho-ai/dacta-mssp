@@ -557,12 +557,24 @@ export default async function handler(req, res) {
 
     // Trim conversation history to avoid timeout on follow-ups
     let currentMessages = trimConversation(messages);
-    let maxIterations = 5; // Safety limit — 5 tool rounds max to stay within timeout
+    const maxToolRounds = 6; // Allow up to 6 rounds of tool use
     let iteration = 0;
     let toolCallLog = []; // Track all tool calls for transparency
 
-    while (iteration < maxIterations) {
+    while (iteration < maxToolRounds + 1) { // +1 for the final synthesis call
       iteration++;
+      const isLastRound = iteration > maxToolRounds;
+
+      // On the last round, remove tools so Claude MUST produce a text response
+      const callBody = {
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: currentMessages
+      };
+      if (!isLastRound) {
+        callBody.tools = TOOLS;
+      }
 
       const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -571,13 +583,7 @@ export default async function handler(req, res) {
           'anthropic-version': '2023-06-01',
           'content-type': 'application/json'
         },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4096,
-          system: systemPrompt,
-          tools: TOOLS,
-          messages: currentMessages
-        })
+        body: JSON.stringify(callBody)
       });
 
       if (!claudeResp.ok) {
@@ -588,8 +594,8 @@ export default async function handler(req, res) {
 
       const claudeData = await claudeResp.json();
 
-      // Check if Claude wants to use tools
-      if (claudeData.stop_reason === 'tool_use') {
+      // Check if Claude wants to use tools (only possible if tools were provided)
+      if (claudeData.stop_reason === 'tool_use' && !isLastRound) {
         // Extract tool use blocks
         const toolUseBlocks = claudeData.content.filter(b => b.type === 'tool_use');
         
@@ -618,7 +624,7 @@ export default async function handler(req, res) {
         continue;
       }
 
-      // Claude is done — extract the text response
+      // Claude produced a text response — extract and return it
       const textBlocks = claudeData.content.filter(b => b.type === 'text');
       const responseText = textBlocks.map(b => b.text).join('\n');
 
@@ -630,9 +636,9 @@ export default async function handler(req, res) {
       });
     }
 
-    // Safety: too many iterations
+    // Should never reach here, but just in case
     return res.status(200).json({
-      response: 'I reached the maximum number of data source queries for this question. Here\'s what I found so far based on the data gathered.',
+      response: 'Analysis complete. Please ask a follow-up question if you need more details.',
       tool_calls: toolCallLog,
       model: 'claude-sonnet-4-20250514',
       usage: {}
