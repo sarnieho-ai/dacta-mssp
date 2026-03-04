@@ -39073,7 +39073,7 @@ async function openInvestigation(ticketKey) {
       console.log('[AI Investigation] Serving cached result for ' + ticketKey);
       var invMainContent = document.getElementById('invMainContent');
       if (invMainContent) {
-        renderCachedInvestigation(ticketKey, cachedResult, invMainContent);
+        renderCachedInvestigation(ticketKey, cachedResult, invMainContent, issueData);
       }
     } else {
       // No cache — run fresh AI investigation
@@ -39420,7 +39420,7 @@ function refreshTriageAIColumn() {
 }
 
 // ── Cached investigation renderer ──
-function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent) {
+function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueData) {
   // Build cache banner
   var ts = new Date(cacheEntry.timestamp);
   var tsStr = ts.toLocaleDateString('en-SG', {day:'2-digit',month:'short',year:'numeric'}) + ' ' + ts.toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -39478,10 +39478,172 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent) {
       var pbBody = document.querySelector('#playbookActionsCard .inv-collapsible-body');
       if (pbBody) { pbBody.innerHTML = sp.playbook; pbBody.style.display = ''; }
     }
+  } else if (issueData) {
+    // No cached sidebar data — auto-regenerate from issueData instead of showing placeholder
+    console.log('[CachedInv] No sidebar cache found, regenerating from issueData for ' + ticketKey);
+    var f = issueData.fields || {};
+    var cachedVerdict = cacheEntry.verdict || '';
+    var alertTitle = f.summary || '';
+    var useCaseName = f.customfield_10072 || '';
+    var description = '';
+    if (f.description && f.description.content) description = extractADFText(f.description);
+    else if (typeof f.description === 'string') description = f.description;
+    if (issueData.renderedFields && issueData.renderedFields.description) description = issueData.renderedFields.description;
+    var cleanDesc = description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000);
+    var fullText = alertTitle + ' ' + cleanDesc;
+    var techniques = detectTechniques(fullText);
+
+    // 1. Enrichment Summary — requires live Elastic/TIP data, show informative note
+    var enrichBody = document.querySelector('#enrichmentSummaryCard .inv-collapsible-body');
+    if (enrichBody) {
+      enrichBody.innerHTML = '<div style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">' +
+        '<span style="font-size:14px;">\ud83d\udd12</span>' +
+        '<div><div style="font-weight:500;color:var(--text-secondary);">Requires live enrichment data</div>' +
+        '<div style="font-size:9px;margin-top:2px;">DACTA TIP + Elastic SIEM lookups run during live investigation only. Click Re-investigate to populate.</div></div></div>';
+      enrichBody.style.display = '';
+    }
+
+    // 2. Correlated Alerts — requires live Elastic data
+    var corrBody = document.querySelector('#correlatedAlertsCard .inv-collapsible-body');
+    if (corrBody) {
+      corrBody.innerHTML = '<div style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">' +
+        '<span style="font-size:14px;">\ud83d\udd12</span>' +
+        '<div><div style="font-weight:500;color:var(--text-secondary);">Requires live correlation data</div>' +
+        '<div style="font-size:9px;margin-top:2px;">Historical alert correlation from Elastic SIEM runs during live investigation only. Click Re-investigate to populate.</div></div></div>';
+      corrBody.style.display = '';
+    }
+
+    // 3. Recommended Actions — fully regenerable from cached verdict
+    var actBody = document.querySelector('#recommendedActionsCard .inv-collapsible-body');
+    if (actBody) {
+      var actions = [];
+      if (cachedVerdict.includes('TRUE POSITIVE')) {
+        actions = [
+          { icon: '\uD83D\uDD34', text: 'Isolate affected host immediately', priority: 'CRITICAL' },
+          { icon: '\uD83D\uDD0D', text: 'Collect forensic artifacts (memory dump, disk image)', priority: 'HIGH' },
+          { icon: '\uD83D\uDCE7', text: 'Notify SOC Lead and Incident Commander', priority: 'HIGH' },
+          { icon: '\uD83D\uDD11', text: 'Reset credentials for affected accounts', priority: 'HIGH' },
+          { icon: '\uD83D\uDCCB', text: 'Document IOCs and update block lists', priority: 'MEDIUM' }
+        ];
+      } else if (cachedVerdict.includes('FALSE POSITIVE')) {
+        actions = [
+          { icon: '\u2705', text: 'Close ticket as False Positive \u2014 Business Justified', priority: 'STANDARD' },
+          { icon: '\uD83D\uDCDD', text: 'Document findings for future reference', priority: 'LOW' },
+          { icon: '\u2699\uFE0F', text: 'Consider tuning detection rule to reduce noise', priority: 'LOW' },
+          { icon: '\uD83D\uDCCA', text: 'Update use case baseline if recurring', priority: 'LOW' }
+        ];
+      } else {
+        actions = [
+          { icon: '\uD83D\uDD0D', text: 'Analyst manual review required \u2014 evidence is mixed', priority: 'HIGH' },
+          { icon: '\uD83D\uDCDE', text: 'Contact client for additional context', priority: 'MEDIUM' },
+          { icon: '\uD83D\uDD0E', text: 'Run additional queries on adjacent hosts', priority: 'MEDIUM' },
+          { icon: '\u23F0', text: 'Set 24hr monitoring watch on affected entity', priority: 'MEDIUM' }
+        ];
+      }
+      var aHTML = '';
+      actions.forEach(function(a, i) {
+        var pColor = a.priority === 'CRITICAL' ? '#ef4444' : a.priority === 'HIGH' ? '#f59e0b' : a.priority === 'STANDARD' ? '#10b981' : 'var(--text-muted)';
+        aHTML += '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;' + (i < actions.length - 1 ? 'border-bottom:1px solid var(--border-subtle);' : '') + '">' +
+          '<span style="font-size:12px;">' + a.icon + '</span>' +
+          '<div style="flex:1;"><div style="font-size:10px;color:var(--text-primary);">' + a.text + '</div>' +
+          '<div style="font-size:8px;color:' + pColor + ';font-weight:600;margin-top:2px;">' + a.priority + '</div></div></div>';
+      });
+      actBody.innerHTML = aHTML;
+      actBody.style.display = '';
+    }
+
+    // 4. Playbook Actions — regenerable from issueData + techniques
+    var playbookCard = document.getElementById('playbookActionsCard');
+    if (playbookCard) {
+      var matchedPlaybook = matchDetectionPlaybook(alertTitle, useCaseName, techniques);
+      var pbHTML = '';
+      if (matchedPlaybook) {
+        pbHTML += '<div style="padding:8px 10px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:6px;margin-bottom:8px;">' +
+          '<div style="font-size:10px;font-weight:600;color:#a78bfa;">' + matchedPlaybook.ruleName + '</div>' +
+          '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Detection Rule ID: ' + matchedPlaybook.ruleId + '</div>' +
+        '</div>';
+        matchedPlaybook.steps.forEach(function(step, si) {
+          pbHTML += '<div style="display:flex;gap:8px;padding:6px 0;' + (si < matchedPlaybook.steps.length - 1 ? 'border-bottom:1px solid var(--border-subtle);' : '') + '">' +
+            '<span style="font-size:10px;color:var(--cyan);font-weight:700;min-width:20px;">' + (si + 1) + '.</span>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:10px;color:var(--text-primary);font-weight:500;">' + step.action + '</div>' +
+              '<div style="font-size:8px;color:var(--text-muted);margin-top:1px;">' + step.detail + '</div>' +
+            '</div>' +
+          '</div>';
+        });
+      } else {
+        pbHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic;">No matching built-in playbook</div>';
+      }
+      var pbBody = playbookCard.querySelector('.inv-collapsible-body');
+      if (pbBody) { pbBody.innerHTML = pbHTML; pbBody.style.display = ''; }
+
+      // Fetch DB playbooks asynchronously and append + save to cache
+      (async function() {
+        try {
+          var dbPbs = await fetchRelevantPlaybooks(techniques, alertTitle, useCaseName);
+          if (dbPbs.length > 0) {
+            var dbHTML = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-subtle);">' +
+              '<div style="font-size:9px;font-weight:600;color:var(--cyan);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">\ud83d\udcda SIEMLess DB Playbooks (' + dbPbs.length + ' matched)</div>';
+            dbPbs.forEach(function(pb) {
+              var matchBadge = '';
+              var matchColor = 'var(--cyan)';
+              var cardBg = 'rgba(0,212,255,0.04)';
+              var cardBorder = 'rgba(0,212,255,0.12)';
+              if (pb._matchType === 'exact') {
+                matchBadge = '<span style="display:inline-block;font-size:7px;padding:1px 5px;border-radius:3px;background:rgba(16,185,129,0.15);color:#10b981;font-weight:600;margin-left:6px;vertical-align:middle;">EXACT MATCH</span>';
+                matchColor = '#10b981'; cardBg = 'rgba(16,185,129,0.04)'; cardBorder = 'rgba(16,185,129,0.15)';
+              } else if (pb._matchType === 'vendor_mitre') {
+                matchBadge = '<span style="display:inline-block;font-size:7px;padding:1px 5px;border-radius:3px;background:rgba(0,212,255,0.15);color:var(--cyan);font-weight:600;margin-left:6px;vertical-align:middle;">VENDOR + MITRE</span>';
+              } else if (pb._matchType === 'mitre_only') {
+                matchBadge = '<span style="display:inline-block;font-size:7px;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:600;margin-left:6px;vertical-align:middle;">MITRE ONLY</span>';
+                matchColor = '#f59e0b'; cardBg = 'rgba(245,158,11,0.04)'; cardBorder = 'rgba(245,158,11,0.12)';
+              } else if (pb._matchType === 'keyword') {
+                matchBadge = '<span style="display:inline-block;font-size:7px;padding:1px 5px;border-radius:3px;background:rgba(156,163,175,0.15);color:#9ca3af;font-weight:600;margin-left:6px;vertical-align:middle;">KEYWORD</span>';
+                matchColor = '#9ca3af'; cardBg = 'rgba(156,163,175,0.04)'; cardBorder = 'rgba(156,163,175,0.12)';
+              }
+              dbHTML += '<div style="padding:8px 10px;background:' + cardBg + ';border:1px solid ' + cardBorder + ';border-radius:6px;margin-bottom:8px;">' +
+                '<div style="font-size:10px;font-weight:600;color:' + matchColor + ';">' + escapeHtml(pb.playbook_name || pb.rule_name || 'Playbook') + matchBadge + '</div>' +
+                (pb.description ? '<div style="font-size:9px;color:var(--text-secondary);margin-top:3px;">' + escapeHtml(pb.description).substring(0, 200) + '</div>' : '') +
+                (pb.mitre_technique_id ? '<div style="font-size:8px;color:var(--text-muted);margin-top:2px;">MITRE: ' + escapeHtml(pb.mitre_technique_id) + '</div>' : '') +
+                (pb._matchDetail ? '<div style="font-size:7px;color:var(--text-muted);margin-top:2px;font-style:italic;">\ud83d\udd17 ' + escapeHtml(pb._matchDetail) + '</div>' : '');
+              if (pb.triage_steps) {
+                var triageArr = Array.isArray(pb.triage_steps) ? pb.triage_steps : [pb.triage_steps];
+                triageArr.forEach(function(ts, ti) {
+                  dbHTML += '<div style="display:flex;gap:6px;padding:4px 0;">' +
+                    '<span style="font-size:9px;color:#a78bfa;font-weight:700;min-width:16px;">' + (ti+1) + '.</span>' +
+                    '<div style="font-size:9px;color:var(--text-primary);">' + escapeHtml(typeof ts === 'string' ? ts : ts.step || JSON.stringify(ts)) + '</div></div>';
+                });
+              }
+              if (pb.false_positive_guidance) {
+                var fpArr = Array.isArray(pb.false_positive_guidance) ? pb.false_positive_guidance : [pb.false_positive_guidance];
+                dbHTML += '<div style="font-size:8px;color:var(--text-muted);margin-top:4px;padding:4px 6px;background:rgba(245,158,11,0.06);border-radius:4px;">FP Guidance: ' + escapeHtml(fpArr.join(' | ')) + '</div>';
+              }
+              if (pb.investigation_queries) {
+                var iqArr = Array.isArray(pb.investigation_queries) ? pb.investigation_queries : [pb.investigation_queries];
+                dbHTML += '<div style="font-size:8px;color:var(--text-muted);margin-top:3px;">\ud83d\udd0d Queries: ' + escapeHtml(iqArr.map(function(q) { return typeof q === 'string' ? q : JSON.stringify(q); }).join(' | ').substring(0, 300)) + '</div>';
+              }
+              dbHTML += '</div>';
+            });
+            dbHTML += '</div>';
+            var pbBodyEl = playbookCard.querySelector('.inv-collapsible-body');
+            if (pbBodyEl) pbBodyEl.innerHTML += dbHTML;
+          }
+          // Save regenerated sidebar panels back to cache for future loads
+          var regenSidebar = {
+            enrichment: (function() { var el = document.querySelector('#enrichmentSummaryCard .inv-collapsible-body'); return el ? el.innerHTML : ''; })(),
+            correlated: (function() { var el = document.querySelector('#correlatedAlertsCard .inv-collapsible-body'); return el ? el.innerHTML : ''; })(),
+            actions: (function() { var el = document.querySelector('#recommendedActionsCard .inv-collapsible-body'); return el ? el.innerHTML : ''; })(),
+            playbook: (function() { var el = document.querySelector('#playbookActionsCard .inv-collapsible-body'); return el ? el.innerHTML : ''; })()
+          };
+          cacheEntry.sidebarPanels = regenSidebar;
+          saveInvestigationCache(ticketKey, cacheEntry);
+          console.log('[CachedInv] Regenerated sidebar panels saved to cache for ' + ticketKey);
+        } catch(e) { console.warn('[CachedInv] DB playbook fetch error during cache regen:', e); }
+      })();
+    }
   } else {
-    // No cached sidebar data (investigation cached before sidebar capture was implemented)
-    // Show a helpful message instead of "will appear after investigation..."
-    var noDataMsg = '<div style="font-size:9px;color:var(--text-muted);font-style:italic;">Cached before sidebar capture was available. Click Re-investigate to populate.</div>';
+    // No issueData available and no cached sidebar — minimal fallback
+    var noDataMsg = '<div style="font-size:9px;color:var(--text-muted);font-style:italic;">No sidebar data available. Click Re-investigate to populate.</div>';
     ['#enrichmentSummaryCard','#correlatedAlertsCard','#recommendedActionsCard','#playbookActionsCard'].forEach(function(sel) {
       var body = document.querySelector(sel + ' .inv-collapsible-body');
       if (body) { body.innerHTML = noDataMsg; body.style.display = ''; }
