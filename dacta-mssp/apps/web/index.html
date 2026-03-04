@@ -7215,6 +7215,29 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   border-top: 1px solid var(--border-subtle);
   margin: 12px 0;
 }
+/* Copilot tables */
+.copilot-table {
+  width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px;
+}
+.copilot-table th {
+  text-align: left; padding: 6px 10px; background: rgba(0,212,255,0.06);
+  border: 1px solid var(--border-card); font-weight: 600; color: var(--text-primary); font-size: 11px;
+}
+.copilot-table td {
+  padding: 5px 10px; border: 1px solid var(--border-card); color: var(--text-secondary); font-size: 11px; line-height: 1.5;
+  word-break: break-word; max-width: 300px;
+}
+.copilot-table tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+.copilot-table tr:hover { background: rgba(0,212,255,0.04); }
+/* Collapsible tool results */
+.copilot-tool-detail { margin: 6px 0 10px 0; border: 1px solid var(--border-card); border-radius: 8px; overflow: hidden; }
+.copilot-tool-detail summary {
+  cursor: pointer; padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--cyan);
+  background: rgba(0,212,255,0.04); list-style: none; display: flex; align-items: center; gap: 6px;
+}
+.copilot-tool-detail summary::before { content: '\25B6'; font-size: 8px; transition: transform 0.2s; }
+.copilot-tool-detail[open] summary::before { transform: rotate(90deg); }
+.copilot-tool-detail .tool-content { padding: 8px 12px; font-size: 11px; color: var(--text-secondary); overflow-x: auto; }
 
 /* ---- Error State ---- */
 .copilot-error-msg {
@@ -9335,13 +9358,14 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           <span class="filter-label">Filter:</span>
           <select id="tqFilterPriority" class="filter-select"><option>All Priorities</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select>
           <select id="tqFilterOrg" class="filter-select"><option>All Organizations</option><option>Dacta Global</option><option>SPMT</option><option>Naga World</option><option>ADV Partners</option></select>
-          <input type="date" id="tqFilterDateFrom" class="filter-select" style="width:140px;" title="From date">
-          <input type="date" id="tqFilterDateTo" class="filter-select" style="width:140px;" title="To date">
+          <input type="datetime-local" id="tqFilterDateFrom" class="filter-select" style="width:180px;" title="From date/time">
+          <input type="datetime-local" id="tqFilterDateTo" class="filter-select" style="width:180px;" title="To date/time">
           <select id="tqFilterDatePreset" class="filter-select"><option value="">Time Range</option><option value="today">Today</option><option value="24h">Last 24h</option><option value="7d">Last 7 Days</option><option value="30d">Last 30 Days</option><option value="90d">Last 90 Days</option><option value="custom">Custom</option></select>
           <select id="tqFilterStatus" class="filter-select"><option>All Statuses</option><option>Open</option><option>Investigating</option><option>Escalated</option><option>Closed</option></select>
           <select id="tqFilterAnalyst" class="filter-select"><option>All Analysts</option><option>John Lim</option><option>Sarah Tan</option><option>Marcus Wong</option><option>Unassigned</option></select>
           <select class="filter-select"><option>AI Confidence: All</option><option>High (&gt;80%)</option><option>Medium (50–80%)</option><option>Low (&lt;50%)</option></select>
           <select class="tq-bulk-select"><option>Bulk Actions</option><option>Assign</option><option>Change Priority</option><option>Close</option></select>
+          <select id="tqPageSize" class="filter-select" style="width:auto;" title="Results per page"><option value="25">25 / page</option><option value="50" selected>50 / page</option><option value="100">100 / page</option><option value="200">200 / page</option></select>
           <input id="tqFilterSearch" class="filter-input" placeholder="Search tickets..." style="margin-left:auto;width:200px;">
         </div>
 
@@ -9351,7 +9375,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <table>
               <thead>
                 <tr>
-                  <th style="width:32px;"><input type="checkbox" class="tq-cb"></th>
+                  <th style="width:32px;"><input type="checkbox" class="tq-cb" id="tqSelectAll" onchange="tqToggleSelectAll(this.checked)" title="Select All"></th>
                   <th>ID</th>
                   <th>P</th>
                   <th>Title</th>
@@ -10016,7 +10040,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <!-- Analyst actions -->
             <div style="display:flex;gap:10px;padding:16px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:10px;align-items:center;flex-wrap:wrap;">
               <span style="font-size:12px;color:var(--text-muted);margin-right:8px;">Analyst Verdict:</span>
-              <button class="btn btn-success" onclick="showToast('Verdict accepted — ticket closing...')">&#x2713; Accept AI Verdict</button>
+              <button class="btn btn-success" onclick="acceptAIVerdict()">&#x2713; Accept AI Verdict</button>
               <button class="btn btn-amber" onclick="toggleOverrideMode()">&#x26A0; Override Verdict</button>
               <button class="btn btn-secondary">&#x21BA; Request Re-analysis</button>
               <button class="btn btn-secondary" style="margin-left:auto;">Add Comment</button>
@@ -35305,6 +35329,25 @@ function copilotRenderMarkdown(text) {
   html = html.replace(/^### (.+)$/gm, '<h4 class="copilot-h4">$1</h4>');
   html = html.replace(/^## (.+)$/gm, '<h3 class="copilot-h3">$1</h3>');
   
+  // Markdown tables (|col1|col2|...)
+  html = html.replace(/(^\|.+\|\n)(^\|[-:|\s]+\|\n)((?:^\|.+\|\n?)+)/gm, function(match, headerRow, sepRow, bodyRows) {
+    var headers = headerRow.trim().split('|').filter(function(c) { return c.trim(); });
+    var rows = bodyRows.trim().split('\n');
+    var tableHTML = '<table class="copilot-table"><thead><tr>';
+    headers.forEach(function(h) { tableHTML += '<th>' + h.trim() + '</th>'; });
+    tableHTML += '</tr></thead><tbody>';
+    rows.forEach(function(row) {
+      var cells = row.split('|').filter(function(c) { return c.trim() !== '' || c.includes(' '); });
+      if (cells.length > 0 && cells.some(function(c){ return c.trim(); })) {
+        tableHTML += '<tr>';
+        cells.forEach(function(c) { tableHTML += '<td>' + c.trim() + '</td>'; });
+        tableHTML += '</tr>';
+      }
+    });
+    tableHTML += '</tbody></table>';
+    return tableHTML;
+  });
+  
   // Unordered lists (- item)
   html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>.*<\/li>\n?)+/g, function(m) {
@@ -35329,6 +35372,8 @@ function copilotRenderMarkdown(text) {
   html = html.replace(/(<\/ul>)\s*<\/p>/g, '$1');
   html = html.replace(/<p>\s*(<div class="copilot-code)/g, '$1');
   html = html.replace(/(<\/pre><\/div>)\s*<\/p>/g, '$1');
+  html = html.replace(/<p>\s*(<table)/g, '$1');
+  html = html.replace(/(<\/table>)\s*<\/p>/g, '$1');
   html = html.replace(/<p>\s*(<hr)/g, '$1');
   
   return html;
@@ -35560,6 +35605,39 @@ async function copilotAsk(text) {
         toolSummary += '<span class="copilot-tool-badge">' + toolIcon + ' ' + toolLabel + '</span>';
       });
       toolSummary += '</div>';
+      // Collapsible query details
+      toolSummary += '<details class="copilot-tool-detail"><summary>\ud83d\udd0e View ' + toolCalls.length + ' tool execution' + (toolCalls.length > 1 ? 's' : '') + '</summary><div class="tool-content">';
+      toolCalls.forEach(function(tc, idx) {
+        var inputStr = '';
+        if (tc.input) {
+          try {
+            var inp = typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input;
+            // Format key params for readability
+            if (inp.index) inputStr += '<strong>Index:</strong> ' + escapeHtml(inp.index) + '<br>';
+            if (inp.query) inputStr += '<strong>Query:</strong> <code class="copilot-inline-code" style="font-size:10px;">' + escapeHtml(JSON.stringify(inp.query).substring(0, 300)) + '</code><br>';
+            if (inp.jql) inputStr += '<strong>JQL:</strong> <code class="copilot-inline-code" style="font-size:10px;">' + escapeHtml(inp.jql) + '</code><br>';
+            if (inp.ioc_value) inputStr += '<strong>IOC:</strong> ' + escapeHtml(inp.ioc_value) + ' (' + escapeHtml(inp.ioc_type || '') + ')<br>';
+            if (inp.technique_id) inputStr += '<strong>Technique:</strong> ' + escapeHtml(inp.technique_id) + '<br>';
+            if (inp.key) inputStr += '<strong>Ticket:</strong> ' + escapeHtml(inp.key) + '<br>';
+            if (inp.size) inputStr += '<strong>Limit:</strong> ' + inp.size + ' results<br>';
+            if (!inputStr) inputStr = '<code style="font-size:10px;word-break:break-all;">' + escapeHtml(JSON.stringify(inp).substring(0, 400)) + '</code>';
+          } catch(e) {
+            inputStr = '<code style="font-size:10px;">' + escapeHtml(String(tc.input).substring(0, 300)) + '</code>';
+          }
+        }
+        var toolIcon2 = '\ud83d\udd0d';
+        if (tc.tool === 'search_elastic_siem') toolIcon2 = '\ud83d\udee1\ufe0f';
+        else if (tc.tool === 'lookup_ioc_opencti') toolIcon2 = '\ud83d\udd34';
+        else if (tc.tool === 'lookup_mitre_technique') toolIcon2 = '\ud83d\uddfa\ufe0f';
+        else if (tc.tool === 'search_jira_tickets') toolIcon2 = '\ud83c\udfab';
+        else if (tc.tool === 'get_jira_ticket_details') toolIcon2 = '\ud83d\udcdd';
+        toolSummary += '<div style="margin-bottom:8px;padding:6px 8px;background:rgba(0,0,0,0.15);border-radius:6px;">' +
+          '<div style="font-size:10px;font-weight:600;color:var(--cyan);margin-bottom:3px;">' + toolIcon2 + ' ' + escapeHtml(tc.tool) + '</div>' +
+          (inputStr ? '<div style="font-size:10px;line-height:1.5;">' + inputStr + '</div>' : '') +
+          (tc.output_summary ? '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Result: ' + escapeHtml(tc.output_summary) + '</div>' : '') +
+        '</div>';
+      });
+      toolSummary += '</div></details>';
     }
 
     // PII vault shield badge
@@ -35932,6 +36010,73 @@ function sendToCopilot() {
       }
     }, 300);
   }, 800);
+}
+
+// ── Accept AI Verdict: transition ticket to Closed/Completed ──
+async function acceptAIVerdict() {
+  var ticketKey = _currentInvestigationKey;
+  if (!ticketKey) { showToast('No investigation open', 'warn'); return; }
+
+  // Get cached verdict info
+  var cache = _investigationCache[ticketKey];
+  var verdictText = cache ? (cache.verdict || 'AI Verdict Accepted') : 'AI Verdict Accepted';
+  var confidence = cache ? (cache.confidence || 'N/A') : 'N/A';
+
+  showToast('Accepting verdict for ' + ticketKey + '...', 'info');
+  try {
+    // 1. Fetch available transitions
+    var transitions = await DactaJira.fetchTransitions(ticketKey);
+    var transArr = (transitions.transitions || transitions || []);
+    // Find a Close/Complete/Done transition
+    var closeTransition = null;
+    var closeNames = ['closed', 'close', 'done', 'completed', 'complete', 'resolved', 'resolve'];
+    for (var i = 0; i < transArr.length; i++) {
+      var tName = (transArr[i].name || '').toLowerCase();
+      if (closeNames.indexOf(tName) >= 0) { closeTransition = transArr[i]; break; }
+    }
+    if (!closeTransition) {
+      // Fallback: use last transition in list (often the "close" option)
+      closeTransition = transArr.length > 0 ? transArr[transArr.length - 1] : null;
+    }
+
+    if (!closeTransition) {
+      showToast('No close transition available for ' + ticketKey + '. Please close manually.', 'warn');
+      return;
+    }
+
+    // 2. Add verdict comment to ticket
+    var comment = 'AI Verdict Accepted by analyst.\n\nVerdict: ' + verdictText + '\nConfidence: ' + confidence + '%\nTimestamp: ' + new Date().toISOString() + '\n\nTransitioned to "' + closeTransition.name + '" via SIEMLess AI Investigation.';
+    try { await DactaJira.addComment(ticketKey, comment); } catch(e) { console.warn('[AcceptVerdict] Comment failed:', e); }
+
+    // 3. Transition the ticket
+    await DactaJira.transitionIssue(ticketKey, closeTransition.id);
+
+    showToast('\u2713 Verdict accepted — ' + ticketKey + ' transitioned to "' + closeTransition.name + '"', 'success');
+
+    // 4. Update investigation cache
+    if (cache) {
+      cache.feedback = 'accepted';
+      cache.acceptedAt = new Date().toISOString();
+    }
+
+    // 5. Update the AI status badge in triage if visible
+    markInvestigationAccepted(ticketKey);
+
+    // 6. Refresh triage queue in background
+    setTimeout(function() { if (typeof populateLiveTriage === 'function') populateLiveTriage(); }, 1000);
+
+  } catch(err) {
+    console.error('[AcceptVerdict] Error:', err);
+    showToast('Failed to close ' + ticketKey + ': ' + err.message, 'error');
+  }
+}
+
+// Helper: mark ticket as accepted in triage AI status badges
+function markInvestigationAccepted(ticketKey) {
+  var el = document.querySelector('[data-ai-status="' + ticketKey + '"]');
+  if (el) {
+    el.innerHTML = '<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981;">\u2713 Accepted</span>';
+  }
 }
 
 /* ==============================================================
@@ -37241,7 +37386,8 @@ async function populateLiveTriage(append) {
   if (dateFromEl && dateFromEl.value) filters.dateFrom = dateFromEl.value;
   if (dateToEl && dateToEl.value) filters.dateTo = dateToEl.value;
 
-  filters.maxResults = 50;
+  var pageSizeEl = document.getElementById('tqPageSize');
+  filters.maxResults = pageSizeEl ? parseInt(pageSizeEl.value, 10) || 50 : 50;
   if (append && _triageNextPageToken) {
     filters.nextPageToken = _triageNextPageToken;
   }
@@ -37329,7 +37475,7 @@ async function populateLiveTriage(append) {
       var openC = _triageCurrentIssues.filter(function(t) { return t.status === 'Open'; }).length;
       var closedC = _triageCurrentIssues.filter(function(t) { return t.status === 'Closed' || t.status === 'Completed'; }).length;
       var canceledC = _triageCurrentIssues.filter(function(t) { return t.status === 'Canceled'; }).length;
-      var moreBtn = !data.isLast ? ' <button class="btn btn-secondary btn-sm" onclick="populateLiveTriage(true)" style="margin-left:12px;font-size:10px;">Load More</button>' : '';
+      var moreBtn = !data.isLast ? ' <button class="btn btn-secondary btn-sm" onclick="populateLiveTriage(true)" style="margin-left:12px;font-size:10px;">Load Next Page</button>' : ' <span style="font-size:10px;color:var(--text-muted);margin-left:8px;">(All loaded)</span>';
       tqSum.innerHTML = '<span>Showing <strong style="color:var(--cyan);">' + _triageCurrentIssues.length + '</strong> tickets</span>' +
         '<span class="sep">·</span>' +
         '<span><strong style="color:var(--amber);">' + openC + '</strong> open</span>' +
@@ -37383,6 +37529,8 @@ function setupTriageFilters() {
     analystEl.onchange = function() { populateLiveTriage(); };
   }
   // Date preset handler
+  // Helper: format Date to datetime-local value (YYYY-MM-DDTHH:MM)
+  function _dtLocal(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + 'T' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
   if (datePresetEl) {
     datePresetEl.onchange = function() {
       var v = datePresetEl.value;
@@ -37390,20 +37538,25 @@ function setupTriageFilters() {
       var fromDate = '';
       var toDate = '';
       if (v === 'today') {
-        fromDate = now.toISOString().slice(0,10);
-        toDate = now.toISOString().slice(0,10);
+        var dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0);
+        fromDate = _dtLocal(dayStart);
+        toDate = _dtLocal(now);
       } else if (v === '24h') {
         var d = new Date(now - 24*60*60*1000);
-        fromDate = d.toISOString().slice(0,10);
+        fromDate = _dtLocal(d);
+        toDate = _dtLocal(now);
       } else if (v === '7d') {
         var d = new Date(now - 7*24*60*60*1000);
-        fromDate = d.toISOString().slice(0,10);
+        fromDate = _dtLocal(d);
+        toDate = _dtLocal(now);
       } else if (v === '30d') {
         var d = new Date(now - 30*24*60*60*1000);
-        fromDate = d.toISOString().slice(0,10);
+        fromDate = _dtLocal(d);
+        toDate = _dtLocal(now);
       } else if (v === '90d') {
         var d = new Date(now - 90*24*60*60*1000);
-        fromDate = d.toISOString().slice(0,10);
+        fromDate = _dtLocal(d);
+        toDate = _dtLocal(now);
       }
       if (dateFromEl) dateFromEl.value = fromDate;
       if (dateToEl) dateToEl.value = toDate;
@@ -37421,6 +37574,10 @@ function setupTriageFilters() {
   }
 
   // Setup bulk actions
+  var pageSizeSetupEl = document.getElementById('tqPageSize');
+  if (pageSizeSetupEl) {
+    pageSizeSetupEl.onchange = function() { populateLiveTriage(); };
+  }
   var bulkEl = document.querySelector('.tq-bulk-select');
   if (bulkEl) {
     bulkEl.innerHTML = '<option>Bulk Actions</option><option value="assign">Assign Selected</option><option value="escalate">Escalate Selected</option><option value="close">Close Selected</option>';
@@ -37507,6 +37664,15 @@ function updateBulkCount() {
   var keys = getSelectedTicketKeys();
   var bulkEl = document.querySelector('.tq-bulk-select');
   if (bulkEl) { var o = bulkEl.querySelector('option'); if (o) o.textContent = keys.length > 0 ? 'Bulk Actions (' + keys.length + ')' : 'Bulk Actions'; }
+  // Sync header select-all checkbox state
+  var allCbs = document.querySelectorAll('#page-triage .tq-cb[data-key]');
+  var headerCb = document.getElementById('tqSelectAll');
+  if (headerCb && allCbs.length > 0) headerCb.checked = keys.length === allCbs.length;
+  else if (headerCb) headerCb.checked = false;
+}
+function tqToggleSelectAll(checked) {
+  document.querySelectorAll('#page-triage .tq-cb[data-key]').forEach(function(cb) { cb.checked = checked; });
+  updateBulkCount();
 }
 
 // ── ASSIGN MODAL ──
@@ -38849,7 +39015,18 @@ async function openCreateTicketModal() {
     assigneeOpts += '<option value="' + u.accountId + '">' + u.displayName + '</option>';
   });
 
-  ov.innerHTML = '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+  // Build organization options from ORG_CONNECTORS
+  var orgOpts = '<option value="">— Select Organization —</option>';
+  if (window.ORG_CONNECTORS) {
+    Object.values(window.ORG_CONNECTORS).sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }).forEach(function(o) {
+      orgOpts += '<option value="' + escapeHtml(o.name || '') + '">' + escapeHtml(o.name || '') + '</option>';
+    });
+  }
+
+  var _ctSelectStyle = 'width:100%;background:#1a1a2e;border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:#ffffff;font-size:12px;';
+  var _ctInputStyle = 'width:100%;background:#1a1a2e;border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:#ffffff;font-size:12px;font-family:var(--font-body);outline:none;';
+
+  ov.innerHTML = '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;width:520px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
     '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">' +
       '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">Create Incident Ticket</div>' +
       '<div style="cursor:pointer;color:var(--text-muted);font-size:18px;" onclick="this.closest(\'#createTicketOverlay\').remove()">&times;</div>' +
@@ -38857,23 +39034,27 @@ async function openCreateTicketModal() {
     '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px;">' +
       '<div>' +
         '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Summary *</div>' +
-        '<input id="ctSummary" type="text" placeholder="Alert summary..." style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;font-family:var(--font-body);outline:none;">' +
+        '<input id="ctSummary" type="text" placeholder="Alert summary..." style="' + _ctInputStyle + '">' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
         '<div>' +
           '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Priority</div>' +
-          '<select id="ctPriority" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;">' +
+          '<select id="ctPriority" style="' + _ctSelectStyle + '">' +
             '<option>P3 - Medium</option><option>P1 - Critical</option><option>P2 - High</option><option>P4 - Low</option>' +
           '</select>' +
         '</div>' +
         '<div>' +
-          '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Assignee</div>' +
-          '<select id="ctAssignee" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;">' + assigneeOpts + '</select>' +
+          '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Organization</div>' +
+          '<select id="ctOrganization" style="' + _ctSelectStyle + '">' + orgOpts + '</select>' +
         '</div>' +
       '</div>' +
       '<div>' +
+        '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Assignee</div>' +
+        '<select id="ctAssignee" style="' + _ctSelectStyle + '">' + assigneeOpts + '</select>' +
+      '</div>' +
+      '<div>' +
         '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Description</div>' +
-        '<textarea id="ctDescription" placeholder="Describe the incident..." style="width:100%;height:80px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:12px;font-family:var(--font-body);resize:none;outline:none;"></textarea>' +
+        '<textarea id="ctDescription" placeholder="Describe the incident..." style="' + _ctInputStyle + 'height:80px;resize:none;"></textarea>' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px;">' +
         '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'createTicketOverlay\').remove()">Cancel</button>' +
@@ -38890,6 +39071,7 @@ async function submitCreateTicket() {
   if (!summary) { showToast('Summary is required', 'error'); return; }
   var priority = document.getElementById('ctPriority').value;
   var assigneeId = document.getElementById('ctAssignee').value || null;
+  var organization = document.getElementById('ctOrganization') ? document.getElementById('ctOrganization').value : '';
   var description = document.getElementById('ctDescription').value.trim();
 
   var ov = document.getElementById('createTicketOverlay');
@@ -38900,7 +39082,7 @@ async function submitCreateTicket() {
     var result = await DactaJira._fetch('/api/jira?action=createticket', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary: summary, priority: priority, assigneeId: assigneeId, description: description })
+      body: JSON.stringify({ summary: summary, priority: priority, assigneeId: assigneeId, organization: organization, description: description })
     });
     if (result.key) {
       showToast('Created ' + result.key + ' successfully', 'success');
@@ -39308,9 +39490,14 @@ async function queryElastic(action, index, body) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: action, index: index, body: body })
     });
-    if (!resp.ok) { console.warn('[Elastic] HTTP ' + resp.status); return null; }
+    if (!resp.ok) {
+      var errData = null;
+      try { errData = await resp.json(); } catch(e) {}
+      console.warn('[Elastic] HTTP ' + resp.status + (errData ? ' — ' + (errData.error || '') : ''));
+      return null;
+    }
     return await resp.json();
-  } catch (err) { console.error('[Elastic] Query failed:', err); return null; }
+  } catch (err) { console.error('[Elastic] Query failed:', err.message || err); return null; }
 }
 
 // ── DACTA TIP GraphQL Helper ──
@@ -39944,6 +40131,63 @@ function generateExculpatoryEvidence(summary, desc, techniques, iocs, cmdCtx, el
 
 // ── Build the comprehensive investigation HTML ──
 function sleep(ms) { return new Promise(function(resolve) { setTimeout(resolve, ms); }); }
+
+// ── Fetch relevant playbooks from SIEMLess DB for AI investigation context ──
+async function fetchRelevantPlaybooks(techniques, alertTitle, useCaseName) {
+  var dbPlaybooks = [];
+  if (!window._dactaSupabase) return dbPlaybooks;
+  try {
+    // Strategy 1: Match by MITRE technique IDs
+    var techIds = (techniques || []).map(function(t) { return t.id; }).filter(Boolean);
+    if (techIds.length > 0) {
+      var res = await window._dactaSupabase.from('response_playbooks')
+        .select('playbook_name,description,severity,triage_steps,containment_steps,eradication_steps,recovery_steps,investigation_queries,false_positive_guidance,escalation_criteria,auto_response_actions,mitre_tactic,mitre_technique_id,rule_name')
+        .in('mitre_technique_id', techIds)
+        .eq('status', 'active')
+        .limit(3);
+      if (res.data && res.data.length > 0) {
+        dbPlaybooks = dbPlaybooks.concat(res.data);
+      }
+    }
+    // Strategy 2: Text search by alert keywords (if no MITRE matches)
+    if (dbPlaybooks.length === 0 && alertTitle) {
+      var keywords = alertTitle.split(/[\s:,\-]+/).filter(function(w) { return w.length > 3; }).slice(0, 3);
+      for (var i = 0; i < keywords.length; i++) {
+        var res2 = await window._dactaSupabase.from('response_playbooks')
+          .select('playbook_name,description,severity,triage_steps,containment_steps,eradication_steps,recovery_steps,investigation_queries,false_positive_guidance,escalation_criteria,auto_response_actions,mitre_tactic,mitre_technique_id,rule_name')
+          .ilike('playbook_name', '%' + keywords[i] + '%')
+          .eq('status', 'active')
+          .limit(2);
+        if (res2.data && res2.data.length > 0) {
+          dbPlaybooks = dbPlaybooks.concat(res2.data);
+          break; // Found matches, stop searching
+        }
+      }
+    }
+  } catch(e) { console.warn('[Investigation] Failed to fetch DB playbooks:', e); }
+  // Deduplicate by playbook_name
+  var seen = {};
+  return dbPlaybooks.filter(function(p) {
+    if (seen[p.playbook_name]) return false;
+    seen[p.playbook_name] = true;
+    return true;
+  });
+}
+
+// ── Format DB playbook into investigation context string ──
+function formatPlaybookForAI(pb) {
+  var parts = ['## Playbook: ' + (pb.playbook_name || pb.rule_name)];
+  if (pb.description) parts.push('Description: ' + pb.description);
+  if (pb.severity) parts.push('Severity: ' + pb.severity);
+  if (pb.triage_steps) parts.push('Triage Steps: ' + (Array.isArray(pb.triage_steps) ? pb.triage_steps.join(' | ') : pb.triage_steps));
+  if (pb.containment_steps) parts.push('Containment: ' + (Array.isArray(pb.containment_steps) ? pb.containment_steps.join(' | ') : pb.containment_steps));
+  if (pb.eradication_steps) parts.push('Eradication: ' + (Array.isArray(pb.eradication_steps) ? pb.eradication_steps.join(' | ') : pb.eradication_steps));
+  if (pb.investigation_queries) parts.push('Investigation Queries: ' + (Array.isArray(pb.investigation_queries) ? pb.investigation_queries.join(' | ') : JSON.stringify(pb.investigation_queries)));
+  if (pb.false_positive_guidance) parts.push('False Positive Guidance: ' + (Array.isArray(pb.false_positive_guidance) ? pb.false_positive_guidance.join(' | ') : pb.false_positive_guidance));
+  if (pb.escalation_criteria) parts.push('Escalation Criteria: ' + (Array.isArray(pb.escalation_criteria) ? pb.escalation_criteria.join(' | ') : pb.escalation_criteria));
+  if (pb.auto_response_actions) parts.push('Auto Response Actions: ' + (Array.isArray(pb.auto_response_actions) ? pb.auto_response_actions.join(' | ') : JSON.stringify(pb.auto_response_actions)));
+  return parts.join('\n');
+}
 
 // ── Match detection playbook from alert title / use case / techniques ──
 function matchDetectionPlaybook(alertTitle, useCaseName, techniques) {
@@ -40581,7 +40825,7 @@ async function runAIInvestigation(ticketKey, issueData) {
     setTimeout(initCollapsiblePanels, 100);
   }
 
-  // Populate Playbook Actions card from detection rules
+  // Populate Playbook Actions card from detection rules + SIEMLess DB
   var playbookCard = document.getElementById('playbookActionsCard');
   if (playbookCard) {
     var useCaseName = (issueData.fields && issueData.fields.customfield_10072) || '';
@@ -40603,11 +40847,52 @@ async function runAIInvestigation(ticketKey, issueData) {
         '</div>';
       });
     } else {
-      pbHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic;">No matching playbook found for this alert type</div>';
+      pbHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic;">No matching built-in playbook</div>';
     }
+
+    // Fetch DB playbooks asynchronously and append
+    (async function() {
+      try {
+        var dbPbs = await fetchRelevantPlaybooks(techniques, alertTitle, useCaseName);
+        if (dbPbs.length > 0) {
+          var dbHTML = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-subtle);">' +
+            '<div style="font-size:9px;font-weight:600;color:var(--cyan);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">\ud83d\udcda SIEMLess DB Playbooks (' + dbPbs.length + ' matched)</div>';
+          dbPbs.forEach(function(pb) {
+            dbHTML += '<div style="padding:8px 10px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.12);border-radius:6px;margin-bottom:8px;">' +
+              '<div style="font-size:10px;font-weight:600;color:var(--cyan);">' + escapeHtml(pb.playbook_name || pb.rule_name || 'Playbook') + '</div>' +
+              (pb.description ? '<div style="font-size:9px;color:var(--text-secondary);margin-top:3px;">' + escapeHtml(pb.description).substring(0, 200) + '</div>' : '') +
+              (pb.mitre_technique_id ? '<div style="font-size:8px;color:var(--text-muted);margin-top:2px;">MITRE: ' + escapeHtml(pb.mitre_technique_id) + '</div>' : '');
+            // Show triage steps
+            if (pb.triage_steps) {
+              var triageArr = Array.isArray(pb.triage_steps) ? pb.triage_steps : [pb.triage_steps];
+              triageArr.forEach(function(ts, ti) {
+                dbHTML += '<div style="display:flex;gap:6px;padding:4px 0;">' +
+                  '<span style="font-size:9px;color:#a78bfa;font-weight:700;min-width:16px;">' + (ti+1) + '.</span>' +
+                  '<div style="font-size:9px;color:var(--text-primary);">' + escapeHtml(typeof ts === 'string' ? ts : ts.step || JSON.stringify(ts)) + '</div></div>';
+              });
+            }
+            // Show false positive guidance
+            if (pb.false_positive_guidance) {
+              var fpArr = Array.isArray(pb.false_positive_guidance) ? pb.false_positive_guidance : [pb.false_positive_guidance];
+              dbHTML += '<div style="font-size:8px;color:var(--text-muted);margin-top:4px;padding:4px 6px;background:rgba(245,158,11,0.06);border-radius:4px;">FP Guidance: ' + escapeHtml(fpArr.join(' | ')) + '</div>';
+            }
+            // Show investigation queries
+            if (pb.investigation_queries) {
+              var iqArr = Array.isArray(pb.investigation_queries) ? pb.investigation_queries : [pb.investigation_queries];
+              dbHTML += '<div style="font-size:8px;color:var(--text-muted);margin-top:3px;">\ud83d\udd0d Queries: ' + escapeHtml(iqArr.map(function(q) { return typeof q === 'string' ? q : JSON.stringify(q); }).join(' | ').substring(0, 300)) + '</div>';
+            }
+            dbHTML += '</div>';
+          });
+          dbHTML += '</div>';
+          var pbBodyEl = playbookCard.querySelector('.inv-collapsible-body');
+          if (pbBodyEl) pbBodyEl.innerHTML += dbHTML;
+        }
+      } catch(e) { console.warn('[Investigation] DB playbook fetch error:', e); }
+    })();
+
     var pbBody = playbookCard.querySelector('.inv-collapsible-body');
     if (pbBody) { pbBody.innerHTML = pbHTML; }
-    else { playbookCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Playbook Actions</span><span style="font-size:9px;color:var(--text-muted);margin-left:6px;">From Detection Rules</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + pbHTML + '</div>'; }
+    else { playbookCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Playbook Actions</span><span style="font-size:9px;color:var(--text-muted);margin-left:6px;">From Detection Rules + SIEMLess DB</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + pbHTML + '</div>'; }
     setTimeout(initCollapsiblePanels, 100);
   }
 

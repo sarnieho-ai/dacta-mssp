@@ -2,6 +2,19 @@
 // Proxies Elasticsearch queries from the frontend, hiding credentials server-side
 // All credentials read from Vercel Environment Variables — never hardcode secrets
 // Required env vars: ELASTIC_URL, ELASTIC_API_KEY
+// Optional env vars: ELASTIC_SKIP_SSL_VERIFY=true (for self-signed certs)
+
+import https from 'https';
+
+// Custom fetch options for SSL certificate handling
+function getFetchOptions(baseOpts) {
+  // If ELASTIC_SKIP_SSL_VERIFY is set, use a custom agent that skips SSL verification
+  if (process.env.ELASTIC_SKIP_SSL_VERIFY === 'true') {
+    const agent = new https.Agent({ rejectUnauthorized: false });
+    return { ...baseOpts, agent };
+  }
+  return baseOpts;
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -72,7 +85,7 @@ export default async function handler(req, res) {
       'Content-Type': action === 'msearch' ? 'application/x-ndjson' : 'application/json'
     };
 
-    const fetchOpts = { method, headers };
+    const fetchOpts = getFetchOptions({ method, headers });
     if (fetchBody) fetchOpts.body = fetchBody;
 
     const response = await fetch(url, fetchOpts);
@@ -81,6 +94,10 @@ export default async function handler(req, res) {
     return res.status(response.status).json(data);
   } catch (err) {
     console.error('Elastic proxy error:', err);
+    // Provide actionable error for SSL cert issues
+    if (err.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || err.code === 'SELF_SIGNED_CERT_IN_CHAIN' || err.code === 'DEPTH_ZERO_SELF_SIGNED_CERT' || (err.message && err.message.includes('certificate'))) {
+      return res.status(502).json({ error: 'SSL certificate error connecting to Elastic SIEM. If using a self-signed certificate, set ELASTIC_SKIP_SSL_VERIFY=true in environment variables.', code: err.code });
+    }
     return res.status(500).json({ error: err.message });
   }
 }

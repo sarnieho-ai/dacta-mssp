@@ -3,8 +3,10 @@
 // GDPR/PDPA-compliant: PII is tokenized before reaching any LLM.
 // Required env vars: ANTHROPIC_API_KEY, ELASTIC_URL, ELASTIC_API_KEY, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_INSTANCE
 // Optional: OPENCTI_URL, OPENCTI_TOKEN (DACTA TIP credentials)
+// Optional: ELASTIC_SKIP_SSL_VERIFY=true (for self-signed certs)
 
 const { PiiVault } = require('./lib/pii-vault.js');
+const https = require('https');
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ELASTIC_URL = process.env.ELASTIC_URL || '';
@@ -13,6 +15,14 @@ const JIRA_EMAIL = process.env.JIRA_EMAIL || '';
 const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN || '';
 const JIRA_INSTANCE = process.env.JIRA_INSTANCE || 'dactaglobal-sg.atlassian.net';
 
+// SSL-aware fetch helper for Elastic connections
+function elasticFetchOptions(opts) {
+  if (process.env.ELASTIC_SKIP_SSL_VERIFY === 'true') {
+    const agent = new https.Agent({ rejectUnauthorized: false });
+    return { ...opts, agent };
+  }
+  return opts;
+}
 // SIEMLess DB — server-side logging (bypasses RLS with service role)
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -190,14 +200,14 @@ async function executeElasticSearch(params) {
   if (params._source) body._source = params._source;
 
   try {
-    const resp = await fetch(`${ELASTIC_URL}/${index}/_search`, {
+    const resp = await fetch(`${ELASTIC_URL}/${index}/_search`, elasticFetchOptions({
       method: 'POST',
       headers: {
         'Authorization': `ApiKey ${ELASTIC_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(body)
-    });
+    }));
     const data = await resp.json();
     
     // Summarize results to fit Claude's context
@@ -611,8 +621,10 @@ export default async function handler(req, res) {
     let systemPrompt = SYSTEM_PROMPT;
     if (client_context) {
       systemPrompt += `\n\n## Current Session Context\n- Selected client: ${client_context.name || 'All Clients'}\n- Client namespace: ${client_context.namespace || 'all'}\n- Client type: ${client_context.type || 'unknown'}\n- Available connectors: ${(client_context.connectors || []).map(c => c.display_name + ' (' + c.connector_type + ')').join(', ') || 'unknown'}`;
+      if (client_context.namespace && client_context.namespace !== 'all') {
+        systemPrompt += `\n\n**CRITICAL: A specific client is selected. You MUST scope ALL Elastic SIEM queries to namespace "${client_context.namespace}" by adding a filter on data_stream.namespace. Use index pattern "logs-*-${client_context.namespace}-*" or add {"term":{"data_stream.namespace":"${client_context.namespace}"}} to your query filter. Do NOT return results from other clients. For Jira queries, filter by organization "${client_context.name}".`;
+      }
     }
-
     // Tokenize system prompt (protects client names in context)
     systemPrompt = vault.tokenizeSystemPrompt(systemPrompt);
 
