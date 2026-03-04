@@ -27901,7 +27901,7 @@ async function loadAIUsagePage() {
     }
   }
 
-  var selectedMonth = monthSel ? monthSel.value : new Date().toISOString().slice(0, 7);
+  var selectedMonth = (monthSel && monthSel.value) ? monthSel.value : new Date().toISOString().slice(0, 7);
 
   // --- Fetch from server-side API (bypasses RLS, always works) ---
   var cacheKey = selectedMonth;
@@ -27910,20 +27910,48 @@ async function loadAIUsagePage() {
     rows = _aiUsageDBCache;
   } else {
     try {
-      var resp = await fetch('/api/ai-usage?month=' + encodeURIComponent(selectedMonth));
+      var _aiUrl = '/api/ai-usage?month=' + encodeURIComponent(selectedMonth);
+      console.log('[AIUsage] Fetching:', _aiUrl);
+      var resp = await fetch(_aiUrl);
+      console.log('[AIUsage] Response:', resp.status, resp.ok);
       if (resp.ok) {
         var json = await resp.json();
         rows = (json.data && json.data.length > 0) ? json.data : [];
+        console.log('[AIUsage] API returned', rows.length, 'rows');
       } else {
         console.warn('[AIUsage] API error:', resp.status);
         rows = [];
       }
-      _aiUsageDBCache = rows;
-      _aiUsageCacheKey = cacheKey;
     } catch (e) {
-      console.warn('[AIUsage] Fetch error:', e);
+      console.warn('[AIUsage] API fetch failed:', e.message);
       rows = [];
     }
+    // Fallback: if server API returned 0 rows, try Supabase client directly
+    if (rows.length === 0 && window._dactaSupabase) {
+      try {
+        console.log('[AIUsage] Trying Supabase client fallback...');
+        var sb = window._dactaSupabase;
+        var _startDate = selectedMonth + '-01T00:00:00Z';
+        var _endParts = selectedMonth.split('-');
+        var _endDate = new Date(parseInt(_endParts[0]), parseInt(_endParts[1]), 1).toISOString();
+        var res = await sb.from('llm_usage_log')
+          .select('*')
+          .gte('created_at', _startDate)
+          .lt('created_at', _endDate)
+          .order('created_at', { ascending: false })
+          .limit(1000);
+        if (res.data && res.data.length > 0) {
+          rows = res.data;
+          console.log('[AIUsage] Supabase fallback returned', rows.length, 'rows');
+        } else {
+          console.warn('[AIUsage] Supabase fallback also returned 0 rows', res.error ? res.error.message : '');
+        }
+      } catch (e2) {
+        console.warn('[AIUsage] Supabase fallback error:', e2.message);
+      }
+    }
+    _aiUsageDBCache = rows;
+    _aiUsageCacheKey = cacheKey;
   }
 
   // Also merge in-memory session calls that haven't been persisted yet
