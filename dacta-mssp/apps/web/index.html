@@ -23025,68 +23025,209 @@ Analyst: K. Rasmussen | 2026-02-28
            PAGE 17: USER MANAGEMENT
            ===================================================== -->
       <div class="page" id="page-users">
+        <style>
+          .um-tabs { display:flex; gap:0; border-bottom:1px solid var(--border-subtle); margin-bottom:20px; }
+          .um-tab { padding:10px 20px; font-size:12px; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; transition:all 0.2s; font-family:var(--font-body); }
+          .um-tab:hover { color:var(--text-secondary); }
+          .um-tab.active { color:var(--cyan); border-bottom-color:var(--cyan); }
+          .um-tab-panel { display:none; }
+          .um-tab-panel.active { display:block; }
+          .um-role-badge-wrap { position:relative; display:inline-block; }
+          .um-role-dropdown { position:absolute; top:100%; left:0; z-index:200; background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:6px; padding:4px 0; min-width:160px; box-shadow:0 8px 24px rgba(0,0,0,0.4); display:none; }
+          .um-role-dropdown.open { display:block; }
+          .um-role-option { padding:6px 12px; font-size:11px; color:var(--text-secondary); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
+          .um-role-option:hover { background:rgba(0,212,255,0.08); color:var(--cyan); }
+          .um-org-chip { display:inline-block; padding:1px 7px; border-radius:10px; font-size:9px; font-family:var(--font-mono); background:rgba(0,212,255,0.08); color:var(--cyan); border:1px solid rgba(0,212,255,0.2); margin:1px 2px 1px 0; white-space:nowrap; }
+          .um-search { background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; padding:6px 12px; font-size:11px; color:var(--text-primary); font-family:var(--font-body); width:220px; outline:none; }
+          .um-search:focus { border-color:var(--cyan); }
+          .um-search::placeholder { color:var(--text-muted); }
+          .um-perm-yes { color:var(--green); font-weight:600; }
+          .um-perm-no { color:var(--text-muted); }
+          .um-perm-read { color:var(--cyan); font-size:10px; }
+          .um-perm-limited { color:var(--amber); font-size:10px; }
+          .um-perm-own { color:#a78bfa; font-size:10px; }
+          .um-perm-team { color:#60a5fa; font-size:10px; }
+          .um-matrix-wrap { overflow-x:auto; }
+          .um-matrix-wrap table { min-width:700px; }
+          .um-matrix-wrap table th:first-child,
+          .um-matrix-wrap table td:first-child { position:sticky; left:0; background:var(--bg-card); z-index:1; min-width:150px; }
+          .um-group-row td { background:rgba(0,0,0,0.25); color:var(--text-muted); font-size:10px; font-family:var(--font-mono); letter-spacing:0.05em; text-transform:uppercase; padding:5px 8px; }
+          .um-role-card { background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:10px; padding:16px; transition:border-color 0.2s; position:relative; overflow:hidden; }
+          .um-role-card:hover { border-color:rgba(0,212,255,0.3); }
+          .um-role-card-accent { position:absolute; top:0; left:0; right:0; height:3px; }
+          .um-role-card-icon { font-size:22px; margin-bottom:8px; }
+          .um-role-card-name { font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+          .um-role-card-desc { font-size:10px; color:var(--text-muted); line-height:1.5; margin-bottom:10px; }
+          .um-role-card-count { font-size:10px; color:var(--text-secondary); }
+          .um-audit-filter-bar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+          .um-filter-select { background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; padding:5px 10px; font-size:11px; color:var(--text-secondary); font-family:var(--font-body); outline:none; cursor:pointer; }
+          .um-filter-select:focus { border-color:var(--cyan); }
+          .um-action-event { color:var(--cyan); font-family:var(--font-mono); font-size:10px; }
+          .um-mfa-badge { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:10px; font-size:9px; background:rgba(16,185,129,0.12); color:var(--green); border:1px solid rgba(16,185,129,0.25); }
+        </style>
+
         <div class="page-header">
           <div>
             <div class="page-title">User Management</div>
-            <div class="page-subtitle">9 users across 5 roles</div>
+            <div class="page-subtitle" id="um-subtitle">Loading users...</div>
           </div>
           <div class="page-actions">
-            <button class="btn btn-secondary btn-sm">↓ Export</button>
-            <button class="btn btn-primary btn-sm">+ Invite User</button>
+            <button class="btn btn-secondary btn-sm" id="um-export-btn">↓ Export</button>
+            <button class="btn btn-primary btn-sm" id="um-invite-btn">+ Invite User</button>
           </div>
         </div>
 
-        <div class="grid-2" style="margin-bottom:16px;">
-          <div class="card">
-            <div class="card-header"><span class="card-title">Users</span></div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th></tr></thead>
-                <tbody>
-                  <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="user-avatar" style="width:22px;height:22px;font-size:9px;">JL</div><span style="color:var(--text-primary);">John Lim</span></div></td><td style="font-family:var(--font-mono);font-size:10px;">john.lim@dacta.sg</td><td><span class="badge badge-cyan">SOC L2</span></td><td><div class="status-dot green" style="display:inline-block;"></div></td><td class="mono">Now</td></tr>
-                  <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="user-avatar" style="width:22px;height:22px;font-size:9px;background:linear-gradient(135deg,#f59e0b,#ef4444);">ST</div><span style="color:var(--text-primary);">Sarah Tan</span></div></td><td style="font-family:var(--font-mono);font-size:10px;">sarah.tan@dacta.sg</td><td><span class="badge badge-blue">SOC L1</span></td><td><div class="status-dot green" style="display:inline-block;"></div></td><td class="mono">22m ago</td></tr>
-                  <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="user-avatar" style="width:22px;height:22px;font-size:9px;background:linear-gradient(135deg,#10b981,#3b82f6);">MW</div><span style="color:var(--text-primary);">Marcus Wong</span></div></td><td style="font-family:var(--font-mono);font-size:10px;">marcus.w@dacta.sg</td><td><span class="badge badge-blue">SOC L1</span></td><td><div class="status-dot amber" style="display:inline-block;"></div></td><td class="mono">1h ago</td></tr>
-                  <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="user-avatar" style="width:22px;height:22px;font-size:9px;background:linear-gradient(135deg,#8b5cf6,#06b6d4);">RL</div><span style="color:var(--text-primary);">Raj Lingam</span></div></td><td style="font-family:var(--font-mono);font-size:10px;">raj.l@dacta.sg</td><td><span class="badge badge-cyan">SOC L2</span></td><td><div class="status-dot gray" style="display:inline-block;"></div></td><td class="mono">6h ago</td></tr>
-                  <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="user-avatar" style="width:22px;height:22px;font-size:9px;background:linear-gradient(135deg,#f97316,#8b5cf6);">AH</div><span style="color:var(--text-primary);">Aisha Hassan</span></div></td><td style="font-family:var(--font-mono);font-size:10px;">aisha.h@dacta.sg</td><td><span class="badge badge-blue">SOC L1</span></td><td><div class="status-dot gray" style="display:inline-block;"></div></td><td class="mono">6h ago</td></tr>
-                  <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="user-avatar" style="width:22px;height:22px;font-size:9px;background:linear-gradient(135deg,#ef4444,#8b5cf6);">WC</div><span style="color:var(--text-primary);">Wei Chen</span></div></td><td style="font-family:var(--font-mono);font-size:10px;">wei.chen@dacta.sg</td><td><span class="badge badge-purple">SOC Manager</span></td><td><div class="status-dot gray" style="display:inline-block;"></div></td><td class="mono">8h ago</td></tr>
-                  <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="user-avatar" style="width:22px;height:22px;font-size:9px;background:linear-gradient(135deg,#3b82f6,#10b981);">KT</div><span style="color:var(--text-primary);">Kevin Toh</span></div></td><td style="font-family:var(--font-mono);font-size:10px;">kevin.t@dacta.sg</td><td><span class="badge badge-amber">Engineer</span></td><td><div class="status-dot green" style="display:inline-block;"></div></td><td class="mono">45m ago</td></tr>
-                  <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="user-avatar" style="width:22px;height:22px;font-size:9px;background:linear-gradient(135deg,#00d4ff,#3b82f6);">NS</div><span style="color:var(--text-primary);">Nadia Soh</span></div></td><td style="font-family:var(--font-mono);font-size:10px;">nadia.s@dacta.sg</td><td><span class="badge badge-green">Hunter</span></td><td><div class="status-dot gray" style="display:inline-block;"></div></td><td class="mono">2d ago</td></tr>
-                  <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="user-avatar" style="width:22px;height:22px;font-size:9px;background:linear-gradient(135deg,#ef4444,#f97316);">AD</div><span style="color:var(--text-primary);">Admin Dacta</span></div></td><td style="font-family:var(--font-mono);font-size:10px;">admin@dacta.sg</td><td><span class="badge badge-red">Admin</span></td><td><div class="status-dot green" style="display:inline-block;"></div></td><td class="mono">1h ago</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <!-- Tab Bar -->
+        <div class="um-tabs">
+          <div class="um-tab active" data-tab="users">Users</div>
+          <div class="um-tab" data-tab="roles">Roles</div>
+          <div class="um-tab" data-tab="audit">Audit Log</div>
+        </div>
 
+        <!-- TAB 1: Users -->
+        <div class="um-tab-panel active" id="um-panel-users">
           <div class="card">
-            <div class="card-header"><span class="card-title">Role-Based Access Matrix</span></div>
+            <div class="card-header" style="gap:12px;flex-wrap:wrap;">
+              <span class="card-title">All Users</span>
+              <input class="um-search" id="um-user-search" type="text" placeholder="Search name, email, role…" />
+            </div>
             <div class="table-wrap">
-              <table>
+              <table id="um-users-table">
                 <thead>
                   <tr>
-                    <th>Permission</th>
-                    <th>SOC L1</th>
-                    <th>SOC L2</th>
-                    <th>Engineer</th>
-                    <th>Manager</th>
-                    <th>Admin</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Assigned Orgs</th>
+                    <th>Status</th>
+                    <th>Last Login</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr><td style="color:var(--text-secondary);">View Tickets</td><td style="color:var(--green);">✓</td><td style="color:var(--green);">✓</td><td style="color:var(--green);">✓</td><td style="color:var(--green);">✓</td><td style="color:var(--green);">✓</td></tr>
-                  <tr><td style="color:var(--text-secondary);">Manage Tickets</td><td style="color:var(--cyan);">Own</td><td style="color:var(--green);">✓</td><td>—</td><td style="color:var(--green);">✓</td><td style="color:var(--green);">✓</td></tr>
-                  <tr><td style="color:var(--text-secondary);">Response Actions</td><td>—</td><td style="color:var(--green);">✓</td><td>—</td><td style="color:var(--green);">✓</td><td style="color:var(--green);">✓</td></tr>
-                  <tr><td style="color:var(--text-secondary);">Detection Rules</td><td>View</td><td>View</td><td style="color:var(--green);">✓</td><td>View</td><td style="color:var(--green);">✓</td></tr>
-                  <tr><td style="color:var(--text-secondary);">Threat Hunting</td><td>—</td><td style="color:var(--cyan);">Collab</td><td>—</td><td style="color:var(--green);">✓</td><td style="color:var(--green);">✓</td></tr>
-                  <tr><td style="color:var(--text-secondary);">Reports (Generate)</td><td>—</td><td>—</td><td>—</td><td style="color:var(--green);">✓</td><td style="color:var(--green);">✓</td></tr>
-                  <tr><td style="color:var(--text-secondary);">Client Portal Mgmt</td><td>—</td><td>—</td><td>—</td><td style="color:var(--green);">✓</td><td style="color:var(--green);">✓</td></tr>
-                  <tr><td style="color:var(--text-secondary);">Integrations Config</td><td>—</td><td>—</td><td style="color:var(--green);">✓</td><td>—</td><td style="color:var(--green);">✓</td></tr>
-                  <tr><td style="color:var(--text-secondary);">User Management</td><td>—</td><td>—</td><td>—</td><td>—</td><td style="color:var(--green);">✓</td></tr>
-                  <tr><td style="color:var(--text-secondary);">AI Config / LLM</td><td>—</td><td>—</td><td>—</td><td>—</td><td style="color:var(--green);">✓</td></tr>
+                <tbody id="um-users-tbody">
+                  <tr><td colspan="7" style="text-align:center;padding:24px;"><div style="font-size:10px;color:var(--text-muted);">Loading…</div></td></tr>
                 </tbody>
               </table>
             </div>
           </div>
         </div>
+
+        <!-- TAB 2: Roles -->
+        <div class="um-tab-panel" id="um-panel-roles">
+          <div id="um-role-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:24px;"></div>
+          <div class="card">
+            <div class="card-header" style="cursor:pointer;" id="um-matrix-toggle">
+              <span class="card-title">Permission Matrix</span>
+              <span style="font-size:10px;color:var(--text-muted);margin-left:auto;" id="um-matrix-toggle-label">▼ Collapse</span>
+            </div>
+            <div id="um-matrix-body" class="um-matrix-wrap">
+              <table id="um-matrix-table">
+                <thead>
+                  <tr>
+                    <th style="min-width:150px;">Permission</th>
+                    <th style="min-width:82px;text-align:center;">SOC L1</th>
+                    <th style="min-width:82px;text-align:center;">SOC L2</th>
+                    <th style="min-width:82px;text-align:center;">SOC L3/Hunter</th>
+                    <th style="min-width:82px;text-align:center;">Det. Engineer</th>
+                    <th style="min-width:82px;text-align:center;">SOC Manager</th>
+                    <th style="min-width:82px;text-align:center;">Admin</th>
+                    <th style="min-width:82px;text-align:center;">Client Portal</th>
+                  </tr>
+                </thead>
+                <tbody id="um-matrix-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: Audit Log -->
+        <div class="um-tab-panel" id="um-panel-audit">
+          <div class="card">
+            <div class="card-header" style="gap:10px;flex-wrap:wrap;">
+              <span class="card-title">RBAC Audit Log</span>
+              <div class="um-audit-filter-bar" style="margin-bottom:0;margin-left:auto;">
+                <select class="um-filter-select" id="um-audit-type-filter">
+                  <option value="">All Events</option>
+                  <option value="user_created">user_created</option>
+                  <option value="role_changed">role_changed</option>
+                  <option value="user_disabled">user_disabled</option>
+                  <option value="user_enabled">user_enabled</option>
+                  <option value="permission_modified">permission_modified</option>
+                  <option value="user_logged_in">user_logged_in</option>
+                </select>
+                <input class="um-search" id="um-audit-search" type="text" placeholder="Search actor, target…" style="width:180px;" />
+                <button class="btn btn-secondary btn-sm" id="um-audit-export-btn">↓ Export CSV</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table id="um-audit-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Actor</th>
+                    <th>Action</th>
+                    <th>Target</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="um-audit-tbody">
+                  <tr><td colspan="5" style="text-align:center;padding:24px;font-size:10px;color:var(--text-muted);">Loading audit log…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Invite User Modal -->
+        <div id="um-invite-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(8,12,24,0.82);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+          <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:14px;padding:28px;width:480px;max-width:95vw;max-height:88vh;overflow-y:auto;position:relative;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+              <div style="font-size:15px;font-weight:600;color:var(--text-primary);font-family:var(--font-body);">Invite User</div>
+              <button id="um-invite-close" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;line-height:1;">✕</button>
+            </div>
+            <div id="um-invite-step1">
+              <div style="margin-bottom:14px;">
+                <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:5px;">Email Address *</label>
+                <input id="um-invite-email" type="email" class="um-search" style="width:100%;box-sizing:border-box;" placeholder="user@example.com" />
+              </div>
+              <div style="margin-bottom:14px;">
+                <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:5px;">Display Name *</label>
+                <input id="um-invite-name" type="text" class="um-search" style="width:100%;box-sizing:border-box;" placeholder="Full Name" />
+              </div>
+              <div style="margin-bottom:14px;">
+                <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:5px;">Role *</label>
+                <select id="um-invite-role" class="um-filter-select" style="width:100%;">
+                  <option value="soc_l1">SOC L1 Analyst</option>
+                  <option value="soc_l2">SOC L2 Analyst</option>
+                  <option value="soc_l3">SOC L3 / Hunter</option>
+                  <option value="det_eng">Detection Engineer</option>
+                  <option value="soc_mgr">SOC Manager</option>
+                  <option value="admin">Admin</option>
+                  <option value="client">Client Portal</option>
+                </select>
+              </div>
+              <div style="margin-bottom:20px;">
+                <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:8px;">Assigned Organizations</label>
+                <div id="um-invite-orgs" style="max-height:160px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:6px;padding:8px;"></div>
+              </div>
+              <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary btn-sm" id="um-invite-cancel">Cancel</button>
+                <button class="btn btn-primary btn-sm" id="um-invite-review">Review →</button>
+              </div>
+            </div>
+            <div id="um-invite-step2" style="display:none;">
+              <div style="background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.15);border-radius:8px;padding:16px;margin-bottom:16px;">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">INVITATION SUMMARY</div>
+                <div id="um-invite-summary" style="font-size:12px;color:var(--text-secondary);line-height:1.8;"></div>
+              </div>
+              <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary btn-sm" id="um-invite-back">← Back</button>
+                <button class="btn btn-primary btn-sm" id="um-invite-submit">Send Invite</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div><!-- end users -->
 
 
@@ -28849,132 +28990,734 @@ function initAICharts() {
 async function loadUserManagement() {
   var page = document.getElementById('page-users');
   if (!page) return;
-  var tbody = page.querySelector('table tbody');
-  if (!tbody) return;
 
-  // Show loading
-  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;"><div class="jira-spinner" style="margin:0 auto;"></div><div style="font-size:10px;color:var(--text-muted);margin-top:8px;">Loading users from Jira...</div></td></tr>';
+  // ============================================================
+  //  DATA DEFINITIONS
+  // ============================================================
+  var RBAC_ROLES = {
+    'soc_l1':  { name: 'SOC L1 Analyst',       badge: 'badge-blue',   color: '#60a5fa', desc: 'Alert monitoring, triage, escalation. Cannot close P1 incidents.',            icon: '\uD83D\uDEE1' },
+    'soc_l2':  { name: 'SOC L2 Analyst',       badge: 'badge-cyan',   color: '#00d4ff', desc: 'Deep investigation, incident response, host isolation, close incidents.',     icon: '\uD83D\uDD0D' },
+    'soc_l3':  { name: 'SOC L3 / Hunter',      badge: 'badge-green',  color: '#10b981', desc: 'Threat hunting, detection rule creation, advanced forensics.',               icon: '\uD83C\uDFAF' },
+    'det_eng': { name: 'Detection Engineer',   badge: 'badge-amber',  color: '#f59e0b', desc: 'Create and test detection rules. Deploy requires approval.',                 icon: '\u2699\uFE0F' },
+    'soc_mgr': { name: 'SOC Manager',          badge: 'badge-purple', color: '#a78bfa', desc: 'Team management, cross-client dashboards, approve deployments.',             icon: '\uD83D\uDCCA' },
+    'admin':   { name: 'Admin',                badge: 'badge-red',    color: '#ef4444', desc: 'Full platform access. User provisioning, SSO, integrations.',                icon: '\uD83D\uDC51' },
+    'client':  { name: 'Client Portal',        badge: 'badge-blue',   color: '#60a5fa', desc: 'Read-only view of own organization. Approve MSSP actions.',                  icon: '\uD83C\uDFE2', style: 'outline' }
+  };
 
-  try {
-    var resp = await fetch('/api/jira', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ endpoint: 'users' })
-    });
-    var users = [];
-    if (resp.ok) {
-      users = await resp.json();
-      if (!Array.isArray(users)) users = [];
+  var RBAC_PERMISSIONS = {
+    'Alert Handling': {
+      'View Alerts':     { soc_l1:'yes',     soc_l2:'yes',  soc_l3:'yes',  det_eng:'read',    soc_mgr:'yes',   admin:'yes', client:'own'  },
+      'Triage & Update': { soc_l1:'yes',     soc_l2:'yes',  soc_l3:'yes',  det_eng:'no',      soc_mgr:'yes',   admin:'yes', client:'no'   },
+      'Escalate':        { soc_l1:'yes',     soc_l2:'yes',  soc_l3:'yes',  det_eng:'no',      soc_mgr:'yes',   admin:'yes', client:'no'   },
+      'Close Incidents': { soc_l1:'no',      soc_l2:'yes',  soc_l3:'yes',  det_eng:'no',      soc_mgr:'yes',   admin:'yes', client:'no'   }
+    },
+    'Investigation': {
+      'Log Search':        { soc_l1:'limited', soc_l2:'yes',  soc_l3:'yes',  det_eng:'yes',     soc_mgr:'yes',   admin:'yes', client:'no'  },
+      'View Assets':       { soc_l1:'yes',     soc_l2:'yes',  soc_l3:'yes',  det_eng:'read',    soc_mgr:'yes',   admin:'yes', client:'no'  },
+      'Threat Intelligence':{ soc_l1:'read',   soc_l2:'yes',  soc_l3:'yes',  det_eng:'yes',     soc_mgr:'yes',   admin:'yes', client:'no'  }
+    },
+    'Response Actions': {
+      'Execute Playbooks': { soc_l1:'no', soc_l2:'yes', soc_l3:'yes', det_eng:'no', soc_mgr:'yes', admin:'yes', client:'no' },
+      'Host Isolation':    { soc_l1:'no', soc_l2:'yes', soc_l3:'yes', det_eng:'no', soc_mgr:'yes', admin:'yes', client:'no' },
+      'Block IPs / IOCs':  { soc_l1:'no', soc_l2:'yes', soc_l3:'yes', det_eng:'no', soc_mgr:'yes', admin:'yes', client:'no' }
+    },
+    'Detection Rules': {
+      'View Rules':         { soc_l1:'read', soc_l2:'read', soc_l3:'yes', det_eng:'yes', soc_mgr:'yes', admin:'yes', client:'no' },
+      'Create / Edit':      { soc_l1:'no',   soc_l2:'no',   soc_l3:'yes', det_eng:'yes', soc_mgr:'yes', admin:'yes', client:'no' },
+      'Deploy to Production':{ soc_l1:'no',  soc_l2:'no',   soc_l3:'no',  det_eng:'no',  soc_mgr:'yes', admin:'yes', client:'no' }
+    },
+    'Reports & Dashboards': {
+      'View Reports':     { soc_l1:'yes', soc_l2:'yes', soc_l3:'yes', det_eng:'read', soc_mgr:'yes', admin:'yes', client:'own' },
+      'Generate Reports': { soc_l1:'no',  soc_l2:'yes', soc_l3:'yes', det_eng:'no',   soc_mgr:'yes', admin:'yes', client:'no'  },
+      'Schedule Reports': { soc_l1:'no',  soc_l2:'no',  soc_l3:'yes', det_eng:'no',   soc_mgr:'yes', admin:'yes', client:'no'  }
+    },
+    'User Management': {
+      'View Users':       { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'team', admin:'yes', client:'no' },
+      'Add / Edit Users': { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'no',   admin:'yes', client:'no' },
+      'Manage Roles':     { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'no',   admin:'yes', client:'no' }
+    },
+    'Platform Settings': {
+      'View Settings':     { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'limited', admin:'yes', client:'no' },
+      'Edit Integrations': { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'no',      admin:'yes', client:'no' },
+      'View Audit Logs':   { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'team',    admin:'yes', client:'no' }
     }
+  };
 
-    // If the Jira users endpoint doesn't return data, try fetching from search
-    if (users.length === 0) {
-      // Fallback: Get unique assignees from Jira tickets
-      var ticketResp = await fetch('/api/jira', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jql: 'project = DAC ORDER BY updated DESC', maxResults: 100, fields: 'assignee,reporter,creator' })
-      });
-      if (ticketResp.ok) {
-        var ticketData = await ticketResp.json();
-        var issues = ticketData.issues || [];
-        var userMap = {};
-        issues.forEach(function(issue) {
-          var f = issue.fields || {};
-          [f.assignee, f.reporter, f.creator].forEach(function(u) {
-            if (u && u.accountId && !userMap[u.accountId]) {
-              userMap[u.accountId] = {
-                accountId: u.accountId,
-                displayName: u.displayName || 'Unknown',
-                emailAddress: u.emailAddress || '',
-                avatarUrls: u.avatarUrls || {},
-                active: u.active !== false
-              };
-            }
-          });
-        });
-        users = Object.values(userMap);
-      }
-    }
+  var SEED_USERS = [
+    { id: 'u1', email: 'admin@dacta.sg',                display_name: 'Admin',                    role: 'admin',   assigned_orgs: ['all'],                                                                                                                    status: 'active', last_login: new Date().toISOString(),                    mfa_enabled: true  },
+    { id: 'u2', email: 'christian.gepanaga@dacta.sg',   display_name: 'Christian Miguel Gepanaga', role: 'soc_l2',  assigned_orgs: ['9ce7a126-4e9d-434e-b952-f4c4fce56fa1','3a57db8a-7787-414c-9e28-1c14de388d31','bc08ccf3-7143-47ff-97af-07b735208186'],     status: 'active', last_login: new Date(Date.now()-1800000).toISOString()  },
+    { id: 'u3', email: 'wendy.melyana@dacta.sg',        display_name: 'Wendy Melyana',             role: 'soc_l1',  assigned_orgs: ['3a57db8a-7787-414c-9e28-1c14de388d31','00145232-a625-4b8b-be55-989b35b1c7c2'],                                           status: 'active', last_login: new Date(Date.now()-3600000).toISOString()  },
+    { id: 'u4', email: 'marcfrance.limasin@dacta.sg',   display_name: 'Marcfrance Limasin',        role: 'soc_l1',  assigned_orgs: ['a1cffb2a-32f3-4cb6-b29e-3fa40d8e08a6','f6463102-adc3-4bdc-a014-ba197d0fada6','65e4e0a3-c81e-4bc4-8576-e7ae5a8fbc02'],     status: 'active', last_login: new Date(Date.now()-7200000).toISOString()  },
+    { id: 'u5', email: 'sarnie.ho@dacta.sg',            display_name: 'Sarnie Ho',                 role: 'soc_mgr', assigned_orgs: ['all'],                                                                                                                    status: 'active', last_login: new Date(Date.now()-600000).toISOString(),  mfa_enabled: true  }
+  ];
 
-    // Define RBAC roles for mapping
-    var rbacRoles = ['SOC L1', 'SOC L2', 'SOC Manager', 'Engineer', 'Hunter', 'Admin'];
-    var roleColors = { 'SOC L1': 'blue', 'SOC L2': 'cyan', 'SOC Manager': 'purple', 'Engineer': 'amber', 'Hunter': 'green', 'Admin': 'red' };
-    var gradients = [
-      'linear-gradient(135deg,#00d4ff,#3b82f6)', 'linear-gradient(135deg,#f59e0b,#ef4444)',
-      'linear-gradient(135deg,#10b981,#3b82f6)', 'linear-gradient(135deg,#8b5cf6,#06b6d4)',
-      'linear-gradient(135deg,#f97316,#8b5cf6)', 'linear-gradient(135deg,#ef4444,#f97316)',
-      'linear-gradient(135deg,#3b82f6,#10b981)', 'linear-gradient(135deg,#ef4444,#8b5cf6)',
-    ];
+  var SEED_AUDIT = [
+    { id: 'a1', created_at: new Date(Date.now()-600000).toISOString(),   actor: 'admin@dacta.sg',              action: 'user_created',     target: 'sarnie.ho@dacta.sg',              details: 'Role: soc_mgr, Orgs: all' },
+    { id: 'a2', created_at: new Date(Date.now()-1800000).toISOString(),  actor: 'admin@dacta.sg',              action: 'role_changed',     target: 'christian.gepanaga@dacta.sg',     details: 'soc_l1 \u2192 soc_l2' },
+    { id: 'a3', created_at: new Date(Date.now()-3600000).toISOString(),  actor: 'sarnie.ho@dacta.sg',          action: 'user_logged_in',   target: 'sarnie.ho@dacta.sg',              details: 'MFA verified' },
+    { id: 'a4', created_at: new Date(Date.now()-7200000).toISOString(),  actor: 'admin@dacta.sg',              action: 'user_created',     target: 'wendy.melyana@dacta.sg',          details: 'Role: soc_l1' },
+    { id: 'a5', created_at: new Date(Date.now()-14400000).toISOString(), actor: 'admin@dacta.sg',              action: 'user_created',     target: 'marcfrance.limasin@dacta.sg',     details: 'Role: soc_l1' },
+    { id: 'a6', created_at: new Date(Date.now()-86400000).toISOString(), actor: 'admin@dacta.sg',              action: 'permission_modified', target: 'soc_l2',                        details: 'Added: Host Isolation' },
+    { id: 'a7', created_at: new Date(Date.now()-172800000).toISOString(),actor: 'admin@dacta.sg',              action: 'user_created',     target: 'admin@dacta.sg',                  details: 'Role: admin, MFA enforced' }
+  ];
 
-    // Auto-assign roles based on name/email heuristics
-    function guessRole(user) {
-      var n = (user.displayName || '').toLowerCase();
-      var e = (user.emailAddress || '').toLowerCase();
-      if (n.includes('admin') || e.includes('admin')) return 'Admin';
-      if (n.includes('manager') || n.includes('lead')) return 'SOC Manager';
-      if (n.includes('engineer') || n.includes('dev') || n.includes('kevin')) return 'Engineer';
-      if (n.includes('hunt') || n.includes('threat')) return 'Hunter';
-      if (n.includes('senior') || n.includes('l2') || n.includes('analyst ii')) return 'SOC L2';
-      return 'SOC L1';
-    }
+  // ============================================================
+  //  STATE
+  // ============================================================
+  var _users = [];
+  var _auditLog = [];
+  var _matrixCollapsed = false;
 
-    if (users.length > 0) {
-      var rowsHTML = '';
-      users.forEach(function(u, idx) {
-        var name = u.displayName || 'Unknown';
-        var email = u.emailAddress || '—';
-        var initials = name.split(' ').map(function(w){ return w[0] || ''; }).join('').toUpperCase().slice(0,2);
-        var grad = gradients[idx % gradients.length];
-        var role = guessRole(u);
-        var roleColor = roleColors[role] || 'blue';
-        var isActive = u.active !== false;
-        var statusClass = isActive ? 'green' : 'gray';
+  // ============================================================
+  //  HELPERS
+  // ============================================================
+  var GRADIENTS = [
+    'linear-gradient(135deg,#00d4ff,#3b82f6)', 'linear-gradient(135deg,#f59e0b,#ef4444)',
+    'linear-gradient(135deg,#10b981,#3b82f6)', 'linear-gradient(135deg,#8b5cf6,#06b6d4)',
+    'linear-gradient(135deg,#f97316,#8b5cf6)', 'linear-gradient(135deg,#ef4444,#f97316)',
+    'linear-gradient(135deg,#3b82f6,#10b981)', 'linear-gradient(135deg,#ef4444,#8b5cf6)'
+  ];
 
-        // Role select dropdown for editing
-        var roleSelect = '<select class="rbac-role-select" data-uid="' + (u.accountId || idx) + '" style="background:transparent;border:1px solid var(--border-subtle);color:var(--' + roleColor + ',var(--cyan));font-size:10px;padding:2px 6px;border-radius:4px;cursor:pointer;font-family:var(--font-mono);">';
-        rbacRoles.forEach(function(r) {
-          roleSelect += '<option value="' + r + '"' + (r === role ? ' selected' : '') + '>' + r + '</option>';
-        });
-        roleSelect += '</select>';
-
-        rowsHTML += '<tr>' +
-          '<td><div style="display:flex;align-items:center;gap:8px;">' +
-            '<div class="user-avatar" style="width:22px;height:22px;font-size:9px;background:' + grad + ';">' + initials + '</div>' +
-            '<span style="color:var(--text-primary);">' + name + '</span>' +
-          '</div></td>' +
-          '<td style="font-family:var(--font-mono);font-size:10px;">' + email + '</td>' +
-          '<td>' + roleSelect + '</td>' +
-          '<td><div class="status-dot ' + statusClass + '" style="display:inline-block;"></div></td>' +
-          '<td class="mono" style="font-size:10px;color:var(--text-muted);">' + (isActive ? 'Active' : 'Inactive') + '</td>' +
-        '</tr>';
-      });
-      tbody.innerHTML = rowsHTML;
-
-      // Update subtitle
-      var subtitle = page.querySelector('.page-subtitle');
-      if (subtitle) subtitle.innerHTML = users.length + ' users from Jira ' + jiraLiveBadge();
-
-      // Add event listeners for role changes
-      page.querySelectorAll('.rbac-role-select').forEach(function(sel) {
-        sel.addEventListener('change', function() {
-          var uid = this.getAttribute('data-uid');
-          var newRole = this.value;
-          var rc = roleColors[newRole] || 'blue';
-          this.style.color = 'var(--' + rc + ',var(--cyan))';
-          this.style.borderColor = 'var(--' + rc + ',var(--border-subtle))';
-          showToast('Role updated to ' + newRole + ' (saved locally)');
-        });
-      });
-
-      console.log('[UserMgmt] Loaded ' + users.length + ' users from Jira');
-    } else {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;font-size:10px;color:var(--text-muted);">No users found in Jira project</td></tr>';
-    }
-  } catch (err) {
-    console.error('[UserMgmt] Error:', err);
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--red-bright);font-size:10px;">Failed to load users: ' + err.message + '</td></tr>';
+  function umGrad(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffff;
+    return GRADIENTS[h % GRADIENTS.length];
   }
+
+  function umInitials(name) {
+    return (name || '?').split(' ').map(function(w){ return w[0] || ''; }).join('').toUpperCase().slice(0,2) || '??';
+  }
+
+  function umRelTime(iso) {
+    if (!iso) return '\u2014';
+    var diff = Date.now() - new Date(iso).getTime();
+    if (diff < 60000)   return 'Just now';
+    if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+    if (diff < 86400000)return Math.floor(diff/3600000) + 'h ago';
+    return Math.floor(diff/86400000) + 'd ago';
+  }
+
+  function umFmtTs(iso) {
+    if (!iso) return '\u2014';
+    var d = new Date(iso);
+    return d.toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' }) +
+           ' ' + d.toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', hour12:false });
+  }
+
+  function umPermCell(val) {
+    if (val === 'yes')     return '<span class="um-perm-yes">\u2713</span>';
+    if (val === 'no')      return '<span class="um-perm-no">\u2014</span>';
+    if (val === 'read')    return '<span class="um-perm-read">R</span>';
+    if (val === 'limited') return '<span class="um-perm-limited">LTD</span>';
+    if (val === 'own')     return '<span class="um-perm-own">Own</span>';
+    if (val === 'team')    return '<span class="um-perm-team">Team</span>';
+    return '<span class="um-perm-no">' + escapeHtml(val) + '</span>';
+  }
+
+  function umOrgChips(orgs) {
+    if (!orgs || orgs.length === 0) return '<span style="color:var(--text-muted);font-size:10px;">\u2014</span>';
+    if (orgs[0] === 'all') return '<span class="um-org-chip" style="background:rgba(167,139,250,0.12);color:#a78bfa;border-color:rgba(167,139,250,0.3);">All Orgs</span>';
+    return orgs.slice(0,3).map(function(id) {
+      var org = (window.ORG_CONNECTORS && window.ORG_CONNECTORS[id]) || {};
+      var label = org.code || org.name || id.slice(0,8);
+      return '<span class="um-org-chip">' + escapeHtml(label) + '</span>';
+    }).join('') + (orgs.length > 3 ? '<span class="um-org-chip" style="opacity:0.6;">+' + (orgs.length-3) + '</span>' : '');
+  }
+
+  function umRoleBadge(roleKey, uid) {
+    var r = RBAC_ROLES[roleKey] || { name: roleKey, badge: 'badge-blue' };
+    var opts = Object.keys(RBAC_ROLES).map(function(k) {
+      return '<div class="um-role-option" data-role="' + k + '" data-uid="' + escapeHtml(uid) + '">' +
+             escapeHtml(RBAC_ROLES[k].name) + '</div>';
+    }).join('');
+    return '<div class="um-role-badge-wrap">' +
+      '<span class="badge ' + r.badge + ' um-role-trigger" style="cursor:pointer;" data-uid="' + escapeHtml(uid) + '">' +
+        escapeHtml(r.name) +
+        ' <span style="font-size:8px;opacity:0.7;">\u25BE</span>' +
+      '</span>' +
+      '<div class="um-role-dropdown" id="um-dd-' + escapeHtml(uid) + '">' + opts + '</div>' +
+    '</div>';
+  }
+
+  // ============================================================
+  //  RENDER USERS TABLE
+  // ============================================================
+  function umRenderUsers(list) {
+    var tbody = document.getElementById('um-users-tbody');
+    if (!tbody) return;
+    if (!list || list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;font-size:10px;color:var(--text-muted);">No users found</td></tr>';
+      return;
+    }
+    var html = '';
+    list.forEach(function(u, idx) {
+      var initials = umInitials(u.display_name);
+      var grad     = umGrad(u.email || u.id || idx + '');
+      var role     = RBAC_ROLES[u.role] || { name: u.role, badge: 'badge-blue' };
+      var isActive = u.status !== 'disabled';
+      var dotClass = isActive ? 'green' : 'gray';
+      var mfaBadge = u.mfa_enabled ? '<span class="um-mfa-badge">\uD83D\uDD12 MFA</span>' : '';
+      html += '<tr data-uid="' + escapeHtml(u.id) + '" data-role="' + escapeHtml(u.role) + '">' +
+        '<td><div style="display:flex;align-items:center;gap:8px;">' +
+          '<div class="user-avatar" style="width:26px;height:26px;font-size:10px;background:' + grad + ';">' + escapeHtml(initials) + '</div>' +
+          '<div><div style="color:var(--text-primary);font-size:12px;">' + escapeHtml(u.display_name || '\u2014') + '</div>' +
+          mfaBadge +
+          '</div></div></td>' +
+        '<td style="font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);">' + escapeHtml(u.email || '\u2014') + '</td>' +
+        '<td>' + umRoleBadge(u.role, u.id) + '</td>' +
+        '<td>' + umOrgChips(u.assigned_orgs) + '</td>' +
+        '<td><div style="display:flex;align-items:center;gap:6px;"><div class="status-dot ' + dotClass + '" style="display:inline-block;"></div>' +
+          '<span style="font-size:10px;color:var(--text-muted);">' + (isActive ? 'Active' : 'Disabled') + '</span></div></td>' +
+        '<td class="mono" style="font-size:10px;color:var(--text-muted);">' + escapeHtml(umRelTime(u.last_login)) + '</td>' +
+        '<td style="white-space:nowrap;">' +
+          '<button class="btn btn-secondary btn-sm um-edit-btn" data-uid="' + escapeHtml(u.id) + '" style="font-size:10px;padding:3px 8px;margin-right:4px;">Edit</button>' +
+          '<button class="btn btn-sm um-toggle-btn" data-uid="' + escapeHtml(u.id) + '" style="font-size:10px;padding:3px 8px;background:' + (isActive ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)') + ';color:' + (isActive ? 'var(--red-bright)' : 'var(--green)') + ';border:1px solid ' + (isActive ? 'rgba(239,68,68,0.25)' : 'rgba(16,185,129,0.25)') + ';">' +
+            (isActive ? 'Disable' : 'Enable') +
+          '</button>' +
+        '</td>' +
+      '</tr>';
+    });
+    tbody.innerHTML = html;
+    umWireUserActions();
+  }
+
+  // ============================================================
+  //  WIRE USER TABLE ACTIONS
+  // ============================================================
+  function umWireUserActions() {
+    // Role badge dropdown toggle
+    document.querySelectorAll('#page-users .um-role-trigger').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var uid = this.getAttribute('data-uid');
+        var dd  = document.getElementById('um-dd-' + uid);
+        if (!dd) return;
+        var wasOpen = dd.classList.contains('open');
+        document.querySelectorAll('#page-users .um-role-dropdown').forEach(function(d){ d.classList.remove('open'); });
+        if (!wasOpen) dd.classList.add('open');
+      });
+    });
+
+    // Role option select
+    document.querySelectorAll('#page-users .um-role-option').forEach(function(opt) {
+      opt.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var uid     = this.getAttribute('data-uid');
+        var newRole = this.getAttribute('data-role');
+        var r       = RBAC_ROLES[newRole];
+        umChangeRole(uid, newRole);
+        var dd = document.getElementById('um-dd-' + uid);
+        if (dd) dd.classList.remove('open');
+      });
+    });
+
+    // Disable / Enable toggle
+    document.querySelectorAll('#page-users .um-toggle-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var uid = this.getAttribute('data-uid');
+        umToggleUser(uid);
+      });
+    });
+
+    // Edit
+    document.querySelectorAll('#page-users .um-edit-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var uid = this.getAttribute('data-uid');
+        showToast('Edit user coming soon', 'info');
+      });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function() {
+      document.querySelectorAll('#page-users .um-role-dropdown').forEach(function(d){ d.classList.remove('open'); });
+    }, { once: false });
+  }
+
+  // ============================================================
+  //  CHANGE ROLE
+  // ============================================================
+  async function umChangeRole(uid, newRole) {
+    var user = null;
+    for (var i = 0; i < _users.length; i++) { if (_users[i].id === uid) { user = _users[i]; break; } }
+    if (!user) return;
+    var oldRole = user.role;
+    user.role = newRole;
+
+    // Try Supabase
+    var saved = false;
+    try {
+      if (window._supabaseRef) {
+        var res = await window._supabaseRef.from('platform_users').update({ role: newRole }).eq('id', uid);
+        if (!res.error) saved = true;
+      }
+    } catch(e) {}
+
+    // Fallback localStorage
+    if (!saved) {
+      try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e) {}
+    }
+
+    // Audit log
+    var auditEntry = {
+      id: 'a_' + Date.now(),
+      created_at: new Date().toISOString(),
+      actor: 'current_user',
+      action: 'role_changed',
+      target: user.email,
+      details: escapeHtml(oldRole) + ' \u2192 ' + escapeHtml(newRole)
+    };
+    _auditLog.unshift(auditEntry);
+    try {
+      if (window._supabaseRef) await window._supabaseRef.from('rbac_audit_log').insert([auditEntry]);
+      else { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); }
+    } catch(e) {}
+
+    umRenderUsers(_users);
+    umRenderAudit(_auditLog);
+    var rName = (RBAC_ROLES[newRole] || {}).name || newRole;
+    showToast('Role updated to ' + rName, 'success');
+  }
+
+  // ============================================================
+  //  TOGGLE USER STATUS
+  // ============================================================
+  async function umToggleUser(uid) {
+    var user = null;
+    for (var i = 0; i < _users.length; i++) { if (_users[i].id === uid) { user = _users[i]; break; } }
+    if (!user) return;
+    var newStatus = (user.status === 'active') ? 'disabled' : 'active';
+    user.status = newStatus;
+
+    var saved = false;
+    try {
+      if (window._supabaseRef) {
+        var res = await window._supabaseRef.from('platform_users').update({ status: newStatus }).eq('id', uid);
+        if (!res.error) saved = true;
+      }
+    } catch(e) {}
+    if (!saved) { try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e) {} }
+
+    var auditEntry = {
+      id: 'a_' + Date.now(),
+      created_at: new Date().toISOString(),
+      actor: 'current_user',
+      action: newStatus === 'disabled' ? 'user_disabled' : 'user_enabled',
+      target: user.email,
+      details: 'Status set to ' + newStatus
+    };
+    _auditLog.unshift(auditEntry);
+    try {
+      if (window._supabaseRef) await window._supabaseRef.from('rbac_audit_log').insert([auditEntry]);
+      else { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); }
+    } catch(e) {}
+
+    umRenderUsers(_users);
+    umRenderAudit(_auditLog);
+    showToast('User ' + user.display_name + ' ' + (newStatus === 'disabled' ? 'disabled' : 're-enabled'), newStatus === 'disabled' ? 'warning' : 'success');
+  }
+
+  // ============================================================
+  //  RENDER ROLE CARDS
+  // ============================================================
+  function umRenderRoleCards(users) {
+    var container = document.getElementById('um-role-cards');
+    if (!container) return;
+    var counts = {};
+    users.forEach(function(u) { counts[u.role] = (counts[u.role] || 0) + 1; });
+    var html = '';
+    Object.keys(RBAC_ROLES).forEach(function(key) {
+      var r = RBAC_ROLES[key];
+      var cnt = counts[key] || 0;
+      html += '<div class="um-role-card">' +
+        '<div class="um-role-card-accent" style="background:' + r.color + ';"></div>' +
+        '<div class="um-role-card-icon">' + r.icon + '</div>' +
+        '<div class="um-role-card-name">' + escapeHtml(r.name) + '</div>' +
+        '<div class="um-role-card-desc">' + escapeHtml(r.desc) + '</div>' +
+        '<div class="um-role-card-count">' +
+          '<span class="badge ' + r.badge + '" style="margin-right:8px;">' + cnt + ' user' + (cnt !== 1 ? 's' : '') + '</span>' +
+        '</div>' +
+      '</div>';
+    });
+    container.innerHTML = html;
+  }
+
+  // ============================================================
+  //  RENDER PERMISSION MATRIX
+  // ============================================================
+  function umRenderMatrix() {
+    var tbody = document.getElementById('um-matrix-tbody');
+    if (!tbody) return;
+    var html = '';
+    var roleOrder = ['soc_l1','soc_l2','soc_l3','det_eng','soc_mgr','admin','client'];
+    Object.keys(RBAC_PERMISSIONS).forEach(function(group) {
+      html += '<tr class="um-group-row"><td colspan="8" style="padding-left:8px;">' + escapeHtml(group) + '</td></tr>';
+      var perms = RBAC_PERMISSIONS[group];
+      Object.keys(perms).forEach(function(permName) {
+        var row = perms[permName];
+        html += '<tr><td style="padding-left:16px;color:var(--text-secondary);font-size:11px;">' + escapeHtml(permName) + '</td>';
+        roleOrder.forEach(function(rk) {
+          html += '<td style="text-align:center;">' + umPermCell(row[rk] || 'no') + '</td>';
+        });
+        html += '</tr>';
+      });
+    });
+    tbody.innerHTML = html;
+  }
+
+  // ============================================================
+  //  RENDER AUDIT LOG
+  // ============================================================
+  function umRenderAudit(log) {
+    var tbody = document.getElementById('um-audit-tbody');
+    if (!tbody) return;
+    var typeFilter  = (document.getElementById('um-audit-type-filter') || {}).value || '';
+    var searchText  = ((document.getElementById('um-audit-search') || {}).value || '').toLowerCase();
+    var filtered = log.filter(function(e) {
+      var matchType   = !typeFilter   || e.action === typeFilter;
+      var matchSearch = !searchText  || (e.actor || '').toLowerCase().includes(searchText) || (e.target || '').toLowerCase().includes(searchText);
+      return matchType && matchSearch;
+    });
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;font-size:10px;color:var(--text-muted);">No events match the current filter</td></tr>';
+      return;
+    }
+    var actionColors = {
+      'user_created':       'var(--green)',
+      'role_changed':       'var(--cyan)',
+      'user_disabled':      'var(--red-bright)',
+      'user_enabled':       'var(--green)',
+      'permission_modified':'var(--amber)',
+      'user_logged_in':     'var(--text-muted)'
+    };
+    var html = '';
+    filtered.forEach(function(e) {
+      var clr = actionColors[e.action] || 'var(--cyan)';
+      html += '<tr>' +
+        '<td class="mono" style="font-size:10px;color:var(--text-muted);white-space:nowrap;">' + escapeHtml(umFmtTs(e.created_at)) + '</td>' +
+        '<td style="font-size:11px;color:var(--text-secondary);">' + escapeHtml(e.actor || '\u2014') + '</td>' +
+        '<td><span class="um-action-event" style="color:' + clr + ';">' + escapeHtml(e.action || '\u2014') + '</span></td>' +
+        '<td style="font-size:11px;color:var(--text-secondary);">' + escapeHtml(e.target || '\u2014') + '</td>' +
+        '<td style="font-size:10px;color:var(--text-muted);">' + escapeHtml(e.details || '\u2014') + '</td>' +
+      '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  // ============================================================
+  //  LOAD DATA FROM SUPABASE / FALLBACK
+  // ============================================================
+  try {
+    var dbUsers = null;
+    if (window._supabaseRef) {
+      try {
+        var res = await window._supabaseRef.from('platform_users').select('*').order('created_at', { ascending: false });
+        if (!res.error && res.data && res.data.length > 0) dbUsers = res.data;
+      } catch(e) { console.warn('[UserMgmt] Supabase users fetch failed:', e); }
+    }
+    if (dbUsers) {
+      _users = dbUsers;
+    } else {
+      // Try localStorage
+      try {
+        var lsUsers = localStorage.getItem('dacta_platform_users');
+        if (lsUsers) _users = JSON.parse(lsUsers);
+      } catch(e) {}
+      if (_users.length === 0) _users = SEED_USERS;
+    }
+  } catch(e) { _users = SEED_USERS; }
+
+  // Load audit log
+  try {
+    var dbAudit = null;
+    if (window._supabaseRef) {
+      try {
+        var aRes = await window._supabaseRef.from('rbac_audit_log').select('*').order('created_at', { ascending: false }).limit(200);
+        if (!aRes.error && aRes.data && aRes.data.length > 0) dbAudit = aRes.data;
+      } catch(e) { console.warn('[UserMgmt] Supabase audit fetch failed:', e); }
+    }
+    if (dbAudit) {
+      _auditLog = dbAudit;
+    } else {
+      try {
+        var lsAudit = localStorage.getItem('dacta_rbac_audit');
+        if (lsAudit) _auditLog = JSON.parse(lsAudit);
+      } catch(e) {}
+      if (_auditLog.length === 0) _auditLog = SEED_AUDIT;
+    }
+  } catch(e) { _auditLog = SEED_AUDIT; }
+
+  // ============================================================
+  //  INITIAL RENDER
+  // ============================================================
+  umRenderUsers(_users);
+  umRenderRoleCards(_users);
+  umRenderMatrix();
+  umRenderAudit(_auditLog);
+
+  // Update subtitle
+  var activeCount = _users.filter(function(u){ return u.status !== 'disabled'; }).length;
+  var roleCount = Object.keys(RBAC_ROLES).length;
+  var subtitle = document.getElementById('um-subtitle');
+  if (subtitle) subtitle.textContent = activeCount + ' active users \u00B7 ' + roleCount + ' roles';
+
+  // ============================================================
+  //  TAB SWITCHING
+  // ============================================================
+  document.querySelectorAll('#page-users .um-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('#page-users .um-tab').forEach(function(t){ t.classList.remove('active'); });
+      document.querySelectorAll('#page-users .um-tab-panel').forEach(function(p){ p.classList.remove('active'); });
+      this.classList.add('active');
+      var panelId = 'um-panel-' + this.getAttribute('data-tab');
+      var panel = document.getElementById(panelId);
+      if (panel) panel.classList.add('active');
+    });
+  });
+
+  // ============================================================
+  //  SEARCH FILTER
+  // ============================================================
+  var searchInput = document.getElementById('um-user-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      var q = this.value.toLowerCase();
+      var filtered = _users.filter(function(u) {
+        var roleLabel = ((RBAC_ROLES[u.role] || {}).name || u.role || '').toLowerCase();
+        return (u.display_name || '').toLowerCase().includes(q) ||
+               (u.email || '').toLowerCase().includes(q) ||
+               roleLabel.includes(q);
+      });
+      umRenderUsers(filtered);
+    });
+  }
+
+  // ============================================================
+  //  AUDIT FILTERS
+  // ============================================================
+  var auditTypeFilter = document.getElementById('um-audit-type-filter');
+  var auditSearch     = document.getElementById('um-audit-search');
+  if (auditTypeFilter) auditTypeFilter.addEventListener('change', function(){ umRenderAudit(_auditLog); });
+  if (auditSearch)     auditSearch.addEventListener('input',  function(){ umRenderAudit(_auditLog); });
+
+  // ============================================================
+  //  MATRIX COLLAPSE TOGGLE
+  // ============================================================
+  var matrixToggle = document.getElementById('um-matrix-toggle');
+  if (matrixToggle) {
+    matrixToggle.addEventListener('click', function() {
+      _matrixCollapsed = !_matrixCollapsed;
+      var body  = document.getElementById('um-matrix-body');
+      var label = document.getElementById('um-matrix-toggle-label');
+      if (body)  body.style.display  = _matrixCollapsed ? 'none' : '';
+      if (label) label.textContent   = _matrixCollapsed ? '\u25BA Expand' : '\u25BC Collapse';
+    });
+  }
+
+  // ============================================================
+  //  EXPORT USERS CSV
+  // ============================================================
+  var exportBtn = document.getElementById('um-export-btn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function() {
+      var rows = [['ID','Name','Email','Role','Status','Last Login']];
+      _users.forEach(function(u) {
+        rows.push([
+          u.id, u.display_name, u.email,
+          (RBAC_ROLES[u.role] || {}).name || u.role,
+          u.status,
+          u.last_login || ''
+        ]);
+      });
+      var csv = rows.map(function(r){ return r.map(function(c){ return '"' + (c||'').replace(/"/g,'""') + '"'; }).join(','); }).join('\n');
+      var a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+      a.download = 'dacta_users_' + new Date().toISOString().slice(0,10) + '.csv';
+      a.click();
+      showToast('Users exported as CSV', 'success');
+    });
+  }
+
+  // ============================================================
+  //  EXPORT AUDIT CSV
+  // ============================================================
+  var auditExportBtn = document.getElementById('um-audit-export-btn');
+  if (auditExportBtn) {
+    auditExportBtn.addEventListener('click', function() {
+      var rows = [['Timestamp','Actor','Action','Target','Details']];
+      _auditLog.forEach(function(e) {
+        rows.push([ umFmtTs(e.created_at), e.actor, e.action, e.target, e.details ]);
+      });
+      var csv = rows.map(function(r){ return r.map(function(c){ return '"' + (c||'').replace(/"/g,'""') + '"'; }).join(','); }).join('\n');
+      var a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+      a.download = 'dacta_rbac_audit_' + new Date().toISOString().slice(0,10) + '.csv';
+      a.click();
+      showToast('Audit log exported as CSV', 'success');
+    });
+  }
+
+  // ============================================================
+  //  INVITE USER MODAL
+  // ============================================================
+  var modal       = document.getElementById('um-invite-modal');
+  var inviteBtn   = document.getElementById('um-invite-btn');
+  var closeBtn    = document.getElementById('um-invite-close');
+  var cancelBtn   = document.getElementById('um-invite-cancel');
+  var reviewBtn   = document.getElementById('um-invite-review');
+  var backBtn     = document.getElementById('um-invite-back');
+  var submitBtn   = document.getElementById('um-invite-submit');
+  var step1       = document.getElementById('um-invite-step1');
+  var step2       = document.getElementById('um-invite-step2');
+  var orgsDiv     = document.getElementById('um-invite-orgs');
+
+  function umShowModal() {
+    if (!modal) return;
+    // Populate org checkboxes
+    if (orgsDiv) {
+      var orgHtml = '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;color:var(--text-secondary);cursor:pointer;">' +
+        '<input type="checkbox" value="all" style="accent-color:var(--cyan);"> All Organizations</label>';
+      if (window.ORG_CONNECTORS) {
+        Object.keys(window.ORG_CONNECTORS).forEach(function(id) {
+          var org = window.ORG_CONNECTORS[id];
+          orgHtml += '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;color:var(--text-secondary);cursor:pointer;">' +
+            '<input type="checkbox" value="' + escapeHtml(id) + '" style="accent-color:var(--cyan);"> ' +
+            escapeHtml(org.name || org.code || id) + '</label>';
+        });
+      }
+      orgsDiv.innerHTML = orgHtml;
+    }
+    modal.style.display = 'flex';
+    if (step1) step1.style.display = 'block';
+    if (step2) step2.style.display = 'none';
+  }
+
+  function umHideModal() {
+    if (modal) modal.style.display = 'none';
+    var emailEl = document.getElementById('um-invite-email');
+    var nameEl  = document.getElementById('um-invite-name');
+    if (emailEl) emailEl.value = '';
+    if (nameEl)  nameEl.value  = '';
+  }
+
+  if (inviteBtn) inviteBtn.addEventListener('click', umShowModal);
+  if (closeBtn)  closeBtn.addEventListener('click',  umHideModal);
+  if (cancelBtn) cancelBtn.addEventListener('click',  umHideModal);
+
+  if (reviewBtn) {
+    reviewBtn.addEventListener('click', function() {
+      var emailVal = (document.getElementById('um-invite-email') || {}).value || '';
+      var nameVal  = (document.getElementById('um-invite-name')  || {}).value || '';
+      var roleVal  = (document.getElementById('um-invite-role')  || {}).value || 'soc_l1';
+      if (!emailVal || !nameVal) {
+        showToast('Email and Display Name are required', 'error');
+        return;
+      }
+      // Collect selected orgs
+      var selectedOrgs = [];
+      if (orgsDiv) {
+        orgsDiv.querySelectorAll('input[type=checkbox]:checked').forEach(function(cb){
+          selectedOrgs.push(cb.value);
+        });
+      }
+      if (selectedOrgs.length === 0) selectedOrgs = ['all'];
+      var rName = (RBAC_ROLES[roleVal] || {}).name || roleVal;
+      var orgLabels = selectedOrgs[0] === 'all' ? 'All Organizations' : selectedOrgs.map(function(id){
+        var org = (window.ORG_CONNECTORS && window.ORG_CONNECTORS[id]) || {};
+        return org.name || org.code || id.slice(0,8);
+      }).join(', ');
+      var summary = document.getElementById('um-invite-summary');
+      if (summary) {
+        summary.innerHTML =
+          '<div><strong style="color:var(--text-muted);font-size:10px;">EMAIL</strong><br>' + escapeHtml(emailVal) + '</div><br>' +
+          '<div><strong style="color:var(--text-muted);font-size:10px;">NAME</strong><br>' + escapeHtml(nameVal) + '</div><br>' +
+          '<div><strong style="color:var(--text-muted);font-size:10px;">ROLE</strong><br><span class="badge ' + (RBAC_ROLES[roleVal]||{badge:'badge-blue'}).badge + '">' + escapeHtml(rName) + '</span></div><br>' +
+          '<div><strong style="color:var(--text-muted);font-size:10px;">ORGANIZATIONS</strong><br>' + escapeHtml(orgLabels) + '</div>';
+      }
+      if (step1) step1.style.display = 'none';
+      if (step2) step2.style.display = 'block';
+    });
+  }
+
+  if (backBtn) {
+    backBtn.addEventListener('click', function() {
+      if (step1) step1.style.display = 'block';
+      if (step2) step2.style.display = 'none';
+    });
+  }
+
+  if (submitBtn) {
+    submitBtn.addEventListener('click', async function() {
+      var emailVal = (document.getElementById('um-invite-email') || {}).value || '';
+      var nameVal  = (document.getElementById('um-invite-name')  || {}).value || '';
+      var roleVal  = (document.getElementById('um-invite-role')  || {}).value || 'soc_l1';
+      var selectedOrgs = [];
+      if (orgsDiv) {
+        orgsDiv.querySelectorAll('input[type=checkbox]:checked').forEach(function(cb){ selectedOrgs.push(cb.value); });
+      }
+      if (selectedOrgs.length === 0) selectedOrgs = ['all'];
+
+      var newUser = {
+        id:           'u_' + Date.now(),
+        email:        emailVal,
+        display_name: nameVal,
+        role:         roleVal,
+        assigned_orgs:selectedOrgs,
+        status:       'active',
+        last_login:   null,
+        created_at:   new Date().toISOString()
+      };
+
+      // Try Supabase
+      var saved = false;
+      try {
+        if (window._supabaseRef) {
+          var ins = await window._supabaseRef.from('platform_users').insert([newUser]);
+          if (!ins.error) saved = true;
+        }
+      } catch(e) {}
+      if (!saved) {
+        _users.push(newUser);
+        try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e) {}
+      } else {
+        _users.push(newUser);
+      }
+
+      // Audit entry
+      var auditEntry = {
+        id:         'a_' + Date.now(),
+        created_at: new Date().toISOString(),
+        actor:      'current_user',
+        action:     'user_created',
+        target:     emailVal,
+        details:    'Role: ' + roleVal + ', Orgs: ' + selectedOrgs.join(', ')
+      };
+      _auditLog.unshift(auditEntry);
+      try {
+        if (window._supabaseRef) await window._supabaseRef.from('rbac_audit_log').insert([auditEntry]);
+        else { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); }
+      } catch(e) {}
+
+      umHideModal();
+      umRenderUsers(_users);
+      umRenderRoleCards(_users);
+      umRenderAudit(_auditLog);
+
+      var activeCount2 = _users.filter(function(u){ return u.status !== 'disabled'; }).length;
+      var sub2 = document.getElementById('um-subtitle');
+      if (sub2) sub2.textContent = activeCount2 + ' active users \u00B7 ' + Object.keys(RBAC_ROLES).length + ' roles';
+
+      showToast('Invite sent to ' + emailVal, 'success');
+    });
+  }
+
+  // Close modal clicking backdrop
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) umHideModal();
+    });
+  }
+
+  console.log('[UserMgmt] Loaded ' + _users.length + ' users, ' + _auditLog.length + ' audit entries');
 }
 
 // ============================================================
