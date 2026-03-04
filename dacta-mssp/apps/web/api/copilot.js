@@ -555,20 +555,58 @@ export default async function handler(req, res) {
       systemPrompt += `\n\n## Current Session Context\n- Selected client: ${client_context.name || 'All Clients'}\n- Client namespace: ${client_context.namespace || 'all'}\n- Client type: ${client_context.type || 'unknown'}\n- Available connectors: ${(client_context.connectors || []).map(c => c.display_name + ' (' + c.connector_type + ')').join(', ') || 'unknown'}`;
     }
 
+    // ── Model Strategy ──
+    // Haiku for tool rounds (fast, cheap, higher rate limits: 50K input tokens/min)
+    // Sonnet for final synthesis (higher quality analysis)
+    const TOOL_MODEL = 'claude-haiku-4-20250514';
+    const SYNTH_MODEL = 'claude-sonnet-4-20250514';
+
+    // ── API call with retry on 429 ──
+    async function callClaude(body, retries = 2) {
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (resp.status === 429 && attempt < retries) {
+          // Rate limited — wait and retry
+          const waitSec = 10 + (attempt * 5); // 10s, then 15s
+          console.log(`[Copilot] Rate limited (429), waiting ${waitSec}s before retry ${attempt + 1}/${retries}`);
+          await new Promise(r => setTimeout(r, waitSec * 1000));
+          continue;
+        }
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error('[Copilot] Claude API error:', resp.status, errText);
+          throw new Error(`Claude API error: ${resp.status}`);
+        }
+
+        return await resp.json();
+      }
+    }
+
     // Trim conversation history to avoid timeout on follow-ups
     let currentMessages = trimConversation(messages);
-    const maxToolRounds = 6; // Allow up to 6 rounds of tool use
+    const maxToolRounds = 4; // Max 4 tool rounds to stay within rate limits
     let iteration = 0;
-    let toolCallLog = []; // Track all tool calls for transparency
+    let toolCallLog = [];
 
     while (iteration < maxToolRounds + 1) { // +1 for the final synthesis call
       iteration++;
       const isLastRound = iteration > maxToolRounds;
 
-      // On the last round, remove tools so Claude MUST produce a text response
+      // Tool rounds: Haiku (fast, high rate limit)
+      // Final synthesis: Sonnet (quality), no tools so it MUST produce text
       const callBody = {
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
+        model: isLastRound ? SYNTH_MODEL : TOOL_MODEL,
+        max_tokens: isLastRound ? 4096 : 2048,
         system: systemPrompt,
         messages: currentMessages
       };
@@ -576,27 +614,10 @@ export default async function handler(req, res) {
         callBody.tools = TOOLS;
       }
 
-      const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify(callBody)
-      });
-
-      if (!claudeResp.ok) {
-        const errText = await claudeResp.text();
-        console.error('[Copilot] Claude API error:', claudeResp.status, errText);
-        return res.status(502).json({ error: `Claude API error: ${claudeResp.status}`, details: errText });
-      }
-
-      const claudeData = await claudeResp.json();
+      const claudeData = await callClaude(callBody);
 
       // Check if Claude wants to use tools (only possible if tools were provided)
       if (claudeData.stop_reason === 'tool_use' && !isLastRound) {
-        // Extract tool use blocks
         const toolUseBlocks = claudeData.content.filter(b => b.type === 'tool_use');
         
         // Add Claude's response (with tool_use) to messages
@@ -619,8 +640,6 @@ export default async function handler(req, res) {
 
         // Add tool results back for Claude to process
         currentMessages.push({ role: 'user', content: toolResults });
-        
-        // Continue the loop — Claude will process tool results
         continue;
       }
 
@@ -636,11 +655,11 @@ export default async function handler(req, res) {
       });
     }
 
-    // Should never reach here, but just in case
+    // Should never reach here
     return res.status(200).json({
       response: 'Analysis complete. Please ask a follow-up question if you need more details.',
       tool_calls: toolCallLog,
-      model: 'claude-sonnet-4-20250514',
+      model: SYNTH_MODEL,
       usage: {}
     });
 
