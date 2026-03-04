@@ -14179,16 +14179,16 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
         </div>
 
         <div class="metrics-row" style="margin-bottom:16px;">
-          <div class="metric-card green"><div class="metric-label">Healthy</div><div class="metric-value">24</div><div class="metric-sub">sources</div></div>
-          <div class="metric-card amber"><div class="metric-label">Degraded</div><div class="metric-value">3</div><div class="metric-sub">sources</div></div>
-          <div class="metric-card red"><div class="metric-label">Silent</div><div class="metric-value">1</div><div class="metric-sub">source</div></div>
-          <div class="metric-card cyan"><div class="metric-label">Events/Day</div><div class="metric-value">2.4<span style="font-size:14px;">M</span></div><div class="metric-sub">total ingestion</div></div>
+          <div class="metric-card green"><div class="metric-label">Healthy</div><div class="metric-value">74</div><div class="metric-sub">sources</div></div>
+          <div class="metric-card amber"><div class="metric-label">Degraded</div><div class="metric-value">0</div><div class="metric-sub">sources</div></div>
+          <div class="metric-card red"><div class="metric-label">Silent</div><div class="metric-value">0</div><div class="metric-sub">sources</div></div>
+          <div class="metric-card cyan"><div class="metric-label">Total Rules</div><div class="metric-value">37.8<span style="font-size:14px;">K</span></div><div class="metric-sub">across all sources</div></div>
         </div>
 
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Status</th><th>Source Name</th><th>Vendor / Type</th><th>SIEM</th><th>Index Pattern</th><th>Organization</th><th>Events/Day</th><th>Volume</th><th>Parse Rate</th><th>Last Event</th></tr></thead>
+              <thead><tr><th>Status</th><th>Source Name</th><th>Vendor / Type</th><th>Vendor</th><th>Index Pattern</th><th>Organization</th><th>Rules</th><th>Category</th><th>Coverage</th><th>Last Event</th></tr></thead>
               <tbody id="logSourcesBody"></tbody>
             </table>
           </div>
@@ -24860,31 +24860,22 @@ async function loadElasticRules() {
   }
 }
 
-// ── Dynamically populate Log Source vendor dropdown from DB ──
+// ── Populate Log Source vendor dropdown from known vendor map (instant, no DB query) ──
 var _vendorDropdownPopulated = false;
-async function _populateVendorDropdown() {
+function _populateVendorDropdown() {
   if (_vendorDropdownPopulated) return;
   var sel = document.getElementById('drLogSourceFilter');
   if (!sel) return;
-  if (!window._dactaSupabase) return;
   var VENDOR_NAMES = {"akamai":"Akamai","alibaba_cloud":"Alibaba Cloud","aqua":"Aqua Security","arcsight":"ArcSight","attivo":"Attivo Networks","aws":"AWS","azure":"Microsoft Azure","barracuda":"Barracuda","beyondtrust":"BeyondTrust","bitdefender":"Bitdefender","carbon_black":"Carbon Black","checkpoint":"Check Point","cisco":"Cisco","cloudflare":"Cloudflare","correlation":"Multi-Source Correlation","crowdstrike":"CrowdStrike","crowdstrike_identity":"CrowdStrike Identity","crowdstrike_intel":"CrowdStrike Intel","cyberark":"CyberArk","darktrace":"Darktrace","digital_guardian":"Digital Guardian","digitalocean":"DigitalOcean","docker":"Docker","duo":"Cisco Duo","elastic":"Elastic","eset":"ESET","f5_bigip":"F5 BIG-IP","forcepoint":"Forcepoint","fortimail":"FortiMail","fortinet":"Fortinet","fortinet_ztna":"Fortinet ZTNA","gcp":"Google Cloud Platform","github":"GitHub","google_workspace":"Google Workspace","imperva":"Imperva","juniper":"Juniper","kaspersky":"Kaspersky","kubernetes":"Kubernetes","logrhythm":"LogRhythm","m365":"Microsoft 365","mandiant":"Mandiant","mcafee":"McAfee","meraki":"Cisco Meraki","microsoft365":"Microsoft 365","microsoft_defender":"Microsoft Defender","mimecast":"Mimecast","nagios":"Nagios","netskope":"Netskope","okta":"Okta","onelogin":"OneLogin","oracle_cloud":"Oracle Cloud","palo_alto":"Palo Alto Networks","paloalto":"Palo Alto Networks","ping_identity":"Ping Identity","prisma_cloud":"Prisma Cloud","proofpoint":"Proofpoint","qradar":"IBM QRadar","qualys":"Qualys","rapid7":"Rapid7","sailpoint":"SailPoint","sentinelone":"SentinelOne","snort_suricata":"Snort/Suricata","solarwinds":"SolarWinds","sophos":"Sophos","splunk_uba":"Splunk UBA","symantec":"Symantec","tenable":"Tenable","trellix":"Trellix","trend_micro":"Trend Micro","vectra":"Vectra AI","veeam":"Veeam","wazuh":"Wazuh","windows_security":"Windows Security","windows_sysmon":"Windows Sysmon","zeek":"Zeek","zscaler":"Zscaler"};
-  try {
-    var res = await window._dactaSupabase.from('detection_rules').select('vendor').limit(1000);
-    if (res.error || !res.data) return;
-    var seen = {};
-    res.data.forEach(function(r) { if (r.vendor) seen[r.vendor] = true; });
-    var vendors = Object.keys(seen).sort();
-    // Keep existing first option (All Log Sources)
-    sel.innerHTML = '<option value="">All Log Sources</option>';
-    vendors.forEach(function(v) {
-      var displayName = VENDOR_NAMES[v] || v;
-      var opt = document.createElement('option');
-      opt.value = v; // DB value for exact filter matching
-      opt.textContent = displayName;
-      sel.appendChild(opt);
-    });
-    _vendorDropdownPopulated = true;
-  } catch(e) { console.warn('[DetectionRules] Vendor dropdown error:', e); }
+  var vendors = Object.keys(VENDOR_NAMES).sort();
+  sel.innerHTML = '<option value="">All Log Sources</option>';
+  vendors.forEach(function(v) {
+    var opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = VENDOR_NAMES[v];
+    sel.appendChild(opt);
+  });
+  _vendorDropdownPopulated = true;
 }
 
 // ── Main init: SIEMLess DB-only paginated rule loading ──
@@ -25969,63 +25960,52 @@ function renderLogSources() {
   `).join('');
 }
 
-// ── Load Log Source Catalog from live DB data (detection_rules table) ──
+// ── Load Log Source Catalog from known vendor mapping + live DB rule counts ──
+var _logSourceCatalogData = [
+  {v:"akamai",s:"Akamai Web Security",c:"security"},{v:"alibaba_cloud",s:"Alibaba Cloud ActionTrail",c:"cloud"},{v:"aqua",s:"Aqua Security Platform",c:"cloud"},{v:"arcsight",s:"ArcSight ESM",c:"security"},{v:"attivo",s:"Attivo ThreatDefend",c:"security"},{v:"aws",s:"AWS CloudTrail",c:"cloud"},{v:"azure",s:"Azure AD / Entra ID",c:"identity"},{v:"barracuda",s:"Barracuda ESG",c:"email"},{v:"beyondtrust",s:"BeyondTrust Privileged Access",c:"identity"},{v:"bitdefender",s:"Bitdefender GravityZone",c:"edr"},{v:"carbon_black",s:"Carbon Black Cloud EDR",c:"edr"},{v:"checkpoint",s:"Check Point NGFW",c:"firewall"},{v:"cisco",s:"Cisco ASA/Meraki",c:"firewall"},{v:"cloudflare",s:"Cloudflare WAF/CDN",c:"security"},{v:"correlation",s:"Multi-Source Correlation",c:"correlation"},{v:"crowdstrike",s:"CrowdStrike Falcon EDR",c:"edr"},{v:"crowdstrike_identity",s:"CrowdStrike Falcon Identity",c:"identity"},{v:"crowdstrike_intel",s:"CrowdStrike Falcon Intelligence",c:"security"},{v:"cyberark",s:"CyberArk Vault Audit",c:"identity"},{v:"darktrace",s:"Darktrace AI Detection",c:"security"},{v:"digital_guardian",s:"Digital Guardian Endpoint DLP",c:"edr"},{v:"digitalocean",s:"DigitalOcean Audit Log",c:"cloud"},{v:"docker",s:"Docker Container Runtime",c:"cloud"},{v:"duo",s:"Cisco Duo MFA",c:"identity"},{v:"elastic",s:"Elastic Security SIEM",c:"security"},{v:"eset",s:"ESET PROTECT Cloud",c:"edr"},{v:"f5_bigip",s:"F5 BIG-IP ASM WAF",c:"firewall"},{v:"forcepoint",s:"Forcepoint Data Loss Prevention",c:"security"},{v:"fortimail",s:"FortiMail Email Gateway",c:"email"},{v:"fortinet",s:"FortiGate Firewall",c:"firewall"},{v:"fortinet_ztna",s:"FortiSASE ZTNA",c:"firewall"},{v:"gcp",s:"GCP Audit Logs",c:"cloud"},{v:"github",s:"GitHub Enterprise Audit",c:"audit"},{v:"google_workspace",s:"Google Workspace Audit",c:"audit"},{v:"imperva",s:"Imperva Web Application Firewall",c:"firewall"},{v:"juniper",s:"Juniper SRX Firewall",c:"firewall"},{v:"kaspersky",s:"Kaspersky Security Center",c:"edr"},{v:"kubernetes",s:"Kubernetes Audit Log",c:"cloud"},{v:"logrhythm",s:"LogRhythm SIEM",c:"security"},{v:"m365",s:"Microsoft 365 Unified Audit Log",c:"audit"},{v:"mandiant",s:"Mandiant Advantage",c:"security"},{v:"mcafee",s:"McAfee ePolicy Orchestrator",c:"edr"},{v:"meraki",s:"Cisco Meraki Cloud",c:"firewall"},{v:"microsoft_defender",s:"Microsoft Defender for Endpoint",c:"edr"},{v:"mimecast",s:"Mimecast Email Security",c:"email"},{v:"nagios",s:"Nagios Monitoring",c:"audit"},{v:"netskope",s:"Netskope CASB/SSE",c:"cloud"},{v:"okta",s:"Okta System Log",c:"identity"},{v:"onelogin",s:"OneLogin Event API",c:"identity"},{v:"oracle_cloud",s:"OCI Audit Logs",c:"cloud"},{v:"palo_alto",s:"PAN-OS Firewall",c:"firewall"},{v:"ping_identity",s:"Ping Identity SSO",c:"identity"},{v:"prisma_cloud",s:"Prisma Cloud",c:"cloud"},{v:"proofpoint",s:"Proofpoint TAP Email",c:"email"},{v:"qradar",s:"IBM QRadar",c:"security"},{v:"qualys",s:"Qualys Vulnerability Management",c:"security"},{v:"rapid7",s:"Rapid7 InsightVM",c:"security"},{v:"sailpoint",s:"SailPoint IdentityNow",c:"identity"},{v:"sentinelone",s:"SentinelOne Deep Visibility",c:"edr"},{v:"snort_suricata",s:"Snort/Suricata IDS",c:"security"},{v:"solarwinds",s:"SolarWinds Orion Platform",c:"audit"},{v:"sophos",s:"Sophos XG Firewall",c:"firewall"},{v:"splunk_uba",s:"Splunk UBA Analytics",c:"security"},{v:"symantec",s:"Symantec Endpoint Protection",c:"edr"},{v:"tenable",s:"Tenable Vulnerability Scanner",c:"security"},{v:"trellix",s:"Trellix ENS/ePO",c:"edr"},{v:"trend_micro",s:"Trend Micro Vision One",c:"edr"},{v:"vectra",s:"Vectra AI NDR",c:"security"},{v:"veeam",s:"Veeam Backup",c:"audit"},{v:"wazuh",s:"Wazuh HIDS/XDR",c:"security"},{v:"windows_security",s:"Windows Security Event Log",c:"security"},{v:"windows_sysmon",s:"Sysmon Event Log",c:"process_creation"},{v:"zeek",s:"Zeek Network Monitor",c:"security"},{v:"zscaler",s:"Zscaler Internet Access",c:"cloud"}
+];
+var _logSourceCatalogLoaded = false;
 async function loadLogSourceCatalogLive() {
+  if (_logSourceCatalogLoaded) return;
   var tbody = document.getElementById('logSourcesBody');
   if (!tbody) return;
-  if (!window._dactaSupabase) {
-    for (var _w = 0; _w < 15 && !window._dactaSupabase; _w++) await new Promise(function(r) { setTimeout(r, 200); });
-  }
-  if (!window._dactaSupabase) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">SIEMLess DB not connected</td></tr>';
-    return;
-  }
-  tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">Loading log sources...</td></tr>';
-  try {
-    var VENDOR_NAMES = {"akamai":"Akamai","alibaba_cloud":"Alibaba Cloud","aqua":"Aqua Security","arcsight":"ArcSight","attivo":"Attivo Networks","aws":"AWS","azure":"Microsoft Azure","barracuda":"Barracuda","beyondtrust":"BeyondTrust","bitdefender":"Bitdefender","carbon_black":"Carbon Black","checkpoint":"Check Point","cisco":"Cisco","cloudflare":"Cloudflare","correlation":"Multi-Source Correlation","crowdstrike":"CrowdStrike","crowdstrike_identity":"CrowdStrike Identity","crowdstrike_intel":"CrowdStrike Intel","cyberark":"CyberArk","darktrace":"Darktrace","digital_guardian":"Digital Guardian","digitalocean":"DigitalOcean","docker":"Docker","duo":"Cisco Duo","elastic":"Elastic","eset":"ESET","f5_bigip":"F5 BIG-IP","forcepoint":"Forcepoint","fortimail":"FortiMail","fortinet":"Fortinet","fortinet_ztna":"Fortinet ZTNA","gcp":"Google Cloud Platform","github":"GitHub","google_workspace":"Google Workspace","imperva":"Imperva","juniper":"Juniper","kaspersky":"Kaspersky","kubernetes":"Kubernetes","logrhythm":"LogRhythm","m365":"Microsoft 365","mandiant":"Mandiant","mcafee":"McAfee","meraki":"Cisco Meraki","microsoft365":"Microsoft 365","microsoft_defender":"Microsoft Defender","mimecast":"Mimecast","nagios":"Nagios","netskope":"Netskope","okta":"Okta","onelogin":"OneLogin","oracle_cloud":"Oracle Cloud","palo_alto":"Palo Alto Networks","paloalto":"Palo Alto Networks","ping_identity":"Ping Identity","prisma_cloud":"Prisma Cloud","proofpoint":"Proofpoint","qradar":"IBM QRadar","qualys":"Qualys","rapid7":"Rapid7","sailpoint":"SailPoint","sentinelone":"SentinelOne","snort_suricata":"Snort/Suricata","solarwinds":"SolarWinds","sophos":"Sophos","splunk_uba":"Splunk UBA","symantec":"Symantec","tenable":"Tenable","trellix":"Trellix","trend_micro":"Trend Micro","vectra":"Vectra AI","veeam":"Veeam","wazuh":"Wazuh","windows_security":"Windows Security","windows_sysmon":"Windows Sysmon","zeek":"Zeek","zscaler":"Zscaler"};
-    // Fetch first 1000 rows to get vendor/source_type/category combinations
-    var res = await window._dactaSupabase
-      .from('detection_rules')
-      .select('vendor,source_type,log_source_category')
-      .limit(1000);
-    if (res.error) throw res.error;
-    var rows = res.data || [];
-    // Build distinct vendor+source_type groups with counts
-    var groups = {};
-    rows.forEach(function(r) {
-      var key = (r.vendor || '') + '||' + (r.source_type || '');
-      if (!groups[key]) groups[key] = { vendor: r.vendor || '', source_type: r.source_type || '', category: r.log_source_category || '', count: 0 };
-      groups[key].count++;
+  var VENDOR_NAMES = {"akamai":"Akamai","alibaba_cloud":"Alibaba Cloud","aqua":"Aqua Security","arcsight":"ArcSight","attivo":"Attivo Networks","aws":"AWS","azure":"Microsoft Azure","barracuda":"Barracuda","beyondtrust":"BeyondTrust","bitdefender":"Bitdefender","carbon_black":"Carbon Black","checkpoint":"Check Point","cisco":"Cisco","cloudflare":"Cloudflare","correlation":"Multi-Source Correlation","crowdstrike":"CrowdStrike","crowdstrike_identity":"CrowdStrike Identity","crowdstrike_intel":"CrowdStrike Intel","cyberark":"CyberArk","darktrace":"Darktrace","digital_guardian":"Digital Guardian","digitalocean":"DigitalOcean","docker":"Docker","duo":"Cisco Duo","elastic":"Elastic","eset":"ESET","f5_bigip":"F5 BIG-IP","forcepoint":"Forcepoint","fortimail":"FortiMail","fortinet":"Fortinet","fortinet_ztna":"Fortinet ZTNA","gcp":"Google Cloud Platform","github":"GitHub","google_workspace":"Google Workspace","imperva":"Imperva","juniper":"Juniper","kaspersky":"Kaspersky","kubernetes":"Kubernetes","logrhythm":"LogRhythm","m365":"Microsoft 365","mandiant":"Mandiant","mcafee":"McAfee","meraki":"Cisco Meraki","microsoft365":"Microsoft 365","microsoft_defender":"Microsoft Defender","mimecast":"Mimecast","nagios":"Nagios","netskope":"Netskope","okta":"Okta","onelogin":"OneLogin","oracle_cloud":"Oracle Cloud","palo_alto":"Palo Alto Networks","paloalto":"Palo Alto Networks","ping_identity":"Ping Identity","prisma_cloud":"Prisma Cloud","proofpoint":"Proofpoint","qradar":"IBM QRadar","qualys":"Qualys","rapid7":"Rapid7","sailpoint":"SailPoint","sentinelone":"SentinelOne","snort_suricata":"Snort/Suricata","solarwinds":"SolarWinds","sophos":"Sophos","splunk_uba":"Splunk UBA","symantec":"Symantec","tenable":"Tenable","trellix":"Trellix","trend_micro":"Trend Micro","vectra":"Vectra AI","veeam":"Veeam","wazuh":"Wazuh","windows_security":"Windows Security","windows_sysmon":"Windows Sysmon","zeek":"Zeek","zscaler":"Zscaler"};
+  var CAT_LABELS = {"edr":"EDR","firewall":"Firewall","cloud":"Cloud","identity":"Identity","email":"Email","security":"Security","audit":"Audit","correlation":"Correlation","process_creation":"Process"};
+  // Render table immediately with known catalog data
+  var items = _logSourceCatalogData;
+  var html = '';
+  items.forEach(function(s, idx) {
+    var displayName = VENDOR_NAMES[s.v] || s.v;
+    html += '<tr>';
+    html += '<td><div style="display:flex;align-items:center;gap:6px;"><div class="status-dot green"></div><span style="font-size:10px;color:var(--text-muted);">Healthy</span></div></td>';
+    html += '<td style="color:var(--text-primary);font-weight:500;">' + s.s + '</td>';
+    html += '<td style="font-size:11px;">' + displayName + ' / SIEMLess</td>';
+    html += '<td>' + displayName + '</td>';
+    html += '<td class="mono" style="font-size:10px;">' + s.v + '_*</td>';
+    html += '<td style="font-size:11px;">All Tenants</td>';
+    html += '<td id="lsc-count-' + idx + '" style="font-family:var(--font-mono);font-weight:600;color:var(--text-muted);">—</td>';
+    html += '<td style="font-family:var(--font-mono);font-size:11px;">' + (CAT_LABELS[s.c] || s.c) + '</td>';
+    html += '<td><span class="badge badge-green">Active</span></td>';
+    html += '<td class="mono" style="font-size:10px;">—</td>';
+    html += '</tr>';
+  });
+  tbody.innerHTML = html;
+  // Update healthy count metric
+  var healthyEl = document.querySelector('#page-logsources .metric-card.green .metric-value');
+  if (healthyEl) healthyEl.textContent = items.length;
+  _logSourceCatalogLoaded = true;
+  // Async: fetch rule counts per vendor from DB (non-blocking, updates cells as they load)
+  if (window._dactaSupabase) {
+    items.forEach(function(s, idx) {
+      window._dactaSupabase.from('detection_rules').select('id', {count:'exact', head:true}).eq('vendor', s.v).then(function(res) {
+        var el = document.getElementById('lsc-count-' + idx);
+        if (el && res && !res.error) {
+          var cnt = res.count || 0;
+          el.textContent = cnt.toLocaleString();
+          el.style.color = cnt > 0 ? 'var(--text-primary)' : 'var(--text-muted)';
+        }
+      });
     });
-    var items = Object.values(groups).sort(function(a, b) { return b.count - a.count; });
-    // Update metric cards
-    var totalSources = items.length;
-    var healthyEl = document.querySelector('#page-logsources .metric-card.green .metric-value');
-    var eventsEl = document.querySelector('#page-logsources .metric-card.cyan .metric-value');
-    if (healthyEl) healthyEl.textContent = totalSources;
-    // Build table rows
-    var html = '';
-    items.forEach(function(s) {
-      var displayName = VENDOR_NAMES[s.vendor] || s.vendor || 'Unknown';
-      var sourceName = s.source_type || displayName;
-      html += '<tr>';
-      html += '<td><div style="display:flex;align-items:center;gap:6px;"><div class="status-dot green"></div><span style="font-size:10px;color:var(--text-muted);">Healthy</span></div></td>';
-      html += '<td style="color:var(--text-primary);font-weight:500;">' + sourceName + '</td>';
-      html += '<td style="font-size:11px;">' + displayName + ' / SIEMLess</td>';
-      html += '<td>' + displayName + '</td>';
-      html += '<td class="mono" style="font-size:10px;">' + (s.vendor || '') + '_*</td>';
-      html += '<td style="font-size:11px;">All Tenants</td>';
-      html += '<td style="font-family:var(--font-mono);font-weight:600;">' + s.count.toLocaleString() + '</td>';
-      html += '<td style="font-family:var(--font-mono);font-size:11px;">—</td>';
-      html += '<td><span class="badge badge-green">100%</span></td>';
-      html += '<td class="mono">—</td>';
-      html += '</tr>';
-    });
-    if (!html) html = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">No log sources found in SIEMLess DB</td></tr>';
-    tbody.innerHTML = html;
-  } catch(e) {
-    console.warn('[LogSourceCatalog] Error:', e);
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">Error loading log sources from SIEMLess DB</td></tr>';
   }
 }
 
