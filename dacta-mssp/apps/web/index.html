@@ -10878,6 +10878,10 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <option>Draft</option>
               <option>Deprecated</option>
             </select>
+            <button class="btn btn-xs btn-secondary" onclick="if(window._resetRuleFilters) window._resetRuleFilters();" style="white-space:nowrap;" title="Reset all filters">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              Clear
+            </button>
           </div>
 
           <!-- Rule Table -->
@@ -10944,7 +10948,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.25)" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
             <div style="font-size:16px;font-weight:700;color:var(--text-secondary);text-align:center;">No rule loaded in editor</div>
             <div style="font-size:12px;color:var(--text-muted);max-width:340px;text-align:center;line-height:1.6;">Click "Edit" on a rule in the Repository tab, or create a new rule to get started.</div>
-            <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="document.getElementById('drBuilderGreyMask').style.display='none';openCreateRuleModal();">
+            <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="document.getElementById('drBuilderGreyMask').style.display='none';var _c=document.getElementById('drIdeCode');if(_c)_c.dataset.edited='1';openCreateRuleModal();">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               + Create Rule
             </button>
@@ -11461,7 +11465,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <button class="filter-chip" onclick="etFilter(this,'validated')">Validated</button>
             <button class="filter-chip" onclick="etFilter(this,'rejected')">Rejected</button>
             <div style="flex:1;"></div>
-            <input class="filter-input" placeholder="Search emerging threats..." style="width:240px;font-size:11px;">
+            <input class="filter-input" placeholder="Search emerging threats..." style="width:240px;font-size:11px;" id="etSearchInput" oninput="etSearchThreats(this.value)">
           </div>
 
           <!-- Emerging Threat Cards -->
@@ -12677,6 +12681,14 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           document.querySelectorAll('#etThreatList .et-threat-card').forEach(function(card) {
             if (status === 'all') { card.style.display = ''; }
             else { card.style.display = card.getAttribute('data-et-status') === status ? '' : 'none'; }
+          });
+        }
+        function etSearchThreats(query) {
+          var q = (query || '').toLowerCase().trim();
+          document.querySelectorAll('#etThreatList .et-threat-card').forEach(function(card) {
+            if (!q) { card.style.display = ''; return; }
+            var text = (card.textContent || '').toLowerCase();
+            card.style.display = text.indexOf(q) >= 0 ? '' : 'none';
           });
         }
         </script>
@@ -24972,19 +24984,46 @@ async function showPlaybook(ruleDbId, ruleName) {
   html += '<div style="flex:1;padding:8px;background:rgba(0,212,255,0.04);border-radius:8px;text-align:center;"><div style="font-size:16px;font-weight:700;color:#00d4ff;">' + (pb.estimated_time_minutes || 30) + 'min</div><div style="font-size:9px;color:var(--text-muted);">Est. Time</div></div>';
   html += '<div style="flex:1;padding:8px;background:rgba(0,212,255,0.04);border-radius:8px;text-align:center;"><div style="font-size:11px;font-weight:600;color:#f1f5f9;text-transform:capitalize;">' + (pb.difficulty || 'intermediate') + '</div><div style="font-size:9px;color:var(--text-muted);">Difficulty</div></div>';
   html += '</div></div>';
-  html += '<div style="margin-top:14px;text-align:right;"><button onclick="document.getElementById(\'playbookOverlay\').style.display=\'none\'" style="padding:8px 18px;border-radius:8px;border:1px solid rgba(0,212,255,0.3);background:rgba(0,212,255,0.08);color:#00d4ff;font-family:\'Sora\',sans-serif;font-size:12px;font-weight:600;cursor:pointer;">Close</button></div>';
+  html += '<div style="margin-top:14px;text-align:right;"><button onclick="closePlaybookOverlay()" style="padding:8px 18px;border-radius:8px;border:1px solid rgba(0,212,255,0.3);background:rgba(0,212,255,0.08);color:#00d4ff;font-family:\'Sora\',sans-serif;font-size:12px;font-weight:600;cursor:pointer;">Close</button></div>';
   var overlay = document.getElementById('playbookOverlay');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'playbookOverlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;';
-    overlay.innerHTML = '<div id="playbookContent" style="background:rgba(8,12,24,0.97);border:1px solid rgba(0,212,255,0.18);border-radius:16px;padding:24px 28px;width:620px;max-width:95vw;max-height:80vh;overflow-y:auto;backdrop-filter:blur(12px);box-shadow:0 24px 80px rgba(0,0,0,0.6);"></div>';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.style.display = 'none'; };
+    overlay.innerHTML = '<div id="playbookContent" style="background:rgba(8,12,24,0.97);border:1px solid rgba(0,212,255,0.18);border-radius:16px;padding:24px 28px;width:620px;max-width:95vw;max-height:80vh;overflow-y:auto;backdrop-filter:blur(12px);box-shadow:0 24px 80px rgba(0,0,0,0.6);cursor:default;"></div>';
     document.body.appendChild(overlay);
   } else {
     overlay.style.display = 'flex';
   }
   document.getElementById('playbookContent').innerHTML = html;
 }
+
+function closePlaybookOverlay() {
+  var overlay = document.getElementById('playbookOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+// ── Escape key: close Detection Rules modals ──
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    // Playbook overlay
+    var pb = document.getElementById('playbookOverlay');
+    if (pb && pb.style.display !== 'none') { pb.style.display = 'none'; return; }
+    // Rule detail modal
+    var rd = document.getElementById('ruleDetailModalOverlay');
+    if (rd && rd.style.display !== 'none') { rd.style.display = 'none'; return; }
+    // Save & Test modal
+    var st = document.getElementById('saveTestModalOverlay');
+    if (st && st.style.display !== 'none') { st.style.display = 'none'; return; }
+    // Bulk Import modal
+    var bi = document.getElementById('bulkImportOverlay');
+    if (bi && bi.style.display !== 'none') { closeBulkImport(); return; }
+    // Bulk Deploy modal
+    var bd = document.getElementById('bulkDeployModal');
+    if (bd && bd.style.display !== 'none') { closeBulkDeployModal(); return; }
+  }
+});
 
 // ── Elastic live rule loader (lightweight — no SIEMLess DB needed) ──
 async function loadElasticRules() {
