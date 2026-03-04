@@ -36060,11 +36060,20 @@ async function acceptAIVerdict() {
 
     showToast('\u2713 Verdict accepted — ' + ticketKey + ' transitioned to "' + closeTransition.name + '"', 'success');
 
-    // 4. Update investigation cache
-    if (cache) {
-      cache.feedback = 'accepted';
-      cache.acceptedAt = new Date().toISOString();
-    }
+    // 4. Update investigation cache and persist to DB
+    if (!cache) cache = _investigationCache[ticketKey] || {};
+    cache.feedback = 'accepted';
+    cache.acceptedAt = new Date().toISOString();
+    await saveInvestigationCache(ticketKey, cache);
+
+    // 5. Log to audit trail
+    logToSupabase('audit_log', {
+      user_email: _getCurrentUserEmail() || 'admin',
+      action: 'verdict_accepted',
+      resource_type: 'investigation',
+      resource_id: ticketKey,
+      details: { verdict: verdictText, confidence: confidence, transitioned_to: closeTransition.name }
+    });
 
     // 5. Update the AI status badge in triage if visible
     markInvestigationAccepted(ticketKey);
@@ -39634,11 +39643,11 @@ function submitOverrideWithCache() {
 
   // Also log to audit trail
   logToSupabase('audit_log', {
+    user_email: _getCurrentUserEmail() || 'admin',
     action: 'verdict_override',
-    entity_type: 'investigation',
-    entity_id: _currentInvestigationKey,
-    details: { new_verdict: newVerdict, reason: reason },
-    performed_by: _getCurrentUserEmail() || 'admin'
+    resource_type: 'investigation',
+    resource_id: _currentInvestigationKey,
+    details: { new_verdict: newVerdict, reason: reason }
   });
 
   closeOverrideModal();
@@ -41718,11 +41727,11 @@ async function submitEscalationToJira(ticketKey) {
     
     // Log to audit
     logToSupabase('audit_log', {
+      user_email: _getCurrentUserEmail() || 'admin',
       action: 'client_escalation_submitted',
-      entity_type: 'investigation',
-      entity_id: ticketKey,
-      details: { draft_length: draftText.length, jsm_reply: replySuccess, transitioned: transitioned },
-      performed_by: _getCurrentUserEmail() || 'admin'
+      resource_type: 'investigation',
+      resource_id: ticketKey,
+      details: { draft_length: draftText.length, jsm_reply: replySuccess, transitioned: transitioned }
     });
   } catch(e) {
     showToast('Failed to submit escalation: ' + e.message, 'error');
