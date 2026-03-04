@@ -26092,26 +26092,28 @@ async function loadRuleStatCounts() {
   if (!window._dactaSupabase) { console.warn('[DetectionRules] Supabase not ready for stat counts'); return; }
   var sb = window._dactaSupabase;
   try {
+    // Use limit(1) instead of head:true — more reliable count across Supabase JS versions
     var [totalRes, activeRes, edrRes, fwRes, critRes, cloudRes] = await Promise.all([
-      sb.from('detection_rules').select('id', { count: 'exact', head: true }),
-      sb.from('detection_rules').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-      sb.from('detection_rules').select('id', { count: 'exact', head: true }).in('log_source_category', ['edr', 'process_creation', 'security']),
-      sb.from('detection_rules').select('id', { count: 'exact', head: true }).eq('log_source_category', 'firewall'),
-      sb.from('detection_rules').select('id', { count: 'exact', head: true }).eq('severity', 'critical'),
-      sb.from('detection_rules').select('id', { count: 'exact', head: true }).in('log_source_category', ['cloud', 'identity'])
+      sb.from('detection_rules').select('id', { count: 'exact' }).limit(1),
+      sb.from('detection_rules').select('id', { count: 'exact' }).eq('status', 'active').limit(1),
+      sb.from('detection_rules').select('id', { count: 'exact' }).in('log_source_category', ['edr', 'process_creation', 'security']).limit(1),
+      sb.from('detection_rules').select('id', { count: 'exact' }).eq('log_source_category', 'firewall').limit(1),
+      sb.from('detection_rules').select('id', { count: 'exact' }).eq('severity', 'critical').limit(1),
+      sb.from('detection_rules').select('id', { count: 'exact' }).in('log_source_category', ['cloud', 'identity']).limit(1)
     ]);
+    console.log('[DetectionRules] Stat counts:', { total: totalRes.count, active: activeRes.count, edr: edrRes.count, fw: fwRes.count, crit: critRes.count, cloud: cloudRes.count });
     var eT = document.getElementById('drStatTotal');
     var eA = document.getElementById('drStatActive');
     var eE = document.getElementById('drStatEDR');
     var eF = document.getElementById('drStatFirewall');
     var eC = document.getElementById('drStatCritical');
     var eCl = document.getElementById('drStatCloud');
-    if (eT) eT.textContent = (totalRes.count || 0).toLocaleString();
-    if (eA) eA.textContent = (activeRes.count || 0).toLocaleString();
-    if (eE) eE.textContent = (edrRes.count || 0).toLocaleString();
-    if (eF) eF.textContent = (fwRes.count || 0).toLocaleString();
-    if (eC) eC.textContent = (critRes.count || 0).toLocaleString();
-    if (eCl) eCl.textContent = (cloudRes.count || 0).toLocaleString();
+    if (eT) eT.textContent = (totalRes.count != null ? totalRes.count : 0).toLocaleString();
+    if (eA) eA.textContent = (activeRes.count != null ? activeRes.count : 0).toLocaleString();
+    if (eE) eE.textContent = (edrRes.count != null ? edrRes.count : 0).toLocaleString();
+    if (eF) eF.textContent = (fwRes.count != null ? fwRes.count : 0).toLocaleString();
+    if (eC) eC.textContent = (critRes.count != null ? critRes.count : 0).toLocaleString();
+    if (eCl) eCl.textContent = (cloudRes.count != null ? cloudRes.count : 0).toLocaleString();
   } catch (e) { console.warn('[DetectionRules] Stat count error:', e); }
 }
 
@@ -26386,16 +26388,18 @@ function renderRules() {
   var statusColor = { 'Production':'green', 'Testing':'amber', 'Draft':'gray', 'Deprecated':'red' };
   var lsClassMap = {'Windows Sysmon':'windows','Windows Security':'windows','CrowdStrike':'edr','SentinelOne':'edr','Fortinet':'firewall','Palo Alto Networks':'firewall','Sophos':'firewall','Cisco':'firewall','AWS':'cloud','Microsoft Azure':'cloud','Google Cloud Platform':'cloud','Okta':'edr','windows':'windows','linux':'linux','firewall':'firewall','cloud':'cloud','edr':'edr','m365':'m365','network':'network','ot':'ot'};
 
-  var total = _rulesTotalCount;
+  var total = _rulesTotalCount + (rulesData.length > 0 && rulesData[0]._source === 'elastic' ? rulesData.filter(function(r){return r._source==='elastic';}).length : 0);
   var totalPages = Math.max(1, Math.ceil(total / _rulesPerPage));
   if (_rulesPage > totalPages) _rulesPage = totalPages;
   if (_rulesPage < 1) _rulesPage = 1;
   var start = (_rulesPage - 1) * _rulesPerPage;
-  var end = Math.min(start + rulesData.length, total);
+  // Only render up to _rulesPerPage rows (rulesData may have elastic + supabase merged)
+  var displayData = rulesData.slice(0, _rulesPerPage);
+  var end = Math.min(start + displayData.length, total);
 
   var rows = '';
-  for (var i = 0; i < rulesData.length; i++) {
-    var r = rulesData[i];
+  for (var i = 0; i < displayData.length; i++) {
+    var r = displayData[i];
     var lsBadges = '';
     var rls = r.logSources || [];
     for (var j = 0; j < rls.length; j++) {
