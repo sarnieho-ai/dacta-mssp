@@ -558,7 +558,7 @@ export default async function handler(req, res) {
     // ── Model Strategy ──
     // Haiku for tool rounds (fast, cheap, higher rate limits: 50K input tokens/min)
     // Sonnet for final synthesis (higher quality analysis)
-    const TOOL_MODEL = 'claude-haiku-4-20250514';
+    const TOOL_MODEL = 'claude-haiku-4-5-20251001';
     const SYNTH_MODEL = 'claude-sonnet-4-20250514';
 
     // ── API call with retry on 429 ──
