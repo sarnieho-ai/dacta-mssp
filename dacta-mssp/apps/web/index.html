@@ -39303,7 +39303,9 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
       timestamp: cacheEntry.timestamp, html: cacheEntry.html,
       overrideVerdict: cacheEntry.overrideVerdict, overrideReason: cacheEntry.overrideReason,
       feedbackRating: cacheEntry.feedbackRating, feedbackText: cacheEntry.feedbackText,
-      promptNotes: cacheEntry.promptNotes, metadata: cacheEntry.metadata
+      promptNotes: cacheEntry.promptNotes, metadata: cacheEntry.metadata,
+      sidebarPanels: cacheEntry.sidebarPanels || null,
+      escalationData: cacheEntry.escalationData || null
     };
     localStorage.setItem('investigationCache', JSON.stringify(lsCacheAll));
   } catch(lsErr) { console.warn('[InvCache] localStorage save failed:', lsErr.message); }
@@ -39322,7 +39324,7 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
       prompt_notes: cacheEntry.promptNotes || null,
       feedback_rating: cacheEntry.feedbackRating || null,
       feedback_text: cacheEntry.feedbackText || null,
-      metadata: cacheEntry.metadata || {}
+      metadata: Object.assign({}, cacheEntry.metadata || {}, cacheEntry.sidebarPanels ? { sidebarPanels: cacheEntry.sidebarPanels } : {}, cacheEntry.escalationData ? { escalationData: cacheEntry.escalationData } : {})
     }, { onConflict: 'ticket_key' });
     if (resp.error) console.warn('[InvCache] SIEMLess DB upsert error:', resp.error.message);
     else console.log('[InvCache] Saved to SIEMLess DB:', ticketKey);
@@ -39340,6 +39342,7 @@ async function loadInvestigationCache(ticketKey) {
     var resp = await window._supabaseRef.from('investigation_cache')
       .select('*').eq('ticket_key', ticketKey).single();
     if (resp.data) {
+      var dbMeta = resp.data.metadata || {};
       var entry = {
         html: resp.data.html_content || '',
         verdict: resp.data.verdict || '',
@@ -39350,7 +39353,9 @@ async function loadInvestigationCache(ticketKey) {
         promptNotes: resp.data.prompt_notes || null,
         feedbackRating: resp.data.feedback_rating || null,
         feedbackText: resp.data.feedback_text || null,
-        metadata: resp.data.metadata || {}
+        metadata: dbMeta,
+        sidebarPanels: dbMeta.sidebarPanels || null,
+        escalationData: dbMeta.escalationData || null
       };
       _investigationCache[ticketKey] = entry;
       return entry;
@@ -39457,6 +39462,27 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent) {
   setTimeout(function() {
     applyCollapsibleSections(invMainContent);
   }, 200);
+
+  // Restore sidebar panels from cache
+  var sp = cacheEntry.sidebarPanels || {};
+  if (sp.enrichment) {
+    var enrichBody = document.querySelector('#enrichmentSummaryCard .inv-collapsible-body');
+    if (enrichBody) enrichBody.innerHTML = sp.enrichment;
+  }
+  if (sp.correlated) {
+    var corrBody = document.querySelector('#correlatedAlertsCard .inv-collapsible-body');
+    if (corrBody) corrBody.innerHTML = sp.correlated;
+  }
+  if (sp.actions) {
+    var actBody = document.querySelector('#recommendedActionsCard .inv-collapsible-body');
+    if (actBody) actBody.innerHTML = sp.actions;
+  }
+  if (sp.playbook) {
+    var pbBody = document.querySelector('#playbookActionsCard .inv-collapsible-body');
+    if (pbBody) pbBody.innerHTML = sp.playbook;
+  }
+  // Re-init collapsible after restoring sidebar
+  setTimeout(initCollapsiblePanels, 300);
 
   // Also add feedback panel below
   appendFeedbackPanel(ticketKey, cacheEntry, invMainContent);
@@ -41096,8 +41122,22 @@ async function runAIInvestigation(ticketKey, issueData) {
       techniquesCount: techniques.length,
       inculpatoryCount: inculpatory.length,
       exculpatoryCount: exculpatory.length
-    }
+    },
+    // Capture sidebar panel contents for cache restoration (delayed to allow async playbook fetch)
+    sidebarPanels: {}
   };
+
+  // Capture sidebar panels after a brief delay to allow async playbook fetch to complete
+  setTimeout(async function() {
+    cacheEntry.sidebarPanels = {
+      enrichment: (function() { var el = document.querySelector('#enrichmentSummaryCard .inv-collapsible-body'); return el ? el.innerHTML : ''; })(),
+      correlated: (function() { var el = document.querySelector('#correlatedAlertsCard .inv-collapsible-body'); return el ? el.innerHTML : ''; })(),
+      actions: (function() { var el = document.querySelector('#recommendedActionsCard .inv-collapsible-body'); return el ? el.innerHTML : ''; })(),
+      playbook: (function() { var el = document.querySelector('#playbookActionsCard .inv-collapsible-body'); return el ? el.innerHTML : ''; })()
+    };
+    await saveInvestigationCache(ticketKey, cacheEntry);
+    console.log('[AI Investigation] Sidebar panels captured and saved to cache for ' + ticketKey);
+  }, 3000);
   await saveInvestigationCache(ticketKey, cacheEntry);
   markInvestigationCompleted(ticketKey);
   console.log('[AI Investigation] Cached result for ' + ticketKey + ' at ' + investigatedTimestamp);
