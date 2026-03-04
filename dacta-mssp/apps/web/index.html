@@ -28305,27 +28305,30 @@ async function importContactsFromJira() {
     var data = await resp.json();
     var members = data.members || [];
 
-    // Filter to only members with valid email addresses, exclude internal DACTA accounts
+    // Import all org members, including those without emails (analyst can fill in later)
     var newContacts = [];
-    var seenEmails = {};
+    var seenKeys = {};
     members.forEach(function(m) {
-      if (!m.emailAddress || m.emailAddress.indexOf('@') === -1) return;
-      var emailLC = m.emailAddress.toLowerCase();
+      if (!m.displayName) return;
+      var hasEmail = m.emailAddress && m.emailAddress.indexOf('@') !== -1;
+      var emailLC = hasEmail ? m.emailAddress.toLowerCase() : '';
       // Skip internal DACTA accounts
-      if (emailLC.indexOf('@dacta') !== -1 || emailLC.indexOf('@dactaglobal') !== -1) return;
-      if (seenEmails[emailLC]) return;
-      seenEmails[emailLC] = true;
+      if (hasEmail && (emailLC.indexOf('@dacta') !== -1 || emailLC.indexOf('@dactaglobal') !== -1)) return;
+      // Dedupe by email or by accountId
+      var key = hasEmail ? emailLC : (m.accountId || m.displayName.toLowerCase());
+      if (seenKeys[key]) return;
+      seenKeys[key] = true;
       newContacts.push({
         name: m.displayName || '',
         role: '',
-        email: m.emailAddress,
+        email: hasEmail ? m.emailAddress : '',
         phone: '',
         tier: newContacts.length === 0 ? 'primary' : 'secondary'
       });
     });
 
-    if (newContacts.length === 0) {
-      // Fallback: also try ticket participants (old method)
+    // Also try ticket participants to get any additional contacts with emails
+    try {
       var jql = encodeURIComponent('project = DAC AND "Organizations" = "' + orgName + '" ORDER BY created DESC');
       var tResp = await fetch('/api/jira?action=search&jql=' + jql + '&maxResults=5&fields=key');
       var tData = await tResp.json();
@@ -28339,44 +28342,53 @@ async function importContactsFromJira() {
             if (p.emailAddress && p.emailAddress.indexOf('@') !== -1) {
               var eLC = p.emailAddress.toLowerCase();
               if (eLC.indexOf('@dacta') !== -1 || eLC.indexOf('@dactaglobal') !== -1) return;
-              if (!seenEmails[eLC]) {
-                seenEmails[eLC] = true;
+              if (!seenKeys[eLC]) {
+                seenKeys[eLC] = true;
                 newContacts.push({ name: p.displayName || '', role: '', email: p.emailAddress, phone: '', tier: 'secondary' });
               }
             }
           });
           if (pData.reporter && pData.reporter.emailAddress) {
             var rLC = pData.reporter.emailAddress.toLowerCase();
-            if (rLC.indexOf('@dacta') === -1 && rLC.indexOf('@dactaglobal') === -1 && !seenEmails[rLC]) {
-              seenEmails[rLC] = true;
+            if (rLC.indexOf('@dacta') === -1 && rLC.indexOf('@dactaglobal') === -1 && !seenKeys[rLC]) {
+              seenKeys[rLC] = true;
               newContacts.push({ name: pData.reporter.displayName || '', role: 'Reporter', email: pData.reporter.emailAddress, phone: '', tier: 'secondary' });
             }
           }
         } catch(e) { /* continue */ }
       }
-    }
+    } catch(e) { /* continue with what we have */ }
 
     if (newContacts.length === 0) {
-      if (statusEl) statusEl.innerHTML = '<span style="color:#f59e0b;">\u26a0</span> No client email addresses found for "' + escapeHtml(orgName) + '". Org members may not have emails set, or only internal accounts exist.';
+      if (statusEl) statusEl.innerHTML = '<span style="color:#f59e0b;">\u26a0</span> No members found for "' + escapeHtml(orgName) + '" in Jira.';
       return;
     }
 
     // Merge with existing contacts (don't overwrite)
     if (!_escMatrixData[_escCurrentOrgId]) _escMatrixData[_escCurrentOrgId] = { contacts: [], sla: {}, escalationTiers: [], notes: '' };
     var existing = _escMatrixData[_escCurrentOrgId].contacts || [];
-    var existingEmails = {};
-    existing.forEach(function(c) { if (c.email) existingEmails[c.email.toLowerCase()] = true; });
+    var existingKeys = {};
+    existing.forEach(function(c) {
+      if (c.email) existingKeys[c.email.toLowerCase()] = true;
+      if (c.name) existingKeys[c.name.toLowerCase().trim()] = true;
+    });
     var added = 0;
+    var noEmailCount = 0;
     newContacts.forEach(function(nc) {
-      if (!existingEmails[nc.email.toLowerCase()]) {
-        existing.push(nc);
-        added++;
-      }
+      var emailKey = nc.email ? nc.email.toLowerCase() : '';
+      var nameKey = nc.name ? nc.name.toLowerCase().trim() : '';
+      if ((emailKey && existingKeys[emailKey]) || (nameKey && existingKeys[nameKey])) return;
+      existing.push(nc);
+      if (emailKey) existingKeys[emailKey] = true;
+      if (nameKey) existingKeys[nameKey] = true;
+      added++;
+      if (!nc.email) noEmailCount++;
     });
     _escMatrixData[_escCurrentOrgId].contacts = existing;
     renderEscalationContacts(existing);
 
-    if (statusEl) statusEl.innerHTML = '<span style="color:#10b981;">\u2713</span> Imported ' + added + ' contact' + (added !== 1 ? 's' : '') + ' from Jira (' + newContacts.length + ' total found, ' + (newContacts.length - added) + ' already existed)';
+    var emailNote = noEmailCount > 0 ? ' (' + noEmailCount + ' without email — please fill in manually)' : '';
+    if (statusEl) statusEl.innerHTML = '<span style="color:#10b981;">\u2713</span> Imported ' + added + ' contact' + (added !== 1 ? 's' : '') + ' from Jira' + emailNote;
   } catch(e) {
     console.error('[EscMatrix] Jira import error:', e);
     if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">\u2717</span> Import failed: ' + e.message;
@@ -29610,23 +29622,33 @@ async function wizPullContactsFromJira() {
     var data = await resp.json();
     var members = data.members || [];
     var added = 0;
-    var seenEmails = {};
-    _wizContacts.forEach(function(c) { if (c.email) seenEmails[c.email.toLowerCase()] = true; });
+    var noEmailCount = 0;
+    var seenKeys = {};
+    _wizContacts.forEach(function(c) {
+      if (c.email) seenKeys[c.email.toLowerCase()] = true;
+      if (c.name) seenKeys[c.name.toLowerCase().trim()] = true;
+    });
 
     members.forEach(function(m) {
-      if (!m.emailAddress || m.emailAddress.indexOf('@') === -1) return;
-      var eLC = m.emailAddress.toLowerCase();
-      if (eLC.indexOf('@dacta') !== -1 || eLC.indexOf('@dactaglobal') !== -1) return;
-      if (seenEmails[eLC]) return;
-      seenEmails[eLC] = true;
-      _wizContacts.push({ name: m.displayName || '', email: m.emailAddress, role: '', phone: '', tier: _wizContacts.length === 0 ? 'primary' : 'secondary' });
+      if (!m.displayName) return;
+      var hasEmail = m.emailAddress && m.emailAddress.indexOf('@') !== -1;
+      var emailLC = hasEmail ? m.emailAddress.toLowerCase() : '';
+      if (hasEmail && (emailLC.indexOf('@dacta') !== -1 || emailLC.indexOf('@dactaglobal') !== -1)) return;
+      var key = hasEmail ? emailLC : (m.accountId || m.displayName.toLowerCase());
+      var nameKey = m.displayName.toLowerCase().trim();
+      if (seenKeys[key] || seenKeys[nameKey]) return;
+      seenKeys[key] = true;
+      if (nameKey) seenKeys[nameKey] = true;
+      _wizContacts.push({ name: m.displayName || '', email: hasEmail ? m.emailAddress : '', role: '', phone: '', tier: _wizContacts.length === 0 ? 'primary' : 'secondary' });
       added++;
+      if (!hasEmail) noEmailCount++;
     });
 
     wizRenderContacts();
     if (statusEl) {
       if (added > 0) {
-        statusEl.innerHTML = '<span style="color:#10b981;">\u2713</span> Imported ' + added + ' contact' + (added !== 1 ? 's' : '') + ' from Jira';
+        var note = noEmailCount > 0 ? ' (' + noEmailCount + ' without email \u2014 fill in manually)' : '';
+        statusEl.innerHTML = '<span style="color:#10b981;">\u2713</span> Imported ' + added + ' contact' + (added !== 1 ? 's' : '') + ' from Jira' + note;
       } else if (members.length > 0) {
         statusEl.innerHTML = '<span style="color:#f59e0b;">\u26a0</span> ' + members.length + ' members found but all are internal DACTA accounts or already added';
       } else {
