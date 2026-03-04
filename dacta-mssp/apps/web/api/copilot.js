@@ -1,7 +1,10 @@
 // Vercel Serverless Function — DACTA Copilot AI Proxy
 // Agentic Claude-powered copilot with tool-use for Elastic SIEM, OpenCTI, and Jira
+// GDPR/PDPA-compliant: PII is tokenized before reaching any LLM.
 // Required env vars: ANTHROPIC_API_KEY, ELASTIC_URL, ELASTIC_API_KEY, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_INSTANCE
 // Optional: OPENCTI_URL, OPENCTI_TOKEN
+
+const { PiiVault } = require('./lib/pii-vault.js');
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ELASTIC_URL = process.env.ELASTIC_URL || '';
@@ -9,6 +12,10 @@ const ELASTIC_API_KEY = process.env.ELASTIC_API_KEY || '';
 const JIRA_EMAIL = process.env.JIRA_EMAIL || '';
 const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN || '';
 const JIRA_INSTANCE = process.env.JIRA_INSTANCE || 'dactaglobal-sg.atlassian.net';
+
+// SIEMLess DB — server-side logging (bypasses RLS with service role)
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // OpenCTI — fallback to base64-encoded defaults if env vars not set
 function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
@@ -461,6 +468,37 @@ async function executeTool(name, input) {
   }
 }
 
+// ── Server-Side Usage Logging (SIEMLess DB) ──
+// Logs LLM usage with service role key, bypassing RLS safely.
+// Fire-and-forget — errors are logged but do not block the response.
+async function logUsageServerSide({ model, usage, toolCallLog, piiStats, sessionId, latencyMs }) {
+  if (!SUPABASE_SERVICE_KEY) return; // Skip if not configured
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/llm_usage_log`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        task_type: 'copilot_query',
+        model: model,
+        provider: 'anthropic',
+        input_tokens: usage?.input_tokens || 0,
+        output_tokens: usage?.output_tokens || 0,
+        latency_ms: latencyMs || 0,
+        estimated_cost_usd: 0,
+        fallback_used: false,
+        related_entity_type: 'copilot_session',
+        related_entity_id: sessionId || null
+      })
+    });
+  } catch (err) {
+    console.error('[Copilot] Usage logging failed (non-blocking):', err.message);
+  }
+}
+
 // ── Vercel Config ──
 export const config = {
   maxDuration: 120 // seconds — allows for multi-tool agentic loops
@@ -537,6 +575,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
+  const requestStart = Date.now();
+
   if (!ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY environment variable not configured.' });
   }
@@ -549,11 +589,31 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
+    // ── PII Tokenization Vault ──
+    // Initialize a per-request vault. All PII is tokenized before Claude sees it.
+    // Tool call arguments are detokenized server-side before hitting real APIs.
+    // Tool results are re-tokenized before returning to Claude.
+    // Final response is detokenized before returning to the analyst.
+    const vault = new PiiVault();
+
+    // Register known client/org names for tokenization
+    if (client_context?.name) {
+      vault.registerClientNames([client_context.name]);
+    }
+    // Register all known client names for cross-client protection
+    const KNOWN_CLIENTS = ['Naga World', 'NagaWorld', 'EM Services', 'SP Telecom',
+      'Toyota Financial', 'Foxwood Technology', 'Foxwood', 'SPMT', 'SP Media',
+      'SilverKey', 'Silver Key', 'ADV Partners', 'Dacta Training', 'Dacta Global'];
+    vault.registerClientNames(KNOWN_CLIENTS);
+
     // Build system prompt with client context
     let systemPrompt = SYSTEM_PROMPT;
     if (client_context) {
       systemPrompt += `\n\n## Current Session Context\n- Selected client: ${client_context.name || 'All Clients'}\n- Client namespace: ${client_context.namespace || 'all'}\n- Client type: ${client_context.type || 'unknown'}\n- Available connectors: ${(client_context.connectors || []).map(c => c.display_name + ' (' + c.connector_type + ')').join(', ') || 'unknown'}`;
     }
+
+    // Tokenize system prompt (protects client names in context)
+    systemPrompt = vault.tokenizeSystemPrompt(systemPrompt);
 
     // ── Model Strategy ──
     // Haiku for tool rounds (fast, cheap, higher rate limits: 50K input tokens/min)
@@ -594,6 +654,10 @@ export default async function handler(req, res) {
 
     // Trim conversation history to avoid timeout on follow-ups
     let currentMessages = trimConversation(messages);
+
+    // Tokenize ALL messages before Claude sees them
+    currentMessages = vault.tokenizeMessages(currentMessages);
+    console.log('[Copilot] PII Vault initialized:', JSON.stringify(vault.getStats()));
     const maxToolRounds = 4; // Max 4 tool rounds to stay within rate limits
     let iteration = 0;
     let toolCallLog = [];
@@ -624,17 +688,22 @@ export default async function handler(req, res) {
         currentMessages.push({ role: 'assistant', content: claudeData.content });
 
         // Execute all tool calls in parallel
+        // PII Flow: Claude sends tokenized args → detokenize → real API → tokenize results → back to Claude
         const toolResults = await Promise.all(toolUseBlocks.map(async (toolBlock) => {
-          const result = await executeTool(toolBlock.name, toolBlock.input);
+          // Detokenize tool arguments so real APIs get real values
+          const realInput = vault.detokenizeDeep(toolBlock.input);
+          const result = await executeTool(toolBlock.name, realInput);
+          // Tokenize tool results before Claude sees them
+          const tokenizedResult = vault.tokenizeDeep(result);
           toolCallLog.push({
             tool: toolBlock.name,
-            input: toolBlock.input,
+            input: toolBlock.input, // Log the tokenized version (safe)
             output_summary: result.error ? result.error : `${JSON.stringify(result).length} bytes`
           });
           return {
             type: 'tool_result',
             tool_use_id: toolBlock.id,
-            content: JSON.stringify(result)
+            content: JSON.stringify(tokenizedResult)
           };
         }));
 
@@ -643,15 +712,30 @@ export default async function handler(req, res) {
         continue;
       }
 
-      // Claude produced a text response — extract and return it
+      // Claude produced a text response — extract and detokenize for the analyst
       const textBlocks = claudeData.content.filter(b => b.type === 'text');
-      const responseText = textBlocks.map(b => b.text).join('\n');
+      const tokenizedResponse = textBlocks.map(b => b.text).join('\n');
+      // Detokenize: restore real PII values for the analyst's eyes only
+      const responseText = vault.detokenize(tokenizedResponse);
+
+      console.log('[Copilot] PII Vault final stats:', JSON.stringify(vault.getStats()));
+
+      // Server-side usage logging (fire-and-forget, non-blocking)
+      const requestLatency = Date.now() - requestStart;
+      logUsageServerSide({
+        model: claudeData.model,
+        usage: claudeData.usage,
+        toolCallLog,
+        piiStats: vault.getStats(),
+        latencyMs: requestLatency
+      });
 
       return res.status(200).json({
         response: responseText,
         tool_calls: toolCallLog,
         model: claudeData.model,
-        usage: claudeData.usage
+        usage: claudeData.usage,
+        pii_vault: vault.getStats() // Return stats (never real values) for UI display
       });
     }
 

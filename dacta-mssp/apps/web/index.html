@@ -7134,6 +7134,16 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   font-family: var(--font-mono);
   white-space: nowrap;
 }
+.copilot-pii-badge {
+  font-size: 10px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: rgba(16,185,129,0.06);
+  border: 1px solid rgba(16,185,129,0.2);
+  color: var(--green);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
 
 /* ---- Markdown Rendering in Copilot ---- */
 .msg-bubble-copilot p {
@@ -27839,19 +27849,8 @@ function trackAIUsage(model, tokensIn, tokensOut, purpose, latencyMs, sessionId)
   _aiUsage.calls.push({ ts: now.toISOString(), model: model, tokensIn: tokensIn, tokensOut: tokensOut, purpose: purpose });
   if (_aiUsage.calls.length > 100) _aiUsage.calls = _aiUsage.calls.slice(-100);
   try { sessionStorage.setItem('dacta_ai_usage', JSON.stringify(_aiUsage)); } catch(e) {}
-  // Persist to SIEMLess DB llm_usage_log (fire-and-forget)
-  logToSupabase('llm_usage_log', {
-    task_type: 'copilot_query',
-    model: model,
-    provider: 'dacta-siemless',
-    input_tokens: tokensIn,
-    output_tokens: tokensOut,
-    latency_ms: latencyMs || null,
-    estimated_cost_usd: 0,
-    fallback_used: false,
-    related_entity_type: 'copilot_session',
-    related_entity_id: sessionId || _copilotSessionId
-  });
+  // Note: LLM usage is now logged server-side in copilot.js (service role key, bypasses RLS).
+  // Frontend logToSupabase for llm_usage_log is deprecated.
 }
 
 // Cost per 1K tokens by model (blended estimate)
@@ -35498,6 +35497,7 @@ async function copilotAsk(text) {
     var responseText = data.response || 'No response received.';
     var toolCalls = data.tool_calls || [];
     var usage = data.usage || {};
+    var piiVault = data.pii_vault || null;
 
     // Add assistant response to conversation history
     _copilotConversation.push({ role: 'assistant', content: responseText });
@@ -35533,6 +35533,13 @@ async function copilotAsk(text) {
       toolSummary += '</div>';
     }
 
+    // PII vault shield badge
+    var piiShieldHtml = '';
+    if (piiVault && piiVault.totalTokens > 0) {
+      var cats = Object.keys(piiVault.byCategory || {}).map(function(k) { return piiVault.byCategory[k] + ' ' + k.toLowerCase(); }).join(', ');
+      piiShieldHtml = '<span class="copilot-pii-badge" title="PII tokenized before LLM: ' + cats + '">\ud83d\udd12 PII Protected \u00b7 ' + piiVault.totalTokens + ' tokens redacted</span>';
+    }
+
     // Token usage info
     var tokenInfo = '';
     if (usage.input_tokens || usage.output_tokens) {
@@ -35544,6 +35551,7 @@ async function copilotAsk(text) {
       '<div class="msg-meta"><span class="msg-sender">DACTA Copilot</span>' +
       '<span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT \u00b7 ' + elapsed + 's' + tokenInfo + '</span></div>' +
       toolSummary +
+      piiShieldHtml +
       '<div class="msg-bubble-copilot">' + copilotRenderMarkdown(responseText) + '</div></div>';
     messages.appendChild(copilotRow);
 
