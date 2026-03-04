@@ -11502,7 +11502,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           }
           function goToTestingLab() {
             closeSaveTestModal();
-            switchDrTab('pipeline');
+            navigate('rulelab');
+            setTimeout(function(){ switchRlTab('queue'); }, 200);
             showToast('Rule queued in testing pipeline');
           }
           // ── Bulk Import ─────────────────────────────────────────
@@ -11684,7 +11685,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               return '<div class="et-threat-card" data-et-status="'+t.status+'" id="etCard'+idx+'">'+'<div class="et-tc-header"><div><div class="et-tc-title">'+t.title+'</div><div class="et-tc-date">'+t.date+'</div></div><span class="et-status-badge '+t.status+'">'+t.status.charAt(0).toUpperCase()+t.status.slice(1)+'</span></div>'+'<div class="et-tc-desc">'+t.desc+'</div>'+'<div style="display:flex;gap:6px;margin-top:10px;"><button class="btn btn-xs btn-secondary" onclick="editETRule(this,'+idx+')">Edit Rule</button><button class="btn btn-xs btn-secondary" onclick="rejectETRule(this,'+idx+')" style="color:var(--red-bright);">Reject</button><button class="btn btn-xs btn-primary" onclick="testETRule(this,'+idx+')">Test Rule &rarr;</button></div></div>';
             }).join('');
           }
-          function editETRule(btn, idx) { showToast('Opening rule editor for this threat...'); switchDrTab('builder'); }
+          function editETRule(btn, idx) { showToast('Opening rule editor for this threat...'); navigate('rules'); setTimeout(function(){ switchDrTab('builder'); }, 200); }
           function rejectETRule(btn, idx) {
             var card = document.getElementById('etCard'+idx);
             if(card){ card.style.opacity='0.4'; card.style.pointerEvents='none'; }
@@ -11692,7 +11693,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
           }
           function testETRule(btn, idx) {
             showToast('Loading rule into Test Lab...');
-            setTimeout(function(){ navigate('page-testlab'); switchRlTab('queue'); }, 400);
+            setTimeout(function(){ navigate('rulelab'); switchRlTab('queue'); }, 400);
           }
         </script>
 
@@ -12852,8 +12853,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="card-header">
               <span class="card-title">Simulation Library</span>
               <div style="display:flex;gap:8px;align-items:center;">
-                <input class="filter-input" placeholder="Search simulations..." style="width:200px;">
-                <select class="filter-select" style="font-size:11px;">
+                <input class="filter-input" placeholder="Search simulations..." style="width:200px;" id="rlSimSearch" oninput="filterSimulations()">
+                <select class="filter-select" style="font-size:11px;" id="rlSimCategory" onchange="filterSimulations()">
                   <option>All Categories</option>
                   <option>Ransomware</option>
                   <option>APT Emulation</option>
@@ -12867,7 +12868,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               </div>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div id="rlSimGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <!-- Simulation 1 -->
               <div class="rl-sim-card" onclick="showToast('Launching ransomware simulation against Dacta Global sandbox...')">
                 <div class="rl-sim-header">
@@ -13242,7 +13243,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
               <div class="rvq-actions">
                 <span style="font-size:10px;color:var(--text-muted);">Performance benchmark: 18/23 rules within latency threshold</span>
-                <button class="btn btn-xs btn-secondary" onclick="showToast('Opening test results'); navigate('rulelab')">View Details</button>
+                <button class="btn btn-xs btn-secondary" onclick="showToast('Test in progress — results loading')">View Details</button>
                 <button class="btn btn-xs btn-primary" id="runTestBtn_1" onclick="runRuleTest('1')">&#9654; Run Test</button>
               </div>
             </div>
@@ -13408,7 +13409,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <div class="rvq-actions">
                 <span style="font-size:10px;color:#22c55e;font-weight:600;">All 5 tests passed — ready to save</span>
                 <button class="btn btn-xs btn-primary" id="runTestBtn_4" onclick="runRuleTest('4')">&#9654; Re-run Test</button>
-                <button class="btn btn-xs btn-primary" onclick="showToast('Rules saved to repository'); switchDrTab('repo')">
+                <button class="btn btn-xs btn-primary" onclick="showToast('Rules saved to repository'); navigate('rules'); setTimeout(function(){ switchDrTab('repo'); }, 200);">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                   Save to Rule Repository
                 </button>
@@ -13466,8 +13467,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               </div>
 
               <div class="rvq-actions">
-                <button class="btn btn-xs btn-secondary" onclick="showToast('Loading failed rules'); switchDrTab('builder')">Tune Failed Rules</button>
-                <button class="btn btn-xs btn-secondary" onclick="showToast('Re-running tests'); navigate('rulelab')">Retest Failed</button>
+                <button class="btn btn-xs btn-secondary" onclick="navigate('rules'); setTimeout(function(){ switchDrTab('builder'); }, 200); showToast('Loading failed rules in Rule Builder')">Tune Failed Rules</button>
+                <button class="btn btn-xs btn-secondary" onclick="showToast('Re-running failed tests...')">Retest Failed</button>
                 <button class="btn btn-xs btn-primary" id="runTestBtn_5" onclick="runRuleTest('5')">&#9654; Run Test</button>
                 <button class="btn btn-xs btn-primary" onclick="showToast('Deployment initiated for 10 passed rules')">Deploy 10 Passed</button>
               </div>
@@ -13664,17 +13665,17 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               <div style="padding:12px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.15);border-radius:8px;">
                 <div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">T1053.005 — Scheduled Task (MISSED)</div>
                 <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Enable Sysmon EventID 1 + Windows Security EventID 4698. Deploy Sigma rule <span style="color:var(--cyan);">proc_creation_win_schtasks_creation</span>.</div>
-                <button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Loading rule template for T1053.005...')">Create Rule</button>
+                <button class="btn btn-xs btn-primary" onclick="navigate('rules'); setTimeout(function(){ switchDrTab('builder'); }, 200); showToast('Loading rule template for T1053.005...')">Create Rule</button>
               </div>
               <div style="padding:12px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.15);border-radius:8px;">
                 <div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">T1041 — Exfiltration Over C2 (MISSED)</div>
                 <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Enable TLS inspection on FortiGate. Configure proxy log ingestion to SIEM. Deploy network anomaly baseline rule.</div>
-                <button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Create Rule</button>
+                <button class="btn btn-xs btn-primary" onclick="navigate('rules'); setTimeout(function(){ switchDrTab('builder'); }, 200); showToast('Open Rule Builder to create rule')">Create Rule</button>
               </div>
               <div style="padding:12px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15);border-radius:8px;">
                 <div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">T1135 — Network Share Discovery (PARTIAL)</div>
                 <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Event logged but no alert rule configured. Deploy correlation rule: 5+ share enumerations from single host within 60s window.</div>
-                <button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Create Rule</button>
+                <button class="btn btn-xs btn-primary" onclick="navigate('rules'); setTimeout(function(){ switchDrTab('builder'); }, 200); showToast('Open Rule Builder to create rule')">Create Rule</button>
               </div>
               <div style="padding:12px;background:rgba(16,185,129,0.04);border:1px solid rgba(16,185,129,0.15);border-radius:8px;">
                 <div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">T1566.001 — Phishing Attachment (BLOCKED)</div>
@@ -13703,13 +13704,13 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="card-header">
               <span class="card-title">Detection Gap Inventory</span>
               <div style="display:flex;gap:8px;">
-                <select class="filter-select" style="font-size:11px;">
+                <select class="filter-select" style="font-size:11px;" id="rlGapPriority" onchange="filterGapTable()">
                   <option>All Priorities</option>
                   <option>Critical</option>
                   <option>High</option>
                   <option>Medium</option>
                 </select>
-                <select class="filter-select" style="font-size:11px;">
+                <select class="filter-select" style="font-size:11px;" id="rlGapClient" onchange="filterGapTable()">
                   <option>All Clients</option>
                   <option>Dacta Global</option>
                   <option>SPMT</option>
@@ -13722,7 +13723,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <div class="table-wrap">
               <table>
                 <thead><tr><th>MITRE ID</th><th>Technique</th><th>Tactic</th><th>Gap Type</th><th>Affected Clients</th><th>Remediation</th><th>Actions</th></tr></thead>
-                <tbody>
+                <tbody id="rlGapBody">
                   <tr>
                     <td class="mono" style="color:var(--cyan);">T1053.005</td>
                     <td style="color:var(--text-primary);font-weight:500;">Scheduled Task/Job</td>
@@ -13730,7 +13731,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                     <td><span class="badge badge-red">No Rule</span></td>
                     <td style="font-size:10px;">All Clients</td>
                     <td style="font-size:10px;color:var(--text-muted);">Deploy Sigma rule for schtasks.exe creation + EventID 4698</td>
-                    <td><button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Fix</button></td>
+                    <td><button class="btn btn-xs btn-primary" onclick="navigate('rules'); setTimeout(function(){ switchDrTab('builder'); }, 200); showToast('Open Rule Builder to create rule')">Fix</button></td>
                   </tr>
                   <tr>
                     <td class="mono" style="color:var(--cyan);">T1041</td>
@@ -13748,7 +13749,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                     <td><span class="badge badge-red">No Rule</span></td>
                     <td style="font-size:10px;">All Clients</td>
                     <td style="font-size:10px;color:var(--text-muted);">Deploy Sysmon-based token impersonation detection</td>
-                    <td><button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Fix</button></td>
+                    <td><button class="btn btn-xs btn-primary" onclick="navigate('rules'); setTimeout(function(){ switchDrTab('builder'); }, 200); showToast('Open Rule Builder to create rule')">Fix</button></td>
                   </tr>
                   <tr>
                     <td class="mono" style="color:var(--cyan);">T1135</td>
@@ -13757,7 +13758,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                     <td><span class="badge badge-amber">No Alert</span></td>
                     <td style="font-size:10px;">Dacta Global</td>
                     <td style="font-size:10px;color:var(--text-muted);">Logged but no correlation rule. Add threshold rule for bulk enumeration.</td>
-                    <td><button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Fix</button></td>
+                    <td><button class="btn btn-xs btn-primary" onclick="navigate('rules'); setTimeout(function(){ switchDrTab('builder'); }, 200); showToast('Open Rule Builder to create rule')">Fix</button></td>
                   </tr>
                   <tr>
                     <td class="mono" style="color:var(--cyan);">T1037</td>
@@ -13766,7 +13767,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                     <td><span class="badge badge-red">No Rule</span></td>
                     <td style="font-size:10px;">All Clients</td>
                     <td style="font-size:10px;color:var(--text-muted);">Monitor startup folder + registry run keys via Sysmon</td>
-                    <td><button class="btn btn-xs btn-primary" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule')">Fix</button></td>
+                    <td><button class="btn btn-xs btn-primary" onclick="navigate('rules'); setTimeout(function(){ switchDrTab('builder'); }, 200); showToast('Open Rule Builder to create rule')">Fix</button></td>
                   </tr>
                   <tr>
                     <td class="mono" style="color:var(--cyan);">T0800</td>
@@ -13890,14 +13891,14 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                 <div class="card-header">
                   <span class="card-title">Atomic Red Team Test Library</span>
                   <div style="display:flex;gap:8px;align-items:center;">
-                    <input class="filter-input" placeholder="Search atomic tests..." style="width:200px;">
+                    <input class="filter-input" placeholder="Search atomic tests..." style="width:200px;" id="rlAtomicSearch" oninput="filterAtomicTests()">
                     <span class="badge badge-cyan">1,347 tests</span>
                   </div>
                 </div>
                 <div class="table-wrap" style="max-height:280px;overflow-y:auto;">
                   <table>
                     <thead><tr><th>Test ID</th><th>Name</th><th>MITRE</th><th>Platform</th><th>Actions</th></tr></thead>
-                    <tbody>
+                    <tbody id="rlAtomicBody">
                       <tr>
                         <td class="mono" style="color:var(--cyan);">ART-T1003-01</td>
                         <td style="color:var(--text-primary);font-weight:500;">Dump LSASS.exe Memory using ProcDump</td>
@@ -14087,6 +14088,74 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
               if(resultsPanel) resultsPanel.innerHTML='<div style="color:var(--red-bright);font-size:12px;padding:12px;">Test execution error: '+e.message+'</div>';
             }
             if(btn){ btn.disabled=false; btn.textContent='Re-run Test'; }
+          }
+
+          // ── Simulation Library Search & Filter ────────────────────
+          function filterSimulations() {
+            var query = (document.getElementById('rlSimSearch').value || '').toLowerCase();
+            var category = (document.getElementById('rlSimCategory').value || 'All Categories');
+            var grid = document.getElementById('rlSimGrid');
+            if (!grid) return;
+            var cards = grid.querySelectorAll('.rl-sim-card');
+            var catMap = {
+              'Ransomware': ['lockbit', 'ransomware', 'encrypt'],
+              'APT Emulation': ['apt', 'cozy bear', 'apt29'],
+              'Credential Theft': ['credential', 'kerberoast', 'lsass', 'harvest'],
+              'Lateral Movement': ['lateral', 'smb', 'movement'],
+              'Data Exfiltration': ['exfil', 'dns tunnel', 'data'],
+              'C2 Communication': ['c2', 'beacon', 'cobalt'],
+              'Persistence': ['persistence', 'defense evasion', 'scheduled task'],
+              'Defense Evasion': ['defense evasion', 'evasion']
+            };
+            cards.forEach(function(card) {
+              var text = card.textContent.toLowerCase();
+              var matchSearch = !query || text.indexOf(query) >= 0;
+              var matchCat = category === 'All Categories';
+              if (!matchCat && catMap[category]) {
+                matchCat = catMap[category].some(function(kw) { return text.indexOf(kw) >= 0; });
+              }
+              card.style.display = (matchSearch && matchCat) ? '' : 'none';
+            });
+          }
+
+          // ── Atomic Red Team Search ────────────────────────────────
+          function filterAtomicTests() {
+            var query = (document.getElementById('rlAtomicSearch').value || '').toLowerCase();
+            var tbody = document.getElementById('rlAtomicBody');
+            if (!tbody) return;
+            var rows = tbody.querySelectorAll('tr');
+            rows.forEach(function(row) {
+              var text = row.textContent.toLowerCase();
+              row.style.display = (!query || text.indexOf(query) >= 0) ? '' : 'none';
+            });
+          }
+
+          // ── Gap Analysis Table Filter ─────────────────────────────
+          function filterGapTable() {
+            var priority = (document.getElementById('rlGapPriority').value || 'All Priorities');
+            var client = (document.getElementById('rlGapClient').value || 'All Clients');
+            var tbody = document.getElementById('rlGapBody');
+            if (!tbody) return;
+            var rows = tbody.querySelectorAll('tr');
+            var priorityMap = {
+              'Critical': 'No Rule',
+              'High': 'No Log Source',
+              'Medium': 'No Alert'
+            };
+            rows.forEach(function(row) {
+              var text = row.textContent;
+              var matchPriority = priority === 'All Priorities';
+              if (!matchPriority) {
+                var gapType = priorityMap[priority];
+                if (gapType) matchPriority = text.indexOf(gapType) >= 0;
+                else matchPriority = true;
+              }
+              var matchClient = client === 'All Clients';
+              if (!matchClient) {
+                matchClient = text.indexOf(client) >= 0;
+              }
+              row.style.display = (matchPriority && matchClient) ? '' : 'none';
+            });
           }
         </script>
 
