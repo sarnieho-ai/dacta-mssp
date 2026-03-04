@@ -2687,7 +2687,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 .tq-bulk-select { background:var(--bg-elevated); border:1px solid var(--border-card); color:var(--text-primary); font-size:12px; padding:5px 10px; border-radius:6px; cursor:pointer; }
 
 /* Summary bar */
-.tq-summary { padding:10px 16px; background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:0 0 10px 10px; font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:12px; }
+.tq-summary { padding:10px 16px; background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:0 0 10px 10px; font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .tq-summary span { color:var(--text-secondary); }
 .tq-summary .sep { color:var(--border-card); }
 
@@ -37357,11 +37357,28 @@ async function populateLiveDashboard() {
 var _triageLoading = false;
 var _triageNextPageToken = null;
 var _triageCurrentIssues = [];
+var _triagePageNum = 1;
+var _triagePageTokens = { 1: null }; // page number -> nextPageToken for that page
+var _triageIsLastPage = false;
 
-async function populateLiveTriage(append) {
+async function populateLiveTriage(pageOrAppend) {
   if (window._dactaMode !== 'production') return;
   if (_triageLoading) return;
   _triageLoading = true;
+
+  // Determine if this is a page navigation or a fresh/filter reload
+  var targetPage = 1;
+  var isPageNav = false;
+  if (typeof pageOrAppend === 'number' && pageOrAppend > 0) {
+    targetPage = pageOrAppend;
+    isPageNav = true;
+  } else if (pageOrAppend !== true) {
+    // Fresh load — reset pagination
+    _triagePageNum = 1;
+    _triagePageTokens = { 1: null };
+    _triageIsLastPage = false;
+    targetPage = 1;
+  }
 
   var triagePage = document.getElementById('page-triage');
   if (!triagePage) { _triageLoading = false; return; }
@@ -37388,13 +37405,14 @@ async function populateLiveTriage(append) {
 
   var pageSizeEl = document.getElementById('tqPageSize');
   filters.maxResults = pageSizeEl ? parseInt(pageSizeEl.value, 10) || 50 : 50;
-  if (append && _triageNextPageToken) {
-    filters.nextPageToken = _triageNextPageToken;
-  }
+
+  // Use stored page token for the target page
+  var pageToken = _triagePageTokens[targetPage] || null;
+  if (pageToken) filters.nextPageToken = pageToken;
 
   // Show loading in table
   var tbody = triagePage.querySelector('table tbody');
-  if (tbody && !append) {
+  if (tbody) {
     tbody.innerHTML = '<tr><td colspan="11">' + jiraProgressBarHTML() + '</td></tr>';
   }
 
@@ -37402,12 +37420,15 @@ async function populateLiveTriage(append) {
     var data = await DactaJira.fetchTriage(filters);
     var issues = data.issues || [];
     _triageNextPageToken = data.nextPageToken || null;
+    _triageIsLastPage = !!data.isLast;
+    _triagePageNum = targetPage;
 
-    if (append) {
-      _triageCurrentIssues = _triageCurrentIssues.concat(issues);
-    } else {
-      _triageCurrentIssues = issues;
+    // Store the token needed to fetch the NEXT page
+    if (_triageNextPageToken && !data.isLast) {
+      _triagePageTokens[targetPage + 1] = _triageNextPageToken;
     }
+
+    _triageCurrentIssues = issues;
 
     // ── Update subtitle ──
     var subtitle = triagePage.querySelector('.page-subtitle');
@@ -37475,15 +37496,36 @@ async function populateLiveTriage(append) {
       var openC = _triageCurrentIssues.filter(function(t) { return t.status === 'Open'; }).length;
       var closedC = _triageCurrentIssues.filter(function(t) { return t.status === 'Closed' || t.status === 'Completed'; }).length;
       var canceledC = _triageCurrentIssues.filter(function(t) { return t.status === 'Canceled'; }).length;
-      var moreBtn = !data.isLast ? ' <button class="btn btn-secondary btn-sm" onclick="populateLiveTriage(true)" style="margin-left:12px;font-size:10px;">Load Next Page</button>' : ' <span style="font-size:10px;color:var(--text-muted);margin-left:8px;">(All loaded)</span>';
-      tqSum.innerHTML = '<span>Showing <strong style="color:var(--cyan);">' + _triageCurrentIssues.length + '</strong> tickets</span>' +
-        '<span class="sep">·</span>' +
+
+      // Build page number buttons (show visited pages + next if available)
+      var maxKnownPage = Math.max.apply(null, Object.keys(_triagePageTokens).map(Number));
+      if (_triageIsLastPage) maxKnownPage = _triagePageNum; // don't show beyond last
+      var pageBtns = '';
+      var pageStart = Math.max(1, _triagePageNum - 3);
+      var pageEnd = _triageIsLastPage ? _triagePageNum : Math.min(maxKnownPage, pageStart + 6);
+      if (pageEnd - pageStart < 6) pageStart = Math.max(1, pageEnd - 6);
+      for (var pg = pageStart; pg <= pageEnd; pg++) {
+        var canNav = (pg <= maxKnownPage); // can only navigate to pages we have tokens for
+        var isActive = (pg === _triagePageNum);
+        var pgStyle = isActive ? 'min-width:28px;background:rgba(0,212,255,0.15);color:var(--cyan);border-color:rgba(0,212,255,0.4);' : (canNav ? 'min-width:28px;' : 'min-width:28px;opacity:0.35;cursor:not-allowed;');
+        pageBtns += '<button class="btn btn-xs btn-secondary" style="' + pgStyle + '" onclick="' + (canNav ? 'goToTriagePage(' + pg + ')' : '') + '">' + pg + '</button>';
+      }
+
+      var prevDis = _triagePageNum <= 1 ? 'opacity:0.35;cursor:not-allowed;' : '';
+      var nextDis = _triageIsLastPage ? 'opacity:0.35;cursor:not-allowed;' : '';
+
+      tqSum.innerHTML = '<span>Page <strong style="color:var(--cyan);">' + _triagePageNum + '</strong>' + (_triageIsLastPage ? ' (last)' : '') + ' \u00b7 <strong style="color:var(--cyan);">' + _triageCurrentIssues.length + '</strong> tickets</span>' +
+        '<span class="sep">\u00b7</span>' +
         '<span><strong style="color:var(--amber);">' + openC + '</strong> open</span>' +
-        '<span class="sep">·</span>' +
+        '<span class="sep">\u00b7</span>' +
         '<span><strong style="color:var(--green);">' + closedC + '</strong> resolved</span>' +
-        '<span class="sep">·</span>' +
+        '<span class="sep">\u00b7</span>' +
         '<span><strong style="color:var(--text-muted);">' + canceledC + '</strong> canceled</span>' +
-        (data.isLast ? '' : moreBtn);
+        '<div style="display:flex;gap:4px;align-items:center;margin-left:auto;">' +
+          '<button class="btn btn-xs btn-secondary" style="' + prevDis + '" onclick="' + (_triagePageNum > 1 ? 'goToTriagePage(' + (_triagePageNum - 1) + ')' : '') + '">\u2190 Prev</button>' +
+          pageBtns +
+          '<button class="btn btn-xs btn-secondary" style="' + nextDis + '" onclick="' + (!_triageIsLastPage ? 'goToTriagePage(' + (_triagePageNum + 1) + ')' : '') + '">Next \u2192</button>' +
+        '</div>';
     }
 
   } catch (err) {
@@ -37494,6 +37536,15 @@ async function populateLiveTriage(append) {
   } finally {
     _triageLoading = false;
   }
+}
+
+// ── Navigate to a specific triage page ──
+function goToTriagePage(page) {
+  if (_triageLoading) return;
+  // Only allow navigation to pages we have tokens for (or page 1)
+  if (page < 1 || (page > 1 && !_triagePageTokens[page])) return;
+  if (_triageIsLastPage && page > _triagePageNum) return;
+  populateLiveTriage(page);
 }
 
 // ── Setup triage filters ──
@@ -37576,7 +37627,12 @@ function setupTriageFilters() {
   // Setup bulk actions
   var pageSizeSetupEl = document.getElementById('tqPageSize');
   if (pageSizeSetupEl) {
-    pageSizeSetupEl.onchange = function() { populateLiveTriage(); };
+    pageSizeSetupEl.onchange = function() {
+      _triagePageNum = 1;
+      _triagePageTokens = { 1: null };
+      _triageIsLastPage = false;
+      populateLiveTriage();
+    };
   }
   var bulkEl = document.querySelector('.tq-bulk-select');
   if (bulkEl) {
