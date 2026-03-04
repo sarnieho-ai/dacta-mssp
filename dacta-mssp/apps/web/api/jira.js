@@ -1,12 +1,13 @@
 // Vercel Serverless Function — Jira API Proxy
 // Handles CORS, authentication, and pagination for Jira Cloud REST API v3
-// Credentials stored as base64-encoded constants (server-side only, never exposed to browser)
+// All credentials read from Vercel Environment Variables — never hardcode secrets
 
-const _JE = 'c2FybmllLmhvQGRhY3RhZ2xvYmFsLmNvbQ=='; // email
-const _JT = 'QVRBVFQzeEZmR0YwS3FTUXExdGZIT0hmVlNiWlVTQ3ZNMnFCVFRBazlQUndnaElvT0pUOVRqOFZFZjRzdjllVEp0cGxGWW5vSkRsakFWU2RTdC1aYUJZZ2xIWl9nQzUyenItSFM4czJDWTNCZUJCbWh6czVVSEROLVNsOVZZWlk4M1g0YW9rSm1TVFQ3Tjh1RXlhSHlSOFhGbkVMWGZaWGJnNWR2cFlXcTFxNW83ZW1jQzhnSWhrPThFMzU2NkY2'; // token
-const _JI = 'dactaglobal-sg.atlassian.net';
-const _CID = '018ce0b3-5943-4d3f-9542-d005b0ce2872'; // Atlassian Cloud ID
-const _TID = 'de6cdba5-d36e-486c-8ace-a41c3eb69b8b'; // [SOC] Alert Ops team ID
+// Required env vars: JIRA_EMAIL, JIRA_API_TOKEN, JIRA_INSTANCE, JIRA_CLOUD_ID, JIRA_TEAM_ID, SUPABASE_URL, SUPABASE_ANON_KEY
+const _JE = process.env.JIRA_EMAIL || '';
+const _JT = process.env.JIRA_API_TOKEN || '';
+const _JI = process.env.JIRA_INSTANCE || 'dactaglobal-sg.atlassian.net';
+const _CID = process.env.JIRA_CLOUD_ID || '';
+const _TID = process.env.JIRA_TEAM_ID || '';
 
 // Server-side in-memory cache (survives across warm invocations on same Vercel instance)
 const _serverCache = {};
@@ -32,8 +33,8 @@ function _setCache(key, data) {
 function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
 
 // ── Supabase REST API helpers (server-side, bypasses client RLS issues) ──
-const _SB_URL = 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpcXJpemdnaXRjcXdrd3NobWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNzkzMjEsImV4cCI6MjA4NzY1NTMyMX0.ZNN47SWAYvAzzY5Dn6VCYV8nzrTrqvvybp2aF4NFHCA';
+const _SB_URL = process.env.SUPABASE_URL || '';
+const _SB_KEY = process.env.SUPABASE_ANON_KEY || '';
 
 async function _sbGet(table, query) {
   try {
@@ -78,10 +79,13 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Credentials (env vars override encoded defaults)
-  const JIRA_EMAIL = process.env.JIRA_EMAIL || _d(_JE);
-  const JIRA_TOKEN = process.env.JIRA_TOKEN || _d(_JT);
-  const JIRA_INSTANCE = process.env.JIRA_INSTANCE || _JI;
+  // Credentials from Vercel env vars
+  if (!_JE || !_JT) {
+    return res.status(500).json({ error: 'Server misconfigured: JIRA_EMAIL and JIRA_API_TOKEN environment variables are required' });
+  }
+  const JIRA_EMAIL = _JE;
+  const JIRA_TOKEN = _JT;
+  const JIRA_INSTANCE = _JI;
 
   const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
   const baseUrl = `https://${JIRA_INSTANCE}`;

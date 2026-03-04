@@ -1,0 +1,34 @@
+# ── Environment & Secrets ──
+.env
+.env.*
+!.env.example
+
+# ── Dependencies ──
+node_modules/
+.pnp
+.pnp.js
+
+# ── Build output ──
+dist/
+build/
+.vercel/
+.output/
+.next/
+
+# ── Logs ──
+*.log
+npm-debug.log*
+
+# ── OS files ──
+.DS_Store
+Thumbs.db
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Misc ──
+*.tgz
+coverage/

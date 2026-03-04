@@ -1,11 +1,7 @@
 // Vercel Serverless Function — Elastic SIEM Proxy
 // Proxies Elasticsearch queries from the frontend, hiding credentials server-side
-// Supports: search, field_caps, and alert correlation queries
-
-const _EU = 'aHR0cHM6Ly9kYWN0YS1nbG9iYWwuZXMuYXAtc291dGhlYXN0LTEuYXdzLmZvdW5kLmlv'; // elastic URL
-const _EK = 'dWtab3Fwd0JPWjFDSVlZQ3pFVkE6bjVyTTk3VS05YnpkQ05sWnRsRmRpQQ=='; // API key
-
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
+// All credentials read from Vercel Environment Variables — never hardcode secrets
+// Required env vars: ELASTIC_URL, ELASTIC_API_KEY
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,8 +10,12 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const ELASTIC_URL = process.env.ELASTIC_URL || _d(_EU);
-  const ELASTIC_API_KEY = process.env.ELASTIC_API_KEY || _EK;
+  const ELASTIC_URL = process.env.ELASTIC_URL || '';
+  const ELASTIC_API_KEY = process.env.ELASTIC_API_KEY || '';
+
+  if (!ELASTIC_URL || !ELASTIC_API_KEY) {
+    return res.status(500).json({ error: 'Server misconfigured: ELASTIC_URL and ELASTIC_API_KEY environment variables are required' });
+  }
 
   try {
     const { action, index, body } = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
