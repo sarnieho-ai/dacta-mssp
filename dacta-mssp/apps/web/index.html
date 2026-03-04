@@ -25847,97 +25847,174 @@ async function showRuleHistory(ruleId, ruleName) {
   } catch(e) { showToast('Failed to load history: ' + e.message, 'warn'); }
 }
 
-async function loadDetectionRulesFromSupabase() {
-  if (!window._dactaSupabase) return [];
-  try {
-    console.log('[DetectionRules] Loading rules from Supabase repository...');
-    var allRules = [];
-    var pageSize = 1000;
-    var offset = 0;
-    var hasMore = true;
-    while (hasMore) {
-      var res = await window._dactaSupabase.from('detection_rules')
-        .select('id,name,description,syntax,severity,status,mitre_tactic,mitre_technique_id,mitre_technique_name,data_sources,tags,author,version,avg_daily_hits,false_positive_rate,vendor,platform,rule_category,batch_id,is_enabled,rule_content,detection_logic,deployment_targets,confidence_score,source_type,log_source_product,log_source_service,log_source_category')
-        .range(offset, offset + pageSize - 1)
-        .order('created_at', { ascending: false });
-      if (res.error) { console.warn('[DetectionRules] Supabase query error:', res.error); break; }
-      if (!res.data || res.data.length === 0) { hasMore = false; break; }
-      allRules = allRules.concat(res.data);
-      offset += pageSize;
-      if (res.data.length < pageSize) hasMore = false;
-    }
-    console.log('[DetectionRules] Loaded ' + allRules.length + ' rules from Supabase');
+// ══════════════════════════════════════════════════════════════
+// DETECTION RULES — Server-Side Paginated Loading (Performance Optimized)
+// ══════════════════════════════════════════════════════════════
 
-    var sevMap = { 'critical': 'Critical', 'high': 'High', 'medium': 'Medium', 'low': 'Low', 'informational': 'Informational' };
-    var syntaxMap = { 'sigma': 'Sigma', 'yara': 'YARA', 'threshold': 'Threshold', 'ml': 'ML', 'eql': 'EQL', 'correlation': 'Correlation', 'kql': 'Sigma', 'spl': 'Sigma' };
-    var statusMap = { 'testing': 'Testing', 'active': 'Production', 'disabled': 'Deprecated' };
-    return allRules.map(function(r, idx) {
-      var logSources = r.log_source_product ? [r.log_source_product] : ((r.data_sources && Array.isArray(r.data_sources)) ? r.data_sources : []);
-      return {
-        id: r.id.substring(0, 8).toUpperCase(),
-        _dbId: r.id,
-        name: r.name || 'Unnamed Rule',
-        type: syntaxMap[r.syntax] || 'Sigma',
-        mitre: r.mitre_technique_id || '\u2014',
-        severity: sevMap[r.severity] || 'Medium',
-        logSources: logSources,
-        author: (r.author === 'DACTA SIEMLess Engine') ? 'Dacta SOC' : (r.author || 'Custom'),
-        ver: 'v' + (r.version || 1) + '.0',
-        status: statusMap[r.status] || 'Testing',
-        fp: (r.false_positive_rate !== null && r.false_positive_rate !== undefined) ? r.false_positive_rate + '%' : '\u2014',
-        hits: r.avg_daily_hits || 0,
-        _source: 'supabase',
-        _batchId: r.batch_id || '',
-        _vendor: r.vendor || '',
-        _isEnabled: r.is_enabled !== false,
-        _ruleContent: r.rule_content || '',
-        _detectionLogic: r.detection_logic || '',
-        _deploymentTargets: r.deployment_targets || [],
-        _confidenceScore: r.confidence_score || 0,
-        _description: r.description || '',
-        _syntax: r.syntax || 'sigma',
-        _sourceType: r.source_type || '',
-        _logSourceProduct: r.log_source_product || '',
-        _logSourceCategory: r.log_source_category || ''
-      };
-    });
-  } catch(e) { console.warn('[DetectionRules] Supabase load error:', e); return []; }
-}
+var _rulesPage = 1;
+var _rulesPerPage = 25;
+var _rulesTotalCount = 0;
+var _rulesCurrentFilters = { search: '', type: '', severity: '', logSource: '', author: '', status: '' };
+var _rulesLoading = false;
 
-// Global playbook cache keyed by detection_rule_id
+// Lightweight cache for on-demand detail/playbook fetches
+var _ruleDetailCache = {};
 var _playbookCache = {};
-var _playbooksLoaded = false;
+var _playbooksLoaded = false; // kept for compat — always true once first fetch done
 
-async function loadPlaybooksFromSupabase() {
-  if (!window._dactaSupabase) return;
-  try {
-    console.log('[Playbooks] Loading response playbooks from Supabase...');
-    var allPbs = [];
-    var pageSize = 1000;
-    var offset = 0;
-    var hasMore = true;
-    while (hasMore) {
-      var res = await window._dactaSupabase.from('response_playbooks')
-        .select('id,detection_rule_id,rule_name,playbook_name,description,severity,triage_steps,containment_steps,eradication_steps,recovery_steps,post_incident_steps,auto_response_actions,escalation_criteria,investigation_queries,evidence_collection,false_positive_guidance,mitre_tactic,mitre_technique_id,estimated_time_minutes,difficulty,status')
-        .eq('status', 'active')
-        .range(offset, offset + pageSize - 1);
-      if (res.error) { console.warn('[Playbooks] Query error:', res.error); break; }
-      if (!res.data || res.data.length === 0) { hasMore = false; break; }
-      allPbs = allPbs.concat(res.data);
-      offset += pageSize;
-      if (res.data.length < pageSize) hasMore = false;
-    }
-    _playbookCache = {};
-    allPbs.forEach(function(pb) {
-      if (pb.detection_rule_id) _playbookCache[pb.detection_rule_id] = pb;
-    });
-    _playbooksLoaded = true;
-    console.log('[Playbooks] Loaded ' + allPbs.length + ' playbooks');
-  } catch(e) { console.warn('[Playbooks] Load error:', e); }
+// Slim columns for table listing (no heavy text blobs)
+var _rulesListColumns = 'id,name,syntax,severity,status,mitre_tactic,mitre_technique_id,vendor,author,version,avg_daily_hits,false_positive_rate,is_enabled,source_type,log_source_product,log_source_category';
+
+// ── Map raw Supabase row → display object (slim) ──
+function mapRuleRow(r) {
+  var sevMap = { 'critical': 'Critical', 'high': 'High', 'medium': 'Medium', 'low': 'Low', 'informational': 'Informational' };
+  var syntaxMap = { 'sigma': 'Sigma', 'yara': 'YARA', 'threshold': 'Threshold', 'ml': 'ML', 'eql': 'EQL', 'correlation': 'Correlation', 'kql': 'Sigma', 'spl': 'Sigma' };
+  var statusMap = { 'testing': 'Testing', 'active': 'Production', 'disabled': 'Deprecated' };
+  var logSources = r.log_source_product ? [r.log_source_product] : [];
+  return {
+    id: r.id.substring(0, 8).toUpperCase(),
+    _dbId: r.id,
+    name: r.name || 'Unnamed Rule',
+    type: syntaxMap[r.syntax] || 'Sigma',
+    mitre: r.mitre_technique_id || '\u2014',
+    severity: sevMap[r.severity] || 'Medium',
+    logSources: logSources,
+    author: (r.author === 'DACTA SIEMLess Engine') ? 'Dacta SOC' : (r.author || 'Custom'),
+    ver: 'v' + (r.version || 1) + '.0',
+    status: statusMap[r.status] || 'Testing',
+    fp: (r.false_positive_rate !== null && r.false_positive_rate !== undefined) ? r.false_positive_rate + '%' : '\u2014',
+    hits: r.avg_daily_hits || 0,
+    _source: 'supabase',
+    _vendor: r.vendor || '',
+    _isEnabled: r.is_enabled !== false,
+    _syntax: r.syntax || 'sigma',
+    _sourceType: r.source_type || '',
+    _logSourceProduct: r.log_source_product || '',
+    _logSourceCategory: r.log_source_category || ''
+  };
 }
 
-function showPlaybook(ruleDbId, ruleName) {
+// ── Fetch ONE page of rules with server-side filter/sort ──
+async function loadRulesPage(page, filters) {
+  if (!window._dactaSupabase) return { data: [], count: 0 };
+  filters = filters || _rulesCurrentFilters;
+  var perPage = _rulesPerPage;
+  var from = (page - 1) * perPage;
+  var to = from + perPage - 1;
+
+  var query = window._dactaSupabase.from('detection_rules')
+    .select(_rulesListColumns, { count: 'exact' })
+    .range(from, to)
+    .order('created_at', { ascending: false });
+
+  // Apply server-side filters
+  if (filters.search) {
+    query = query.or('name.ilike.%' + filters.search + '%,mitre_technique_id.ilike.%' + filters.search + '%,description.ilike.%' + filters.search + '%,source_type.ilike.%' + filters.search + '%,vendor.ilike.%' + filters.search + '%');
+  }
+  if (filters.severity) {
+    var sevReverseMap = { 'Critical': 'critical', 'High': 'high', 'Medium': 'medium', 'Low': 'low' };
+    query = query.eq('severity', sevReverseMap[filters.severity] || filters.severity.toLowerCase());
+  }
+  if (filters.type) {
+    var typeReverseMap = { 'Sigma': 'sigma', 'YARA': 'yara', 'Threshold': 'threshold', 'ML': 'ml', 'EQL': 'eql', 'Correlation': 'correlation' };
+    query = query.eq('syntax', typeReverseMap[filters.type] || filters.type.toLowerCase());
+  }
+  if (filters.logSource) {
+    var ls = filters.logSource.toLowerCase();
+    query = query.or('vendor.ilike.%' + ls + '%,log_source_product.ilike.%' + ls + '%,source_type.ilike.%' + ls + '%');
+  }
+  if (filters.author) {
+    if (filters.author === 'Dacta SOC') query = query.eq('author', 'DACTA SIEMLess Engine');
+    else if (filters.author === 'Community (Sigma HQ)') query = query.eq('author', 'Community');
+    else if (filters.author === 'Custom / Client') query = query.eq('author', 'Custom');
+  }
+  if (filters.status) {
+    var statReverseMap = { 'Production': 'active', 'Testing': 'testing', 'Draft': 'draft', 'Deprecated': 'disabled' };
+    query = query.eq('status', statReverseMap[filters.status] || filters.status.toLowerCase());
+  }
+
+  var res = await query;
+  if (res.error) { console.warn('[DetectionRules] Page query error:', res.error); return { data: [], count: 0 }; }
+  return { data: (res.data || []).map(mapRuleRow), count: res.count || 0 };
+}
+
+// ── Load stat card counts via parallel lightweight queries ──
+async function loadRuleStatCounts() {
+  if (!window._dactaSupabase) return;
+  var sb = window._dactaSupabase;
+  try {
+    var [totalRes, activeRes, edrRes, fwRes, critRes, cloudRes] = await Promise.all([
+      sb.from('detection_rules').select('id', { count: 'exact', head: true }),
+      sb.from('detection_rules').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+      sb.from('detection_rules').select('id', { count: 'exact', head: true }).in('log_source_category', ['edr', 'process_creation', 'security']),
+      sb.from('detection_rules').select('id', { count: 'exact', head: true }).eq('log_source_category', 'firewall'),
+      sb.from('detection_rules').select('id', { count: 'exact', head: true }).eq('severity', 'critical'),
+      sb.from('detection_rules').select('id', { count: 'exact', head: true }).in('log_source_category', ['cloud', 'identity'])
+    ]);
+    var eT = document.getElementById('drStatTotal');
+    var eA = document.getElementById('drStatActive');
+    var eE = document.getElementById('drStatEDR');
+    var eF = document.getElementById('drStatFirewall');
+    var eC = document.getElementById('drStatCritical');
+    var eCl = document.getElementById('drStatCloud');
+    if (eT) eT.textContent = (totalRes.count || 0).toLocaleString();
+    if (eA) eA.textContent = (activeRes.count || 0).toLocaleString();
+    if (eE) eE.textContent = (edrRes.count || 0).toLocaleString();
+    if (eF) eF.textContent = (fwRes.count || 0).toLocaleString();
+    if (eC) eC.textContent = (critRes.count || 0).toLocaleString();
+    if (eCl) eCl.textContent = (cloudRes.count || 0).toLocaleString();
+  } catch (e) { console.warn('[DetectionRules] Stat count error:', e); }
+}
+
+// ── Fetch full rule detail on demand (for modal, inline expand, edit) ──
+async function fetchRuleDetail(dbId) {
+  if (_ruleDetailCache[dbId]) return _ruleDetailCache[dbId];
+  if (!window._dactaSupabase) return null;
+  var res = await window._dactaSupabase.from('detection_rules')
+    .select('*')
+    .eq('id', dbId)
+    .single();
+  if (res.error || !res.data) return null;
+  var r = res.data;
+  var detail = mapRuleRow(r);
+  detail._ruleContent = r.rule_content || '';
+  detail._detectionLogic = r.detection_logic || '';
+  detail._description = r.description || '';
+  detail._deploymentTargets = r.deployment_targets || [];
+  detail._confidenceScore = r.confidence_score || 0;
+  detail._tags = r.tags || [];
+  detail._dataSources = r.data_sources || [];
+  detail._mitreTactic = r.mitre_tactic || '';
+  detail._mitreTechniqueName = r.mitre_technique_name || '';
+  detail._ruleCategory = r.rule_category || '';
+  detail._platform = r.platform || '';
+  detail._batchId = r.batch_id || '';
+  _ruleDetailCache[dbId] = detail;
+  return detail;
+}
+
+// ── Fetch playbook on demand ──
+async function fetchPlaybook(ruleDbId) {
+  if (_playbookCache[ruleDbId]) return _playbookCache[ruleDbId];
+  if (!window._dactaSupabase) return null;
+  var res = await window._dactaSupabase.from('response_playbooks')
+    .select('id,detection_rule_id,rule_name,playbook_name,description,severity,triage_steps,containment_steps,eradication_steps,recovery_steps,post_incident_steps,auto_response_actions,escalation_criteria,investigation_queries,evidence_collection,false_positive_guidance,mitre_tactic,mitre_technique_id,estimated_time_minutes,difficulty,status')
+    .eq('detection_rule_id', ruleDbId)
+    .limit(1)
+    .maybeSingle();
+  if (res.error || !res.data) return null;
+  _playbookCache[ruleDbId] = res.data;
+  _playbooksLoaded = true;
+  return res.data;
+}
+
+// ── Show Playbook (on-demand fetch) ──
+async function showPlaybook(ruleDbId, ruleName) {
   var pb = _playbookCache[ruleDbId];
+  if (!pb) {
+    showToast('Loading playbook...', 'info');
+    pb = await fetchPlaybook(ruleDbId);
+  }
   if (!pb) { showToast('No playbook found for this rule. Generate one in the Rule Builder.', 'warn'); return; }
   var html = '<div style="font-family:\'Sora\',sans-serif;">';
   html += '<div style="font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:4px;">' + (pb.playbook_name || ruleName) + '</div>';
@@ -25956,21 +26033,26 @@ function showPlaybook(ruleDbId, ruleName) {
     html += '<div style="font-size:11px;font-weight:700;color:' + phase.color + ';margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">' + phase.name + '</div>';
     steps.forEach(function(s) {
       html += '<div style="display:flex;gap:8px;margin-bottom:6px;padding:6px 10px;background:rgba(255,255,255,0.02);border-radius:6px;border-left:2px solid ' + phase.color + ';">';
-      html += '<span style="font-size:10px;font-weight:700;color:' + phase.color + ';min-width:18px;">' + (s.step || '') + '</span>';
-      html += '<div><div style="font-size:11px;color:#f1f5f9;">' + (s.action || '') + '</div>';
-      if (s.tool) html += '<div style="font-size:9px;color:rgba(241,245,249,0.4);margin-top:2px;">Tool: ' + s.tool + '</div>';
-      html += '</div></div>';
+      if (typeof s === 'string') {
+        html += '<div style="font-size:11px;color:#f1f5f9;">' + s + '</div>';
+      } else {
+        html += '<span style="font-size:10px;font-weight:700;color:' + phase.color + ';min-width:18px;">' + (s.step || '') + '</span>';
+        html += '<div><div style="font-size:11px;color:#f1f5f9;">' + (s.action || '') + '</div>';
+        if (s.tool) html += '<div style="font-size:9px;color:rgba(241,245,249,0.4);margin-top:2px;">Tool: ' + s.tool + '</div>';
+        html += '</div>';
+      }
+      html += '</div>';
     });
     html += '</div>';
   });
-  // Auto response actions
   var autoActions = pb.auto_response_actions || [];
   if (autoActions.length > 0) {
     html += '<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:#00d4ff;margin-bottom:6px;text-transform:uppercase;">Auto-Response Actions</div>';
     autoActions.forEach(function(a) {
-      var approvalBadge = a.requires_approval ? '<span style="font-size:8px;padding:1px 5px;background:rgba(245,158,11,0.15);color:#f59e0b;border-radius:3px;">Needs Approval</span>' : '<span style="font-size:8px;padding:1px 5px;background:rgba(16,185,129,0.15);color:#10b981;border-radius:3px;">Auto-Execute</span>';
+      var actionLabel = (typeof a === 'string') ? a : ((a.action || a.action_type || '').replace(/_/g, ' ') + (a.target_field ? ' \u2192 ' + a.target_field : (a.description ? ' \u2014 ' + a.description : '')));
+      var approvalBadge = (a && a.requires_approval) ? '<span style="font-size:8px;padding:1px 5px;background:rgba(245,158,11,0.15);color:#f59e0b;border-radius:3px;">Needs Approval</span>' : '<span style="font-size:8px;padding:1px 5px;background:rgba(16,185,129,0.15);color:#10b981;border-radius:3px;">Auto-Execute</span>';
       html += '<div style="padding:6px 10px;background:rgba(0,212,255,0.04);border-radius:6px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">';
-      html += '<span style="font-size:11px;color:#f1f5f9;">' + (a.action_type || '').replace(/_/g,' ') + (a.target_field ? ' → ' + a.target_field : '') + '</span>';
+      html += '<span style="font-size:11px;color:#f1f5f9;">' + actionLabel + '</span>';
       html += approvalBadge + '</div>';
     });
     html += '</div>';
@@ -25993,118 +26075,38 @@ function showPlaybook(ruleDbId, ruleName) {
   document.getElementById('playbookContent').innerHTML = html;
 }
 
+// ── Main init: loads first page + stats (replaces loadDetectionRulesLive) ──
 async function loadDetectionRulesLive() {
-  console.log('[DetectionRules] Loading live rules from Elastic + Supabase...');
+  console.log('[DetectionRules] Loading rules (server-side paginated)...');
+  _rulesLoading = true;
 
-  // Start both loads in parallel
-  var supabasePromise = loadDetectionRulesFromSupabase();
-  var elasticPromise = (async function() {
-    try {
-      var resp = await fetch('/api/elastic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'search',
-          index: '.internal.alerts-security*',
-          body: {
-            size: 0,
-            aggs: {
-              rules: {
-                terms: { field: 'kibana.alert.rule.name', size: 100 },
-                aggs: {
-                  severity: { terms: { field: 'kibana.alert.severity', size: 1 } },
-                  category: { terms: { field: 'kibana.alert.rule.category', size: 1 } },
-                  latest: { top_hits: { size: 1, sort: [{ '@timestamp': 'desc' }], _source: ['kibana.alert.rule.name', 'kibana.alert.rule.category', 'kibana.alert.severity', 'kibana.alert.rule.description', 'kibana.alert.rule.tags'] } }
-                }
-              }
-            }
-          }
-        })
-      });
-      var result = await resp.json();
-      if (!result || !result.aggregations) return [];
-      var buckets = result.aggregations.rules ? result.aggregations.rules.buckets : [];
-      var elasticRules = [];
-      var idx = 1;
-      buckets.forEach(function(b) {
-        var hit = (b.latest && b.latest.hits && b.latest.hits.hits && b.latest.hits.hits[0]) ? b.latest.hits.hits[0]._source : {};
-        var alert = hit.kibana ? hit.kibana.alert || {} : {};
-        var rule = alert.rule || {};
-        var sev = (b.severity && b.severity.buckets && b.severity.buckets[0]) ? b.severity.buckets[0].key : 'medium';
-        var cat = (b.category && b.category.buckets && b.category.buckets[0]) ? b.category.buckets[0].key : 'Custom Query Rule';
-        var sevMap = { 'critical': 'Critical', 'high': 'High', 'medium': 'Medium', 'low': 'Low' };
-        var typeMap = { 'Custom Query Rule': 'Sigma', 'Threshold Rule': 'Threshold', 'EQL Rule': 'EQL', 'Machine Learning Rule': 'ML', 'Indicator Match Rule': 'Correlation' };
-        var tags = rule.tags || [];
-        var mitre = '\u2014';
-        tags.forEach(function(t) { if (t && t.match && t.match(/^T\d{4}/)) mitre = t; });
-        var isDacta = b.key.indexOf('DACTA') >= 0;
-        var logSources = [];
-        if (b.key.toLowerCase().indexOf('ip ') >= 0 || b.key.toLowerCase().indexOf('ioc') >= 0) logSources.push('network');
-        if (b.key.toLowerCase().indexOf('web') >= 0 || b.key.toLowerCase().indexOf('shell') >= 0) logSources.push('windows');
-        if (b.key.toLowerCase().indexOf('edr') >= 0 || b.key.toLowerCase().indexOf('crowdstrike') >= 0) logSources.push('edr');
-        if (b.key.toLowerCase().indexOf('firewall') >= 0 || b.key.toLowerCase().indexOf('forti') >= 0) logSources.push('firewall');
-        if (logSources.length === 0) logSources.push('edr');
-        elasticRules.push({
-          id: 'RUL-' + String(3000 + idx).padStart(4, '0'),
-          name: b.key,
-          type: typeMap[cat] || 'Sigma',
-          mitre: mitre,
-          severity: sevMap[sev] || 'Medium',
-          logSources: logSources,
-          author: isDacta ? 'Dacta SOC' : 'Custom',
-          ver: '1.0',
-          status: 'Production',
-          fp: '\u2014',
-          hits: b.doc_count,
-          _source: 'elastic'
-        });
-        idx++;
-      });
-      return elasticRules;
-    } catch(err) {
-      console.warn('[DetectionRules] Elastic load failed, falling back to Supabase only:', err.message);
-      return [];
-    }
-  })();
+  // Show loading indicator
+  var tbody = document.getElementById('drRepoTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-muted);"><div style="font-size:13px;">Loading detection rules...</div></td></tr>';
 
   try {
-    var results = await Promise.all([elasticPromise, supabasePromise]);
-    var elasticRules = results[0] || [];
-    var supabaseRules = results[1] || [];
+    // Fire page load + stat counts in parallel
+    var [pageResult] = await Promise.all([
+      loadRulesPage(1, _rulesCurrentFilters),
+      loadRuleStatCounts()
+    ]);
 
-    // Merge: Elastic rules first (deployed/live), then Supabase-only rules (repo library)
-    var elasticNames = new Set();
-    elasticRules.forEach(function(r) { elasticNames.add(r.name); });
-    var repoOnlyRules = supabaseRules.filter(function(r) { return !elasticNames.has(r.name); });
+    rulesData = pageResult.data;
+    _rulesTotalCount = pageResult.count;
+    _rulesPage = 1;
 
-    rulesData = elasticRules.concat(repoOnlyRules);
-    window._allRulesData = rulesData.slice();
-    console.log('[DetectionRules] Combined: ' + elasticRules.length + ' from Elastic + ' + repoOnlyRules.length + ' from Supabase repo = ' + rulesData.length + ' total');
-
-    // Update stats cards
+    // Update page subtitle
     var page = document.getElementById('page-rules');
     if (page) {
-      var eT = document.getElementById('drStatTotal');
-      var eA = document.getElementById('drStatActive');
-      var eE = document.getElementById('drStatEDR');
-      var eF = document.getElementById('drStatFirewall');
-      var eC = document.getElementById('drStatCritical');
-      var eCl = document.getElementById('drStatCloud');
-      if (eT) eT.textContent = rulesData.length;
-      if (eA) eA.textContent = rulesData.filter(function(r) { return r.status === 'Production'; }).length;
-      if (eE) eE.textContent = rulesData.filter(function(r) { return r._logSourceCategory === 'edr' || r._logSourceCategory === 'process_creation' || r._logSourceCategory === 'security'; }).length;
-      if (eF) eF.textContent = rulesData.filter(function(r) { return r._logSourceCategory === 'firewall'; }).length;
-      if (eC) eC.textContent = rulesData.filter(function(r) { return r.severity === 'Critical'; }).length;
-      if (eCl) eCl.textContent = rulesData.filter(function(r) { return r._logSourceCategory === 'cloud' || r._logSourceCategory === 'identity'; }).length;
-      // Update page subtitle
       var sub = page.querySelector('.page-subtitle');
       if (sub) {
-        var srcLabel = elasticRules.length > 0
-          ? elasticRules.length + ' live from Elastic + ' + repoOnlyRules.length + ' from Supabase repo'
-          : rulesData.length + ' rules from Supabase repository';
-        sub.innerHTML = srcLabel + ' ' + jiraLiveBadge();
+        sub.innerHTML = _rulesTotalCount.toLocaleString() + ' rules from Supabase repository ' + jiraLiveBadge();
       }
     }
+
+    // Update tab badge
+    var tabCount = document.getElementById('repoTabCount');
+    if (tabCount) tabCount.textContent = _rulesTotalCount.toLocaleString();
 
     renderRules();
     renderPipeline();
@@ -26112,52 +26114,45 @@ async function loadDetectionRulesLive() {
     renderEmergingThreats();
     renderMitre();
 
-    // Load playbooks in parallel (fire-and-forget)
-    loadPlaybooksFromSupabase();
-    if (elasticRules.length > 0) {
-      syncDetectionRulesToSupabase(elasticRules);
-    } else {
-      // Still build the version cache from Supabase for renderRules
-      _ruleVersionCache = {};
-      supabaseRules.forEach(function(r) {
-        if (r._dbId) _ruleVersionCache[r.name] = { id: r._dbId, version: parseInt((r.ver || 'v1.0').replace('v','')) || 1 };
-      });
-      _ruleVersionsLoaded = true;
-      renderRules();
-    }
+    // Version cache from current page (lightweight)
+    _ruleVersionCache = {};
+    rulesData.forEach(function(r) {
+      if (r._dbId) _ruleVersionCache[r.name] = { id: r._dbId, version: parseInt((r.ver || 'v1.0').replace('v','')) || 1 };
+    });
+    _ruleVersionsLoaded = true;
+
   } catch (err) {
     console.error('[DetectionRules] Error:', err);
   }
+  _rulesLoading = false;
 }
 
-var _rulesPage = 1;
-var _rulesPerPage = 25;
-
+// ── Render current page of rules (data already fetched) ──
 function renderRules() {
   var tbody = document.getElementById('drRepoTableBody');
   if (!tbody) return;
-  // Update tab count badge
-  var tabCount = document.getElementById('repoTabCount');
-  if (tabCount) tabCount.textContent = rulesData.length.toLocaleString();
+
   var bTotal = document.getElementById('drBadgeTotal');
-  if (bTotal) bTotal.textContent = rulesData.length + ' rules';
+  if (bTotal) bTotal.textContent = _rulesTotalCount.toLocaleString() + ' rules';
   var bVendors = document.getElementById('drBadgeVendors');
   if (bVendors) { var vs = {}; rulesData.forEach(function(r) { if (r._logSourceProduct) vs[r._logSourceProduct] = 1; }); bVendors.textContent = Object.keys(vs).length + ' vendors'; }
+
   var sevColor = { 'Critical':'red', 'High':'amber', 'Medium':'blue', 'Low':'gray', 'Informational':'gray' };
   var typeClass = { 'Sigma':'sigma', 'YARA':'yara', 'Correlation':'correlation', 'Threshold':'threshold', 'ML':'ml', 'EQL':'eql' };
   var authorClass = { 'Dacta SOC':'dacta', 'Community':'community', 'Custom':'custom' };
   var statusColor = { 'Production':'green', 'Testing':'amber', 'Draft':'gray', 'Deprecated':'red' };
   var lsClassMap = {'Windows Sysmon':'windows','Windows Security':'windows','CrowdStrike':'edr','SentinelOne':'edr','Fortinet':'firewall','Palo Alto Networks':'firewall','Sophos':'firewall','Cisco':'firewall','AWS':'cloud','Microsoft Azure':'cloud','Google Cloud Platform':'cloud','Okta':'edr','windows':'windows','linux':'linux','firewall':'firewall','cloud':'cloud','edr':'edr','m365':'m365','network':'network','ot':'ot'};
-  var total = rulesData.length;
+
+  var total = _rulesTotalCount;
   var totalPages = Math.max(1, Math.ceil(total / _rulesPerPage));
   if (_rulesPage > totalPages) _rulesPage = totalPages;
   if (_rulesPage < 1) _rulesPage = 1;
   var start = (_rulesPage - 1) * _rulesPerPage;
-  var end = Math.min(start + _rulesPerPage, total);
-  var pageData = rulesData.slice(start, end);
+  var end = Math.min(start + rulesData.length, total);
+
   var rows = '';
-  for (var i = 0; i < pageData.length; i++) {
-    var r = pageData[i];
+  for (var i = 0; i < rulesData.length; i++) {
+    var r = rulesData[i];
     var lsBadges = '';
     var rls = r.logSources || [];
     for (var j = 0; j < rls.length; j++) {
@@ -26194,10 +26189,11 @@ function renderRules() {
     rows += '</div></td></tr>';
   }
   tbody.innerHTML = rows;
+
   // Render pagination bar
   var pbar = document.getElementById('drRepoPagination');
   if (!pbar) return;
-  if (total === 0) { pbar.innerHTML = ''; return; }
+  if (total === 0) { pbar.innerHTML = '<span style="font-size:10px;color:var(--text-muted);">No rules found matching filters</span>'; return; }
   var startDisp = start + 1;
   var endDisp = end;
   var pageBtns = '';
@@ -26207,57 +26203,59 @@ function renderRules() {
   if (pageEnd - pageStart < maxBtns - 1) pageStart = Math.max(1, pageEnd - maxBtns + 1);
   for (var p = pageStart; p <= pageEnd; p++) {
     var active = (p === _rulesPage) ? 'background:rgba(0,212,255,0.15);color:var(--cyan);border-color:rgba(0,212,255,0.4);' : '';
-    pageBtns += '<button class="btn btn-xs btn-secondary" style="min-width:28px;' + active + '" onclick="_rulesPage=' + p + ';renderRules();">' + p + '</button>';
+    pageBtns += '<button class="btn btn-xs btn-secondary" style="min-width:28px;' + active + '" onclick="goToRulesPage(' + p + ')">' + p + '</button>';
   }
   var prevDis = _rulesPage <= 1 ? 'opacity:0.35;cursor:not-allowed;' : '';
   var nextDis = _rulesPage >= totalPages ? 'opacity:0.35;cursor:not-allowed;' : '';
-  pbar.innerHTML = '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">Showing ' + startDisp + '–' + endDisp + ' of ' + total + '</span>'
+  pbar.innerHTML = '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">Showing ' + startDisp + '\u2013' + endDisp + ' of ' + total.toLocaleString() + '</span>'
     + '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">'
-    + '<button class="btn btn-xs btn-secondary" style="' + prevDis + '" onclick="if(_rulesPage>1){_rulesPage--;renderRules();}">&#8592; Prev</button>'
+    + '<button class="btn btn-xs btn-secondary" style="' + prevDis + '" onclick="if(_rulesPage>1)goToRulesPage(_rulesPage-1)">&#8592; Prev</button>'
     + pageBtns
-    + '<button class="btn btn-xs btn-secondary" style="' + nextDis + '" onclick="if(_rulesPage<' + totalPages + '){_rulesPage++;renderRules();}">Next &#8594;</button>'
+    + '<button class="btn btn-xs btn-secondary" style="' + nextDis + '" onclick="if(_rulesPage<' + totalPages + ')goToRulesPage(_rulesPage+1)">Next &#8594;</button>'
     + '</div>';
 }
 
-// ── Filter Event Listeners ──
+// ── Navigate to a page (server-side fetch) ──
+async function goToRulesPage(page) {
+  if (_rulesLoading) return;
+  _rulesLoading = true;
+  _rulesPage = page;
+  var tbody = document.getElementById('drRepoTableBody');
+  if (tbody) tbody.style.opacity = '0.5';
+  try {
+    var result = await loadRulesPage(page, _rulesCurrentFilters);
+    rulesData = result.data;
+    _rulesTotalCount = result.count;
+    renderRules();
+  } catch (e) { console.warn('[DetectionRules] Page load error:', e); }
+  if (tbody) tbody.style.opacity = '1';
+  _rulesLoading = false;
+}
+
+// ── Filter Event Listeners (server-side) ──
 (function wireFilters() {
-  function applyFilters() {
+  async function applyFilters() {
     var search = (document.getElementById('drRuleSearch') || {}).value || '';
     var typeF = (document.getElementById('drTypeFilter') || {}).value || '';
     var sevF = (document.getElementById('drSeverityFilter') || {}).value || '';
     var lsF = (document.getElementById('drLogSourceFilter') || {}).value || '';
     var authF = (document.getElementById('drAuthorFilter') || {}).value || '';
     var statF = (document.getElementById('drStatusFilter') || {}).value || '';
-    search = search.toLowerCase();
-    
-    // Store original data if not stored
-    if (!window._allRulesData) window._allRulesData = rulesData.slice();
-    
-    var filtered = window._allRulesData.filter(function(r) {
-      if (search && r.name.toLowerCase().indexOf(search) < 0 && r.mitre.toLowerCase().indexOf(search) < 0 && (r._description||'').toLowerCase().indexOf(search) < 0 && (r._sourceType||'').toLowerCase().indexOf(search) < 0) return false;
-      if (typeF && r.type !== typeF) return false;
-      if (sevF && r.severity !== sevF) return false;
-      if (lsF && (r.logSources||[]).join(',').toLowerCase().indexOf(lsF.toLowerCase()) < 0 && (r._vendor||'').toLowerCase().indexOf(lsF.toLowerCase()) < 0 && (r._logSourceProduct||'').toLowerCase().indexOf(lsF.toLowerCase()) < 0) return false;
-      if (authF) {
-        if (authF === 'Dacta SOC' && r.author !== 'Dacta SOC') return false;
-        if (authF === 'Community (Sigma HQ)' && r.author !== 'Community') return false;
-        if (authF === 'Custom / Client' && r.author !== 'Custom') return false;
-      }
-      if (statF && r.status !== statF) return false;
-      return true;
+
+    _rulesCurrentFilters = { search: search.trim(), type: typeF, severity: sevF, logSource: lsF, author: authF, status: statF };
+    _rulesPage = 1;
+    await goToRulesPage(1);
+  }
+
+  async function resetFilters() {
+    ['drRuleSearch','drTypeFilter','drSeverityFilter','drLogSourceFilter','drAuthorFilter','drStatusFilter'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.value = '';
     });
-    rulesData = filtered;
+    _rulesCurrentFilters = { search: '', type: '', severity: '', logSource: '', author: '', status: '' };
     _rulesPage = 1;
-    renderRules();
+    await goToRulesPage(1);
   }
-  
-  function resetFilters() {
-    if (window._allRulesData) rulesData = window._allRulesData.slice();
-    _rulesPage = 1;
-    renderRules();
-  }
-  
-  // Debounced search
+
   var searchTimer = null;
   document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
@@ -26266,32 +26264,31 @@ function renderRules() {
         var el = document.getElementById(id);
         if (!el) return;
         if (id === 'drRuleSearch') {
-          el.addEventListener('input', function() { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 300); });
+          el.addEventListener('input', function() { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 400); });
         } else {
           el.addEventListener('change', applyFilters);
         }
       });
-    }, 2000);
+    }, 500);
   });
-  
+
   window._applyRuleFilters = applyFilters;
   window._resetRuleFilters = resetFilters;
 })();
 
 
-
-function showRuleDetailModal(dbId) {
-  var r = null;
-  var searchIn = window._allRulesData || rulesData;
-  for (var i = 0; i < searchIn.length; i++) { if (searchIn[i]._dbId === dbId) { r = searchIn[i]; break; } }
+// ── Rule Detail Modal (on-demand fetch) ──
+async function showRuleDetailModal(dbId) {
+  showToast('Loading rule details...', 'info');
+  var r = await fetchRuleDetail(dbId);
   if (!r) { showToast('Rule not found', 'warn'); return; }
-  var pb = _playbookCache[dbId];
+  var pb = _playbookCache[dbId] || await fetchPlaybook(dbId);
   var pbSection = '';
   if (pb) {
     pbSection = '<div style="margin-top:16px;padding:12px;background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.15);border-radius:8px;">'
       + '<div style="font-size:10px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Linked Playbook</div>'
       + '<div style="font-size:12px;color:var(--text-primary);font-weight:600;">' + (pb.playbook_name||'') + '</div>'
-      + '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Est. ' + (pb.estimated_time_minutes||30) + ' min · ' + (pb.difficulty||'intermediate') + '</div>'
+      + '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Est. ' + (pb.estimated_time_minutes||30) + ' min \u00b7 ' + (pb.difficulty||'intermediate') + '</div>'
       + '</div>';
   }
   var content = r._ruleContent || '';
@@ -26312,7 +26309,7 @@ function showRuleDetailModal(dbId) {
     + '<div style="font-family:var(--font-mono);font-size:11px;line-height:1.6;color:var(--text-secondary);background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;max-height:300px;overflow:auto;white-space:pre-wrap;margin-bottom:8px;border:1px solid var(--border-subtle);">' + contentPreview + '</div>'
     + pbSection
     + '<div style="display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border-subtle);">'
-    + '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';editRuleInBuilder(\'' + r.id + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\',\'' + r.type + '\',\'' + r.severity + '\',\'' + r.mitre + '\')">Edit in Builder</button>'
+    + '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';editRuleInBuilder(\'' + r._dbId + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\',\'' + r.type + '\',\'' + r.severity + '\',\'' + r.mitre + '\')">Edit in Builder</button>'
     + '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';testRuleInLab(\'' + r.id + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\')">Test Rule</button>'
     + (pb ? '<button class="btn btn-secondary btn-sm" style="color:var(--cyan);" onclick="document.getElementById(\'ruleDetailModalOverlay\').style.display=\'none\';showPlaybook(\'' + dbId + '\',\'' + (r.name||'').replace(/\'/g,"\\'") + '\')">View Playbook</button>' : '')
     + '<button class="btn btn-secondary btn-sm" onclick="toggleRuleEnabled(\'' + dbId + '\',' + r._isEnabled + ',this)">' + (r._isEnabled !== false ? 'Disable Rule' : 'Enable Rule') + '</button>'
@@ -26331,16 +26328,19 @@ function showRuleDetailModal(dbId) {
   document.getElementById('ruleDetailModalContent').innerHTML = html;
 }
 
-function toggleRuleDetail(row, dbId) {
+// ── Inline rule detail expand (on-demand fetch) ──
+async function toggleRuleDetail(row, dbId) {
   var existing = row.nextElementSibling;
   if (existing && existing.classList.contains('rule-detail-row')) { existing.remove(); return; }
-  // Remove any other open detail rows
   document.querySelectorAll('.rule-detail-row').forEach(function(el) { el.remove(); });
-  var r = rulesData.find(function(x) { return x._dbId === dbId; });
+
+  // Fetch full detail + playbook on demand
+  var r = await fetchRuleDetail(dbId);
   if (!r) return;
+  var pb = _playbookCache[dbId] || await fetchPlaybook(dbId);
+
   var detailRow = document.createElement('tr');
   detailRow.className = 'rule-detail-row';
-  var pb = _playbookCache[dbId];
   var pbSummary = pb ? '<span style="color:var(--green);">\u2713 ' + (pb.playbook_name||'Playbook attached') + '</span> \u00b7 <span style="color:var(--text-muted);">' + (pb.estimated_time_minutes||30) + 'min \u00b7 ' + (pb.difficulty||'intermediate') + '</span>' : '<span style="color:var(--text-muted);">No playbook attached</span>';
   var confColor = r._confidenceScore >= 80 ? 'var(--green)' : r._confidenceScore >= 50 ? 'var(--amber)' : 'var(--red-bright)';
   var targets = (r._deploymentTargets && r._deploymentTargets.length > 0) ? r._deploymentTargets.join(', ') : 'Not deployed';
@@ -26377,38 +26377,32 @@ async function toggleRuleEnabled(ruleId, currentState, btn) {
     var res = await window._dactaSupabase.from('detection_rules').update({ is_enabled: newState }).eq('id', ruleId);
     if (res.error) throw res.error;
     btn.innerHTML = newState ? '\ud83d\udfe2 Enabled' : '\ud83d\udd34 Disabled';
-    // Update local data
     for (var i = 0; i < rulesData.length; i++) { if (rulesData[i]._dbId === ruleId) { rulesData[i]._isEnabled = newState; break; } }
-    if (window._allRulesData) { for (var j = 0; j < window._allRulesData.length; j++) { if (window._allRulesData[j]._dbId === ruleId) { window._allRulesData[j]._isEnabled = newState; break; } } }
+    if (_ruleDetailCache[ruleId]) _ruleDetailCache[ruleId]._isEnabled = newState;
     showToast('Rule ' + (newState ? 'enabled' : 'disabled'));
   } catch(e) { showToast('Failed to update: ' + e.message, 'warn'); }
 }
 
 function exportRulePack() {
   if (!rulesData || rulesData.length === 0) { showToast('No rules to export', 'warn'); return; }
-  var exportData = rulesData.map(function(r) { return { id: r._dbId || r.id, name: r.name, type: r.type, severity: r.severity, mitre: r.mitre, vendor: r._vendor, source_type: r._sourceType, log_source: r._logSourceProduct, status: r.status, rule_content: r._ruleContent }; });
+  // Export current page — shows toast with option info
+  var exportData = rulesData.map(function(r) { return { id: r._dbId || r.id, name: r.name, type: r.type, severity: r.severity, mitre: r.mitre, vendor: r._vendor, source_type: r._sourceType, log_source: r._logSourceProduct, status: r.status }; });
   var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a'); a.href = url; a.download = 'dacta_rules_export_' + new Date().toISOString().split('T')[0] + '.json'; a.click();
   URL.revokeObjectURL(url);
-  showToast('Exported ' + exportData.length + ' rules as JSON');
+  showToast('Exported ' + exportData.length + ' rules (current page). Use Supabase for full export.');
 }
 
-function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
+async function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
   var mask = document.getElementById('drBuilderGreyMask');
   if (mask) mask.style.display = 'none';
   switchDrTab('builder');
   var code = document.getElementById('drIdeCode');
   if (code) {
-    // Find the actual rule data from rulesData (which includes _ruleContent from Supabase)
-    var ruleData = null;
-    var searchPool = window._allRulesData || rulesData;
-    for (var ri = 0; ri < searchPool.length; ri++) {
-      if (searchPool[ri].id === ruleId || searchPool[ri]._dbId === ruleId) {
-        ruleData = searchPool[ri];
-        break;
-      }
-    }
+    // Fetch full rule detail on demand (server-side paginated — _ruleContent not in list data)
+    showToast('Loading rule content...', 'info');
+    var ruleData = await fetchRuleDetail(ruleId);
     var content = (ruleData && ruleData._ruleContent) ? ruleData._ruleContent : '';
     if (content && content.length > 20) {
       // Syntax-highlight the actual rule content
