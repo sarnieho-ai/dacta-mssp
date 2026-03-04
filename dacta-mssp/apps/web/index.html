@@ -39307,7 +39307,7 @@ function buildAttackPathHTML(ticketKey, techniques, summary) {
 // Global store for current escalation draft data (used by modal)
 var _currentEscalationDraft = {};
 
-function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData) {
+async function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData) {
   var card = document.getElementById('clientEscalationCard');
   if (!card) return;
   var content = document.getElementById('escalationDraftContent');
@@ -39349,16 +39349,85 @@ function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, p
     } catch(e) { timestampStr = createdRaw; }
   }
 
-  // ── Build To/CC from org connectors ──
-  var toEmail = 'security@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
+  // ── Fetch real request participants from Jira ──
+  var toEmail = '';
   var ccEmail = 'soc-lead@dacta.global';
-  // If org has a ticketing connector, try to build a more accurate email
-  if (orgObj && orgObj.connectors) {
-    var tickConnector = orgObj.connectors.find(function(c) { return c.connector_type === 'ticketing'; });
-    // Use org code for a cleaner domain
-    if (orgObj.code) {
-      toEmail = 'security@' + orgName.toLowerCase().replace(/\s+/g, '') + '.com';
+  var participantNames = []; // Declared outside try for fallback access
+  try {
+    var rpResp = await fetch('/api/jira?action=requestParticipants&key=' + encodeURIComponent(ticketKey));
+    if (rpResp.ok) {
+      var rpData = await rpResp.json();
+      var realEmails = [];
+      // Collect emails from request participants
+      if (rpData.participants && rpData.participants.length > 0) {
+        rpData.participants.forEach(function(p) {
+          var email = (p.emailAddress || '').trim();
+          var name = (p.displayName || '').trim();
+          // Use emailAddress if available
+          if (email && email.indexOf('@') !== -1) {
+            realEmails.push(email);
+          } else if (name && name.indexOf('@') !== -1) {
+            // Some JSM customers have email as displayName
+            realEmails.push(name);
+          } else if (name) {
+            // GDPR-blocked email — store name for reference
+            participantNames.push(name);
+          }
+        });
+      }
+      // Also include reporter if different from participants
+      if (rpData.reporter) {
+        var rptEmail = (rpData.reporter.emailAddress || '').trim();
+        if (!rptEmail && rpData.reporter.displayName && rpData.reporter.displayName.indexOf('@') !== -1) {
+          rptEmail = rpData.reporter.displayName.trim();
+        }
+        if (rptEmail && rptEmail.indexOf('@') !== -1 && realEmails.indexOf(rptEmail) === -1) {
+          // If reporter is the generic SOC email, put in CC not TO
+          if (rptEmail.toLowerCase() === 'soc@dactaglobal.com' || rptEmail.toLowerCase() === 'soc-lead@dacta.global') {
+            // skip — it's internal
+          } else {
+            realEmails.push(rptEmail);
+          }
+        }
+      }
+      if (realEmails.length > 0) {
+        // Filter out internal dacta emails from TO, keep them in CC
+        var externalEmails = [];
+        var internalEmails = [];
+        realEmails.forEach(function(e) {
+          if (e.toLowerCase().indexOf('dacta') !== -1 || e.toLowerCase().indexOf('soc-lead') !== -1) {
+            internalEmails.push(e);
+          } else {
+            externalEmails.push(e);
+          }
+        });
+        toEmail = externalEmails.length > 0 ? externalEmails.join(', ') : realEmails.join(', ');
+        // Add internal participant emails to CC if not already there
+        if (internalEmails.length > 0) {
+          var ccList = [ccEmail];
+          internalEmails.forEach(function(ie) {
+            if (ccList.indexOf(ie) === -1) ccList.push(ie);
+          });
+          ccEmail = ccList.join(', ');
+        }
+      }
+      console.log('[EscDraft] Jira participants resolved:', realEmails, 'names:', participantNames, 'TO:', toEmail);
     }
+  } catch(rpErr) {
+    console.warn('[EscDraft] Failed to fetch request participants:', rpErr);
+  }
+  // Fallback: if no real emails resolved, show participant names or fabricated org email
+  if (!toEmail) {
+    // Check if we captured any participant names (GDPR-blocked emails)
+    if (participantNames.length > 0) {
+      toEmail = participantNames.join(', ') + ' (email hidden by Jira GDPR — check JSM portal)';
+    } else {
+      toEmail = 'security@' + orgName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
+      if (orgObj && orgObj.connectors && orgObj.code) {
+        toEmail = 'security@' + orgName.toLowerCase().replace(/\s+/g, '') + '.com';
+      }
+    }
+    console.log('[EscDraft] Fallback TO:', toEmail);
   }
 
   // ── Build subject ──
