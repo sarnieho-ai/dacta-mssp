@@ -2600,11 +2600,6 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 .inv-collapse-arrow { transition: transform 0.3s ease; }
 .inv-collapse-arrow.collapsed { transform: rotate(-90deg); }
 
-/* ── Left sidebar scrollbar (investigation workspace) ── */
-.prod-investigation-live > div:first-child::-webkit-scrollbar { width: 4px; }
-.prod-investigation-live > div:first-child::-webkit-scrollbar-track { background: transparent; }
-.prod-investigation-live > div:first-child::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.15); border-radius: 2px; }
-.prod-investigation-live > div:first-child::-webkit-scrollbar-thumb:hover { background: rgba(0,212,255,0.3); }
 
 /* ── Cache banner on investigation page ── */
 .inv-cache-banner {
@@ -38914,7 +38909,7 @@ async function openInvestigation(ticketKey) {
     livePanel.innerHTML = '<div style="display:grid;grid-template-columns:320px 1fr;gap:12px;margin-top:4px;">' +
 
       // ── LEFT SIDEBAR (Ticket Details + SLA + Raw Alert + Timeline + Enrichment/Correlated/Actions/Playbook) ──
-      '<div style="display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 120px);overflow-y:auto;padding-right:4px;">' +
+      '<div style="display:flex;flex-direction:column;gap:12px;">' +
         // Ticket Details card
         '<div class="card" style="padding:14px;">' +
           '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Ticket Details</span></div>' +
@@ -39465,22 +39460,44 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent) {
 
   // Restore sidebar panels from cache
   var sp = cacheEntry.sidebarPanels || {};
-  if (sp.enrichment) {
-    var enrichBody = document.querySelector('#enrichmentSummaryCard .inv-collapsible-body');
-    if (enrichBody) enrichBody.innerHTML = sp.enrichment;
+  var hasSidebarData = sp.enrichment || sp.correlated || sp.actions || sp.playbook;
+  if (hasSidebarData) {
+    if (sp.enrichment) {
+      var enrichBody = document.querySelector('#enrichmentSummaryCard .inv-collapsible-body');
+      if (enrichBody) { enrichBody.innerHTML = sp.enrichment; enrichBody.style.display = ''; }
+    }
+    if (sp.correlated) {
+      var corrBody = document.querySelector('#correlatedAlertsCard .inv-collapsible-body');
+      if (corrBody) { corrBody.innerHTML = sp.correlated; corrBody.style.display = ''; }
+    }
+    if (sp.actions) {
+      var actBody = document.querySelector('#recommendedActionsCard .inv-collapsible-body');
+      if (actBody) { actBody.innerHTML = sp.actions; actBody.style.display = ''; }
+    }
+    if (sp.playbook) {
+      var pbBody = document.querySelector('#playbookActionsCard .inv-collapsible-body');
+      if (pbBody) { pbBody.innerHTML = sp.playbook; pbBody.style.display = ''; }
+    }
+  } else {
+    // No cached sidebar data (investigation cached before sidebar capture was implemented)
+    // Show a helpful message instead of "will appear after investigation..."
+    var noDataMsg = '<div style="font-size:9px;color:var(--text-muted);font-style:italic;">Cached before sidebar capture was available. Click Re-investigate to populate.</div>';
+    ['#enrichmentSummaryCard','#correlatedAlertsCard','#recommendedActionsCard','#playbookActionsCard'].forEach(function(sel) {
+      var body = document.querySelector(sel + ' .inv-collapsible-body');
+      if (body) { body.innerHTML = noDataMsg; body.style.display = ''; }
+    });
   }
-  if (sp.correlated) {
-    var corrBody = document.querySelector('#correlatedAlertsCard .inv-collapsible-body');
-    if (corrBody) corrBody.innerHTML = sp.correlated;
-  }
-  if (sp.actions) {
-    var actBody = document.querySelector('#recommendedActionsCard .inv-collapsible-body');
-    if (actBody) actBody.innerHTML = sp.actions;
-  }
-  if (sp.playbook) {
-    var pbBody = document.querySelector('#playbookActionsCard .inv-collapsible-body');
-    if (pbBody) pbBody.innerHTML = sp.playbook;
-  }
+  // Update collapse arrows to reflect expanded state
+  ['#enrichmentSummaryCard','#correlatedAlertsCard','#recommendedActionsCard','#playbookActionsCard'].forEach(function(sel) {
+    var card = document.querySelector(sel);
+    if (card) {
+      var body = card.querySelector('.inv-collapsible-body');
+      var arrow = card.querySelector('.inv-collapse-arrow');
+      if (body && body.style.display !== 'none' && arrow) {
+        arrow.classList.remove('collapsed');
+      }
+    }
+  });
   // Re-init collapsible after restoring sidebar
   setTimeout(initCollapsiblePanels, 300);
 
@@ -41027,7 +41044,7 @@ async function runAIInvestigation(ticketKey, issueData) {
         '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">' + elasticLogs.queriesRun + ' queries executed</div>';
     }
     var enrichBody = enrichCard.querySelector('.inv-collapsible-body');
-    if (enrichBody) { enrichBody.innerHTML = eHTML; }
+    if (enrichBody) { enrichBody.innerHTML = eHTML; enrichBody.style.display = ''; }
     else { enrichCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + eHTML + '</div>'; }
     setTimeout(initCollapsiblePanels, 100);
   }
@@ -41054,7 +41071,7 @@ async function runAIInvestigation(ticketKey, issueData) {
       cHTML += '</div>';
     }
     var corrBody = corrCard.querySelector('.inv-collapsible-body');
-    if (corrBody) { corrBody.innerHTML = cHTML; }
+    if (corrBody) { corrBody.innerHTML = cHTML; corrBody.style.display = ''; }
     else { corrCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Correlated Alerts</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + cHTML + '</div>'; }
     setTimeout(initCollapsiblePanels, 100);
   }
@@ -41095,7 +41112,7 @@ async function runAIInvestigation(ticketKey, issueData) {
         '<div style="font-size:8px;color:' + pColor + ';font-weight:600;margin-top:2px;">' + a.priority + '</div></div></div>';
     });
     var actBody = actCard.querySelector('.inv-collapsible-body');
-    if (actBody) { actBody.innerHTML = aHTML; }
+    if (actBody) { actBody.innerHTML = aHTML; actBody.style.display = ''; }
     else { actCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">AI Recommended Actions</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + aHTML + '</div>'; }
     setTimeout(initCollapsiblePanels, 100);
   }
@@ -41184,7 +41201,7 @@ async function runAIInvestigation(ticketKey, issueData) {
     })();
 
     var pbBody = playbookCard.querySelector('.inv-collapsible-body');
-    if (pbBody) { pbBody.innerHTML = pbHTML; }
+    if (pbBody) { pbBody.innerHTML = pbHTML; pbBody.style.display = ''; }
     else { playbookCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Playbook Actions</span><span style="font-size:9px;color:var(--text-muted);margin-left:6px;">From Detection Rules + SIEMLess DB</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + pbHTML + '</div>'; }
     setTimeout(initCollapsiblePanels, 100);
   }
