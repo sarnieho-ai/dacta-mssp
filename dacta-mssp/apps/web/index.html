@@ -34457,6 +34457,7 @@ var _copilotDomain = 'logsearch'; // default active domain
 //  COPILOT — Redesigned Functions
 // ============================================================
 
+var _copilotIOCs = [];
 
 function copilotRenderEmpty() {
   var msgs = document.getElementById('copilotMessages');
@@ -34528,12 +34529,14 @@ function copilotSend() {
 }
 
 async function copilotAsk(text) {
+  console.log('[Copilot] copilotAsk called with:', text);
   var messages = document.getElementById('copilotMessages');
-  if (!messages) return;
+  if (!messages) { console.error('[Copilot] copilotMessages not found'); return; }
+  console.log('[Copilot] messages container found, children:', messages.children.length);
 
   // Clear empty state if present
   var emptyEl = messages.querySelector('.copilot-empty-state');
-  if (emptyEl) emptyEl.remove();
+  if (emptyEl) { emptyEl.remove(); console.log('[Copilot] empty state removed'); }
 
   // Add analyst message (right-aligned)
   var analystRow = document.createElement('div');
@@ -34544,6 +34547,7 @@ async function copilotAsk(text) {
     '<span class="msg-sender">You</span></div>' +
     '<div style="text-align:right;"><div class="msg-bubble-analyst">' + escapeHtml(text) + '</div></div></div>';
   messages.appendChild(analystRow);
+  console.log('[Copilot] analyst message appended, children now:', messages.children.length, 'offsetHeight:', messages.offsetHeight, 'scrollHeight:', messages.scrollHeight);
 
   // Show thinking indicator
   var thinkRow = document.createElement('div');
@@ -34803,7 +34807,7 @@ async function copilotAsk(text) {
       if (typeof trackAIUsage === 'function') trackAIUsage('Copilot-Search', 500, 800, 'Search: ' + text.substring(0, 30));
     }
   } catch(err) {
-    console.error('[Copilot]', err);
+    console.error('[Copilot] ERROR:', err);
     responseHTML = '<div style="color:var(--red-bright);">Error: ' + escapeHtml(err.message) + '</div>';
   }
 
@@ -34820,6 +34824,7 @@ async function copilotAsk(text) {
     '<span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT \u00b7 ' + elapsed + 's</span></div>' +
     '<div class="msg-bubble-copilot">' + responseHTML + '</div></div>';
   messages.appendChild(copilotRow);
+  console.log('[Copilot] response appended, total children:', messages.children.length);
   messages.scrollTop = messages.scrollHeight;
 }
 
