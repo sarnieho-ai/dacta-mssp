@@ -25996,16 +25996,26 @@ async function loadLogSourceCatalogLive() {
   _logSourceCatalogLoaded = true;
   // Async: fetch rule counts per vendor from DB (non-blocking, updates cells as they load)
   if (window._dactaSupabase) {
-    items.forEach(function(s, idx) {
-      window._dactaSupabase.from('detection_rules').select('id', {count:'exact', head:true}).eq('vendor', s.v).then(function(res) {
-        var el = document.getElementById('lsc-count-' + idx);
-        if (el && res && !res.error) {
-          var cnt = res.count || 0;
-          el.textContent = cnt.toLocaleString();
-          el.style.color = cnt > 0 ? 'var(--text-primary)' : 'var(--text-muted)';
-        }
+    // Fire count queries in batches of 10 to avoid overwhelming the DB
+    var queue = items.slice();
+    var batchIdx = 0;
+    function runCountBatch() {
+      var batch = queue.splice(0, 10);
+      if (batch.length === 0) return;
+      batch.forEach(function(s) {
+        var idx = items.indexOf(s);
+        window._dactaSupabase.from('detection_rules').select('id', {count:'exact'}).eq('vendor', s.v).limit(1).then(function(res) {
+          var el = document.getElementById('lsc-count-' + idx);
+          if (el && res && !res.error && typeof res.count === 'number') {
+            el.textContent = res.count > 0 ? res.count.toLocaleString() : '—';
+            el.style.color = res.count > 0 ? 'var(--text-primary)' : 'var(--text-muted)';
+          }
+        }).catch(function() {});
       });
-    });
+      // Next batch after 300ms
+      if (queue.length > 0) setTimeout(runCountBatch, 300);
+    }
+    runCountBatch();
   }
 }
 
