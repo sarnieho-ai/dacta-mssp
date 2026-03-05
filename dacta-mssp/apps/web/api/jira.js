@@ -80,6 +80,11 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  // Health check: GET without action returns service status
+  if (req.method === 'GET' && (!req.query || !req.query.action)) {
+    return res.status(200).json({ status: 'ok', service: 'jira-proxy', timestamp: new Date().toISOString() });
+  }
+
   // Credentials from Vercel env vars
   if (!_JE || !_JT) {
     return res.status(500).json({ error: 'Server misconfigured: JIRA_EMAIL and JIRA_API_TOKEN environment variables are required' });

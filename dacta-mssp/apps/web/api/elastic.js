@@ -23,6 +23,11 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // Health check: GET without params returns service status
+  if (req.method === 'GET' && (!req.query || !req.query.action)) {
+    return res.status(200).json({ status: 'ok', service: 'elastic-proxy', timestamp: new Date().toISOString() });
+  }
+
   const ELASTIC_URL = process.env.ELASTIC_URL || '';
   const ELASTIC_API_KEY = process.env.ELASTIC_API_KEY || '';
 

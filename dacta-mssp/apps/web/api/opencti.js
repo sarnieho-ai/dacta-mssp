@@ -14,6 +14,11 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // Health check: GET without params returns service status
+  if (req.method === 'GET' && (!req.body || !req.body.query)) {
+    return res.status(200).json({ status: 'ok', service: 'dacta-tip-proxy', timestamp: new Date().toISOString() });
+  }
+
   const OPENCTI_URL = process.env.OPENCTI_URL || _d(_OU);
   const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || _d(_OK);
 
