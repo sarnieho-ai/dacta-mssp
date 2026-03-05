@@ -444,6 +444,10 @@ a { text-decoration: none; color: inherit; }
 .page.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
+.r1-playbook-scope {
+  animation: fadeIn 0.4s ease;
+}
+
 /* ============================================================
    COMMON COMPONENTS
    ============================================================ */
@@ -49612,6 +49616,91 @@ function _extractVendorFromText(text) {
   return '';
 }
 
+// ── Classify if a playbook step is automated (SIEM-answerable) vs human action ──
+function _isPlaybookStepAutomated(step) {
+  var text = (typeof step === 'string') ? step.toLowerCase() :
+    ((step.action || step.step || step.description || '')).toLowerCase();
+
+  // Explicit human-only patterns — skip these
+  var humanPatterns = ['verify with user', 'verify with asset', 'verify with owner',
+    'contact user', 'contact the user', 'notify ', 'escalate to', 'ask user',
+    'confirm with user', 'confirm with owner', 'check with user', 'check with owner',
+    'document the incident', 'obtain approval', 'request approval', 'communicate to',
+    'send email', 'phone call', 'update jira', 'write up', 'create a ticket',
+    'open a case', 'inform ', 'brief '];
+  for (var i = 0; i < humanPatterns.length; i++) {
+    if (text.indexOf(humanPatterns[i]) !== -1) return false;
+  }
+
+  // Explicit tool classification
+  if (typeof step === 'object') {
+    var tool = (step.tool || step.category || '').toLowerCase();
+    if (/siem|edr|elastic|crowdstrike|firewall|splunk|sentinel|soc\s*tool/.test(tool)) return true;
+    if (/manual|phone|email|human|analyst\s+action/.test(tool)) return false;
+  }
+
+  // Automated investigation keywords
+  var autoKeywords = ['search ', 'query ', 'look for', 'identify ', 'correlate ',
+    'determine if', 'determine whether', 'scope ', 'check for', 'analyze log',
+    'review log', 'review event', 'review alert', 'isolat', 'pattern across',
+    'multiple host', 'multiple account', 'multiple endpoint', 'lateral movement',
+    'persistence', 'indicator', 'ioc', 'malware', 'hash', 'c2 ', 'command and control',
+    'beaconing', 'exfiltrat', 'broader pattern', 'broader campaign', 'related alert',
+    'related event', 'historical', 'baseline', 'anomal'];
+  for (var j = 0; j < autoKeywords.length; j++) {
+    if (text.indexOf(autoKeywords[j]) !== -1) return true;
+  }
+  return false;
+}
+
+// ── Run playbook investigation_queries against Elastic (max 3 queries) ──
+async function _runPlaybookQueries(namespace, investigationQueries, iocs) {
+  var results = [];
+  if (!investigationQueries || !investigationQueries.length) return results;
+  var conn = getOrgConnector(namespace, 'siem');
+  if (!conn) return results;
+
+  var queriesArray = investigationQueries;
+  if (typeof investigationQueries === 'string') {
+    try { queriesArray = JSON.parse(investigationQueries); } catch(e) { return results; }
+  }
+  if (!Array.isArray(queriesArray)) return results;
+
+  var toRun = queriesArray.slice(0, 3); // Cap at 3 queries
+  for (var i = 0; i < toRun.length; i++) {
+    var q = toRun[i];
+    if (!q || (!q.query && !q.body)) continue;
+    var title = q.title || q.name || ('Playbook Query ' + (i + 1));
+    try {
+      var ns = namespace || '';
+      var indexPat = (q.index || 'logs-*').replace(/\{namespace\}/g, ns).replace(/\{ns\}/g, ns);
+      var queryBody = q.body || q.query;
+      if (typeof queryBody === 'string') {
+        // Replace IOC placeholders if present
+        var hostVal = (iocs && iocs.hostnames && iocs.hostnames[0]) || '*';
+        var ipVal = (iocs && iocs.ips && iocs.ips[0]) || '*';
+        queryBody = queryBody.replace(/\{hostname\}/g, hostVal).replace(/\{ip\}/g, ipVal);
+        try { queryBody = JSON.parse(queryBody); } catch(e) {
+          // Not JSON — treat as KQL/Lucene, wrap in query_string
+          queryBody = { query: { query_string: { query: queryBody } }, size: 20 };
+        }
+      }
+      if (!queryBody.size) queryBody.size = 20;
+      var res = await fetch('/api/elastic', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'search', index: indexPat, body: queryBody })
+      });
+      var data = res.ok ? await res.json() : null;
+      var hits = data && data.hits ? (data.hits.total && data.hits.total.value != null ? data.hits.total.value : data.hits.hits.length) : 0;
+      var topHits = data && data.hits && data.hits.hits ? data.hits.hits.slice(0, 3) : [];
+      results.push({ title: title, hits: hits, topHits: topHits, ok: res.ok });
+    } catch (e) {
+      results.push({ title: title, hits: -1, ok: false, error: e.message });
+    }
+  }
+  return results;
+}
+
 async function fetchRelevantPlaybooks(techniques, alertTitle, useCaseName) {
   var dbPlaybooks = [];
   if (!window._dactaSupabase) return dbPlaybooks;
@@ -50031,6 +50120,9 @@ async function runAIInvestigation(ticketKey, issueData) {
   var inculpatory = generateInculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx);
   var exculpatory = generateExculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs);
 
+  // ── Playbook caching for Round 1 & Playbook Card ──
+  var _cachedPlaybooks = []; // Will be populated in Round 1, reused in Playbook Card
+
   // ── Inject SIEM-confirmed firewall block evidence (source: SIEM_CONFIRMED, not ticket text) ──
   if (elasticLogs.firewallBlocks && elasticLogs.firewallBlocks.length > 0) {
     var fbCount = elasticLogs.firewallBlocks.length;
@@ -50265,6 +50357,30 @@ async function runAIInvestigation(ticketKey, issueData) {
     // Generate round content
     console.log('[AI Investigation] Round ' + rnd + ' generating content...');
     var roundHTML = '';
+
+    // ── Playbook-driven Round 1: fetch matched playbooks and run automated scope checks ──
+    var _r1Playbooks = [];
+    var _r1PlaybookResults = [];
+    var _r1AutoSteps = [];
+    if (rnd === 1) {
+      try {
+        _r1Playbooks = await fetchRelevantPlaybooks(techniques, summary, useCase);
+        _cachedPlaybooks = _r1Playbooks; // Cache for Playbook Card reuse
+        if (_r1Playbooks.length > 0) {
+          var _r1Pb = _r1Playbooks[0]; // Best match
+          // Extract automated triage steps
+          var _r1AllSteps = [];
+          if (Array.isArray(_r1Pb.triage_steps)) _r1AllSteps = _r1AllSteps.concat(_r1Pb.triage_steps);
+          // Also include investigation_queries titles as scope checks
+          _r1AutoSteps = _r1AllSteps.filter(_isPlaybookStepAutomated);
+          // Run investigation_queries from playbook against Elastic
+          if (_r1Pb.investigation_queries) {
+            _r1PlaybookResults = await _runPlaybookQueries(invNamespace, _r1Pb.investigation_queries, iocs);
+          }
+        }
+      } catch (e) { console.warn('[R1Playbook] Fetch/run error:', e.message); }
+    }
+
     try {
     if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment);
     else if (rnd === 2) roundHTML = buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs);
@@ -50273,6 +50389,74 @@ async function runAIInvestigation(ticketKey, issueData) {
     } catch (roundErr) {
       console.error('[AI Investigation] Round ' + rnd + ' ERROR:', roundErr);
       roundHTML = '<div style="color:var(--red-bright);font-size:11px;">Error generating round ' + rnd + ' analysis: ' + roundErr.message + '</div>';
+    }
+
+    // ── Append Playbook Scope Assessment to Round 1 HTML ──
+    if (rnd === 1 && (_r1Playbooks.length > 0 || _r1AutoSteps.length > 0 || _r1PlaybookResults.length > 0)) {
+      var _r1Pb0 = _r1Playbooks[0] || {};
+      var _r1PbHTML = '<div class="r1-playbook-scope" style="margin-top:16px;border:1px solid rgba(139,92,246,0.25);border-radius:8px;overflow:hidden;">' +
+        '<div style="background:rgba(139,92,246,0.1);padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(139,92,246,0.2);">' +
+        dIcon('playbook', 16) + ' <span style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#a78bfa;">Playbook Response Scope</span>' +
+        '<span style="font-size:10px;color:var(--text-muted);margin-left:4px;">— ' + escapeHtml(_r1Pb0.playbook_name || 'Matched playbook') + '</span>' +
+        '<span style="margin-left:auto;font-size:9px;background:rgba(139,92,246,0.15);color:#a78bfa;padding:2px 7px;border-radius:10px;">' + (_r1Pb0.match_type || 'matched') + '</span>' +
+        '</div>';
+
+      // Automated triage steps (scope assessment items)
+      if (_r1AutoSteps.length > 0) {
+        _r1PbHTML += '<div style="padding:12px 16px;border-bottom:1px solid rgba(139,92,246,0.1);">' +
+          '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Automated Scope Checks</div>';
+        _r1AutoSteps.slice(0, 5).forEach(function(st) {
+          var stText = (typeof st === 'string') ? st : (st.action || st.step || '');
+          _r1PbHTML += '<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+            '<span style="color:#a78bfa;font-size:10px;margin-top:2px;flex-shrink:0;">' + dIcon('search', 12) + '</span>' +
+            '<span style="font-size:11px;color:var(--text-secondary);">' + escapeHtml(stText) + '</span>' +
+            '</div>';
+        });
+        _r1PbHTML += '</div>';
+      }
+
+      // Playbook investigation query results
+      if (_r1PlaybookResults.length > 0) {
+        _r1PbHTML += '<div style="padding:12px 16px;">' +
+          '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Playbook Query Results</div>' +
+          '<div style="display:flex;flex-direction:column;gap:6px;">';
+        _r1PlaybookResults.forEach(function(qr) {
+          var hitColor = qr.hits > 0 ? 'var(--amber)' : (qr.hits === 0 ? 'var(--text-muted)' : '#ef4444');
+          var hitBg = qr.hits > 0 ? 'rgba(245,158,11,0.1)' : 'rgba(100,116,139,0.08)';
+          var hitLabel = qr.hits < 0 ? 'ERROR' : (qr.hits + ' hit' + (qr.hits !== 1 ? 's' : ''));
+          _r1PbHTML += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + hitBg + ';border-radius:5px;">' +
+            '<span style="font-size:11px;color:var(--text-secondary);flex:1;">' + escapeHtml(qr.title) + '</span>' +
+            '<span style="font-size:10px;font-weight:600;color:' + hitColor + ';background:' + hitBg + ';padding:2px 8px;border-radius:10px;white-space:nowrap;">' + hitLabel + '</span>' +
+            '</div>';
+          // Show top hit summaries if available
+          if (qr.topHits && qr.topHits.length > 0) {
+            qr.topHits.slice(0, 2).forEach(function(hit) {
+              var src = hit._source || {};
+              var hitSummary = src['event.action'] || src.action || src.message || src['process.name'] || src['host.name'] || '';
+              if (hitSummary) {
+                _r1PbHTML += '<div style="margin-left:16px;margin-top:-2px;font-size:10px;color:var(--text-muted);padding:2px 0;">' +
+                  dIcon('chevronRight', 10) + ' ' + escapeHtml(String(hitSummary).substring(0, 80)) + '</div>';
+              }
+            });
+          }
+        });
+        _r1PbHTML += '</div></div>';
+      }
+
+      // False positive guidance if available
+      if (_r1Pb0.false_positive_guidance) {
+        var fpText = (typeof _r1Pb0.false_positive_guidance === 'string') ? _r1Pb0.false_positive_guidance :
+          (Array.isArray(_r1Pb0.false_positive_guidance) ? _r1Pb0.false_positive_guidance.join(' ') : '');
+        if (fpText) {
+          _r1PbHTML += '<div style="padding:8px 16px;border-top:1px solid rgba(139,92,246,0.1);background:rgba(139,92,246,0.04);">' +
+            '<span style="font-size:9px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:0.8px;">' + dIcon('info', 10) + ' FP Guidance</span>' +
+            '<span style="font-size:10px;color:var(--text-muted);margin-left:8px;">' + escapeHtml(fpText.substring(0, 200)) + (fpText.length > 200 ? '...' : '') + '</span>' +
+            '</div>';
+        }
+      }
+
+      _r1PbHTML += '</div>'; // close r1-playbook-scope
+      roundHTML += _r1PbHTML;
     }
 
     // Update round card to complete
@@ -50595,7 +50779,7 @@ async function runAIInvestigation(ticketKey, issueData) {
     // Fetch DB playbooks asynchronously and append
     (async function() {
       try {
-        var dbPbs = await fetchRelevantPlaybooks(techniques, alertTitle, useCaseName);
+        var dbPbs = (_cachedPlaybooks && _cachedPlaybooks.length > 0) ? _cachedPlaybooks : await fetchRelevantPlaybooks(techniques, alertTitle, useCaseName);
         if (dbPbs.length > 0) {
           var dbHTML = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-subtle);">' +
             '<div style="font-size:9px;font-weight:600;color:var(--cyan);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">' + dIcon('book',14) + ' SIEMLess DB Playbooks (' + dbPbs.length + ' matched)</div>';
