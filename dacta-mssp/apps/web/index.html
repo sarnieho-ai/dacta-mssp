@@ -43983,54 +43983,7 @@ async function populateLiveTriage(pageOrAppend) {
     }
 
     // ── Update metric strip ──
-    var metricVals = triagePage.querySelectorAll('.tq-metric-value');
-    var p1Count = _triageCurrentIssues.filter(function(t) { return t.priorityShort === 'P1' && t.status === 'Open'; }).length;
-    var openCount = _triageCurrentIssues.filter(function(t) { return t.status === 'Open'; }).length;
-
-    // Compute AI Pre-Triaged count: tickets in current view that have a cached AI investigation
-    var aiPreTriagedCount = 0;
-    _triageCurrentIssues.forEach(function(t) {
-      if (_investigationCache[t.key]) aiPreTriagedCount++;
-    });
-
-    // Compute Avg Triage Time: average delta between ticket created and AI investigated_at
-    var triageDeltas = [];
-    _triageCurrentIssues.forEach(function(t) {
-      var cached = _investigationCache[t.key];
-      if (cached && cached.timestamp && t.created) {
-        var createdMs = new Date(t.created).getTime();
-        var investigatedMs = new Date(cached.timestamp).getTime();
-        if (createdMs > 0 && investigatedMs > 0 && investigatedMs >= createdMs) {
-          triageDeltas.push(investigatedMs - createdMs);
-        }
-      }
-    });
-    var avgTriageMs = triageDeltas.length > 0 ? triageDeltas.reduce(function(a, b) { return a + b; }, 0) / triageDeltas.length : 0;
-    // Format avg triage time as human-readable
-    var avgTriageText = '—';
-    var avgTriageSub = 'No data yet';
-    if (triageDeltas.length > 0) {
-      var avgSec = avgTriageMs / 1000;
-      if (avgSec < 60) { avgTriageText = Math.round(avgSec) + '<span style="font-size:14px;">s</span>'; }
-      else if (avgSec < 3600) { avgTriageText = (avgSec / 60).toFixed(1) + '<span style="font-size:14px;">m</span>'; }
-      else if (avgSec < 86400) { avgTriageText = (avgSec / 3600).toFixed(1) + '<span style="font-size:14px;">h</span>'; }
-      else { avgTriageText = (avgSec / 86400).toFixed(1) + '<span style="font-size:14px;">d</span>'; }
-      avgTriageSub = 'From ' + triageDeltas.length + ' investigated';
-    }
-
-    if (metricVals.length >= 4) {
-      metricVals[0].textContent = p1Count;
-      metricVals[1].textContent = openCount;
-      metricVals[2].textContent = aiPreTriagedCount;
-      metricVals[3].innerHTML = avgTriageText;
-    }
-    var metricSubs = triagePage.querySelectorAll('.tq-metric-sub');
-    if (metricSubs.length >= 4) {
-      metricSubs[0].textContent = p1Count > 0 ? 'Active now' : 'None active';
-      metricSubs[1].textContent = 'Needs analyst review';
-      metricSubs[2].textContent = aiPreTriagedCount > 0 ? (aiPreTriagedCount + ' auto-classified') : 'No investigations yet';
-      metricSubs[3].textContent = avgTriageSub;
-    }
+    updateTriageMetricStrip();
 
     // ── Render table ──
     if (tbody) {
@@ -44344,6 +44297,60 @@ function jiraQueueBadge(queue) {
   };
   var style = colors[queue] || colors['General'];
   return '<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid;white-space:nowrap;letter-spacing:0.3px;' + style + '">' + queue + '</span>';
+}
+
+// ── Reusable metric strip updater (called after triage load AND after investigation cache loads) ──
+function updateTriageMetricStrip() {
+  var triagePage = document.getElementById('page-triage');
+  if (!triagePage || !_triageCurrentIssues || !_triageCurrentIssues.length) return;
+
+  var metricVals = triagePage.querySelectorAll('.tq-metric-value');
+  var p1Count = _triageCurrentIssues.filter(function(t) { return t.priorityShort === 'P1' && t.status === 'Open'; }).length;
+  var openCount = _triageCurrentIssues.filter(function(t) { return t.status === 'Open'; }).length;
+
+  // Compute AI Pre-Triaged count: tickets in current view that have a cached AI investigation
+  var aiPreTriagedCount = 0;
+  _triageCurrentIssues.forEach(function(t) {
+    if (_investigationCache[t.key]) aiPreTriagedCount++;
+  });
+
+  // Compute Avg Triage Time: average delta between ticket created and AI investigated_at
+  var triageDeltas = [];
+  _triageCurrentIssues.forEach(function(t) {
+    var cached = _investigationCache[t.key];
+    if (cached && cached.timestamp && t.created) {
+      var createdMs = new Date(t.created).getTime();
+      var investigatedMs = new Date(cached.timestamp).getTime();
+      if (createdMs > 0 && investigatedMs > 0 && investigatedMs >= createdMs) {
+        triageDeltas.push(investigatedMs - createdMs);
+      }
+    }
+  });
+  var avgTriageMs = triageDeltas.length > 0 ? triageDeltas.reduce(function(a, b) { return a + b; }, 0) / triageDeltas.length : 0;
+  var avgTriageText = '—';
+  var avgTriageSub = 'No data yet';
+  if (triageDeltas.length > 0) {
+    var avgSec = avgTriageMs / 1000;
+    if (avgSec < 60) { avgTriageText = Math.round(avgSec) + '<span style="font-size:14px;">s</span>'; }
+    else if (avgSec < 3600) { avgTriageText = (avgSec / 60).toFixed(1) + '<span style="font-size:14px;">m</span>'; }
+    else if (avgSec < 86400) { avgTriageText = (avgSec / 3600).toFixed(1) + '<span style="font-size:14px;">h</span>'; }
+    else { avgTriageText = (avgSec / 86400).toFixed(1) + '<span style="font-size:14px;">d</span>'; }
+    avgTriageSub = 'From ' + triageDeltas.length + ' investigated';
+  }
+
+  if (metricVals.length >= 4) {
+    metricVals[0].textContent = p1Count;
+    metricVals[1].textContent = openCount;
+    metricVals[2].textContent = aiPreTriagedCount;
+    metricVals[3].innerHTML = avgTriageText;
+  }
+  var metricSubs = triagePage.querySelectorAll('.tq-metric-sub');
+  if (metricSubs.length >= 4) {
+    metricSubs[0].textContent = p1Count > 0 ? 'Active now' : 'None active';
+    metricSubs[1].textContent = 'Needs analyst review';
+    metricSubs[2].textContent = aiPreTriagedCount > 0 ? (aiPreTriagedCount + ' auto-classified') : 'No investigations yet';
+    metricSubs[3].textContent = avgTriageSub;
+  }
 }
 
 // ── Re-render with client-side queue filter ──
@@ -45944,6 +45951,9 @@ async function loadAllCachedKeys() {
         }
       });
       console.log('[InvCache] Loaded ' + resp.data.length + ' cached investigations from SIEMLess DB');
+      // Refresh triage AI column badges + metric strip now that cache is populated
+      refreshTriageAIColumn();
+      updateTriageMetricStrip();
     }
   } catch(e) {
     console.log('[InvCache] Bulk load skipped:', e.message);
