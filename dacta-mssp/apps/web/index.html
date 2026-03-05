@@ -26962,22 +26962,29 @@ async function checkSyntaxUpdates() {
   var totalAffected = 0;
 
   try {
-    // For each vendor check, query rules with matching vendor and scan rule_content
+    // For each vendor check, query ALL rules (paginated) with matching vendor and scan rule_content
     for (var vi = 0; vi < _vendorFieldChecks.length; vi++) {
       var vc = _vendorFieldChecks[vi];
-      // Fetch rules for this vendor that have rule_content
-      var res = await sb.from('detection_rules')
-        .select('id,name,rule_content,vendor,log_source_product')
-        .or('vendor.ilike.%' + vc.vendor + '%,log_source_product.ilike.%' + vc.log + '%')
-        .not('rule_content', 'is', null)
-        .limit(500);
-
-      if (res.error || !res.data) continue;
+      // Paginate to fetch ALL matching rules (1000 per page)
+      var allRules = [];
+      var pageSize = 1000;
+      var pageOffset = 0;
+      var hasMore = true;
+      while (hasMore) {
+        var res = await sb.from('detection_rules')
+          .select('id,name,rule_content,vendor,log_source_product')
+          .or('vendor.ilike.%' + vc.vendor + '%,log_source_product.ilike.%' + vc.log + '%')
+          .not('rule_content', 'is', null)
+          .range(pageOffset, pageOffset + pageSize - 1);
+        if (res.error || !res.data || res.data.length === 0) { hasMore = false; break; }
+        allRules = allRules.concat(res.data);
+        if (res.data.length < pageSize) { hasMore = false; } else { pageOffset += pageSize; }
+      }
 
       var affectedRules = [];
       var matchedFields = [];
 
-      res.data.forEach(function(rule) {
+      allRules.forEach(function(rule) {
         var content = rule.rule_content || '';
         if (content.length < 20) return;
         var ruleAffected = false;
@@ -48765,33 +48772,42 @@ function viewQueuedRuleDetail(queueId) {
 }
 
 // ── Syntax Check: "View Affected" button — shows modal with full rule list ──
-function viewAffectedRules(vendor, log) {
+async function viewAffectedRules(vendor, log) {
   if (!window._dactaSupabase) { showToast('SIEMLess DB not connected', 'warn'); return; }
   showToast('Loading affected rules for ' + vendor + '...', 'info');
 
   var vc = _vendorFieldChecks.find(function(v) { return v.vendor === vendor; });
   if (!vc) { showToast('Vendor check config not found', 'warn'); return; }
 
-  window._dactaSupabase.from('detection_rules')
-    .select('id,name,rule_content,vendor,severity,mitre_technique_id')
-    .or('vendor.ilike.%' + vendor + '%,log_source_product.ilike.%' + log + '%')
-    .not('rule_content', 'is', null)
-    .limit(500)
-    .then(function(res) {
-      if (res.error || !res.data) { showToast('Failed to load rules: ' + (res.error ? res.error.message : 'unknown'), 'warn'); return; }
+  // Paginate to fetch ALL matching rules
+  var sb = window._dactaSupabase;
+  var allRules = [];
+  var pageSize = 1000;
+  var offset = 0;
+  var hasMore = true;
+  while (hasMore) {
+    var res = await sb.from('detection_rules')
+      .select('id,name,rule_content,vendor,severity,mitre_technique_id')
+      .or('vendor.ilike.%' + vendor + '%,log_source_product.ilike.%' + log + '%')
+      .not('rule_content', 'is', null)
+      .range(offset, offset + pageSize - 1);
+    if (res.error || !res.data || res.data.length === 0) { hasMore = false; break; }
+    allRules = allRules.concat(res.data);
+    if (res.data.length < pageSize) { hasMore = false; } else { offset += pageSize; }
+  }
 
-      var affected = [];
-      res.data.forEach(function(rule) {
-        var content = rule.rule_content || '';
-        if (content.length < 20) return;
-        var matchedFields = [];
-        vc.checks.forEach(function(chk) {
-          if (chk.pattern.test(content)) matchedFields.push(chk.old + ' → ' + chk.new);
-        });
-        if (matchedFields.length > 0) affected.push({ rule: rule, fields: matchedFields });
-      });
+  var affected = [];
+  allRules.forEach(function(rule) {
+    var content = rule.rule_content || '';
+    if (content.length < 20) return;
+    var matchedFields = [];
+    vc.checks.forEach(function(chk) {
+      if (chk.pattern.test(content)) matchedFields.push(chk.old + ' \u2192 ' + chk.new);
+    });
+    if (matchedFields.length > 0) affected.push({ rule: rule, fields: matchedFields });
+  });
 
-      if (affected.length === 0) { showToast('No affected rules found for ' + vendor); return; }
+  if (affected.length === 0) { showToast('No affected rules found for ' + vendor); return; }
 
       // Build modal
       var html = '<div style="max-width:750px;">';
@@ -48820,7 +48836,6 @@ function viewAffectedRules(vendor, log) {
       html += '</div></div>';
 
       showModal(affected.length + ' Affected Rules — ' + escHtml(vendor), html);
-    });
 }
 
 // ── Syntax Check: "Flag for Review" — submit rule(s) to validation queue ──
@@ -48859,16 +48874,25 @@ async function flagAllAffectedRules(vendor, log) {
   showToast('Flagging all affected ' + vendor + ' rules...', 'info');
 
   try {
-    var res = await window._dactaSupabase.from('detection_rules')
-      .select('id,name,rule_content')
-      .or('vendor.ilike.%' + vendor + '%,log_source_product.ilike.%' + log + '%')
-      .not('rule_content', 'is', null)
-      .limit(500);
-
-    if (res.error || !res.data) { showToast('Failed to load rules', 'warn'); return; }
+    // Paginate to fetch ALL matching rules
+    var sb = window._dactaSupabase;
+    var allRules = [];
+    var pageSize = 1000;
+    var pgOffset = 0;
+    var hasMore = true;
+    while (hasMore) {
+      var res = await sb.from('detection_rules')
+        .select('id,name,rule_content')
+        .or('vendor.ilike.%' + vendor + '%,log_source_product.ilike.%' + log + '%')
+        .not('rule_content', 'is', null)
+        .range(pgOffset, pgOffset + pageSize - 1);
+      if (res.error || !res.data || res.data.length === 0) { hasMore = false; break; }
+      allRules = allRules.concat(res.data);
+      if (res.data.length < pageSize) { hasMore = false; } else { pgOffset += pageSize; }
+    }
 
     var affected = [];
-    res.data.forEach(function(rule) {
+    allRules.forEach(function(rule) {
       var content = rule.rule_content || '';
       if (content.length < 20) return;
       vc.checks.forEach(function(chk) {
