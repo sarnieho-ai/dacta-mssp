@@ -29286,7 +29286,7 @@ async function loadThreatIntelLive() {
           '</div>' +
           '<span class="tip-status-published">Published</span>' +
           '<div class="tip-report-actions">' +
-            '<button class="tip-btn tip-btn-secondary tip-btn-xs" onclick="event.stopPropagation();tipToast(\dIcon('document',14) + '\',\'Opening report...\')">View</button>' +
+            '<button class="tip-btn tip-btn-secondary tip-btn-xs" onclick="event.stopPropagation();tipToast(\'\',\'Opening report...\')">View</button>' +
           '</div>' +
         '</div>';
       });
@@ -29968,7 +29968,7 @@ function _tipFixAddActorSearch() {
     var html = '';
     filtered.forEach(function(a) {
       var safeName = escapeHtml(a.name);
-      html += '<div class="tip-actor-search-result" onclick="tipToast(\dIcon('checkCircle',14) + '\',\'' + safeName + ' added to watchlist\')">' +
+      html += '<div class="tip-actor-search-result" onclick="tipToast(\'\',\'' + safeName + ' added to watchlist\')">' +
         '<div class="tip-live-dot ' + (a.dotClass || 'orange') + '" style="flex-shrink:0"></div>' +
         '<div>' +
           '<div style="font-size:13px;font-weight:600;color:#e8edf5">' + safeName + (a.isLive ? ' <span style="font-size:9px;color:#00d4ff;">[LIVE]</span>' : '') + '</div>' +
