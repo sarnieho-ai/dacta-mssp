@@ -48133,34 +48133,40 @@ async function openInvestigation(ticketKey) {
           '</div>' +
           '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',14) + ' Re-investigate</button>' +
         '</div>' +
-        // AI Investigation loading spinner
-        '<div id="invLoadingSpinner" class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;min-height:350px;background:var(--bg-card);border:1px solid var(--border-card);border-radius:12px;">' +
-          '<div style="width:48px;height:48px;border:3px solid rgba(0,212,255,0.15);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
-          '<div style="font-size:13px;color:var(--cyan);font-family:var(--font-mono);text-align:center;font-weight:500;">Initializing AI Investigation Engine</div>' +
-          '<div style="width:240px;height:5px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:3px;animation:invProgressBar 8s ease-in-out forwards;"></div></div>' +
-          '<div style="font-size:10px;color:var(--text-secondary);text-align:center;line-height:1.6;">Querying log sources &middot; DACTA TIP enrichment &middot; MITRE mapping<br><span style="color:var(--text-muted);">This may take a few seconds...</span></div>' +
+        // AI Investigation loading panel
+        '<div id="invLoadingSpinner" class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;gap:14px;min-height:300px;background:var(--bg-card);border:1px solid rgba(0,212,255,0.12);border-radius:12px;">' +
+          '<div style="position:relative;width:52px;height:52px;">' +
+            '<div style="position:absolute;inset:0;border:2px solid rgba(0,212,255,0.1);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
+            '<div style="position:absolute;inset:8px;border:2px solid rgba(139,92,246,0.1);border-bottom-color:#8b5cf6;border-radius:50%;animation:spin 1.2s linear infinite reverse;"></div>' +
+            '<div style="position:absolute;inset:18px;width:16px;height:16px;background:rgba(0,212,255,0.15);border-radius:50%;border:1px solid rgba(0,212,255,0.3);"></div>' +
+          '</div>' +
+          '<div style="text-align:center;">' +
+            '<div style="font-size:13px;color:var(--cyan);font-family:var(--font-mono);font-weight:600;margin-bottom:4px;" id="invSpinnerLabel">Initializing AI Investigation</div>' +
+            '<div style="font-size:10px;color:var(--text-muted);" id="invSpinnerSub">Setting up analysis pipeline...</div>' +
+          '</div>' +
+          '<div style="width:260px;height:4px;background:rgba(0,212,255,0.08);border-radius:2px;overflow:hidden;">' +
+            '<div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:2px;animation:invProgressBar 8s ease-in-out forwards;" id="invProgressFill"></div>' +
+          '</div>' +
+          '<div style="display:flex;gap:16px;margin-top:4px;">' +
+            '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep1"><span style="width:6px;height:6px;border-radius:50%;border:1px solid rgba(0,212,255,0.4);display:inline-block;"></span>SIEM Queries</span>' +
+            '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep2"><span style="width:6px;height:6px;border-radius:50%;border:1px solid rgba(139,92,246,0.4);display:inline-block;"></span>Threat Intel</span>' +
+            '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep3"><span style="width:6px;height:6px;border-radius:50%;border:1px solid rgba(16,185,129,0.4);display:inline-block;"></span>AI Analysis</span>' +
+          '</div>' +
         '</div>' +
-        // ── Alert Graph (Chronicle-style force-directed graph) ──
+        // ── Investigation Snapshot (replaces alert graph — more actionable) ──
         '<div class="card" style="padding:14px;border-color:rgba(0,212,255,0.15);" id="alertGraphCard">' +
           '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;">' +
-            '<span class="card-title">Alert Graph</span>' +
-            '<span class="badge" style="font-size:8px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);">Entities</span>' +
+            '<span class="card-title">Investigation Snapshot</span>' +
+            '<span class="badge" id="invSnapshotBadge" style="font-size:8px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);">Pre-scan</span>' +
             '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span>' +
           '</div>' +
           '<div class="inv-collapsible-body" id="alertGraphBody">' +
-            '<div style="position:relative;width:100%;height:320px;background:rgba(0,0,0,0.2);border-radius:8px;overflow:hidden;border:1px solid var(--border-subtle);">' +
-              '<canvas id="invAlertGraphCanvas" style="width:100%;height:100%;"></canvas>' +
-              '<div id="invAGTooltip" style="display:none;position:absolute;background:rgba(8,13,26,0.95);border:1px solid rgba(0,212,255,0.25);border-radius:6px;padding:8px 10px;font-size:10px;color:var(--text-primary);pointer-events:none;z-index:10;max-width:200px;"></div>' +
-            '</div>' +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;" id="invAGLegend">' +
-              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;"></span>Alert</span>' +
-              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#00d4ff;display:inline-block;"></span>Host</span>' +
-              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#8b5cf6;display:inline-block;"></span>IP</span>' +
-              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;"></span>User</span>' +
-              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>Domain</span>' +
-              '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#f97316;display:inline-block;"></span>File/Hash</span>' +
-            '</div>' +
-            '<div id="invAGEntityInfo" style="margin-top:8px;display:none;padding:8px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.1);border-radius:6px;font-size:10px;"></div>' +
+            // 4-metric mini grid (priority, entities, SIEM queries, playbook)
+            '<div id="invSnapshotMetrics" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;"></div>' +
+            // Entity list
+            '<div id="invSnapshotEntities" style="margin-bottom:10px;"></div>' +
+            // Post-investigation results (filled by runAIInvestigation)
+            '<div id="invSnapshotResults" style="font-size:9px;color:var(--text-muted);text-align:center;padding:12px 0;font-style:italic;">SIEM analysis results will appear here after investigation runs...</div>' +
           '</div>' +
         '</div>' +
         // Client Escalation Draft (just above Analyst Feedback Loop)
@@ -48177,8 +48183,8 @@ async function openInvestigation(ticketKey) {
     // ── Initialize collapsible panels ──
     initCollapsiblePanels();
     
-    // ── Initialize Alert Graph with ticket IOCs ──
-    setTimeout(function() { initAlertGraph(ticketKey, f); }, 300);
+    // ── Initialize Investigation Snapshot with ticket IOCs ──
+    setTimeout(function() { initInvestigationSnapshot(ticketKey, f); }, 300);
     
     // ── Fetch and display SLA data from Jira API ──
     fetchAndDisplaySLA(ticketKey, f);
@@ -48200,6 +48206,107 @@ async function openInvestigation(ticketKey) {
   } catch (err) {
     console.error('[DactaJira] Investigation error:', err);
     livePanel.innerHTML = jiraErrorHTML('Failed to load ' + ticketKey + ': ' + err.message, 'openInvestigation(\'' + ticketKey + '\')');
+  }
+}
+
+// ── Investigation Snapshot: replaces the alert graph with a useful metrics panel ──
+function initInvestigationSnapshot(ticketKey, ticketData) {
+  var metricsEl = document.getElementById('invSnapshotMetrics');
+  var entitiesEl = document.getElementById('invSnapshotEntities');
+  var badgeEl = document.getElementById('invSnapshotBadge');
+  if (!metricsEl) return;
+
+  var f = ticketData || {};
+  var desc = '';
+  if (f.description && f.description.content) desc = extractADFText(f.description);
+  else if (typeof f.description === 'string') desc = f.description;
+  var summary = f.summary || '';
+  var priority = (f.priority && f.priority.name) || 'Unknown';
+  var fullText = summary + ' ' + desc.replace(/<[^>]+>/g, ' ');
+  var iocs = extractIOCs(fullText);
+
+  var totalEntities = (iocs.hosts||[]).length + (iocs.ips||[]).length + (iocs.users||[]).length + (iocs.files||[]).length + (iocs.hashes||[]).length;
+  var priorityColor = (priority||'').includes('P1') ? '#ef4444' : (priority||'').includes('P2') ? '#f97316' : (priority||'').includes('P3') ? '#f59e0b' : 'var(--cyan)';
+
+  var metrics = [
+    { label: 'Priority', value: (priority||'—').replace(' - ', ' '), color: priorityColor, bg: priorityColor + '18', icon: 'siren' },
+    { label: 'Entities', value: totalEntities + ' found', color: 'var(--cyan)', bg: 'rgba(0,212,255,0.08)', icon: 'network' },
+    { label: 'SIEM Queries', value: '6 queued', color: '#10b981', bg: 'rgba(16,185,129,0.08)', icon: 'search' },
+    { label: 'Playbook', value: 'Matching...', color: '#a78bfa', bg: 'rgba(139,92,246,0.08)', icon: 'lightning' }
+  ];
+  metricsEl.innerHTML = metrics.map(function(m) {
+    return '<div style="padding:8px 6px;background:'+m.bg+';border-radius:6px;border:1px solid '+m.color+'20;text-align:center;">' +
+      '<div style="font-size:11px;color:'+m.color+';margin-bottom:3px;">'+dIcon(m.icon,13)+'</div>' +
+      '<div style="font-size:9px;font-weight:700;color:'+m.color+';margin-bottom:1px;word-break:break-word;line-height:1.2;">'+escapeHtml(m.value)+'</div>' +
+      '<div style="font-size:8px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">'+m.label+'</div>' +
+    '</div>';
+  }).join('');
+
+  var entitySections = [];
+  if ((iocs.hosts||[]).length) entitySections.push({ label: 'Hosts', items: iocs.hosts, color: 'var(--cyan)' });
+  if ((iocs.ips||[]).length)   entitySections.push({ label: 'IPs',   items: iocs.ips,   color: '#8b5cf6' });
+  if ((iocs.users||[]).length) entitySections.push({ label: 'Users', items: iocs.users, color: '#10b981' });
+  if ((iocs.hashes||[]).length) entitySections.push({ label: 'Hashes', items: iocs.hashes.map(function(h){return h.substring(0,16)+'\u2026';}), color: '#f97316' });
+
+  if (entitySections.length > 0) {
+    entitiesEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:6px;">' +
+      entitySections.map(function(sec) {
+        return '<div style="padding:6px 8px;background:var(--surface-1);border-radius:5px;border:1px solid var(--border-subtle);">' +
+          '<div style="font-size:8px;font-weight:700;color:'+sec.color+';text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">'+sec.label+'</div>' +
+          sec.items.slice(0, 4).map(function(v) {
+            return '<div style="font-size:9px;font-family:var(--font-mono);color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(v)+'</div>';
+          }).join('') +
+          (sec.items.length > 4 ? '<div style="font-size:8px;color:var(--text-muted);margin-top:2px;">+' + (sec.items.length - 4) + ' more</div>' : '') +
+        '</div>';
+      }).join('') +
+    '</div>';
+  } else {
+    entitiesEl.innerHTML = '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:8px 0;">No IOCs extracted from ticket text</div>';
+  }
+
+  if (badgeEl) badgeEl.textContent = totalEntities + ' Entities';
+}
+
+// Called from runAIInvestigation after investigation to fill the snapshot results panel
+function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
+  var resultsEl = document.getElementById('invSnapshotResults');
+  if (!resultsEl || !elasticLogs) return;
+  var siemTotal = (elasticLogs.queryDetails || []).reduce(function(sum, qd) { return sum + (qd.hits || 0); }, 0);
+  var netHits = (elasticLogs.networkConnections || []).filter(function(n){return n.status !== 'CLEAR';}).length;
+  var fileHits = (elasticLogs.fileEvents || []).filter(function(f){return f.status !== 'CLEAR';}).length;
+  var procHits = (elasticLogs.childProcesses || []).filter(function(c){return c.status !== 'CLEAR';}).length;
+  var tipHits  = (elasticLogs.openctiResults || []).filter(function(r){return r.found;}).length;
+  var verdictColor = verdict && verdict.includes('TRUE POSITIVE') ? '#ef4444' : (verdict && verdict.includes('FALSE POSITIVE') ? '#10b981' : '#f59e0b');
+
+  var rows = [
+    { label: 'SIEM Events', val: siemTotal > 0 ? siemTotal + ' hits' : '0 hits', color: siemTotal > 0 ? 'var(--amber)' : 'var(--green)' },
+    { label: 'Network', val: netHits > 0 ? netHits + ' suspicious' : 'Clean', color: netHits > 0 ? 'var(--red-bright)' : 'var(--green)' },
+    { label: 'File Events', val: fileHits > 0 ? fileHits + ' suspicious' : 'Clean', color: fileHits > 0 ? 'var(--red-bright)' : 'var(--green)' },
+    { label: 'Child Procs', val: procHits > 0 ? procHits + ' suspicious' : 'Clean', color: procHits > 0 ? 'var(--red-bright)' : 'var(--green)' },
+    { label: 'TI Matches', val: tipHits > 0 ? tipHits + ' matched' : 'Clean', color: tipHits > 0 ? 'var(--red-bright)' : 'var(--green)' }
+  ];
+
+  resultsEl.innerHTML =
+    (verdict ? '<div style="margin-bottom:8px;padding:5px 10px;background:' + verdictColor + '12;border-radius:5px;border:1px solid ' + verdictColor + '28;display:flex;align-items:center;gap:8px;">' +
+      '<span style="font-size:10px;font-weight:700;color:' + verdictColor + ';">' + verdict + '</span>' +
+      (confidence ? '<span style="font-size:9px;color:var(--text-muted);margin-left:auto;">' + confidence + '% confidence</span>' : '') +
+    '</div>' : '') +
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;">' +
+    rows.slice(0, 6).map(function(r) {
+      return '<div style="padding:5px 7px;background:var(--surface-1);border-radius:4px;border:1px solid var(--border-subtle);">' +
+        '<div style="font-size:8px;color:var(--text-muted);margin-bottom:2px;">' + r.label + '</div>' +
+        '<div style="font-size:10px;font-weight:600;color:' + r.color + ';">' + r.val + '</div>' +
+      '</div>';
+    }).join('') +
+    '</div>';
+
+  var badgeEl = document.getElementById('invSnapshotBadge');
+  if (badgeEl && verdict) {
+    var shortVerdict = verdict.includes('TRUE') ? '⚠ TP' : verdict.includes('FALSE') ? '✓ FP' : '? Unclear';
+    badgeEl.textContent = shortVerdict;
+    badgeEl.style.background = verdictColor + '20';
+    badgeEl.style.color = verdictColor;
+    badgeEl.style.border = '1px solid ' + verdictColor + '40';
   }
 }
 
@@ -48775,6 +48882,18 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
       }
     }
   }, 200);
+
+  // Update snapshot panel with cached verdict data
+  try {
+    if (cacheEntry.verdict || cacheEntry.confidence) {
+      updateInvestigationSnapshot(
+        cacheEntry.elasticLogs || {},
+        cacheEntry.iocs || {},
+        cacheEntry.verdict || '',
+        cacheEntry.confidence || 0
+      );
+    }
+  } catch(e) { console.warn('[Snapshot cache]', e.message); }
 
   // Restore sidebar panels from cache
   var sp = cacheEntry.sidebarPanels || {};
@@ -50541,6 +50660,13 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   // Real Elastic SIEM + DACTA TIP lookup (async, parallel with CrowdStrike)
   console.log('[AI Investigation] Starting real Elastic SIEM + DACTA TIP + CrowdStrike queries in parallel...');
+  // Update spinner to show SIEM step is active
+  try {
+    var _sl = document.getElementById('invSpinnerLabel'); if (_sl) _sl.textContent = 'Querying SIEM + Threat Intel';
+    var _ss = document.getElementById('invSpinnerSub'); if (_ss) _ss.textContent = 'Running 6 log queries \u00B7 CrowdStrike Falcon \u00B7 DACTA TIP...';
+    var _sp1 = document.getElementById('invPipeStep1'); if (_sp1) { _sp1.style.color = 'var(--cyan)'; var d=_sp1.querySelector('span'); if(d){d.style.background='var(--cyan)';d.style.border='none';} }
+    var _sp2 = document.getElementById('invPipeStep2'); if (_sp2) { _sp2.style.color = 'var(--amber)'; var d=_sp2.querySelector('span'); if(d){d.style.background='var(--amber)';d.style.border='none';} }
+  } catch(e) {}
   var elasticLogs;
   var [, elasticResult] = await Promise.allSettled([csEnrichPromise, realElasticLookup(ticketKey, iocs, techniques, issueData).catch(function(elErr) {
     console.error('[AI Investigation] Elastic lookup failed, falling back to simulation:', elErr);
@@ -50791,6 +50917,14 @@ async function runAIInvestigation(ticketKey, issueData) {
     // Show round card as processing
     roundsContainer.innerHTML += buildRoundHTML(rnd, totalRounds, roundLabels[rnd-1], 'running', '');
 
+    // Update spinner step indicator for AI analysis phase
+    try {
+      var _sp3El = document.getElementById('invPipeStep3');
+      if (_sp3El) { _sp3El.style.color = '#10b981'; var d=_sp3El.querySelector('span'); if(d){d.style.background='#10b981';d.style.border='none';} }
+      var _slEl = document.getElementById('invSpinnerLabel'); if (_slEl) _slEl.textContent = 'AI Analysis Round ' + rnd + '/' + totalRounds;
+      var _ssEl = document.getElementById('invSpinnerSub'); if (_ssEl) _ssEl.textContent = roundSubtitles[rnd-1];
+    } catch(e) {}
+
     await sleep(roundTimings[rnd-1] || 2000);
 
     // Generate round content
@@ -50829,20 +50963,79 @@ async function runAIInvestigation(ticketKey, issueData) {
       var _pbMatch = escapeHtml(_pb0.match_type || '');
       var _pbFpRaw = _pb0.false_positive_guidance;
       var _pbFpText = typeof _pbFpRaw === 'string' ? _pbFpRaw : (Array.isArray(_pbFpRaw) ? _pbFpRaw.join(' ') : '');
-      var _pbStepsHtml = _r1AutoSteps.slice(0, 4).map(function(st) {
+      var _pbStepsHtml = _r1AutoSteps.slice(0, 5).map(function(st) {
         var txt = typeof st === 'string' ? st : (st.action || st.step || '');
-        return '<div style="padding:2px 0 2px 14px;font-size:10px;color:var(--text-secondary);border-bottom:1px solid rgba(139,92,246,0.06);">' +
-          '<span style="color:#a78bfa;margin-right:5px;">◆</span>' + escapeHtml(txt) + '</div>';
+        // Determine outcome from already-collected elasticLogs data
+        var outcome = '?', outcomeColor = 'rgba(255,255,255,0.3)', outcomeBg = 'transparent', outcomeNote = '';
+        if (/scope|isolated|pattern|breadth|spread|hosts?|devices?|systems?|multiple/i.test(txt)) {
+          var allHosts = (elasticLogs.edrActions||[]).map(function(e){return e.host;}).filter(Boolean);
+          var uniqueHosts = allHosts.filter(function(v,i,a){return a.indexOf(v)===i;}).length;
+          if (uniqueHosts > 1) { outcome='⚠'; outcomeColor='var(--amber)'; outcomeBg='rgba(245,158,11,0.07)'; outcomeNote=uniqueHosts+' hosts — broader pattern'; }
+          else { outcome='✓'; outcomeColor='var(--green)'; outcomeBg='rgba(16,185,129,0.07)'; outcomeNote=uniqueHosts===1?'Isolated to 1 host':'No multi-host spread'; }
+        } else if (/network|connection|traffic|c2|beacon|external|communicat|outbound/i.test(txt)) {
+          var netHits = (elasticLogs.networkConnections||[]).filter(function(n){return n.status!=='CLEAR';});
+          if (netHits.length>0) { outcome='⚠'; outcomeColor='var(--red-bright)'; outcomeBg='rgba(239,68,68,0.07)'; outcomeNote=netHits.length+' suspicious connection(s)'; }
+          else { outcome='✓'; outcomeColor='var(--green)'; outcomeBg='rgba(16,185,129,0.07)'; outcomeNote='No malicious network activity'; }
+        } else if (/child.?proc|spawn|process.tree|lateral.?move|privilege.?esc/i.test(txt)) {
+          var badProcs = (elasticLogs.childProcesses||[]).filter(function(c){return c.status!=='CLEAR';});
+          if (badProcs.length>0) { outcome='⚠'; outcomeColor='var(--red-bright)'; outcomeBg='rgba(239,68,68,0.07)'; outcomeNote=badProcs.length+' suspicious process(es)'; }
+          else { outcome='✓'; outcomeColor='var(--green)'; outcomeBg='rgba(16,185,129,0.07)'; outcomeNote='No child process escalation'; }
+        } else if (/file|malware|hash|payload|drop|artifact|binary/i.test(txt)) {
+          var badFiles = (elasticLogs.queryResults||[]).filter(function(q){return q.status!=='CLEAN';});
+          var badEvts = (elasticLogs.fileEvents||[]).filter(function(f){return f.status!=='CLEAR';});
+          if (badFiles.length>0) { outcome='⚠'; outcomeColor='var(--red-bright)'; outcomeBg='rgba(239,68,68,0.07)'; outcomeNote=badFiles.length+' malicious file(s)'; }
+          else if (badEvts.length>0) { outcome='⚠'; outcomeColor='var(--amber)'; outcomeBg='rgba(245,158,11,0.07)'; outcomeNote='Suspicious file events'; }
+          else { outcome='✓'; outcomeColor='var(--green)'; outcomeBg='rgba(16,185,129,0.07)'; outcomeNote='No malicious files'; }
+        } else if (/prior.?alert|previous|recurrence|similar.?event|alert.?history/i.test(txt)) {
+          var prevAlerts = (elasticLogs.alertHistory||[]).filter(function(a){return a.status!=='NONE';});
+          if (prevAlerts.length>0) { outcome='⚠'; outcomeColor='var(--amber)'; outcomeBg='rgba(245,158,11,0.07)'; outcomeNote=prevAlerts.length+' prior alert(s)'; }
+          else { outcome='✓'; outcomeColor='var(--green)'; outcomeBg='rgba(16,185,129,0.07)'; outcomeNote='No prior alerts found'; }
+        } else if (/threat.intel|ioc|reputation|known.bad|feed/i.test(txt)) {
+          var tipHits = (elasticLogs.openctiResults||[]).filter(function(r){return r.found;});
+          if (tipHits.length>0) { outcome='⚠'; outcomeColor='var(--red-bright)'; outcomeBg='rgba(239,68,68,0.07)'; outcomeNote=tipHits.length+' TI match(es)'; }
+          else { outcome='✓'; outcomeColor='var(--green)'; outcomeBg='rgba(16,185,129,0.07)'; outcomeNote='No threat intel hits'; }
+        }
+        return '<div style="padding:4px 8px 4px 10px;background:'+outcomeBg+';border-bottom:1px solid rgba(139,92,246,0.06);display:flex;align-items:flex-start;gap:6px;">' +
+          '<span style="color:'+outcomeColor+';font-weight:700;font-size:12px;min-width:14px;line-height:1.4;">'+outcome+'</span>' +
+          '<span style="color:var(--text-secondary);font-size:10px;flex:1;line-height:1.4;">'+escapeHtml(txt)+'</span>' +
+          (outcomeNote ? '<span style="font-size:9px;color:'+outcomeColor+';white-space:nowrap;margin-left:4px;opacity:0.85;">'+outcomeNote+'</span>' : '') +
+          '</div>';
       }).join('');
-      roundHTML += '<div style="margin-top:10px;padding:8px 10px;background:rgba(139,92,246,0.05);border-left:2px solid rgba(139,92,246,0.35);border-radius:0 4px 4px 0;">' +
-        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+      // Compute outcome summary counts for the header
+      var _pbOkCount = 0, _pbWarnCount = 0, _pbUnkCount = 0;
+      _r1AutoSteps.slice(0, 5).forEach(function(st) {
+        var txt = typeof st === 'string' ? st : (st.action || st.step || '');
+        if (/scope|isolated|pattern|breadth|spread|hosts?|devices?|systems?|multiple/i.test(txt)) {
+          var _h = (elasticLogs.edrActions||[]).map(function(e){return e.host;}).filter(Boolean).filter(function(v,i,a){return a.indexOf(v)===i;}).length;
+          _h > 1 ? _pbWarnCount++ : _pbOkCount++;
+        } else if (/network|connection|traffic|c2|beacon|external|communicat|outbound/i.test(txt)) {
+          (elasticLogs.networkConnections||[]).filter(function(n){return n.status!=='CLEAR';}).length > 0 ? _pbWarnCount++ : _pbOkCount++;
+        } else if (/child.?proc|spawn|process.tree|lateral.?move|privilege.?esc/i.test(txt)) {
+          (elasticLogs.childProcesses||[]).filter(function(c){return c.status!=='CLEAR';}).length > 0 ? _pbWarnCount++ : _pbOkCount++;
+        } else if (/file|malware|hash|payload|drop|artifact|binary/i.test(txt)) {
+          ((elasticLogs.queryResults||[]).filter(function(q){return q.status!=='CLEAN';}).length > 0 || (elasticLogs.fileEvents||[]).filter(function(f){return f.status!=='CLEAR';}).length > 0) ? _pbWarnCount++ : _pbOkCount++;
+        } else if (/prior.?alert|previous|recurrence|similar.?event|alert.?history/i.test(txt)) {
+          (elasticLogs.alertHistory||[]).filter(function(a){return a.status!=='NONE';}).length > 0 ? _pbWarnCount++ : _pbOkCount++;
+        } else if (/threat.intel|ioc|reputation|known.bad|feed/i.test(txt)) {
+          (elasticLogs.openctiResults||[]).filter(function(r){return r.found;}).length > 0 ? _pbWarnCount++ : _pbOkCount++;
+        } else { _pbUnkCount++; }
+      });
+      roundHTML += '<div style="margin-top:10px;background:rgba(139,92,246,0.04);border:1px solid rgba(139,92,246,0.2);border-radius:6px;overflow:hidden;">' +
+        // Header row
+        '<div style="padding:7px 10px;border-bottom:1px solid rgba(139,92,246,0.15);display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:rgba(139,92,246,0.07);">' +
         dIcon('lightning', 12) +
-        '<span style="font-size:9px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:0.8px;">Playbook:</span>' +
-        '<span style="font-size:10px;color:var(--text-secondary);">' + _pbName + '</span>' +
-        (_pbMatch ? '<span style="font-size:9px;color:var(--text-muted);background:rgba(139,92,246,0.12);padding:1px 5px;border-radius:8px;">' + _pbMatch + '</span>' : '') +
-        (_pbFpText ? '<span style="font-size:9px;color:var(--text-muted);margin-left:6px;">' + dIcon('info', 10) + ' FP: ' + escapeHtml(_pbFpText.substring(0, 70)) + (_pbFpText.length > 70 ? '…' : '') + '</span>' : '') +
+        '<span style="font-size:9px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:0.08em;">Playbook Triage</span>' +
+        '<span style="font-size:10px;color:var(--text-secondary);flex:1;">' + _pbName + '</span>' +
+        (_pbMatch ? '<span style="font-size:8px;color:#a78bfa;background:rgba(139,92,246,0.15);padding:1px 6px;border-radius:8px;border:1px solid rgba(139,92,246,0.25);">' + _pbMatch + '</span>' : '') +
+        // Outcome summary badges
+        (_pbOkCount > 0 ? '<span style="font-size:8px;color:var(--green);background:rgba(16,185,129,0.1);padding:1px 6px;border-radius:8px;border:1px solid rgba(16,185,129,0.25);font-weight:700;">\u2713 '+_pbOkCount+' OK</span>' : '') +
+        (_pbWarnCount > 0 ? '<span style="font-size:8px;color:var(--amber);background:rgba(245,158,11,0.1);padding:1px 6px;border-radius:8px;border:1px solid rgba(245,158,11,0.25);font-weight:700;">\u26A0 '+_pbWarnCount+' flags</span>' : '') +
+        (_pbUnkCount > 0 ? '<span style="font-size:8px;color:var(--text-muted);background:rgba(255,255,255,0.05);padding:1px 6px;border-radius:8px;border:1px solid var(--border-subtle);">? '+_pbUnkCount+' pending</span>' : '') +
         '</div>' +
-        (_pbStepsHtml ? '<div style="margin-top:5px;">' + _pbStepsHtml + '</div>' : '') +
+        // FP guidance (subtle, collapsed style)
+        (_pbFpText ? '<div style="padding:4px 10px;font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.15);border-bottom:1px solid rgba(139,92,246,0.1);">' + dIcon('info', 10) + ' FP guidance: ' + escapeHtml(_pbFpText.substring(0, 90)) + (_pbFpText.length > 90 ? '\u2026' : '') + '</div>' : '') +
+        // Steps with outcomes
+        (_pbStepsHtml ? _pbStepsHtml : '<div style="padding:6px 10px;font-size:9px;color:var(--text-muted);">No automated triage steps found for this playbook.</div>') +
         '</div>';
     }
 
@@ -51292,6 +51485,9 @@ async function runAIInvestigation(ticketKey, issueData) {
       }
     }
   }
+
+  // Update investigation snapshot panel with live SIEM results + verdict
+  try { updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence); } catch(e) { console.warn('[Snapshot]', e.message); }
 
   // Generate client escalation draft (pass CrowdStrike enrichment for actor-attributed email)
   generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, f, csEnrichment);
@@ -52107,98 +52303,120 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
 
   html += '</div>'; // end elastic section
 
-  // ── CrowdStrike Falcon Intel (Round 1 enrichment) ──
-  if (csEnrichment) {
-    var csLookup = csEnrichment.lookup || {};
-    var csKeys = Object.keys(csLookup);
-    var csHighIOCs = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'high'; });
-    var csMedIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'medium'; });
-    var csLowIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'low'; });
-    var csUnvIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'unverified'; });
-    var csConnected = !csEnrichment.error && (csEnrichment.total !== undefined);
-    html += '<div style="margin-top:8px;padding:10px 12px;background:rgba(234,88,12,0.03);border:1px solid rgba(234,88,12,0.18);border-radius:6px;">' +
-      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#ea580c;margin-bottom:8px;">' +
-        dIcon('target',14) + ' CROWDSTRIKE FALCON INTEL' + (csEnrichment.error ? ' \u2014 ERROR' : (csConnected ? ' (LIVE)' : ' \u2014 OFFLINE')) + '</div>';
-    if (csEnrichment.error) {
-      html += '<div style="font-size:9px;color:var(--text-muted);">Could not reach CrowdStrike API: ' + csEnrichment.error + '</div>';
-    } else if (csKeys.length === 0 && csEnrichment.queried === 0) {
-      html += '<div style="font-size:9px;color:var(--text-muted);">No IOCs extracted from ticket to enrich.</div>';
-    } else {
-      // Summary confidence badges
-      html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">';
-      if (csHighIOCs.length > 0) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);font-weight:700;">\u25CF HIGH: ' + csHighIOCs.length + '</span>';
-      if (csMedIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-weight:700;">\u25CF MEDIUM: ' + csMedIOCs.length + '</span>';
-      if (csLowIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">LOW: ' + csLowIOCs.length + '</span>';
-      if (csUnvIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">UNVERIFIED: ' + csUnvIOCs.length + '</span>';
-      if (csKeys.length === 0 && csEnrichment.queried > 0) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">' + dIcon('checkCircle',14) + ' All ' + csEnrichment.queried + ' IOC(s) Clean</span>';
-      html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">' + csEnrichment.queried + ' QUERIED \u00B7 ' + csEnrichment.total + ' MATCHED</span>';
-      html += '</div>';
-      // Per-IOC rows (top 8)
-      csKeys.slice(0, 8).forEach(function(indicator) {
-        var ioc = csLookup[indicator];
-        var conf = ioc.malicious_confidence;
-        var confColor = conf === 'high' ? '#ef4444' : conf === 'medium' ? '#f59e0b' : conf === 'low' ? '#10b981' : 'var(--text-muted)';
-        var confBg    = conf === 'high' ? 'rgba(239,68,68,0.05)' : conf === 'medium' ? 'rgba(245,158,11,0.05)' : 'var(--surface-1)';
-        html += '<div style="margin-bottom:5px;padding:5px 8px;background:' + confBg + ';border-radius:4px;border-left:3px solid ' + confColor + ';">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-            '<span style="font-size:9px;font-family:var(--font-mono);color:var(--text-primary);">' + indicator.substring(0, 36) + (indicator.length > 36 ? '\u2026' : '') + '</span>' +
-            '<span style="font-size:8px;font-weight:700;color:' + confColor + ';text-transform:uppercase;min-width:60px;text-align:right;">' + (conf || 'unverified') + '</span>' +
-          '</div>';
-        if (ioc.actors && ioc.actors.length > 0) {
-          html += '<div style="margin-top:2px;font-size:8px;color:var(--amber);">' + dIcon('user',14) + ' ' + ioc.actors.slice(0, 3).join(', ') + '</div>';
-        }
-        if (ioc.malware_families && ioc.malware_families.length > 0) {
-          html += '<div style="margin-top:1px;font-size:8px;color:var(--red-bright);">Malware: ' + ioc.malware_families.slice(0, 2).join(', ') + '</div>';
-        }
-        if (ioc.labels && ioc.labels.length > 0) {
-          html += '<div style="margin-top:2px;display:flex;gap:2px;flex-wrap:wrap;">';
-          ioc.labels.slice(0, 3).forEach(function(l) {
-            html += '<span style="font-size:7px;padding:1px 4px;border-radius:6px;background:rgba(239,68,68,0.06);color:var(--red-bright);border:1px solid rgba(239,68,68,0.15);">' + l + '</span>';
+  // ── THREAT INTELLIGENCE (CrowdStrike Falcon + DACTA TIP — unified card) ──
+  var _hasCsData = !!csEnrichment;
+  var _hasTipData = elasticLogs.openctiResults && elasticLogs.openctiResults.length > 0;
+  if (_hasCsData || _hasTipData) {
+    // Determine overall TI status for header badge
+    var _csLookupU = (_hasCsData && csEnrichment.lookup) ? csEnrichment.lookup : {};
+    var _csKeysU = Object.keys(_csLookupU);
+    var _csHighU = _csKeysU.filter(function(k){return _csLookupU[k].malicious_confidence==='high';}).length;
+    var _csMedU  = _csKeysU.filter(function(k){return _csLookupU[k].malicious_confidence==='medium';}).length;
+    var _tipHitsU = _hasTipData ? elasticLogs.openctiResults.filter(function(r){return r.found;}).length : 0;
+    var _tiOverallThreat = _csHighU > 0 || _tipHitsU > 0;
+    var _tiOverallMed = _csMedU > 0;
+    var _tiHeaderColor = _tiOverallThreat ? '#ef4444' : (_tiOverallMed ? '#f59e0b' : '#10b981');
+    var _tiHeaderBg = _tiOverallThreat ? 'rgba(239,68,68,0.04)' : (_tiOverallMed ? 'rgba(245,158,11,0.04)' : 'rgba(16,185,129,0.03)');
+    var _tiBorderColor = _tiOverallThreat ? 'rgba(239,68,68,0.2)' : (_tiOverallMed ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.15)');
+    var _tiStatusText = _tiOverallThreat ? 'THREAT DETECTED' : (_tiOverallMed ? 'SUSPICIOUS' : 'CLEAN');
+
+    html += '<div style="margin-top:8px;padding:10px 12px;background:'+_tiHeaderBg+';border:1px solid '+_tiBorderColor+';border-radius:6px;">';
+    // Unified header
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:'+_tiHeaderColor+';">' +
+        dIcon('target',13) + ' THREAT INTELLIGENCE</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;">' +
+        '<span style="font-size:7px;color:var(--text-muted);opacity:0.7;">CrowdStrike Falcon &middot; DACTA TIP</span>' +
+        '<span style="font-size:8px;font-weight:700;padding:1px 7px;border-radius:8px;background:'+_tiHeaderColor+'18;color:'+_tiHeaderColor+';border:1px solid '+_tiHeaderColor+'30;">'+_tiStatusText+'</span>' +
+      '</div></div>';
+
+    // ── CrowdStrike Falcon sub-section ──
+    if (_hasCsData) {
+      var csLookup = csEnrichment.lookup || {};
+      var csKeys = Object.keys(csLookup);
+      var csHighIOCs = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'high'; });
+      var csMedIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'medium'; });
+      var csLowIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'low'; });
+      var csUnvIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'unverified'; });
+      var csConnected = !csEnrichment.error && (csEnrichment.total !== undefined);
+      html += '<div style="margin-bottom:8px;padding:8px 10px;background:rgba(234,88,12,0.04);border-radius:4px;border-left:2px solid rgba(234,88,12,0.35);">';
+      html += '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#ea580c;margin-bottom:6px;">' +
+        dIcon('target',12) + ' CrowdStrike Falcon Intel' +
+        '<span style="font-weight:400;margin-left:6px;opacity:0.7;">' + (csEnrichment.error ? '— error' : (csConnected ? '(live)' : '— offline')) + '</span></div>';
+      if (csEnrichment.error) {
+        html += '<div style="font-size:9px;color:var(--text-muted);">Could not reach CrowdStrike API: ' + csEnrichment.error + '</div>';
+      } else if (csKeys.length === 0 && csEnrichment.queried === 0) {
+        html += '<div style="font-size:9px;color:var(--text-muted);">No IOCs extracted from ticket to enrich.</div>';
+      } else {
+        html += '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:6px;">';
+        if (csHighIOCs.length > 0) html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);font-weight:700;">\u25CF HIGH: ' + csHighIOCs.length + '</span>';
+        if (csMedIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-weight:700;">\u25CF MED: ' + csMedIOCs.length + '</span>';
+        if (csLowIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">LOW: ' + csLowIOCs.length + '</span>';
+        if (csUnvIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">UNVERIFIED: ' + csUnvIOCs.length + '</span>';
+        if (csKeys.length === 0 && csEnrichment.queried > 0) html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">' + dIcon('checkCircle',12) + ' All ' + csEnrichment.queried + ' IOC(s) Clean</span>';
+        html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">' + csEnrichment.queried + ' queried \u00B7 ' + csEnrichment.total + ' matched</span>';
+        html += '</div>';
+        csKeys.slice(0, 6).forEach(function(indicator) {
+          var ioc = csLookup[indicator];
+          var conf = ioc.malicious_confidence;
+          var confColor = conf === 'high' ? '#ef4444' : conf === 'medium' ? '#f59e0b' : conf === 'low' ? '#10b981' : 'var(--text-muted)';
+          var confBg    = conf === 'high' ? 'rgba(239,68,68,0.05)' : conf === 'medium' ? 'rgba(245,158,11,0.05)' : 'var(--surface-1)';
+          html += '<div style="margin-bottom:4px;padding:4px 7px;background:' + confBg + ';border-radius:4px;border-left:2px solid ' + confColor + ';">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+              '<span style="font-size:9px;font-family:var(--font-mono);color:var(--text-primary);">' + indicator.substring(0, 34) + (indicator.length > 34 ? '\u2026' : '') + '</span>' +
+              '<span style="font-size:8px;font-weight:700;color:' + confColor + ';text-transform:uppercase;">' + (conf || 'unverified') + '</span>' +
+            '</div>';
+          if (ioc.actors && ioc.actors.length > 0) html += '<div style="margin-top:2px;font-size:8px;color:var(--amber);">' + dIcon('user',11) + ' ' + ioc.actors.slice(0, 3).join(', ') + '</div>';
+          if (ioc.malware_families && ioc.malware_families.length > 0) html += '<div style="margin-top:1px;font-size:8px;color:var(--red-bright);">Malware: ' + ioc.malware_families.slice(0, 2).join(', ') + '</div>';
+          if (ioc.labels && ioc.labels.length > 0) {
+            html += '<div style="margin-top:2px;display:flex;gap:2px;flex-wrap:wrap;">';
+            ioc.labels.slice(0, 3).forEach(function(l) { html += '<span style="font-size:7px;padding:1px 4px;border-radius:6px;background:rgba(239,68,68,0.06);color:var(--red-bright);border:1px solid rgba(239,68,68,0.15);">' + l + '</span>'; });
+            html += '</div>';
+          }
+          html += '</div>';
+        });
+        if (csKeys.length > 6) html += '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:3px 0;">+ ' + (csKeys.length - 6) + ' more indicators</div>';
+        if (csEnrichment.actors && csEnrichment.actors.length > 0) {
+          html += '<div style="margin-top:6px;padding:5px 7px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);border-radius:4px;">' +
+            '<div style="font-size:8px;font-weight:700;color:var(--amber);margin-bottom:3px;">' + dIcon('target',11) + ' Adversary Attribution</div>' +
+            '<div style="display:flex;gap:3px;flex-wrap:wrap;">';
+          csEnrichment.actors.slice(0, 6).forEach(function(actor) {
+            html += '<span style="font-size:8px;padding:2px 7px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.22);border-radius:10px;color:var(--amber);font-weight:600;">' + actor + '</span>';
           });
+          html += '</div></div>';
+        }
+      }
+      html += '</div>'; // end CS sub-section
+    }
+
+    // ── DACTA TIP sub-section ──
+    if (_hasTipData) {
+      if (_hasCsData) html += '<div style="height:1px;background:rgba(255,255,255,0.05);margin:0 0 8px;"></div>';
+      html += '<div style="padding:8px 10px;background:rgba(139,92,246,0.04);border-radius:4px;border-left:2px solid rgba(139,92,246,0.35);">';
+      html += '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#8b5cf6;margin-bottom:6px;">' +
+        dIcon('search',12) + ' DACTA TIP' +
+        '<span style="font-weight:400;margin-left:6px;opacity:0.7;">' + (ocConn ? '(live)' : '') + '</span></div>';
+      elasticLogs.openctiResults.forEach(function(oc) {
+        var found = oc.found;
+        html += '<div style="margin-bottom:5px;padding:5px 8px;background:var(--surface-1);border-radius:4px;border:1px solid var(--border-subtle);">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">' +
+            '<span style="font-size:9px;color:var(--text-muted);">' + oc.type + ': <span style="font-family:var(--font-mono);color:var(--cyan);">' + oc.value.substring(0, 22) + (oc.value.length > 22 ? '...' : '') + '</span></span>' +
+            '<span style="font-size:9px;font-weight:600;color:' + (found ? 'var(--red-bright)' : 'var(--green)') + ';">' + (found ? dIcon('siren',12) + ' FOUND IN TI' : dIcon('checkCircle',12) + ' CLEAN') + '</span></div>';
+        if (found && oc.labels && oc.labels.length > 0) {
+          html += '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:2px;">';
+          oc.labels.forEach(function(l) { html += '<span style="font-size:7px;padding:1px 5px;border-radius:6px;background:rgba(239,68,68,0.08);color:var(--red-bright);border:1px solid rgba(239,68,68,0.2);">' + l + '</span>'; });
           html += '</div>';
         }
+        if (found && oc.source) html += '<div style="font-size:9px;color:var(--text-muted);margin-top:1px;">Source: ' + oc.source + '</div>';
         html += '</div>';
       });
-      if (csKeys.length > 8) {
-        html += '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:4px 0;">+ ' + (csKeys.length - 8) + ' more indicators</div>';
-      }
-      // Adversary attribution block
-      if (csEnrichment.actors && csEnrichment.actors.length > 0) {
-        html += '<div style="margin-top:8px;padding:6px 8px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:4px;">' +
-          '<div style="font-size:9px;font-weight:700;color:var(--amber);margin-bottom:4px;">' + dIcon('target',14) + ' ADVERSARY ATTRIBUTION</div>' +
-          '<div style="display:flex;gap:4px;flex-wrap:wrap;">';
-        csEnrichment.actors.slice(0, 6).forEach(function(actor) {
-          html += '<span style="font-size:8px;padding:2px 8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:10px;color:var(--amber);font-weight:600;">' + actor + '</span>';
-        });
-        html += '</div></div>';
-      }
+      html += '</div>'; // end TIP sub-section
     }
-    html += '</div>';
-  }
 
-  // ── DACTA TIP Results ──
-  if (elasticLogs.openctiResults && elasticLogs.openctiResults.length > 0) {
-    html += '<div style="margin-top:8px;padding:10px 12px;background:rgba(139,92,246,0.02);border:1px solid rgba(139,92,246,0.12);border-radius:6px;">' +
-      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8b5cf6;margin-bottom:8px;">' + dIcon('search',14) + ' DACTA TIP THREAT INTELLIGENCE' + (ocConn ? ' (LIVE)' : '') + '</div>';
-    elasticLogs.openctiResults.forEach(function(oc) {
-      var found = oc.found;
-      html += '<div style="margin-bottom:6px;padding:6px 8px;background:var(--surface-1);border-radius:4px;border:1px solid var(--border-subtle);">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">' +
-          '<span style="font-size:9px;color:var(--text-muted);">' + oc.type + ': <span style="font-family:var(--font-mono);color:var(--cyan);">' + oc.value.substring(0, 24) + (oc.value.length > 24 ? '...' : '') + '</span></span>' +
-          '<span style="font-size:9px;font-weight:600;color:' + (found ? 'var(--red-bright)' : 'var(--green)') + ';">' + (found ? dIcon('siren',14) + ' FOUND IN TI' : dIcon('checkCircle',14) + ' CLEAN') + '</span></div>';
-      if (found && oc.labels.length > 0) {
-        html += '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">';
-        oc.labels.forEach(function(l) {
-          html += '<span style="font-size:7px;padding:1px 5px;border-radius:6px;background:rgba(239,68,68,0.08);color:var(--red-bright);border:1px solid rgba(239,68,68,0.2);">' + l + '</span>';
-        });
-        html += '</div>';
-      }
-      if (found && oc.source) {
-        html += '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Source: ' + oc.source + '</div>';
-      }
-      html += '</div>';
-    });
-    html += '</div>';
+    if (!_hasCsData && !_hasTipData) {
+      html += '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:12px 0;">No threat intelligence data available for this ticket.</div>';
+    }
+    html += '</div>'; // end unified TI card
   }
 
   // ── Query Execution Log ──
