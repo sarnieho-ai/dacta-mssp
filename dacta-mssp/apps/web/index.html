@@ -29247,6 +29247,9 @@ async function loadThreatIntelLive() {
     console.log('[ThreatIntel] Loaded: ' + indicators.length + ' indicators, ' + malwares.length + ' malware, ' + reports.length + ' reports, ' + threatActors.length + ' actors, ' + attackPatterns.length + ' attack patterns');
     showToast('Threat Intel loaded from DACTA TIP \u2014 ' + indicators.length + ' indicators, ' + threatActors.length + ' actors');
 
+    // ── CrowdStrike Falcon Intel enrichment (fire-and-forget, non-blocking) ──
+    tipLoadCrowdStrikeIntel(page, iocFeedBody);
+
     // Run Threat Intel page fixes/enhancements (with delay for DOM stability)
     if (typeof _tipInitAllFixes === 'function') { setTimeout(_tipInitAllFixes, 300); }
 
@@ -29281,6 +29284,280 @@ function tipEnrichIOC(iocValue) {
       }
     }, 300);
   }, 500);
+}
+
+// ── Phase 4: CrowdStrike Falcon Intel — Active Adversaries + Finished Reports ──
+
+/**
+ * Load CrowdStrike actor cards and finished intelligence reports into the TI page.
+ * Called after DACTA TIP data loads, so it fires concurrently without blocking the page.
+ */
+async function tipLoadCrowdStrikeIntel(page, iocFeedBody) {
+  if (!page) page = document.getElementById('page-intel');
+  if (!page) return;
+
+  // ── Actors: search CS for active adversaries ──
+  try {
+    var csActorResp = await fetch('/api/crowdstrike', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'search_actors', limit: 12, offset: 0 })
+    });
+    var csActorData = await csActorResp.json();
+    var csActors = (csActorData && csActorData.resources) ? csActorData.resources : [];
+
+    if (csActors.length > 0) {
+      var actorGrid = page.querySelector('#tip-panel-actors .tip-actor-grid');
+      if (actorGrid) {
+        // Insert a section divider before CS cards
+        var divider = document.createElement('div');
+        divider.id = 'tip-cs-actors-section';
+        divider.style.cssText = 'grid-column:1/-1;margin-top:16px;';
+        divider.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">' +
+          '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#f97316;">🦅 CrowdStrike Falcon Intel</span>' +
+          '<div style="flex:1;height:1px;background:rgba(249,115,22,0.2);"></div>' +
+          '<span style="font-size:9px;color:#64748b;">' + csActors.length + ' active adversaries</span>' +
+          '</div>';
+        actorGrid.appendChild(divider);
+
+        csActors.forEach(function(a) {
+          var name = a.name || (a.slug ? a.slug.replace(/-/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}) : 'Unknown Actor');
+          var aliases = a.known_as || [];
+          var aliasStr = Array.isArray(aliases) ? aliases.slice(0,3).join(' · ') : (aliases || '');
+          var origins = (a.origins || []).map(function(o) { return o.value || o; }).join(', ') || 'Unknown';
+          var isActive = a.active !== false;
+          var dotColor = isActive ? 'red' : '';
+          var severity = isActive ? '<span class="tip-tag tip-tag-high">ACTIVE</span>' : '<span style="font-size:9px;padding:2px 6px;background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.2);border-radius:4px;color:#64748b;">INACTIVE</span>';
+          var industries = (a.target_industries || []).map(function(i) { return i.value || i; });
+          var countries = (a.target_countries || []).map(function(c) { return c.value || c; });
+          var motivations = (a.motivations || []).map(function(m) { return m.value || m; }).join(', ') || '';
+          var lastSeen = a.last_activity_date ? new Date(a.last_activity_date * 1000).toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+          var slug = (a.slug || a.id || name).replace(/[^a-z0-9]/gi, '-').toLowerCase();
+          var cardId = 'tip-cs-actor-' + slug;
+          var shortDesc = a.short_description || '';
+          if (shortDesc.length > 180) shortDesc = shortDesc.substring(0, 177) + '...';
+
+          var card = document.createElement('div');
+          card.className = 'tip-actor-card';
+          card.id = cardId;
+          card.innerHTML =
+            '<div class="tip-actor-header" onclick="tipToggleActor(\'' + cardId + '\')" style="cursor:pointer;">' +
+              (isActive ? '<div class="tip-live-dot red"></div>' : '<div style="width:8px;height:8px;border-radius:50%;background:#374151;flex-shrink:0;"></div>') +
+              '<div class="tip-actor-name-wrap">' +
+                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+                  '<div class="tip-actor-name">' + name + '</div>' +
+                  severity +
+                  '<span style="font-size:9px;padding:2px 6px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);border-radius:4px;color:#f97316;font-weight:600;">🦅 CS Intel</span>' +
+                '</div>' +
+                (aliasStr ? '<div class="tip-actor-alias">' + aliasStr + '</div>' : '') +
+                '<div class="tip-actor-origin">🌐 ' + origins + (motivations ? ' · ' + motivations : '') + '</div>' +
+              '</div>' +
+              '<div style="text-align:right;flex-shrink:0;">' +
+                '<div style="font-size:10px;color:#64748b;margin-top:4px;">Last active: ' + lastSeen + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="tip-actor-body" id="' + cardId + '-body">' +
+              '<div class="tip-actor-expand">' +
+                (industries.length > 0 ? '<div class="tip-actor-section-label">Target Industries</div>' +
+                  '<div class="tip-sector-tags">' + industries.slice(0,6).map(function(i){ return '<span class="tip-sector-tag">' + i + '</span>'; }).join('') + '</div>' : '') +
+                (countries.length > 0 ? '<div class="tip-actor-section-label">Target Countries</div>' +
+                  '<div class="tip-sector-tags">' + countries.slice(0,6).map(function(c){ return '<span class="tip-sector-tag">' + c + '</span>'; }).join('') + '</div>' : '') +
+                (shortDesc ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;line-height:1.5;">' + shortDesc + '</div>' : '') +
+                '<div class="tip-actor-quick-actions">' +
+                  '<button class="tip-btn tip-btn-primary tip-btn-sm" onclick="openEntityExplorer(\'' + name.replace(/'/g, "\\'") + '\',\'actor\')">🔗 Investigate</button>' +
+                  '<button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="tipToast(\'🎯\',\'Hunt job created for ' + name.replace(/'/g, "\\'") + ' TTPs\')">🎯 Hunt</button>' +
+                  '<button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="switchTiTab(\'report\');tipToast(\'📄\',\'Report Builder pre-populated with ' + name.replace(/'/g, "\\'") + ' context\')">📄 Brief</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+
+          actorGrid.appendChild(card);
+        });
+
+        // Store for window
+        if (window._tipLiveData) window._tipLiveData.csActors = csActors;
+        console.log('[CS Intel] Loaded ' + csActors.length + ' active adversaries');
+      }
+    }
+  } catch(csActErr) {
+    console.warn('[CS Intel] Actor load failed:', csActErr.message);
+  }
+
+  // ── Reports: fetch CrowdStrike finished intelligence reports ──
+  try {
+    var csRepResp = await fetch('/api/crowdstrike', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'search_reports', limit: 10, offset: 0 })
+    });
+    var csRepData = await csRepResp.json();
+    var csReports = (csRepData && csRepData.resources) ? csRepData.resources : [];
+
+    if (csReports.length > 0 && page) {
+      var recentReportsContainer = page.querySelector('#tip-panel-report .tip-recent-reports');
+      if (recentReportsContainer) {
+        var csRepHTML = '';
+
+        // Section header
+        csRepHTML += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-top:1px solid rgba(249,115,22,0.1);margin-top:8px;">' +
+          '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#f97316;">🦅 CrowdStrike Finished Intel</span>' +
+          '<div style="flex:1;height:1px;background:rgba(249,115,22,0.15);"></div>' +
+          '</div>';
+
+        csReports.forEach(function(r) {
+          var pub = r.last_modified_date
+            ? new Date(r.last_modified_date * 1000).toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' })
+            : r.created_date
+              ? new Date(r.created_date * 1000).toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' })
+              : '—';
+          var title = r.name || r.short_description || 'Intel Report';
+          var desc = r.description || r.short_description || '';
+          if (desc.length > 80) desc = desc.substring(0, 77) + '...';
+          var repType = r.report_type || 'Intelligence Report';
+
+          csRepHTML += '<div class="tip-report-row" style="cursor:pointer;">' +
+            '<span class="tip-report-type-badge" style="background:rgba(249,115,22,0.08);color:#f97316;border:1px solid rgba(249,115,22,0.2);">🦅 ' + repType + '</span>' +
+            '<div class="tip-report-info">' +
+              '<div class="tip-report-name">' + title + '</div>' +
+              '<div class="tip-report-meta">' + pub + (desc ? ' · ' + desc : '') + '</div>' +
+            '</div>' +
+            '<span class="tip-status-published">Published</span>' +
+            '<div class="tip-report-actions">' +
+              '<button class="tip-btn tip-btn-secondary tip-btn-xs" onclick="event.stopPropagation();tipToast(\'📄\',\'Opening CrowdStrike report...\')">View</button>' +
+            '</div>' +
+          '</div>';
+        });
+
+        // Append CS reports after existing
+        var existing = recentReportsContainer.innerHTML;
+        recentReportsContainer.innerHTML = existing + csRepHTML;
+        if (window._tipLiveData) window._tipLiveData.csReports = csReports;
+        console.log('[CS Intel] Loaded ' + csReports.length + ' finished intel reports');
+      }
+    }
+  } catch(csRepErr) {
+    console.warn('[CS Intel] Reports load failed:', csRepErr.message);
+  }
+
+  // ── IOC Feed: add CS column header + Enrich All button ──
+  if (iocFeedBody) {
+    var iocTable = iocFeedBody.closest('table');
+    if (iocTable) {
+      // Add CS Intel column to header
+      var thead = iocTable.querySelector('thead tr');
+      if (thead && !thead.querySelector('.cs-intel-th')) {
+        var csTh = document.createElement('th');
+        csTh.className = 'cs-intel-th';
+        csTh.title = 'CrowdStrike Falcon Intel confidence';
+        csTh.style.cssText = 'font-size:9px;white-space:nowrap;';
+        csTh.innerHTML = '🦅 CS Intel';
+        // Insert before last Actions column
+        var ths = thead.querySelectorAll('th');
+        if (ths.length > 0) thead.insertBefore(csTh, ths[ths.length - 1]);
+        else thead.appendChild(csTh);
+      }
+      // Add placeholder CS cells to existing rows (without removing onclick)
+      iocFeedBody.querySelectorAll('tr').forEach(function(row) {
+        if (!row.querySelector('.cs-ioc-cell')) {
+          var td = document.createElement('td');
+          td.className = 'cs-ioc-cell';
+          td.innerHTML = '<span style="font-size:9px;color:#374151;">—</span>';
+          var tds = row.querySelectorAll('td');
+          if (tds.length > 0) row.insertBefore(td, tds[tds.length - 1]);
+          else row.appendChild(td);
+        }
+      });
+      // Add Enrich All button near the IOC feed header
+      var tipPanel = iocTable.closest('.tip-panel, [id^="tip-panel"]');
+      if (tipPanel) {
+        var panelHeader = tipPanel.querySelector('.tip-panel-header, .tip-panel-title');
+        if (panelHeader && !tipPanel.querySelector('#tipCSEnrichAllBtn')) {
+          var enrichBtn = document.createElement('button');
+          enrichBtn.id = 'tipCSEnrichAllBtn';
+          enrichBtn.className = 'tip-btn tip-btn-secondary tip-btn-sm';
+          enrichBtn.style.cssText = 'margin-left:8px;font-size:10px;';
+          enrichBtn.innerHTML = '🦅 CS Enrich All';
+          enrichBtn.onclick = tipCSEnrichIOCFeed;
+          panelHeader.appendChild(enrichBtn);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Batch-enrich all IOC rows in the TI feed table via CrowdStrike.
+ * Reads indicator values from each row's first mono column, fires enrich_iocs,
+ * then updates each row's .cs-ioc-cell with confidence badge.
+ */
+async function tipCSEnrichIOCFeed() {
+  var page = document.getElementById('page-intel');
+  if (!page) return;
+  var iocFeedBody = page.querySelector('#tipIocFeedBody') || (page.querySelectorAll('tbody')[0] || null);
+  if (!iocFeedBody) return;
+
+  var rows = Array.from(iocFeedBody.querySelectorAll('tr'));
+  if (!rows.length) { showToast('No IOC rows to enrich', 'info'); return; }
+
+  // Mark all as loading
+  rows.forEach(function(row) {
+    var cell = row.querySelector('.cs-ioc-cell');
+    if (cell) cell.innerHTML = '<div class="jira-spinner" style="width:10px;height:10px;border-width:1px;display:inline-block;vertical-align:middle;"></div>';
+  });
+
+  // Extract indicator values from the second cell (name/pattern column)
+  var indicators = rows.map(function(row) {
+    var tds = row.querySelectorAll('td');
+    if (tds.length < 2) return null;
+    var val = tds[1].textContent.trim();
+    // Strip STIX pattern wrapper [ipv4-addr:value = 'X']
+    var m = val.match(/['"]([^'"]+)['"]/);
+    return m ? m[1] : val;
+  }).filter(function(v) { return v && v.length > 3; });
+
+  if (!indicators.length) { showToast('No indicator values found', 'info'); return; }
+  showToast('🦅 CrowdStrike enriching ' + indicators.length + ' IOCs...', 'info');
+
+  try {
+    var resp = await fetch('/api/crowdstrike', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'enrich_iocs', indicators: indicators })
+    });
+    var data = await resp.json();
+    var lookup = (data && data.lookup) ? data.lookup : {};
+
+    rows.forEach(function(row) {
+      var cell = row.querySelector('.cs-ioc-cell');
+      if (!cell) return;
+      var tds = row.querySelectorAll('td');
+      if (tds.length < 2) { cell.innerHTML = '<span style="color:#374151;font-size:9px;">—</span>'; return; }
+      var raw = tds[1].textContent.trim();
+      var m = raw.match(/['"]([^'"]+)['"]/);
+      var key = m ? m[1] : raw;
+      var result = lookup[key];
+      if (!result) { cell.innerHTML = '<span style="font-size:9px;color:#374151;">—</span>'; return; }
+      var conf = result.malicious_confidence || 'unverified';
+      var badge = {
+        high:       '<span style="font-size:9px;font-weight:700;padding:1px 6px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:3px;color:#ef4444;white-space:nowrap;">🛑 HIGH</span>',
+        medium:     '<span style="font-size:9px;font-weight:700;padding:1px 6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:3px;color:#f59e0b;white-space:nowrap;">⚠ MED</span>',
+        low:        '<span style="font-size:9px;padding:1px 6px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:3px;color:#10b981;white-space:nowrap;">✓ LOW</span>',
+        unverified: '<span style="font-size:9px;color:#64748b;white-space:nowrap;">? UNV</span>'
+      }[conf] || '<span style="font-size:9px;color:#374151;">—</span>';
+      cell.innerHTML = badge;
+    });
+
+    var highCount = Object.values(lookup).filter(function(r) { return r.malicious_confidence === 'high'; }).length;
+    showToast('🦅 CS enrichment complete — ' + highCount + ' HIGH confidence IOCs', highCount > 0 ? 'warning' : 'success');
+    console.log('[CS Intel] IOC enrichment complete:', Object.keys(lookup).length, 'matched,', highCount, 'HIGH');
+
+  } catch(e) {
+    rows.forEach(function(row) {
+      var cell = row.querySelector('.cs-ioc-cell');
+      if (cell) cell.innerHTML = '<span style="font-size:9px;color:#ef4444;">ERR</span>';
+    });
+    console.error('[CS Intel] IOC enrichment failed:', e.message);
+  }
 }
 
 /* =============================================================================
