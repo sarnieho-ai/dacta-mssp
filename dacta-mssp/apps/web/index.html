@@ -48188,6 +48188,48 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     }
 
     // No host info or alert history from EDR
+
+    // ── FALLBACK Query 5: IP-based alert correlation (network/ML alerts without EDR) ──
+    var corrIPs = (iocs.ips || []).filter(function(ip) {
+      return !ip.startsWith('10.') && !ip.startsWith('172.') && !ip.startsWith('192.168.') && !ip.startsWith('127.');
+    });
+    if (corrIPs.length > 0) {
+      var qD5fb = { name: 'Alert Correlation (IP)', index: 'logs-*', query: 'related.ip:"' + corrIPs[0] + '" (aggs)', status: 'running' };
+      logs.queryDetails.push(qD5fb); logs.queriesRun++;
+      var ipCorrQ = {
+        size: 5,
+        query: { bool: { must: [{ range: { '@timestamp': { gte: 'now-30d' } } }], should: corrIPs.map(function(ip) { return { match: { 'related.ip': ip } }; }), minimum_should_match: 1 } },
+        aggs: {
+          by_name: { terms: { field: 'rule.name', size: 20 } },
+          by_sev: { terms: { field: 'kibana.alert.severity', size: 10 } },
+          by_dest: { terms: { field: 'destination.ip', size: 10 } }
+        },
+        sort: [{ '@timestamp': 'desc' }],
+        _source: ['@timestamp', 'rule.name', 'kibana.alert.severity', 'related.ip', 'host.hostname']
+      };
+      var ipCorrResult = await queryElastic('search', 'logs-*', ipCorrQ);
+      if (ipCorrResult && ipCorrResult.aggregations) {
+        qD5fb.status = 'success';
+        qD5fb.hits = ipCorrResult.hits && ipCorrResult.hits.total ? ipCorrResult.hits.total.value : 0;
+        logs.alertHistory = {
+          totalAlerts: qD5fb.hits,
+          byName: ((ipCorrResult.aggregations.by_name || {}).buckets || []),
+          bySeverity: ((ipCorrResult.aggregations.by_sev || {}).buckets || []).map(function(b) { return { key: b.key, doc_count: b.doc_count }; }),
+          byDest: ((ipCorrResult.aggregations.by_dest || {}).buckets || []),
+          correlatedIPs: corrIPs,
+          correlationMode: 'ip'
+        };
+      } else {
+        qD5fb.status = ipCorrResult ? 'success' : 'error';
+        qD5fb.hits = 0;
+        // Set a minimal alertHistory so the card still renders with a "no matches" message
+        logs.alertHistory = { totalAlerts: 0, byName: [], bySeverity: [], correlatedIPs: corrIPs, correlationMode: 'ip' };
+      }
+    } else {
+      // No IPs at all — still set a stub so the card renders
+      logs.alertHistory = { totalAlerts: 0, byName: [], bySeverity: [], correlatedIPs: [], correlationMode: 'none' };
+    }
+
     logs.authEvents.push({ status: 'INFO', user: 'N/A', result: 'User context requires EDR telemetry. Not available for this client.', live: true });
   }
 
@@ -49226,20 +49268,45 @@ async function runAIInvestigation(ticketKey, issueData) {
   var corrCard = document.getElementById('correlatedAlertsCard');
   if (corrCard && elasticLogs && elasticLogs.alertHistory) {
     var ah = elasticLogs.alertHistory;
-    var cHTML = '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' + (ah.totalAlerts || 0) + ' historical alerts on this host</div>';
+    var isIPMode = ah.correlationMode === 'ip';
+    var scopeLabel = isIPMode
+      ? 'correlated alerts matching IPs: ' + (ah.correlatedIPs || []).join(', ')
+      : 'historical alerts on this host';
+    var cHTML = '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' +
+      (ah.totalAlerts || 0) + ' ' + scopeLabel + ' (last 30d)</div>';
+
     if (ah.byName && ah.byName.length > 0) {
-      ah.byName.slice(0, 5).forEach(function(b) {
+      ah.byName.slice(0, 8).forEach(function(b) {
         cHTML += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border-subtle);">' +
           '<span style="font-size:10px;color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + b.key + '</span>' +
           '<span style="font-size:10px;font-weight:600;color:var(--text-primary);min-width:30px;text-align:right;">' + b.doc_count + '</span>' +
         '</div>';
       });
+    } else if (ah.totalAlerts === 0) {
+      cHTML += '<div style="font-size:10px;color:var(--text-muted);font-style:italic;padding:6px 0;">' +
+        (isIPMode ? 'No correlated alerts found for these IPs in the last 30 days.' : 'No historical alerts found for this host.') +
+        '</div>';
     }
+
     if (ah.bySeverity && ah.bySeverity.length > 0) {
       cHTML += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">';
       ah.bySeverity.forEach(function(s) {
-        var sc = s.key.toLowerCase().includes('critical') ? '#ef4444' : s.key.toLowerCase().includes('high') ? '#f59e0b' : s.key.toLowerCase().includes('medium') ? '#00d4ff' : '#10b981';
+        var sk = (s.key || '').toLowerCase();
+        var sc = sk.includes('critical') ? '#ef4444' : sk.includes('high') ? '#f59e0b' : sk.includes('medium') ? '#00d4ff' : '#10b981';
         cHTML += '<span style="font-size:9px;padding:2px 8px;background:' + sc + '15;border:1px solid ' + sc + '30;border-radius:10px;color:' + sc + ';">' + s.key + ': ' + s.doc_count + '</span>';
+      });
+      cHTML += '</div>';
+    }
+
+    // Show correlated destination IPs if available (from IP-mode query)
+    if (isIPMode && ah.byDest && ah.byDest.length > 0) {
+      cHTML += '<div style="margin-top:8px;">';
+      cHTML += '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Other Destination IPs in correlated alerts</div>';
+      ah.byDest.slice(0, 5).forEach(function(d) {
+        cHTML += '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border-subtle);">' +
+          '<span style="font-size:10px;font-family:var(--font-mono);color:var(--cyan);">' + d.key + '</span>' +
+          '<span style="font-size:10px;color:var(--text-muted);">' + d.doc_count + ' events</span>' +
+        '</div>';
       });
       cHTML += '</div>';
     }
