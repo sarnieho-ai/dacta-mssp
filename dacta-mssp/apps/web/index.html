@@ -28867,6 +28867,9 @@ function _tipFixGlobalSearch() {
   input._tipSearchWired = true;
 
   function _tipSearchLive(q) {
+    // Debug: show search is being called
+    var dbgEl = document.getElementById('tip-debug-banner');
+    if (dbgEl) dbgEl.textContent = '[SEARCH] q="' + q + '" liveKeys=' + Object.keys(window._tipLiveData || {}).join(',') + ' SEARCH_DATA=' + (typeof SEARCH_DATA !== 'undefined' ? SEARCH_DATA.length : 'undef');
     var overlay = document.getElementById('tip-search-overlay');
     if (!overlay) return;
     if (!q || q.length < 2) {
@@ -28975,6 +28978,9 @@ function _tipFixGlobalSearch() {
     // Render results
     var container = document.getElementById('tip-search-results-container');
     var headerEl = overlay.querySelector('.tip-search-overlay-header');
+    // Debug
+    var dbgEl2 = document.getElementById('tip-debug-banner');
+    if (dbgEl2) dbgEl2.textContent += ' | results=' + results.length + ' container=' + (container ? 'YES' : 'NO') + ' overlay=' + (overlay ? overlay.className : 'NULL');
 
     if (results.length === 0) {
       if (headerEl) headerEl.textContent = '0 results for "' + q + '"';
