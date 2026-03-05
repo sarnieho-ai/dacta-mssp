@@ -24992,17 +24992,21 @@ Analyst: K. Rasmussen | 2026-02-28
             <div class="card-header"><span class="card-title">Investigation Decision Log</span><span class="badge badge-cyan">Compliance</span></div>
             <div style="font-size:11px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px;">Every LLM-driven investigation decision is logged with: ticket ID, model used, verdict, confidence, analyst override (if any), and timestamp. This creates an immutable audit trail for SOC 2 and ISO 27001 compliance.</div>
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Log all AI investigation decisions</div><div style="font-size:10px;color:var(--text-muted);">Verdict, confidence, model, duration</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Track analyst overrides</div><div style="font-size:10px;color:var(--text-muted);">Who, when, justification</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Rule version history</div><div style="font-size:10px;color:var(--text-muted);">Detection rules + RAG config changes</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Feedback loop telemetry</div><div style="font-size:10px;color:var(--text-muted);">Analyst ratings feed into prompt tuning</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Log all AI investigation decisions</div><div style="font-size:10px;color:var(--text-muted);">Verdict, confidence, model, duration</div></div><div id="auditToggleAI" data-audit="log_ai_decisions" data-state="on" onclick="toggleAuditSetting(this)" style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;transition:all 0.2s;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Track analyst overrides</div><div style="font-size:10px;color:var(--text-muted);">Who, when, justification</div></div><div id="auditToggleOverrides" data-audit="track_overrides" data-state="on" onclick="toggleAuditSetting(this)" style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;transition:all 0.2s;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Rule version history</div><div style="font-size:10px;color:var(--text-muted);">Detection rules + RAG config changes</div></div><div id="auditToggleRules" data-audit="rule_history" data-state="on" onclick="toggleAuditSetting(this)" style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;transition:all 0.2s;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Feedback loop telemetry</div><div style="font-size:10px;color:var(--text-muted);">Analyst ratings feed into prompt tuning</div></div><div id="auditToggleFeedback" data-audit="feedback_loop" data-state="on" onclick="toggleAuditSetting(this)" style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;transition:all 0.2s;"></div></div></div>
+              <button class="btn btn-sm" style="background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);font-size:10px;margin-top:4px;" onclick="saveAuditSettings()">Save Audit Settings</button>
+              <div id="stgAuditStatus" style="font-size:9px;color:var(--text-muted);min-height:14px;"></div>
             </div>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Data Retention</span></div>
             <div style="display:flex;flex-direction:column;gap:10px;">
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Investigation Cache TTL</div><select class="filter-select" style="width:100%;"><option>30 days</option><option>90 days</option><option>12 months</option><option>Indefinite</option></select></div>
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Audit Log Retention</div><select class="filter-select" style="width:100%;"><option>12 months</option><option>24 months</option><option>7 years (Compliance)</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Investigation Cache TTL</div><select class="filter-select" id="stgCacheTTL" style="width:100%;"><option value="30">30 days</option><option value="90">90 days</option><option value="365">12 months</option><option value="-1">Indefinite</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Audit Log Retention</div><select class="filter-select" id="stgAuditRetention" style="width:100%;"><option value="12">12 months</option><option value="24">24 months</option><option value="84">7 years (Compliance)</option></select></div>
+              <button class="btn btn-sm" style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);font-size:10px;" onclick="saveRetentionSettings()">Save Retention Policy</button>
+              <div id="stgRetentionStatus" style="font-size:9px;color:var(--text-muted);min-height:14px;"></div>
             </div>
           </div>
         </div><!-- end stgPanelRules -->
@@ -25013,43 +25017,50 @@ Analyst: K. Rasmussen | 2026-02-28
           <div class="card">
             <div class="card-header"><span class="card-title">LLM Configuration</span><span class="badge badge-cyan">AI Engine</span></div>
             <div style="display:flex;flex-direction:column;gap:12px;">
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Primary Model (Investigation Briefs)</div><select class="filter-select" style="width:100%;"><option>Claude 3.5 Sonnet (Recommended)</option><option>Claude 3 Opus</option><option>GPT-4o</option><option>Gemini 1.5 Pro</option></select></div>
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Fast Model (Enrichment, Triage)</div><select class="filter-select" style="width:100%;"><option>Claude 3.5 Haiku (Recommended)</option><option>GPT-4o Mini</option><option>Gemini Flash</option><option>DeepSeek V3</option></select></div>
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Threat Intel Model</div><select class="filter-select" style="width:100%;"><option>Perplexity Sonar Pro</option><option>Claude 3.5 Sonnet</option><option>GPT-4o + Web Browsing</option></select></div>
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Monthly AI Budget Cap</div><input class="filter-input" value="$250.00" style="width:100%;"></div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><span style="font-size:12px;color:var(--text-secondary);">Auto-run AI on all P1/P2 alerts</span><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Primary Model (Investigation Briefs)</div><select class="filter-select" id="stgLLMPrimary" style="width:100%;"><option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Recommended)</option><option value="claude-opus-4-5-20251101">Claude Opus 4.5</option><option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option><option value="gpt-4o">GPT-4o</option><option value="gemini-2.0-pro">Gemini 2.0 Pro</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Fast Model (Enrichment, Triage)</div><select class="filter-select" id="stgLLMFast" style="width:100%;"><option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Recommended)</option><option value="claude-sonnet-4-6">Claude Sonnet 4.6</option><option value="gpt-4o-mini">GPT-4o Mini</option><option value="gemini-2.0-flash">Gemini 2.0 Flash</option><option value="deepseek-v3">DeepSeek V3</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Threat Intel Model</div><select class="filter-select" id="stgLLMThreat" style="width:100%;"><option value="perplexity-sonar-pro">Perplexity Sonar Pro</option><option value="claude-sonnet-4-6">Claude Sonnet 4.6</option><option value="gpt-4o-search">GPT-4o + Web Browsing</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Monthly AI Budget Cap</div><input class="filter-input" id="stgLLMBudget" value="$250.00" style="width:100%;"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><span style="font-size:12px;color:var(--text-secondary);">Auto-run AI on all P1/P2 alerts</span><div id="stgAutoRunToggle" onclick="toggleSecuritySetting('stgAutoRun',this)" style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;transition:all 0.2s;"></div></div></div>
+              <button class="btn btn-sm" style="background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);font-size:10px;margin-top:2px;" onclick="saveLLMConfig()">Save AI Configuration</button>
+              <div id="stgLLMStatus" style="font-size:9px;color:var(--text-muted);min-height:14px;"></div>
             </div>
           </div>
           <div class="card">
-            <div class="card-header"><span class="card-title">SLA Configuration</span></div>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;"><span class="badge badge-p1">P1</span><div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div><input class="filter-input" value="15 min" style="width:80px;text-align:center;"><span style="color:var(--text-muted);">/</span><input class="filter-input" value="4 hr" style="width:80px;text-align:center;"></div>
-              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;"><span class="badge badge-p2">P2</span><div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div><input class="filter-input" value="30 min" style="width:80px;text-align:center;"><span style="color:var(--text-muted);">/</span><input class="filter-input" value="12 hr" style="width:80px;text-align:center;"></div>
-              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;"><span class="badge badge-p3">P3</span><div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div><input class="filter-input" value="2 hr" style="width:80px;text-align:center;"><span style="color:var(--text-muted);">/</span><input class="filter-input" value="48 hr" style="width:80px;text-align:center;"></div>
-              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;display:flex;align-items:center;gap:12px;"><span class="badge badge-p4">P4</span><div style="flex:1;"><div style="font-size:11px;color:var(--text-muted);">Response / Resolution</div></div><input class="filter-input" value="8 hr" style="width:80px;text-align:center;"><span style="color:var(--text-muted);">/</span><input class="filter-input" value="7 days" style="width:80px;text-align:center;"></div>
+            <div class="card-header"><span class="card-title">Access Control</span><span class="badge badge-cyan">Security</span></div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Require MFA for all analyst logins</div><div style="font-size:10px;color:var(--text-muted);">Enforced via SSO provider</div></div><div id="stgMFAToggle" onclick="toggleSecuritySetting('stgMFA',this)" style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;transition:all 0.2s;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Inactivity Session Timeout</div><div style="font-size:10px;color:var(--text-muted);">Auto-logout after idle period</div></div><select class="filter-select" id="stgSessionTimeout" style="width:120px;"><option value="30">30 minutes</option><option value="60" selected>1 hour</option><option value="120">2 hours</option><option value="480">8 hours</option></select></div>
+              <div style="padding:10px;background:var(--bg-elevated);border-radius:7px;"><div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">Allowed IP Ranges</div><input class="filter-input" id="stgAllowedIPs" placeholder="e.g. 10.0.0.0/8, 203.0.113.0/24 (leave blank for any)" style="width:100%;font-size:10px;font-family:var(--font-mono);"></div>
+              <button class="btn btn-sm" style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);font-size:10px;" onclick="saveAccessConfig()">Save Access Settings</button>
+              <div id="stgAccessStatus" style="font-size:9px;color:var(--text-muted);min-height:14px;"></div>
             </div>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Notification Settings</span></div>
             <div style="display:flex;flex-direction:column;gap:10px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">P1 Alert — Slack + SMS</div><div style="font-size:10px;color:var(--text-muted);">#soc-critical channel</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Shift Handover Reminder</div><div style="font-size:10px;color:var(--text-muted);">30 min before shift end</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">SLA Breach Warning</div><div style="font-size:10px;color:var(--text-muted);">When 80% of SLA window elapsed</div></div><div style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;"></div></div></div>
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Daily Digest Email</div><div style="font-size:10px;color:var(--text-muted);">08:00 SGT every morning</div></div><div style="width:36px;height:20px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:var(--text-muted);border-radius:50%;position:absolute;left:2px;top:1px;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">P1 Alert — Slack + SMS</div><div style="font-size:10px;color:var(--text-muted);">#soc-critical channel</div></div><div id="notifP1Toggle" data-notif="p1_alert" data-state="on" onclick="toggleNotifSetting(this)" style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;transition:all 0.2s;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Shift Handover Reminder</div><div style="font-size:10px;color:var(--text-muted);">30 min before shift end</div></div><div id="notifHandoverToggle" data-notif="shift_handover" data-state="on" onclick="toggleNotifSetting(this)" style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;transition:all 0.2s;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">SLA Breach Warning</div><div style="font-size:10px;color:var(--text-muted);">When 80% of SLA window elapsed</div></div><div id="notifSLAToggle" data-notif="sla_breach" data-state="on" onclick="toggleNotifSetting(this)" style="width:36px;height:20px;background:var(--cyan);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;right:2px;top:2px;transition:all 0.2s;"></div></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:7px;"><div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Daily Digest Email</div><div style="font-size:10px;color:var(--text-muted);">08:00 SGT every morning</div></div><div id="notifDigestToggle" data-notif="daily_digest" data-state="off" onclick="toggleNotifSetting(this)" style="width:36px;height:20px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:10px;cursor:pointer;position:relative;"><div style="width:16px;height:16px;background:var(--text-muted);border-radius:50%;position:absolute;left:2px;top:1px;transition:all 0.2s;"></div></div></div>
+              <button class="btn btn-sm" style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);font-size:10px;" onclick="saveNotificationSettings()">Save Notification Settings</button>
+              <div id="stgNotifStatus" style="font-size:9px;color:var(--text-muted);min-height:14px;"></div>
             </div>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Tenant Settings</span></div>
             <div style="display:flex;flex-direction:column;gap:10px;">
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Organization Name</div><input class="filter-input" value="Dacta SG Pte Ltd" style="width:100%;"></div>
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Timezone</div><select class="filter-select" style="width:100%;"><option>Asia/Singapore (UTC+8)</option><option>UTC</option></select></div>
-              <div style="margin-top:8px;">
-                <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Encryption: <strong>AES-256-GCM</strong> at rest &amp; in transit</div>
-                <div style="font-size:11px;color:var(--text-secondary);margin-top:3px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Data Pipeline: <strong>3-Round Redaction Pipeline</strong> for PII/PHI compliance</div>
-                <div style="font-size:11px;color:var(--text-secondary);margin-top:3px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Data Residency: <strong>Singapore (SG)</strong> — PDPA compliant</div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Organization Name</div><input class="filter-input" id="stgTenantOrgName" value="Dacta SG Pte Ltd" style="width:100%;"></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Timezone</div><select class="filter-select" id="stgTenantTimezone" style="width:100%;"><option value="Asia/Singapore">Asia/Singapore (UTC+8)</option><option value="UTC">UTC</option><option value="America/New_York">America/New_York (UTC-5)</option><option value="Europe/London">Europe/London (UTC+0/+1)</option></select></div>
+              <div style="margin-top:4px;padding:8px 10px;background:var(--bg-elevated);border-radius:6px;border:1px solid var(--border-subtle);">
+                <div style="font-size:10px;color:var(--text-secondary);"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;margin-right:4px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Encryption: <strong>AES-256-GCM</strong> at rest &amp; in transit</div>
+                <div style="font-size:10px;color:var(--text-secondary);margin-top:3px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;margin-right:4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Data Pipeline: <strong>3-Round Redaction</strong> for PII/PHI compliance</div>
+                <div style="font-size:10px;color:var(--text-secondary);margin-top:3px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;margin-right:4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Data Residency: <strong>Singapore (SG)</strong> — PDPA compliant</div>
               </div>
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Data Retention Policy</div><select class="filter-select" style="width:100%;"><option>12 months</option><option>24 months</option><option>7 years (Compliance)</option></select></div>
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Ticket ID Prefix</div><input class="filter-input" value="DAC-" style="width:100%;"></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Data Retention Policy</div><select class="filter-select" id="stgTenantRetention" style="width:100%;"><option value="12">12 months</option><option value="24">24 months</option><option value="84">7 years (Compliance)</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Ticket ID Prefix</div><input class="filter-input" id="stgTenantTicketPrefix" value="DAC-" style="width:100%;"></div>
+              <button class="btn btn-sm" style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);font-size:10px;" onclick="saveTenantSettings()">Save Tenant Settings</button>
+              <div id="stgTenantStatus" style="font-size:9px;color:var(--text-muted);min-height:14px;"></div>
             </div>
           </div>
         </div>
@@ -34524,19 +34535,45 @@ async function loadPersistedConnectors() {
 }
 
 
-function testAndUpdateHealth(cid) {
+async function testAndUpdateHealth(cid) {
   var parts = cid.split('__');
   var org = ORG_CONNECTORS[parts[0]];
   if (!org) return;
   var c = org.connectors[parseInt(parts[1])];
   if (!c) return;
-  // Simulate connection test — if enabled, mark as healthy
-  if (c.is_enabled) {
-    c.health_status = 'healthy';
-    showToast('Connection test OK — ' + (c.display_name || c.type) + ' status updated to healthy', 'success');
-  } else {
+  if (!c.is_enabled) {
     c.health_status = 'not_configured';
     showToast('Connector is disabled — enable it first to test', 'warn');
+    renderSettingsConnectors();
+    return;
+  }
+  // Show testing state
+  var btn = document.querySelector('#stg-card-' + cid + ' .stg-conn-test-btn');
+  if (btn) { btn.textContent = '⌛ Testing...'; btn.disabled = true; }
+  try {
+    var ok = false;
+    var detail = '';
+    if (c.connector_type === 'siem' || c.connector_type === 'firewall') {
+      var r = await fetch('/api/elastic?action=cluster_health', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ namespace: org.namespace }) });
+      if (r.ok) { var d = await r.json(); ok = d.status && d.status !== 'red'; detail = d.status || 'unknown'; }
+    } else if (c.connector_type === 'edr') {
+      var r2 = await fetch('/api/crowdstrike', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping' }) });
+      ok = r2.ok;
+    } else if (c.connector_type === 'ticketing') {
+      var r3 = await fetch('/api/jira?action=health', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+      ok = r3.ok;
+    } else if (c.connector_type === 'threat_intel') {
+      // TI is passive — just verify URL metadata is present
+      ok = !!(c.metadata && (c.metadata.url || c.metadata.api_key));
+      detail = ok ? 'configured' : 'missing config';
+    } else {
+      ok = true; detail = 'no test available';
+    }
+    c.health_status = ok ? 'healthy' : 'degraded';
+    showToast((ok ? 'Connection OK' : 'Connection degraded') + ' — ' + (c.display_name || c.connector_type) + (detail ? ' (' + detail + ')' : ''), ok ? 'success' : 'warn');
+  } catch(e) {
+    c.health_status = 'degraded';
+    showToast('Connection test failed — ' + (c.display_name || c.connector_type) + ': ' + e.message, 'error');
   }
   renderSettingsConnectors();
 }
@@ -34584,6 +34621,9 @@ async function loadSettingsPage() {
 
     // Load SSO admin settings UI
     loadSSOSettingsUI();
+
+    // Load platform settings (notifications, audit toggles, tenant settings, LLM config)
+    loadPlatformSettings();
 
     console.log('[Settings] Live connector registry loaded: ' + orgCount + ' orgs');
   } catch(err) {
@@ -35037,6 +35077,193 @@ async function saveEscalationMatrix() {
     console.error('[EscMatrix] Save error:', e);
     if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + dIcon('close',14) + '</span> Save failed';
   }
+}
+
+// ============================================================
+//  PLATFORM SETTINGS — NOTIFICATIONS, AUDIT, TENANT, LLM
+// ============================================================
+
+// Generic toggle helper used by notification + audit + security toggles
+function _applyToggleState(el, on) {
+  var knob = el.querySelector('div');
+  if (on) {
+    el.style.background = 'var(--cyan)';
+    el.style.border = '';
+    if (knob) { knob.style.left = ''; knob.style.right = '2px'; knob.style.background = '#fff'; }
+  } else {
+    el.style.background = 'var(--bg-input)';
+    el.style.border = '1px solid var(--border-card)';
+    if (knob) { knob.style.right = ''; knob.style.left = '2px'; knob.style.background = 'var(--text-muted)'; }
+  }
+}
+
+function toggleNotifSetting(el) {
+  var on = el.dataset.state !== 'on';
+  el.dataset.state = on ? 'on' : 'off';
+  _applyToggleState(el, on);
+}
+
+function toggleAuditSetting(el) {
+  var on = el.dataset.state !== 'on';
+  el.dataset.state = on ? 'on' : 'off';
+  _applyToggleState(el, on);
+}
+
+function toggleSecuritySetting(key, el) {
+  var on = el.dataset.state !== 'on';
+  el.dataset.state = on ? 'on' : 'off';
+  _applyToggleState(el, on);
+}
+
+// Save to Supabase platform_settings (key → value JSON)
+async function _savePlatformKey(key, value, statusElId) {
+  var statusEl = statusElId ? document.getElementById(statusElId) : null;
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--cyan);">↻</span> Saving...';
+  try {
+    var saved = false;
+    if (window._supabaseRef) {
+      var res = await window._supabaseRef.from('platform_settings').upsert({ key: key, value: value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      if (!res.error) saved = true;
+    }
+    if (!saved) { try { localStorage.setItem('dacta_ps_' + key, JSON.stringify(value)); } catch(e) {} }
+    if (statusEl) { statusEl.innerHTML = '<span style="color:#10b981;">✓ Saved</span>'; setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 2000); }
+    return true;
+  } catch(e) {
+    try { localStorage.setItem('dacta_ps_' + key, JSON.stringify(value)); } catch(le) {}
+    if (statusEl) { statusEl.innerHTML = '<span style="color:#f59e0b;">Saved locally</span>'; setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 2000); }
+    return false;
+  }
+}
+
+// Load all platform settings and hydrate the UI
+async function loadPlatformSettings() {
+  var allSettings = {};
+  try {
+    if (window._supabaseRef) {
+      var res = await window._supabaseRef.from('platform_settings').select('key,value');
+      if (res.data) res.data.forEach(function(row) {
+        try { allSettings[row.key] = typeof row.value === 'string' ? JSON.parse(row.value) : row.value; } catch(e) { allSettings[row.key] = row.value; }
+      });
+    }
+  } catch(e) { console.warn('[PlatformSettings] Load error:', e.message); }
+  // Fallback to localStorage for any missing keys
+  ['notification_settings','audit_settings','tenant_settings','llm_config','access_config','retention_settings'].forEach(function(k) {
+    if (!allSettings[k]) { try { var v = localStorage.getItem('dacta_ps_' + k); if (v) allSettings[k] = JSON.parse(v); } catch(e) {} }
+  });
+
+  // ── Notification Settings ──
+  var ns = allSettings['notification_settings'] || {};
+  var notifMap = { notifP1Toggle: 'p1_alert', notifHandoverToggle: 'shift_handover', notifSLAToggle: 'sla_breach', notifDigestToggle: 'daily_digest' };
+  Object.keys(notifMap).forEach(function(elId) {
+    var el = document.getElementById(elId); if (!el) return;
+    var key = notifMap[elId]; var defaultOn = key !== 'daily_digest';
+    var on = (ns[key] !== undefined) ? !!ns[key] : defaultOn;
+    el.dataset.state = on ? 'on' : 'off';
+    _applyToggleState(el, on);
+  });
+
+  // ── Audit Settings ──
+  var as = allSettings['audit_settings'] || {};
+  var auditMap = { auditToggleAI: 'log_ai_decisions', auditToggleOverrides: 'track_overrides', auditToggleRules: 'rule_history', auditToggleFeedback: 'feedback_loop' };
+  Object.keys(auditMap).forEach(function(elId) {
+    var el = document.getElementById(elId); if (!el) return;
+    var key = auditMap[elId]; var on = (as[key] !== undefined) ? !!as[key] : true;
+    el.dataset.state = on ? 'on' : 'off';
+    _applyToggleState(el, on);
+  });
+  var cacheTTL = document.getElementById('stgCacheTTL');
+  var auditRet = document.getElementById('stgAuditRetention');
+  if (cacheTTL && as.cache_ttl) cacheTTL.value = as.cache_ttl;
+  if (auditRet && as.audit_retention) auditRet.value = as.audit_retention;
+
+  // ── Tenant Settings ──
+  var ts = allSettings['tenant_settings'] || {};
+  var orgNameEl = document.getElementById('stgTenantOrgName');
+  var tzEl = document.getElementById('stgTenantTimezone');
+  var retEl = document.getElementById('stgTenantRetention');
+  var prefixEl = document.getElementById('stgTenantTicketPrefix');
+  if (orgNameEl && ts.org_name) orgNameEl.value = ts.org_name;
+  if (tzEl && ts.timezone) tzEl.value = ts.timezone;
+  if (retEl && ts.retention) retEl.value = ts.retention;
+  if (prefixEl && ts.ticket_prefix) prefixEl.value = ts.ticket_prefix;
+
+  // ── LLM Config ──
+  var lc = allSettings['llm_config'] || {};
+  var llmP = document.getElementById('stgLLMPrimary'); var llmF = document.getElementById('stgLLMFast');
+  var llmT = document.getElementById('stgLLMThreat'); var llmB = document.getElementById('stgLLMBudget');
+  if (llmP && lc.primary) llmP.value = lc.primary;
+  if (llmF && lc.fast) llmF.value = lc.fast;
+  if (llmT && lc.threat_intel) llmT.value = lc.threat_intel;
+  if (llmB && lc.budget) llmB.value = lc.budget;
+
+  // ── Access Config ──
+  var ac = allSettings['access_config'] || {};
+  var mfaEl = document.getElementById('stgMFAToggle');
+  var sessionEl = document.getElementById('stgSessionTimeout');
+  var ipEl = document.getElementById('stgAllowedIPs');
+  if (mfaEl) { var mfaOn = (ac.mfa !== undefined) ? !!ac.mfa : true; mfaEl.dataset.state = mfaOn ? 'on' : 'off'; _applyToggleState(mfaEl, mfaOn); }
+  if (sessionEl && ac.session_timeout) sessionEl.value = ac.session_timeout;
+  if (ipEl && ac.allowed_ips) ipEl.value = ac.allowed_ips;
+
+  console.log('[PlatformSettings] Loaded all platform settings');
+}
+
+function saveNotificationSettings() {
+  var ns = {};
+  var notifMap = { notifP1Toggle: 'p1_alert', notifHandoverToggle: 'shift_handover', notifSLAToggle: 'sla_breach', notifDigestToggle: 'daily_digest' };
+  Object.keys(notifMap).forEach(function(elId) {
+    var el = document.getElementById(elId); if (!el) return;
+    ns[notifMap[elId]] = el.dataset.state === 'on';
+  });
+  _savePlatformKey('notification_settings', ns, 'stgNotifStatus');
+}
+
+function saveAuditSettings() {
+  var as = {};
+  var auditMap = { auditToggleAI: 'log_ai_decisions', auditToggleOverrides: 'track_overrides', auditToggleRules: 'rule_history', auditToggleFeedback: 'feedback_loop' };
+  Object.keys(auditMap).forEach(function(elId) {
+    var el = document.getElementById(elId); if (!el) return;
+    as[auditMap[elId]] = el.dataset.state === 'on';
+  });
+  _savePlatformKey('audit_settings', as, 'stgAuditStatus');
+}
+
+function saveRetentionSettings() {
+  var rs = {
+    cache_ttl: (document.getElementById('stgCacheTTL') || {}).value,
+    audit_retention: (document.getElementById('stgAuditRetention') || {}).value
+  };
+  _savePlatformKey('retention_settings', rs, 'stgRetentionStatus');
+}
+
+async function saveTenantSettings() {
+  var ts = {
+    org_name: (document.getElementById('stgTenantOrgName') || {}).value || '',
+    timezone: (document.getElementById('stgTenantTimezone') || {}).value || 'Asia/Singapore',
+    retention: (document.getElementById('stgTenantRetention') || {}).value || '12',
+    ticket_prefix: (document.getElementById('stgTenantTicketPrefix') || {}).value || 'DAC-'
+  };
+  await _savePlatformKey('tenant_settings', ts, 'stgTenantStatus');
+}
+
+async function saveLLMConfig() {
+  var lc = {
+    primary: (document.getElementById('stgLLMPrimary') || {}).value || 'claude-sonnet-4-6',
+    fast: (document.getElementById('stgLLMFast') || {}).value || 'claude-haiku-4-5-20251001',
+    threat_intel: (document.getElementById('stgLLMThreat') || {}).value || 'perplexity-sonar-pro',
+    budget: (document.getElementById('stgLLMBudget') || {}).value || '$250.00',
+    auto_run: (document.getElementById('stgAutoRunToggle') || { dataset: {} }).dataset.state === 'on'
+  };
+  await _savePlatformKey('llm_config', lc, 'stgLLMStatus');
+}
+
+async function saveAccessConfig() {
+  var ac = {
+    mfa: (document.getElementById('stgMFAToggle') || { dataset: {} }).dataset.state === 'on',
+    session_timeout: (document.getElementById('stgSessionTimeout') || {}).value || '60',
+    allowed_ips: (document.getElementById('stgAllowedIPs') || {}).value || ''
+  };
+  await _savePlatformKey('access_config', ac, 'stgAccessStatus');
 }
 
 // ── Get escalation contacts for a specific org (used by escalation draft) ──
@@ -48317,8 +48544,6 @@ async function openInvestigation(ticketKey) {
         }).join('');
 
     livePanel.innerHTML =
-      '<div id="invVerdictArea" style="display:none;"></div>' +
-
       // ══════════════════════════════════════════════════════
       //  RADIANT-STYLE INCIDENT HEADER
       // ══════════════════════════════════════════════════════
@@ -48372,6 +48597,8 @@ async function openInvestigation(ticketKey) {
       //  OVERVIEW TAB
       // ══════════════════════════════════════════════════════
       '<div id="invTab-overview" class="inv-radiant-tab-content" style="display:block;">' +
+        // Verdict bar — subtle inline strip, shown after investigation runs
+        '<div id="invVerdictArea" style="display:none;margin-bottom:12px;"></div>' +
         // Quick info strip
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">' +
           '<div class="card" style="padding:12px 14px;">' +
@@ -48673,7 +48900,7 @@ function initInvestigationSnapshot(ticketKey, ticketData) {
     { label: 'Network & Firewall', detail: 'Connection logs, blocked traffic', color: '#8b5cf6' },
     { label: 'AI Analysis', detail: 'Verdict + recommended actions', color: 'var(--cyan)' }
   ];
-  var pipelineHTML = '<div style="margin-top:10px;padding:8px 10px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.1);border-radius:6px;">' +
+  var pipelineHTML = '<div id="snapshotPipelineWrap" style="margin-top:10px;padding:8px 10px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.1);border-radius:6px;">' +
     '<div style="font-size:8px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:7px;">Investigation pipeline (awaiting run)</div>' +
     '<div style="display:flex;flex-direction:column;gap:4px;">' +
     pipelineItems.map(function(p, i) {
@@ -48735,6 +48962,51 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
     badgeEl.style.background = verdictColor + '20';
     badgeEl.style.color = verdictColor;
     badgeEl.style.border = '1px solid ' + verdictColor + '40';
+  }
+
+  // ── Update pipeline section to show completed steps ──
+  var pipeWrap = document.getElementById('snapshotPipelineWrap');
+  if (pipeWrap) {
+    var completedSteps = [
+      { label: 'Elastic SIEM', result: siemTotal > 0 ? siemTotal + ' event' + (siemTotal !== 1 ? 's' : '') : 'No hits', color: siemTotal > 0 ? 'var(--amber)' : 'var(--green)', done: true },
+      { label: 'Threat Intelligence', result: tipHits > 0 ? tipHits + ' IOC' + (tipHits !== 1 ? 's' : '') + ' matched' : 'Clean', color: tipHits > 0 ? '#ef4444' : 'var(--green)', done: true },
+      { label: 'Network & Firewall', result: netHits > 0 ? netHits + ' suspicious conn' : 'Clean', color: netHits > 0 ? '#8b5cf6' : 'var(--green)', done: true },
+      { label: 'AI Analysis', result: verdict ? verdict.split('\u2014')[0].trim() : 'Complete', color: verdictColor, done: true }
+    ];
+    pipeWrap.innerHTML =
+      '<div style="font-size:8px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:7px;">Investigation pipeline — completed</div>' +
+      '<div style="display:flex;flex-direction:column;gap:4px;">' +
+      completedSteps.map(function(p, i) {
+        return '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<div style="width:16px;height:16px;border-radius:50%;background:' + p.color + '20;border:1px solid ' + p.color + '60;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
+            '<span style="font-size:8px;font-weight:700;color:' + p.color + ';">' + (i+1) + '</span>' +
+          '</div>' +
+          '<div style="flex:1;">' +
+            '<span style="font-size:9px;font-weight:600;color:var(--text-secondary);">' + p.label + '</span>' +
+            '<span style="font-size:9px;color:var(--text-muted);margin-left:5px;">— ' + p.result + '</span>' +
+          '</div>' +
+          '<span style="font-size:8px;color:' + p.color + ';background:' + p.color + '10;border:1px solid ' + p.color + '30;padding:1px 5px;border-radius:3px;">✓ Done</span>' +
+        '</div>';
+      }).join('') +
+      '</div>';
+    pipeWrap.style.borderColor = 'rgba(16,185,129,0.15)';
+    pipeWrap.style.background = 'rgba(16,185,129,0.02)';
+  }
+
+  // ── Update subtle verdict bar in overview tab ──
+  var vArea = document.getElementById('invVerdictArea');
+  if (vArea && verdict) {
+    var verdictIcon = verdict.includes('TRUE POSITIVE') ? '⚠' : verdict.includes('FALSE POSITIVE') ? '✓' : '◑';
+    vArea.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:' + verdictColor + '08;border-radius:8px;border:1px solid ' + verdictColor + '25;">' +
+        '<div style="width:7px;height:7px;border-radius:50%;background:' + verdictColor + ';flex-shrink:0;box-shadow:0 0 6px ' + verdictColor + '60;"></div>' +
+        '<div style="display:flex;flex-direction:column;gap:1px;">' +
+          '<span style="font-size:10px;font-weight:700;color:' + verdictColor + ';">' + verdictIcon + ' ' + verdict + '</span>' +
+          (confidence ? '<span style="font-size:9px;color:var(--text-muted);">' + confidence + '% confidence — AI investigation complete</span>' : '') +
+        '</div>' +
+        '<button class="btn btn-xs" onclick="reInvestigate(_currentInvestigationKey||_currentTicketKey||\'\')" style="margin-left:auto;font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);">↻ Re-run</button>' +
+      '</div>';
+    vArea.style.display = '';
   }
 }
 
@@ -49289,29 +49561,13 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
   // Apply collapsible behavior to round cards in cached content
   setTimeout(function() {
     applyCollapsibleSections(invMainContent);
-    // Reorder: move evidence (Round 2) before technical queries (Round 1)
-    var r1 = invMainContent.querySelector('[id="aiRound1"], .inv-round-1');
-    var r2 = invMainContent.querySelector('[id="aiRound2"], .inv-round-2');
-    var invVerdictArea = document.getElementById('invVerdictArea');
-    if (invVerdictArea) {
-      var vBanner = container.querySelector('.verdict-banner');
-      if (vBanner) {
-        var cloned = vBanner.cloneNode(true);
-        cloned.style.borderLeft = '4px solid ' + (vBanner.style.borderColor || 'var(--cyan)');
-        cloned.style.padding = '20px 24px';
-        var btnDiv = document.createElement('div');
-        btnDiv.style.cssText = 'margin-top:10px;';
-        btnDiv.innerHTML = '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="reInvestigate(\'' + ticketKey + '\')">' + '\uD83D\uDD04' + ' Re-investigate</button>';
-        cloned.appendChild(btnDiv);
-        invVerdictArea.innerHTML = '';
-        invVerdictArea.appendChild(cloned);
-        invVerdictArea.style.display = '';
-        vBanner.style.display = 'none';
-      }
-    }
+    // Hide the verbose verdict-banner from the investigation tab body
+    // (verdict is now shown as a subtle bar in the overview tab)
+    var vBanner = container.querySelector('.verdict-banner');
+    if (vBanner) vBanner.style.display = 'none';
   }, 200);
 
-  // Update snapshot panel with cached verdict data
+  // Update snapshot panel with cached verdict data — this also populates invVerdictArea subtly
   try {
     if (cacheEntry.verdict || cacheEntry.confidence) {
       updateInvestigationSnapshot(
@@ -51536,32 +51792,8 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   roundsContainer.innerHTML += verdictBannerHTML;
 
-  // Also inject verdict into the full-width verdict area at top
-  var verdictAreaEl = document.getElementById('invVerdictArea');
-  if (verdictAreaEl) {
-    var topVerdictHTML = '<div class="verdict-banner" style="border-color:' + verdictBorder + ';background:' + verdictBg + ';border-left:4px solid ' + verdictColor + ';padding:20px 24px;">' +
-      '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">' +
-        '<div style="flex:1;min-width:200px;">' +
-          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:' + verdictColor + ';margin-bottom:6px;opacity:0.8;">AI Investigation Verdict</div>' +
-          '<div class="verdict-title" style="color:' + verdictColor + ';font-size:20px;">' + verdictIcon + ' ' + verdict + '</div>' +
-          '<div class="confidence-pill" style="background:' + verdictColor + '20;color:' + verdictColor + ';border-color:' + verdictColor + '40;font-size:13px;padding:4px 14px;margin-top:6px;">' + confidence + '% CONFIDENCE</div>' +
-        '</div>' +
-        '<div class="inv-verdict-stats">' +
-          '<div class="inv-verdict-stat"><div class="inv-verdict-stat-label">Inculpatory</div><div class="inv-verdict-stat-value" style="color:var(--red-bright);">' + inculpatory.length + '</div></div>' +
-          '<div class="inv-verdict-stat"><div class="inv-verdict-stat-label">Exculpatory</div><div class="inv-verdict-stat-value" style="color:var(--green);">' + exculpatory.length + '</div></div>' +
-          '<div class="inv-verdict-stat"><div class="inv-verdict-stat-label">MITRE</div><div class="inv-verdict-stat-value" style="color:var(--cyan);">' + techniques.length + '</div></div>' +
-          '<div class="inv-verdict-stat"><div class="inv-verdict-stat-label">Confidence</div><div class="inv-verdict-stat-value" style="color:' + verdictColor + ';">' + confidence + '%</div></div>' +
-        '</div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
-          techniques.slice(0,4).map(function(t) { return '<span class="mitre-tag">' + t.id + '</span>'; }).join('') +
-          '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);margin-left:8px;" onclick="reInvestigate(\'' + ticketKey + '\')">' + '\uD83D\uDD04' + ' Re-investigate</button>' +
-        '</div>' +
-      '</div>' +
-      '<div style="margin-top:10px;font-size:10px;color:var(--text-muted);">' + actionLabel + '</div>' +
-    '</div>';
-    verdictAreaEl.innerHTML = topVerdictHTML;
-    verdictAreaEl.style.display = '';
-  }
+  // Verdict area (invVerdictArea) is now populated by updateInvestigationSnapshot
+  // as a subtle inline bar in the Overview tab — no large banner needed here
 
   // Make entities (IPs, hostnames) clickable in the investigation panel
   setTimeout(function() {
