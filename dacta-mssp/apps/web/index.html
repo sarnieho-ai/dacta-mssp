@@ -27528,14 +27528,276 @@ function validateRuleSyntax() {
   if (errors.length > 0) { showToast('Validation errors: ' + errors.join(', '), 'warn'); }
   else { showToast('Syntax validated — no errors found'); }
 }
+// ══════════════════════════════════════════════════════════════
+// SIGMA RULE TRANSLATOR — Client-Side Uncoder Engine
+// Parses Sigma YAML detection logic and converts to SIEM query languages
+// Supports: Elastic EQL/KQL, Splunk SPL, MS Sentinel KQL,
+//           Chronicle YARA-L, QRadar AQL, CrowdStrike Logscale,
+//           Sumo Logic, Palo Alto Cortex XDR
+// ══════════════════════════════════════════════════════════════
+function _sigParseSigmaYAML(text) {
+  var lines = text.split('\n');
+  var root = {};
+  var stack = [{ obj: root, indent: -1 }];
+  var lastKeyInfo = { obj: root, key: null };
+  for (var i = 0; i < lines.length; i++) {
+    var raw = lines[i];
+    if (raw.trim() === '' || raw.trim().charAt(0) === '#') continue;
+    var indent = raw.search(/\S/);
+    if (indent < 0) continue;
+    var trimmed = raw.trim();
+    while (stack.length > 1 && indent <= stack[stack.length - 1].indent) { stack.pop(); }
+    var parent = stack[stack.length - 1].obj;
+    if (trimmed.charAt(0) === '-') {
+      var lv = trimmed.substring(1).trim().replace(/^['"]|['"]$/g, '');
+      var lkObj = lastKeyInfo.obj;
+      var lk = lastKeyInfo.key;
+      if (lk && lkObj && lkObj[lk] !== undefined) {
+        if (!Array.isArray(lkObj[lk])) {
+          var prev = lkObj[lk];
+          lkObj[lk] = (prev === null || prev === undefined || prev === '' || (typeof prev === 'object' && !Array.isArray(prev) && Object.keys(prev).length === 0)) ? [] : [prev];
+        }
+        lkObj[lk].push(lv);
+      }
+      continue;
+    }
+    var colIdx = trimmed.indexOf(':');
+    if (colIdx > 0) {
+      var key = trimmed.substring(0, colIdx).trim();
+      var val = trimmed.substring(colIdx + 1).trim();
+      if (val === '' || val === '|') {
+        var nextNE = '';
+        for (var ni = i + 1; ni < lines.length; ni++) { if (lines[ni].trim() !== '') { nextNE = lines[ni].trim(); break; } }
+        if (nextNE.charAt(0) === '-') { parent[key] = []; lastKeyInfo = { obj: parent, key: key }; }
+        else { parent[key] = {}; lastKeyInfo = { obj: parent, key: key }; stack.push({ obj: parent[key], indent: indent }); }
+      } else { val = val.replace(/^['"]|['"]$/g, ''); parent[key] = val; lastKeyInfo = { obj: parent, key: key }; }
+    }
+  }
+  return root;
+}
+function _sigExtractDetection(p) { return (p.detection && typeof p.detection === 'object' && Object.keys(p.detection).length > 0) ? p.detection : null; }
+function _sigParseSelection(selObj) {
+  if (typeof selObj === 'string') return [{ field: '_raw', modifier: 'contains', values: [selObj] }];
+  if (Array.isArray(selObj)) return [{ field: '_raw', modifier: 'contains', values: selObj }];
+  var conds = [];
+  for (var rawKey in selObj) {
+    if (!selObj.hasOwnProperty(rawKey)) continue;
+    var val = selObj[rawKey], parts = rawKey.split('|'), fieldName = parts[0], modifier = parts.length > 1 ? parts.slice(1).join('|') : 'eq';
+    var values = Array.isArray(val) ? val.map(function(v){return String(v).replace(/^['"]|['"]$/g,'');}) : (typeof val==='object'&&val!==null) ? ['*'] : [String(val).replace(/^['"]|['"]$/g,'')];
+    conds.push({ field: fieldName, modifier: modifier, values: values });
+  }
+  return conds;
+}
+function _sigEscapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function _sigSlugify(s) { return (s||'rule').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').substring(0,60); }
+
+function _sigFieldCondition(field, modifier, values, siem) {
+  var parts = [];
+  values.forEach(function(val) {
+    var hasW = val.indexOf('*') >= 0, cl = val.replace(/\*/g, '');
+    switch(siem) {
+      case 'Elastic EQL':
+        if (modifier==='contains') parts.push(field+' : "*'+cl+'*"');
+        else if (modifier==='startswith') parts.push(field+' : "'+cl+'*"');
+        else if (modifier==='endswith') parts.push(field+' : "*'+cl+'"');
+        else if (modifier==='re') parts.push(field+' regex~ "'+val+'"');
+        else parts.push(field+' : "'+val+'"');
+        break;
+      case 'Elastic KQL':
+        if (modifier==='contains') parts.push(field+':*'+cl+'*');
+        else if (modifier==='startswith') parts.push(field+':'+cl+'*');
+        else if (modifier==='endswith') parts.push(field+':*'+cl);
+        else if (hasW) parts.push(field+':'+val);
+        else parts.push(field+':"'+val+'"');
+        break;
+      case 'Splunk SPL':
+        if (modifier==='contains') parts.push(field+'="*'+cl+'*"');
+        else if (modifier==='startswith') parts.push(field+'="'+cl+'*"');
+        else if (modifier==='endswith') parts.push(field+'="*'+cl+'"');
+        else parts.push(field+'="'+val+'"');
+        break;
+      case 'Microsoft Sentinel KQL':
+        if (modifier==='contains') parts.push(field+' contains "'+cl+'"');
+        else if (modifier==='startswith') parts.push(field+' startswith "'+cl+'"');
+        else if (modifier==='endswith') parts.push(field+' endswith "'+cl+'"');
+        else if (modifier==='re') parts.push(field+' matches regex "'+val+'"');
+        else if (hasW) parts.push(field+' contains "'+cl+'"');
+        else parts.push(field+' == "'+val+'"');
+        break;
+      case 'Chronicle YARA-L':
+        if (modifier==='contains') parts.push('$e.'+field+' = /.*'+_sigEscapeRegex(cl)+'.*/ nocase');
+        else if (modifier==='startswith') parts.push('$e.'+field+' = /^'+_sigEscapeRegex(cl)+'.*/ nocase');
+        else if (modifier==='endswith') parts.push('$e.'+field+' = /.*'+_sigEscapeRegex(cl)+'$/ nocase');
+        else if (modifier==='re') parts.push('$e.'+field+' = /'+val+'/');
+        else parts.push('$e.'+field+' = "'+val+'" nocase');
+        break;
+      case 'QRadar AQL':
+        if (modifier==='contains') parts.push('"'+field+'" ILIKE \'%'+cl+'%\'');
+        else if (modifier==='startswith') parts.push('"'+field+'" ILIKE \''+cl+'%\'');
+        else if (modifier==='endswith') parts.push('"'+field+'" ILIKE \'%'+cl+'\'');
+        else if (modifier==='re') parts.push('"'+field+'" IMATCHES \''+val+'\'');
+        else parts.push('"'+field+'" = \''+val+'\'');
+        break;
+      case 'CrowdStrike Logscale':
+        if (modifier==='contains') parts.push(field+' = /'+_sigEscapeRegex(cl)+'/i');
+        else if (modifier==='startswith') parts.push(field+' = /^'+_sigEscapeRegex(cl)+'/i');
+        else if (modifier==='endswith') parts.push(field+' = /'+_sigEscapeRegex(cl)+'$/i');
+        else if (modifier==='re') parts.push(field+' = /'+val+'/');
+        else parts.push(field+' = "'+val+'"');
+        break;
+      case 'Sumo Logic':
+        if (modifier==='contains') parts.push(field+' matches "*'+cl+'*"');
+        else if (modifier==='startswith') parts.push(field+' matches "'+cl+'*"');
+        else if (modifier==='endswith') parts.push(field+' matches "*'+cl+'"');
+        else if (hasW) parts.push(field+' matches "'+val+'"');
+        else parts.push(field+' = "'+val+'"');
+        break;
+      case 'Palo Alto Cortex XDR':
+        if (modifier==='contains') parts.push(field+' contains "'+cl+'"');
+        else if (modifier==='startswith') parts.push(field+' ~= "'+cl+'.*"');
+        else if (modifier==='endswith') parts.push(field+' ~= ".*'+cl+'"');
+        else if (modifier==='re') parts.push(field+' ~= "'+val+'"');
+        else parts.push(field+' = "'+val+'"');
+        break;
+    }
+  });
+  if (parts.length <= 1) return parts[0] || '';
+  switch(siem) {
+    case 'Elastic EQL':
+      var eV = values.map(function(v){var c=v.replace(/\*/g,''); if(modifier==='contains')return'"*'+c+'*"';if(modifier==='startswith')return'"'+c+'*"';if(modifier==='endswith')return'"*'+c+'"';return'"'+v+'"';});
+      return field+' : ('+eV.join(', ')+')';
+    case 'Splunk SPL': return '('+parts.join(' OR ')+')';
+    case 'Microsoft Sentinel KQL':
+      if (modifier==='eq'&&!values.some(function(v){return v.indexOf('*')>=0;})) return field+' in ("'+values.join('", "')+'")';
+      return '('+parts.join(' or ')+')';
+    case 'QRadar AQL':
+      if (modifier==='eq'&&!values.some(function(v){return v.indexOf('*')>=0;})) return '"'+field+'" IN (\''+values.join('\', \'')+'\')';
+      return '('+parts.join(' OR ')+')';
+    case 'Palo Alto Cortex XDR':
+      if (modifier==='eq') return field+' in ("'+values.join('", "')+'")';
+      return '('+parts.join(' or ')+')';
+    default: return '('+parts.join(' or ')+')';
+  }
+}
+
+function _sigBuildSelectionQuery(conditions, siem) {
+  var parts = [];
+  conditions.forEach(function(c) { var q = _sigFieldCondition(c.field, c.modifier, c.values, siem); if (q) parts.push(q); });
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0];
+  var j; switch(siem) { case 'Splunk SPL': j=' '; break; case 'CrowdStrike Logscale': j='\n    '; break; default: j='\n    and '; }
+  return parts.join(j);
+}
+
+function _sigResolveCondition(condStr, selQueries, andOp, orOp, notPre) {
+  var resolved = condStr.trim();
+  resolved = resolved.replace(/\b(all|any|\d+)\s+of\s+([\w]+)\*?/g, function(m, quant, prefix) {
+    var matching = [];
+    for (var k in selQueries) { if (k.indexOf(prefix)===0 && selQueries[k]) matching.push('('+selQueries[k]+')'); }
+    if (matching.length===0) return '/* unresolved: '+m+' */';
+    return '('+matching.join(quant==='all'?andOp:orOp)+')';
+  });
+  var sorted = Object.keys(selQueries).sort(function(a,b){return b.length-a.length;});
+  sorted.forEach(function(name) {
+    var q = selQueries[name]; if(!q) return;
+    var wrap = q.indexOf('\n')>=0||q.indexOf(' and ')>=0||q.indexOf(' AND ')>=0||q.indexOf(' or ')>=0;
+    var w = wrap ? '(\n    '+q+')' : q;
+    resolved = resolved.replace(new RegExp('\\b'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','g'), w);
+  });
+  resolved = resolved.replace(/\s+and\s+/gi, andOp);
+  resolved = resolved.replace(/\s+or\s+/gi, orOp);
+  resolved = resolved.replace(/\bnot\s+/gi, notPre);
+  return resolved;
+}
+
+function _sigTranslateToSIEM(sigmaText, targetSIEM) {
+  var parsed = _sigParseSigmaYAML(sigmaText);
+  var detection = _sigExtractDetection(parsed);
+  if (!detection) return '// Error: No detection block found in the Sigma rule.\n// Ensure the rule has a valid "detection:" section.';
+  var condition = detection.condition || 'selection';
+  var selQueries = {};
+  for (var key in detection) { if (key==='condition') continue; selQueries[key] = _sigBuildSelectionQuery(_sigParseSelection(detection[key]), targetSIEM); }
+  var desc = parsed.description || '';
+  if (typeof desc === 'object') { var dm = sigmaText.match(/description:\s*\|?\s*\n((?:\s+[^\n]+\n?)+)/); desc = dm ? dm[1].replace(/^\s+/gm,'').replace(/\n/g,' ').trim() : ''; }
+  desc = String(desc).substring(0,120).replace(/"/g,'\\"').replace(/\n/g,' ').trim();
+  var title = parsed.title || 'Untitled Sigma Rule', level = parsed.level || 'medium';
+  var header, footer, andOp, orOp, notPre;
+  switch(targetSIEM) {
+    case 'Elastic EQL':
+      header='// Sigma \u2192 Elastic EQL\n// Rule: '+title+'\n\nany where\n  '; andOp='\n  and '; orOp='\n  or '; notPre='not '; footer=''; break;
+    case 'Elastic KQL':
+      header='// Sigma \u2192 Elastic KQL\n// Rule: '+title+'\n\n'; andOp=' and '; orOp=' or '; notPre='NOT '; footer=''; break;
+    case 'Splunk SPL': {
+      var sI='index=*'; if(parsed.logsource&&parsed.logsource.product) sI='index='+String(parsed.logsource.product);
+      header='// Sigma \u2192 Splunk SPL\n// Rule: '+title+'\n\n'+sI+' '; andOp=' '; orOp=' OR '; notPre='NOT '; footer='\n| table _time, host, source, sourcetype, _raw'; break;
+    }
+    case 'Microsoft Sentinel KQL': {
+      var tb='CommonSecurityLog';
+      if(parsed.logsource){var ct=String(parsed.logsource.category||'').toLowerCase(),pr=String(parsed.logsource.product||'').toLowerCase();if(ct==='process_creation'||ct==='process')tb='DeviceProcessEvents';else if(pr.indexOf('windows')>=0)tb='SecurityEvent';else if(pr.indexOf('azure')>=0||pr.indexOf('entra')>=0)tb='SigninLogs';else if(pr.indexOf('m365')>=0||pr.indexOf('office')>=0)tb='OfficeActivity';else if(pr.indexOf('linux')>=0)tb='Syslog';}
+      header='// Sigma \u2192 Microsoft Sentinel KQL\n// Rule: '+title+'\n\n'+tb+'\n| where\n  '; andOp='\n  and '; orOp='\n  or '; notPre='not '; footer='\n| project TimeGenerated, Computer, Account, Activity'; break;
+    }
+    case 'Chronicle YARA-L':
+      header='// Sigma \u2192 Chronicle YARA-L 2.0\n// Rule: '+title+'\n\nrule '+_sigSlugify(title)+' {\n  meta:\n    author = "DACTA SIEMLess"\n    description = "'+desc+'"\n    severity = "'+level+'"\n\n  events:\n    '; andOp='\n    and '; orOp='\n    or '; notPre='not '; footer='\n\n  condition:\n    $e\n}'; break;
+    case 'QRadar AQL':
+      header='// Sigma \u2192 QRadar AQL\n// Rule: '+title+'\n\nSELECT\n  DATEFORMAT(starttime, \'yyyy-MM-dd HH:mm:ss\') AS "Time",\n  sourceIP AS "Source IP",\n  destinationIP AS "Dest IP",\n  "eventName" AS "Event",\n  UTF8(payload) AS "Payload"\nFROM events\nWHERE\n  '; andOp='\n  AND '; orOp='\n  OR '; notPre='NOT '; footer='\nORDER BY starttime DESC\nLAST 24 HOURS'; break;
+    case 'CrowdStrike Logscale':
+      header='// Sigma \u2192 CrowdStrike Logscale\n// Rule: '+title+'\n\n'; andOp='\n| '; orOp=' or '; notPre='!'; footer='\n| table([@timestamp, host, source, @rawstring])'; break;
+    case 'Sumo Logic': {
+      var sC='_sourceCategory=*'; if(parsed.logsource&&parsed.logsource.product) sC='_sourceCategory='+String(parsed.logsource.product)+'*';
+      header='// Sigma \u2192 Sumo Logic\n// Rule: '+title+'\n\n'+sC+'\n| where\n  '; andOp='\n  and '; orOp='\n  or '; notPre='!'; footer='\n| count by _sourceHost, _source\n| sort by _count desc'; break;
+    }
+    case 'Palo Alto Cortex XDR': {
+      var ds='dataset = xdr_data';
+      if(parsed.logsource){var xC=String(parsed.logsource.category||'').toLowerCase();if(xC.indexOf('process')>=0)ds+=' | filter event_type = PROCESS';else if(xC.indexOf('network')>=0||xC==='utm'||xC==='firewall')ds+=' | filter event_type = NETWORK';else if(xC.indexOf('file')>=0)ds+=' | filter event_type = FILE';else if(xC.indexOf('registry')>=0)ds+=' | filter event_type = REGISTRY';}
+      header='// Sigma \u2192 Palo Alto Cortex XDR (XQL)\n// Rule: '+title+'\n\n'+ds+'\n| filter\n  '; andOp='\n  and '; orOp='\n  or '; notPre='not '; footer='\n| fields _time, agent_hostname, action_process_image_name, action_process_command_line'; break;
+    }
+    default: header='// Sigma \u2192 '+targetSIEM+'\n\n'; andOp=' AND '; orOp=' OR '; notPre='NOT '; footer='';
+  }
+  return header + _sigResolveCondition(condition, selQueries, andOp, orOp, notPre) + footer;
+}
+
 function translateRuleToTarget() {
   var code = document.getElementById('drIdeCode');
-  if (!code || !code.textContent || code.textContent.length < 10) { showToast('No rule to translate', 'warn'); return; }
-  showToast('Translation preview generated — see output panel below');
-  var translateBody = document.querySelector('.dr-translate-body');
-  if (translateBody) {
-    translateBody.textContent = '// Auto-translated from Sigma YAML\n// Target: Elastic EQL\n\nprocess where\n  ' + (code.textContent.indexOf('CommandLine') >= 0 ? 'process.command_line' : 'event.action') + ' : "*"\n  // TODO: Manually verify field mappings for your SIEM\n  // Original Sigma rule had ' + code.textContent.split('\n').length + ' lines';
+  if (!code || !code.textContent || code.textContent.length < 10) { showToast('No rule to translate — load or write a Sigma rule first', 'warn'); return; }
+  var targetSelect = document.getElementById('drTranslateTarget');
+  var target = targetSelect ? targetSelect.value : 'Elastic EQL';
+  showToast('Translating to ' + target + '...', 'info');
+  try {
+    var result = _sigTranslateToSIEM(code.textContent, target);
+    var translateBody = document.querySelector('.dr-translate-body');
+    if (translateBody) { translateBody.innerHTML = _sigHighlightOutput(result, target); }
+    showToast('Translation complete — ' + target);
+  } catch (e) {
+    console.error('[Translate]', e);
+    showToast('Translation error: ' + e.message, 'warn');
+    var tb2 = document.querySelector('.dr-translate-body');
+    if (tb2) { tb2.textContent = '// Translation failed: ' + e.message + '\n// Please verify the Sigma rule format is valid'; }
   }
+}
+
+function _sigHighlightOutput(code, siem) {
+  var esc = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  esc = esc.replace(/^(\/\/.*)$/gm, '<span class="cmt">$1</span>');
+  esc = esc.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, '<span class="str">"$1"</span>');
+  esc = esc.replace(/'([^'\\]*(\\.[^'\\]*)*)'/g, '<span class="str">\'$1\'</span>');
+  var kws = {
+    'Elastic EQL':['any','where','and','or','not','in','process','file','network','registry','sequence','maxspan','by'],
+    'Elastic KQL':['and','or','NOT'],
+    'Splunk SPL':['index','sourcetype','source','host','OR','AND','NOT','table','stats','where','eval','search'],
+    'Microsoft Sentinel KQL':['where','project','extend','summarize','and','or','not','contains','startswith','endswith','in','has','matches','regex'],
+    'Chronicle YARA-L':['rule','meta','events','condition','outcome','match','and','or','not','nocase','over'],
+    'QRadar AQL':['SELECT','FROM','WHERE','AND','OR','NOT','IN','ILIKE','LIKE','ORDER','BY','DESC','ASC','LAST','HOURS','events','flows','AS','DATEFORMAT','IMATCHES'],
+    'CrowdStrike Logscale':['table','groupBy','count','sort','and','or','not','in'],
+    'Sumo Logic':['where','and','or','not','count','by','sort','matches','desc'],
+    'Palo Alto Cortex XDR':['dataset','filter','fields','and','or','not','contains','in','alter','comp']
+  };
+  (kws[siem]||[]).forEach(function(kw){
+    var fl=(kw===kw.toUpperCase()&&kw.length>1)?'g':'gi';
+    esc=esc.replace(new RegExp('(?<![a-zA-Z_\\$\\.])(' + kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?![a-zA-Z_])',fl),'<span class="kw">$1</span>');
+  });
+  esc = esc.replace(/(\$e\.[\w.]+)/g, '<span class="field">$1</span>');
+  esc = esc.replace(/^(\s*\|)/gm, '<span class="op">$1</span>');
+  return esc;
 }
 async function saveRuleAsDraft() {
   var code = document.getElementById('drIdeCode');
