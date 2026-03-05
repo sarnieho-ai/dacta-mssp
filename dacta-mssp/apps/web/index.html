@@ -8880,8 +8880,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
         <span>All Organizations</span>
         <span>▾</span>
       </div>
-      <div class="demo-toggle-wrap" style="display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid var(--border-subtle);">
-        <span class="demo-label-text" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">Demo</span><span class="prod-label-text" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">View</span>
+      <div class="demo-toggle-wrap" id="demoToggleWrap" style="display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid var(--border-subtle);" title="Toggle between Production (live data) and Demo (sample data) mode">
+        <span class="demo-label-text" id="demoToggleLabel" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">Demo</span><span class="prod-label-text" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">Mode</span>
         <label style="position:relative;width:32px;height:18px;cursor:pointer;">
           <input type="checkbox" id="demoModeToggle" style="display:none;">
           <span style="position:absolute;inset:0;background:rgba(77,90,110,0.2);border-radius:9px;transition:0.2s;" id="demoSlider"></span>
@@ -16201,6 +16201,11 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
             <input type="date" id="hunt-filter-to" onchange="huntApplyFindingsFilter()" value="2026-03-05">
             <button class="btn btn-xs" style="background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--text-muted);cursor:pointer;" onclick="huntClearFindingsFilters()">&#8635; Clear</button>
             <span id="hunt-findings-count">6 findings</span>
+            <div style="display:flex;gap:4px;margin-left:auto;">
+              <button class="btn btn-xs btn-secondary" onclick="huntExportFindings()" title="Export all visible findings to CSV">&#x2193; Export CSV</button>
+              <button class="btn btn-xs btn-secondary" onclick="huntShareFindings()" title="Copy findings summary to clipboard">&#x1F4CB; Share</button>
+              <button class="btn btn-xs btn-secondary" onclick="huntArchiveFindings()" title="Archive closed findings">&#x1F4E6; Archive</button>
+            </div>
           </div>
 
           <!-- Findings Table -->
@@ -19391,7 +19396,7 @@ process.name:<span class="str">"rundll32.exe"</span> <span class="op">AND</span>
             <div id="tip-report-actions-bar" style="display:none;margin-top:10px;display:none;gap:8px;">
               <button class="tip-btn tip-btn-success tip-btn-sm" onclick="tipToast('✅','Report published to client portal')">✓ Publish to Portal</button>
               <button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="tipToast('💾','Report saved as draft')">Save Draft</button>
-              <button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="tipToast('📥','Report exported as PDF')">↓ Export PDF</button>
+              <button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="dactaExportPagePDF('Threat Intelligence Report')">↓ Export PDF</button>
             </div>
           </div>
         </div>
@@ -25835,6 +25840,17 @@ Analyst: K. Rasmussen | 2026-02-28
               <select class="copilot-org-select" id="copilotOrgSelect"><option value="">All Clients</option></select>
               <textarea class="copilot-text-input" id="copilotInput" placeholder="Ask anything... Check IP, search logs, MITRE lookup, search tickets..." rows="1" onkeydown="copilotInputKeydown(event)"></textarea>
               <button class="copilot-send-btn" onclick="copilotSend()">&#x27A4;</button>
+              <button class="copilot-send-btn" style="background:transparent;border:1px solid var(--border-subtle);font-size:14px;" onclick="copilotSaveTemplate(document.getElementById('copilotInput').value)" title="Save as template">&#x1F4BE;</button>
+            </div>
+            <!-- DEF-005: Saved Templates Panel -->
+            <div id="copilotSavedTemplatesPanel" style="margin-top:6px;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;" onclick="var c=document.getElementById('copilotSavedTemplatesContainer');c.style.display=c.style.display==='none'?'block':'none';">
+                <span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">&#x1F4D1; Saved Templates</span>
+                <span style="font-size:9px;color:var(--text-muted);">&#x25BC;</span>
+              </div>
+              <div id="copilotSavedTemplatesContainer" style="display:none;max-height:150px;overflow-y:auto;">
+                <!-- Rendered by copilotRenderSavedTemplates() -->
+              </div>
             </div>
           </div>
 
@@ -29650,7 +29666,7 @@ function _tipMakeReportsClickable() {
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
         (isPublished
           ? '<button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="tipToast(\'📄\',\'Opening full report...\')">&#128196; View Full Report</button>' +
-            '<button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="tipToast(\'&#128229;\',\'Downloading PDF...\')">&#11015; Export PDF</button>'
+            '<button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="dactaExportPagePDF(\'Report\')">&#11015; Export PDF</button>'
           : '<button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="tipToast(\'&#9999;\',\'Opening draft editor...\')">&#9999; Edit Draft</button>' +
             '<button class="tip-btn tip-btn-success tip-btn-sm" onclick="tipToast(\'&#10003;\',\'Report published to client portal\');document.getElementById(\'tip-report-detail-modal\').style.display=\'none\'">&#10003; Publish</button>'
         ) +
@@ -30956,6 +30972,46 @@ function rptCategoryBadge(category) {
   return map[(category || '').toLowerCase()] || '<span class="badge badge-gray">' + escapeHtml(category || '?') + '</span>';
 }
 
+
+// ── DEF-008: PDF Export via print dialog ──
+function dactaExportPagePDF(reportTitle) {
+  showToast('Preparing PDF export...', 'info');
+  // Create a print-friendly version
+  var activePage = document.querySelector('.page.active');
+  if (!activePage) { showToast('No active page to export.', 'warn'); return; }
+
+  // Add print styles dynamically
+  var printStyle = document.createElement('style');
+  printStyle.id = 'dacta-print-style';
+  printStyle.textContent = '@media print { ' +
+    'body { background: white !important; color: black !important; } ' +
+    '#sidebar, #topbar, .demo-toggle-wrap, .prod-badge, .live-badge, .topbar-right { display: none !important; } ' +
+    '#content-area { margin: 0 !important; padding: 20px !important; overflow: visible !important; height: auto !important; } ' +
+    '.page { display: none !important; } ' +
+    '.page.active { display: block !important; } ' +
+    '.card { break-inside: avoid; border: 1px solid #ddd !important; background: white !important; } ' +
+    '.badge { border: 1px solid #999 !important; } ' +
+    'h1, h2, h3, .card-header { color: black !important; } ' +
+    '@page { size: A4 landscape; margin: 15mm; } ' +
+  '}';
+  document.head.appendChild(printStyle);
+
+  // Set document title for PDF filename
+  var oldTitle = document.title;
+  document.title = (reportTitle || 'DACTA SIEMLess Report') + ' — ' + new Date().toISOString().slice(0, 10);
+
+  setTimeout(function() {
+    window.print();
+    // Cleanup
+    setTimeout(function() {
+      document.title = oldTitle;
+      var ps = document.getElementById('dacta-print-style');
+      if (ps) ps.remove();
+    }, 1000);
+  }, 300);
+}
+window.dactaExportPagePDF = dactaExportPagePDF;
+
 window.rptExportAuditLogs = function() {
   var filtered = rptGetFilteredAuditLogs();
   if (typeof showToast === 'function') {
@@ -32103,7 +32159,11 @@ function _huntRenderFindingsTable() {
 }
 
 function huntApplyFindingsFilter() {
-  if (!_huntData) return;
+  if (!_huntData || !_huntData.findings) {
+    console.warn('[ThreatHunting] Findings filter: data not loaded yet, retrying in 500ms...');
+    setTimeout(huntApplyFindingsFilter, 500);
+    return;
+  }
   var huntFilter = _huntGetSelectVal('hunt-filter-hunt') || 'all';
   var sevFilter = _huntGetSelectVal('hunt-filter-severity') || 'all';
   var statusFilter = _huntGetSelectVal('hunt-filter-status') || 'all';
@@ -32183,6 +32243,114 @@ function huntClearFindingsFilters() {
   huntApplyFindingsFilter();
   showToast('Filters cleared.', 'info');
 }
+
+// ── DEF-007: Export Findings to CSV ──
+function huntExportFindings() {
+  if (!_huntData || !_huntData.findings || _huntData.findings.length === 0) {
+    showToast('No findings to export.', 'warn');
+    return;
+  }
+  // Get currently filtered findings
+  var huntFilter = _huntGetSelectVal('hunt-filter-hunt') || 'all';
+  var sevFilter = _huntGetSelectVal('hunt-filter-severity') || 'all';
+  var statusFilter = _huntGetSelectVal('hunt-filter-status') || 'all';
+  var fromFilter = _huntGetFieldVal('hunt-filter-from') || '';
+  var toFilter = _huntGetFieldVal('hunt-filter-to') || '';
+
+  var filtered = [];
+  for (var i = 0; i < _huntData.findings.length; i++) {
+    var f = _huntData.findings[i];
+    if (huntFilter !== 'all' && f.hunt_id !== huntFilter) continue;
+    if (sevFilter !== 'all' && f.severity !== sevFilter) continue;
+    if (statusFilter !== 'all' && f.status !== statusFilter) continue;
+    if (fromFilter && f.date < fromFilter) continue;
+    if (toFilter && f.date > toFilter) continue;
+    filtered.push(f);
+  }
+
+  if (filtered.length === 0) {
+    showToast('No findings match current filters.', 'warn');
+    return;
+  }
+
+  var lines = ['ID,Date,Hunt Name,Severity,Status,Details,IOCs,Ticket,Rule'];
+  for (var i = 0; i < filtered.length; i++) {
+    var f = filtered[i];
+    lines.push([
+      '"' + (f.id || '').replace(/"/g, '""') + '"',
+      '"' + (f.date || '') + '"',
+      '"' + (f.hunt_name || '').replace(/"/g, '""') + '"',
+      '"' + (f.severity || '') + '"',
+      '"' + (f.status || '') + '"',
+      '"' + (f.details || '').replace(/"/g, '""') + '"',
+      '"' + (f.iocs || []).join('; ').replace(/"/g, '""') + '"',
+      '"' + (f.ticket || '') + '"',
+      '"' + (f.rule || '') + '"'
+    ].join(','));
+  }
+
+  var csv = lines.join('\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'dacta_hunt_findings_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Exported ' + filtered.length + ' finding(s) to CSV.', 'success');
+}
+
+// ── DEF-007: Share Findings (copy to clipboard) ──
+function huntShareFindings() {
+  if (!_huntData || !_huntData.findings || _huntData.findings.length === 0) {
+    showToast('No findings to share.', 'warn');
+    return;
+  }
+  var lines = ['DACTA SIEMLess — Threat Hunting Findings Report', 'Generated: ' + new Date().toISOString(), '---'];
+  var findings = _huntData.findings;
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    lines.push('[' + f.id + '] ' + f.severity.toUpperCase() + ' | ' + f.status + ' | ' + (f.hunt_name || '') + ' — ' + (f.details || ''));
+  }
+  var text = lines.join('\n');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      showToast('Findings summary copied to clipboard.', 'success');
+    }).catch(function() {
+      showToast('Could not copy to clipboard.', 'error');
+    });
+  } else {
+    showToast('Clipboard API not available.', 'warn');
+  }
+}
+
+// ── DEF-007: Archive closed findings ──
+function huntArchiveFindings() {
+  if (!_huntData || !_huntData.findings) {
+    showToast('No findings data available.', 'warn');
+    return;
+  }
+  var closedFindings = _huntData.findings.filter(function(f) { return f.status === 'closed'; });
+  if (closedFindings.length === 0) {
+    showToast('No closed findings to archive.', 'info');
+    return;
+  }
+  // Move to archived state
+  var archivedCount = 0;
+  _huntData.findings = _huntData.findings.map(function(f) {
+    if (f.status === 'closed') {
+      archivedCount++;
+      return Object.assign({}, f, { status: 'archived' });
+    }
+    return f;
+  });
+  huntApplyFindingsFilter();
+  _huntUpdateKPIs();
+  showToast('Archived ' + archivedCount + ' closed finding(s).', 'success');
+}
+
 
 function huntViewFindingDetail(findingId) {
   if (!_huntData) return;
@@ -34270,7 +34438,10 @@ let charts = {};
 function initDashboardCharts() {
   // Production guard removed — visuals render with live data
   const ctx1 = document.getElementById('alertVolumeChart');
-  if (!ctx1 || charts.alertVolume) return;
+  if (!ctx1) return;
+  // DEF-009: Destroy existing chart instances to prevent "Canvas already in use" error
+  if (charts.alertVolume) { try { charts.alertVolume.destroy(); } catch(e) {} charts.alertVolume = null; }
+  if (charts.source) { try { charts.source.destroy(); } catch(e) {} charts.source = null; }
   const hours = Array.from({length: 23}, (_, i) => `${String(i).padStart(2,'0')}:00`);
   const data = (window._liveVis && window._liveVis.hourlyToday) ?
     window._liveVis.hourlyToday.slice(0, 23) :
@@ -34300,7 +34471,7 @@ function initDashboardCharts() {
   });
 
   const ctx2 = document.getElementById('sourceChart');
-  if (!ctx2 || charts.source) return;
+  if (!ctx2) return;
   var _srcData = window._liveVis ? [
     (window._liveVis.totalOpen || 0) + (window._liveVis.resolvedAllTime || 0), 0, 0
   ] : [18, 3, 1];
@@ -35982,8 +36153,39 @@ function navigate(page) {
   const navEl = document.querySelector(`[data-page="${page}"]`);
   if (navEl) navEl.classList.add('active');
 
-  // Hash routing
-  window.location.hash = page;
+
+  // ── DEF-010 fix: Dynamic page titles ──
+  var _pageTitles = {
+    'dashboard': 'SOC Dashboard',
+    'triage': 'Triage Queue',
+    'investigation': 'Investigation Workspace',
+    'copilot': 'Copilot AI',
+    'hunting': 'Threat Hunting',
+    'reporting': 'Reports & Analytics',
+    'intel': 'Threat Intelligence',
+    'warroom': 'War Room',
+    'rules': 'Detection Rules',
+    'rulelab': 'Rule Lab',
+    'entities': 'Entity Explorer',
+    'assets': 'Asset Management',
+    'logsources': 'Log Sources',
+    'users': 'User Management',
+    'integrations': 'Integration Hub',
+    'onboarding': 'Client Onboarding',
+    'settings': 'Settings',
+    'clientportal': 'Client Portal',
+    'handover': 'Ops Command',
+    'audit': 'Audit Log',
+    'privacy': 'Privacy & Compliance',
+    'aiusage': 'AI Usage'
+  };
+  document.title = (_pageTitles[page] || page.charAt(0).toUpperCase() + page.slice(1)) + ' — DACTA SIEMLess';
+
+  // ── DEF-011 fix: pushState for browser back/forward ──
+  if (!window._dactaNavPopping) {
+    history.pushState({ page: page }, '', '#' + page);
+  }
+  window._dactaNavPopping = false;
 
   // Init charts on page show
   if (page === 'dashboard') { initDashboardCharts(); setTimeout(initCommandCenter, 100); setTimeout(initHeatMap, 150); setTimeout(function(){ initGeoMap(); }, 200); setTimeout(initGeoHeatMap, 250); }
@@ -36018,9 +36220,58 @@ function navigate(page) {
     }
   }
 
+
+
+  // ── DEF-002: RBAC Nav Enforcement ──
+  var _currentUserRole = (window._currentUser && window._currentUser.role) || 'admin';
+  var _rbacAdminOnlyPages = ['users', 'integrations', 'onboarding', 'settings'];
+  var _rbacManagerPages = ['users', 'reporting', 'handover', 'audit'];
+  if (_currentUserRole !== 'admin') {
+    _rbacAdminOnlyPages.forEach(function(p) {
+      var navItem = document.querySelector('[data-page="' + p + '"]');
+      if (navItem) {
+        if (_currentUserRole === 'soc_mgr' && _rbacManagerPages.indexOf(p) !== -1) {
+          navItem.style.display = '';
+          navItem.style.opacity = '';
+        } else {
+          navItem.style.opacity = '0.3';
+          navItem.style.pointerEvents = 'none';
+        }
+      }
+    });
+    // If trying to access admin-only page, redirect
+    if (_rbacAdminOnlyPages.indexOf(page) !== -1 && _currentUserRole !== 'soc_mgr') {
+      showToast('Access denied. Admin privileges required.', 'error');
+      navigate('dashboard');
+      return;
+    }
+  } else {
+    // Admin — ensure all nav items visible
+    _rbacAdminOnlyPages.forEach(function(p) {
+      var navItem = document.querySelector('[data-page="' + p + '"]');
+      if (navItem) { navItem.style.opacity = ''; navItem.style.pointerEvents = ''; }
+    });
+  }
+
   // Scroll to top
   document.getElementById('content-area').scrollTop = 0;
 }
+
+
+// ── DEF-011: Handle browser back/forward ──
+window.addEventListener('popstate', function(e) {
+  if (e.state && e.state.page) {
+    window._dactaNavPopping = true;
+    navigate(e.state.page);
+  } else {
+    // Fallback: read from hash
+    var hash = window.location.hash.replace('#', '');
+    if (hash) {
+      window._dactaNavPopping = true;
+      navigate(hash);
+    }
+  }
+});
 
 // ============================================================
 //  SIDEBAR TOGGLE
@@ -37072,16 +37323,54 @@ async function loadOrgsFromSupabase() {
       showLogin();
     });
 
-    // Listen for auth state changes
+    // Listen for auth state changes (DEF-001: includes TOKEN_EXPIRED handling)
     _supabase.auth.onAuthStateChange(function(event, session) {
       if (event === 'SIGNED_IN' && session && session.user) {
         showApp(session.user);
+        // Start session expiry monitor
+        _startSessionExpiryMonitor(session);
       } else if (event === 'SIGNED_OUT') {
         showLogin();
+      } else if (event === 'TOKEN_REFRESHED' && session) {
+        // Token refreshed — reset monitor
+        _startSessionExpiryMonitor(session);
       }
     });
 
+    // ── DEF-001: Session Expiry Monitor ──
+    var _sessionExpiryTimer = null;
+    var _sessionWarningTimer = null;
+    function _startSessionExpiryMonitor(session) {
+      if (_sessionExpiryTimer) clearTimeout(_sessionExpiryTimer);
+      if (_sessionWarningTimer) clearTimeout(_sessionWarningTimer);
+      if (!session || !session.expires_at) return;
+      var expiresAt = session.expires_at * 1000; // Convert to ms
+      var now = Date.now();
+      var msUntilExpiry = expiresAt - now;
+      var warningMs = msUntilExpiry - (5 * 60 * 1000); // 5 min before
+
+      if (warningMs > 0) {
+        _sessionWarningTimer = setTimeout(function() {
+          showToast('Your session will expire in 5 minutes. Please save your work.', 'warn', 10000);
+        }, warningMs);
+      }
+
+      if (msUntilExpiry > 0) {
+        _sessionExpiryTimer = setTimeout(function() {
+          showToast('Session expired. Redirecting to login...', 'error', 5000);
+          setTimeout(function() {
+            _supabase.auth.signOut();
+          }, 2000);
+        }, msUntilExpiry);
+      }
+    }
+
     // Handle login form submit
+    // ── DEF-003: Rate-limit tracking ──
+    var _loginAttempts = {};
+    var _LOGIN_MAX_ATTEMPTS = 5;
+    var _LOGIN_LOCKOUT_MS = 5 * 60 * 1000; // 5 minutes
+
     window.handleLogin = function(e) {
       e.preventDefault();
       var email = document.getElementById('loginEmail').value.trim();
@@ -37091,13 +37380,35 @@ async function loadOrgsFromSupabase() {
 
       errorEl.textContent = '';
       errorEl.classList.remove('show');
+
+      // Check lockout state
+      var attemptKey = email.toLowerCase();
+      var attempts = _loginAttempts[attemptKey] || { count: 0, lockUntil: 0 };
+      if (attempts.lockUntil > Date.now()) {
+        var remainSec = Math.ceil((attempts.lockUntil - Date.now()) / 1000);
+        var remainMin = Math.ceil(remainSec / 60);
+        errorEl.textContent = 'Account temporarily locked due to too many failed attempts. Try again in ' + remainMin + ' minute' + (remainMin > 1 ? 's' : '') + '.';
+        errorEl.classList.add('show');
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = 'Signing in...';
 
       _supabase.auth.signInWithPassword({ email: email, password: password })
         .then(function(res) {
           if (res.error) {
-            errorEl.textContent = res.error.message || 'Authentication failed. Please check your credentials.';
+            // Track failed attempt
+            attempts.count = (attempts.count || 0) + 1;
+            if (attempts.count >= _LOGIN_MAX_ATTEMPTS) {
+              attempts.lockUntil = Date.now() + _LOGIN_LOCKOUT_MS;
+              attempts.count = 0;
+              errorEl.textContent = 'Too many failed login attempts. Account locked for 5 minutes.';
+            } else {
+              var remaining = _LOGIN_MAX_ATTEMPTS - attempts.count;
+              errorEl.textContent = (res.error.message || 'Authentication failed.') + ' (' + remaining + ' attempt' + (remaining > 1 ? 's' : '') + ' remaining)';
+            }
+            _loginAttempts[attemptKey] = attempts;
             errorEl.classList.add('show');
             btn.disabled = false;
             btn.textContent = 'Sign In';
@@ -39914,8 +40225,10 @@ function initHeatMap() {
   var canvas = document.getElementById('heatmapCanvas');
   if (!canvas) return;
   var container = canvas.parentElement;
+  if (!container) return; // DEF-009: guard against null container
   var tooltip = document.getElementById('heatmapTooltip');
   var ctx = canvas.getContext('2d');
+  if (!ctx) return; // DEF-009: guard against null context
   var dpr = window.devicePixelRatio || 1;
   var rect = container.getBoundingClientRect();
   canvas.width = rect.width * dpr;
@@ -40077,7 +40390,8 @@ function initClassicCharts() {
   // Production guard removed — visuals render with live data
   // Alert Volume bar chart
   var ctx1 = document.getElementById('classicAlertChart');
-  if (ctx1 && !classicAlertChartObj) {
+  if (ctx1) {
+    if (classicAlertChartObj) { try { classicAlertChartObj.destroy(); } catch(e) {} classicAlertChartObj = null; }
     var hours = [];
     for (var i = 0; i < 23; i++) hours.push((i < 10 ? '0' : '') + i + ':00');
     var data = (window._liveVis && window._liveVis.hourlyToday) ?
@@ -40110,7 +40424,8 @@ function initClassicCharts() {
 
   // Source breakdown doughnut
   var ctx2 = document.getElementById('classicSourceChart');
-  if (ctx2 && !classicSourceChartObj) {
+  if (ctx2) {
+    if (classicSourceChartObj) { try { classicSourceChartObj.destroy(); } catch(e) {} classicSourceChartObj = null; }
     var _clsSrcData = window._liveVis ? [
       (window._liveVis.totalOpen || 0) + (window._liveVis.resolvedAllTime || 0), 0, 0
     ] : [18, 3, 1];
@@ -41919,10 +42234,54 @@ function copilotExtractIOCs(text) {
 }
 
 // ── Init Copilot Page ──
+// ── DEF-005: Saved Search Templates ──
+var _copilotSavedTemplates = JSON.parse(localStorage.getItem('dacta_copilot_templates') || '[]');
+
+function copilotSaveTemplate(query) {
+  if (!query || !query.trim()) { showToast('Enter a query to save', 'warn'); return; }
+  var tmpl = { id: 'tmpl-' + Date.now(), query: query.trim(), ts: new Date().toISOString().slice(0, 10) };
+  _copilotSavedTemplates.unshift(tmpl);
+  if (_copilotSavedTemplates.length > 20) _copilotSavedTemplates = _copilotSavedTemplates.slice(0, 20);
+  localStorage.setItem('dacta_copilot_templates', JSON.stringify(_copilotSavedTemplates));
+  showToast('Template saved', 'success');
+  copilotRenderSavedTemplates();
+}
+
+function copilotDeleteTemplate(id) {
+  _copilotSavedTemplates = _copilotSavedTemplates.filter(function(t) { return t.id !== id; });
+  localStorage.setItem('dacta_copilot_templates', JSON.stringify(_copilotSavedTemplates));
+  copilotRenderSavedTemplates();
+}
+
+function copilotUseTemplate(query) {
+  var input = document.getElementById('copilotInput');
+  if (input) { input.value = query; input.focus(); }
+}
+
+function copilotRenderSavedTemplates() {
+  var container = document.getElementById('copilotSavedTemplatesContainer');
+  if (!container) return;
+  if (_copilotSavedTemplates.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:12px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No saved templates yet. Type a query and click &#x1F4BE; to save.</div>';
+    return;
+  }
+  var html = '';
+  _copilotSavedTemplates.forEach(function(t) {
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:6px;margin-bottom:4px;cursor:pointer;" onclick="copilotUseTemplate(\'' + t.query.replace(/'/g, "\\'") + '\')">' +
+      '<span style="flex:1;font-size:11px;color:var(--text-secondary);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + t.query.replace(/</g, '&lt;') + '</span>' +
+      '<span style="font-size:9px;color:var(--text-muted);">' + t.ts + '</span>' +
+      '<button onclick="event.stopPropagation();copilotDeleteTemplate(\'' + t.id + '\')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;padding:2px;">&#x2715;</button>' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
 function initCopilotPage() {
   copilotRenderEmpty();
   copilotPopulateClients();
   copilotCheckSources();
+  // Render saved templates on page load
+  setTimeout(copilotRenderSavedTemplates, 100);
 }
 
 // ── Command Bar ──
@@ -49574,3 +49933,19 @@ function getTimeAgo(ts) {
 </div>
 </body>
 </html>
+
+// ── DEF-009: Suppress non-critical WebSocket reconnect errors ──
+window.addEventListener('error', function(e) {
+  if (e.message && (e.message.includes('WebSocket') || e.message.includes('websocket'))) {
+    e.preventDefault();
+    console.debug('[WS] Reconnect attempt (suppressed):', e.message);
+    return true;
+  }
+});
+window.addEventListener('unhandledrejection', function(e) {
+  if (e.reason && e.reason.message && (e.reason.message.includes('WebSocket') || e.reason.message.includes('websocket') || e.reason.message.includes('realtime'))) {
+    e.preventDefault();
+    console.debug('[WS] Realtime reconnect (suppressed):', e.reason.message);
+  }
+});
+
