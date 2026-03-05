@@ -909,9 +909,17 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
    INVESTIGATION WORKSPACE
    ============================================================ */
 .investigation-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.inv-verdict-area {
+  margin-bottom: 14px;
+}
+.inv-body-grid {
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 16px;
+  grid-template-columns: 260px 1fr;
+  gap: 14px;
 }
 .inv-sidebar {
   display: flex;
@@ -922,9 +930,10 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 
 .verdict-banner {
   border-radius: 10px;
-  padding: 16px;
+  padding: 20px 24px;
   background: rgba(239,68,68,0.08);
   border: 1px solid rgba(239,68,68,0.3);
+  border-left: 4px solid rgba(239,68,68,0.5);
   position: relative;
   overflow: hidden;
 }
@@ -934,19 +943,74 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   top: 0; left: 0; right: 0; height: 2px;
   background: linear-gradient(90deg, var(--red), var(--amber));
 }
-.verdict-title { font-family: var(--font-display); font-size: 15px; font-weight: 800; color: #ff6b6b; letter-spacing: -0.02em; }
+.verdict-title { font-family: var(--font-display); font-size: 18px; font-weight: 800; color: #ff6b6b; letter-spacing: -0.02em; }
 .confidence-pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
+  padding: 4px 14px;
   background: rgba(239,68,68,0.15);
   border-radius: 20px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: #ff9999;
-  margin-top: 4px;
+  margin-top: 6px;
 }
+.inv-verdict-stats {
+  display: flex;
+  gap: 20px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  flex-wrap: wrap;
+}
+.inv-verdict-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.inv-verdict-stat-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.inv-verdict-stat-value {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+.inv-evidence-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  border-radius: 10px 10px 0 0;
+  user-select: none;
+}
+.inv-section-collapsed .inv-evidence-body { display: none; }
+.inv-siem-details-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(0,212,255,0.04);
+  border: 1px solid rgba(0,212,255,0.12);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--cyan);
+  font-family: var(--font-mono);
+  margin: 8px 0;
+  transition: background 0.15s;
+}
+.inv-siem-details-toggle:hover { background: rgba(0,212,255,0.08); }
+.inv-siem-details-body { display: none; }
+.inv-siem-details-body.expanded { display: block; }
 .reasoning-item {
   display: flex;
   gap: 10px;
@@ -28378,6 +28442,7 @@ async function lscLoadOrg(orgId) {
     _lscCurrentData = res.data || [];
     lscUpdateMetrics(_lscCurrentData);
     lscRenderCards(_lscCurrentData);
+    lscRefreshLastEvents(_lscCurrentData);
     // Gap detection: count expected_by_client=true vs monitoring_active
     var expectedCount = _lscCurrentData.filter(function(s){ return s.expected_by_client === true; }).length;
     var monitoredCount = _lscCurrentData.filter(function(s){ return s.monitoring_active !== false && s.status !== 'silent'; }).length;
@@ -28456,6 +28521,73 @@ function lscRenderCards(data) {
     html += '</div>';
   });
   container.innerHTML = html;
+}
+
+async function lscRefreshLastEvents(data) {
+  if (!data || !Array.isArray(data)) return;
+  var updatePromises = data.map(function(src) {
+    return (async function() {
+      try {
+        var res = await fetch('/api/elastic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'search',
+            index: src.index_pattern,
+            body: {
+              size: 1,
+              sort: [{ '@timestamp': 'desc' }],
+              _source: ['@timestamp'],
+              query: { range: { '@timestamp': { gte: 'now-30d' } } }
+            }
+          })
+        });
+        if (!res.ok) throw new Error('API error');
+        var result = await res.json();
+        if (!result.hits || !result.hits.hits || result.hits.hits.length === 0) {
+          console.log('[LSC] No events for ' + src.id);
+          return;
+        }
+        var realTs = result.hits.hits[0]._source['@timestamp'];
+        var timeDiff = Date.now() - new Date(realTs).getTime();
+        var newStatus = 'silent';
+        if (timeDiff < 4 * 3600000) newStatus = 'healthy';
+        else if (timeDiff < 24 * 3600000) newStatus = 'degraded';
+        var card = document.querySelector('[data-lsc-id="' + src.id + '"]');
+        if (card) {
+          var lastEventEl = card.querySelector('.src-meta-item:last-child .val');
+          if (lastEventEl) {
+            lastEventEl.textContent = _lscTimeAgo(realTs);
+          }
+          var statusDot = card.querySelector('.src-status');
+          var statusLabel = card.querySelector('.src-header span:last-child');
+          if (statusDot) {
+            statusDot.className = 'src-status ' + newStatus;
+            statusDot.title = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+          }
+          if (statusLabel) {
+            var statusColor = newStatus === 'healthy' ? '#22c55e' : newStatus === 'degraded' ? '#f59e0b' : '#ef4444';
+            statusLabel.style.color = statusColor;
+            statusLabel.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+          }
+        }
+        if (newStatus !== (src.status || 'healthy')) {
+          var sb = window._dactaSupabase;
+          if (sb) {
+            await sb.from('client_log_sources').update({
+              status: newStatus,
+              last_event_at: realTs
+            }).eq('id', src.id);
+          }
+        }
+      } catch(e) {
+        console.warn('[LSC] Refresh error for ' + (src.source_name || src.id), e);
+      }
+    })();
+  });
+  Promise.allSettled(updatePromises).catch(function(e) {
+    console.warn('[LSC] Batch refresh error', e);
+  });
 }
 
 function _lscEsc(str) { var d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
@@ -31656,70 +31788,246 @@ window.rptSubmitGenerateReport = function() {
   var dateFrom = document.getElementById('rpt-gen-date-from');
   var dateTo   = document.getElementById('rpt-gen-date-to');
 
-  if (!nameEl || !nameEl.value.trim()) {
-    if (typeof showToast === 'function') showToast('Please enter a report name', 'warning');
-    return;
-  }
-  if (!orgEl || !orgEl.value) {
-    if (typeof showToast === 'function') showToast('Please select an organisation', 'warning');
-    return;
-  }
-
+  if (!nameEl || !nameEl.value.trim()) { if (typeof showToast === 'function') showToast('Please enter a report name', 'warning'); return; }
+  if (!orgEl || !orgEl.value) { if (typeof showToast === 'function') showToast('Please select an organisation', 'warning'); return; }
   var sb = window._supabaseRef;
-  if (!sb) {
-    if (typeof showToast === 'function') showToast('SIEMLess DB not connected', 'error');
-    return;
-  }
+  if (!sb) { if (typeof showToast === 'function') showToast('SIEMLess DB not connected', 'error'); return; }
 
-  var payload = {
-    name: nameEl.value.trim(),
-    type: typeEl ? typeEl.value : 'monthly_soc',
-    status: 'generating',
-    org_id: orgEl.value,
-    date_range_start: dateFrom && dateFrom.value ? new Date(dateFrom.value).toISOString() : null,
-    date_range_end:   dateTo   && dateTo.value   ? new Date(dateTo.value).toISOString()   : null,
+  var reportName = nameEl.value.trim();
+  var reportType = typeEl ? typeEl.value : 'monthly_soc';
+  var orgId = orgEl.value;
+  var orgName = orgEl.options[orgEl.selectedIndex] ? orgEl.options[orgEl.selectedIndex].text : orgId;
+  var fromDt = dateFrom && dateFrom.value ? dateFrom.value : new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
+  var toDt = dateTo && dateTo.value ? dateTo.value : new Date().toISOString().slice(0,10);
+
+  if (typeof showToast === 'function') showToast('Generating live report — fetching Jira + investigation data...', 'info');
+  rptCloseModal('rpt-generate-modal');
+
+  sb.from('generated_reports').insert([{
+    name: reportName, type: reportType, status: 'generating', org_id: orgId,
+    date_range_start: new Date(fromDt).toISOString(), date_range_end: new Date(toDt).toISOString(),
     generated_by: typeof currentUserEmail !== 'undefined' ? currentUserEmail : 'analyst',
-    content: {},
-    created_at: new Date().toISOString()
-  };
+    content: { status: 'generating' }, created_at: new Date().toISOString()
+  }]).then(function(insRes) {
+    if (insRes.error) { if (typeof showToast === 'function') showToast('Error: ' + insRes.error.message, 'error'); return; }
+    var newReportId = insRes.data && insRes.data[0] ? insRes.data[0].id : null;
+    rptLoadGeneratedReports();
 
-  sb.from('generated_reports')
-    .insert([payload])
-    .then(function(res) {
-      if (res.error) {
-        if (typeof showToast === 'function') showToast('Error creating report: ' + res.error.message, 'error');
-        return;
+    rptBuildLiveReportContent(orgId, orgName, reportType, fromDt, toDt).then(function(content) {
+      var updatePayload = { status: 'draft', content: content };
+      if (newReportId) {
+        sb.from('generated_reports').update(updatePayload).eq('id', newReportId).then(function() {
+          rptLoadGeneratedReports();
+          if (typeof showToast === 'function') showToast('Report "' + reportName + '" generated with live data', 'success');
+        });
       }
-      if (typeof showToast === 'function') showToast('Report "' + payload.name + '" queued for AI generation', 'success');
-      rptCloseModal('rpt-generate-modal');
-      // Clear form
-      if (nameEl) nameEl.value = '';
-
-      // Reload if on reporting engine tab
-      window._rptReportingLoaded = false;
-      var activePanel = document.querySelector('.rpt-panel.active');
-      if (activePanel && activePanel.id === 'rpt-panel-reporting-engine') {
-        rptLoadGeneratedReports();
-      }
-
-      // Simulate status change to 'draft' after delay
-      if (res.data && res.data[0]) {
-        var newId = res.data[0].id;
-        setTimeout(function() {
-          sb.from('generated_reports')
-            .update({ status: 'draft' })
-            .eq('id', newId)
-            .then(function() {
-              rptLoadGeneratedReports();
-              if (typeof showToast === 'function') showToast('Report "' + payload.name + '" generated and ready for review', 'success');
-            });
-        }, 4000);
-      }
+    }).catch(function(err) {
+      console.error('[RPT] Live report generation error', err);
+      if (typeof showToast === 'function') showToast('Report generated with partial data', 'warning');
+      if (newReportId) sb.from('generated_reports').update({ status: 'draft', content: { error: err.message } }).eq('id', newReportId).then(function() { rptLoadGeneratedReports(); });
     });
+  });
 };
 
+async function rptBuildLiveReportContent(orgId, orgName, reportType, fromDt, toDt) {
+  var sb = window._supabaseRef;
+  var fromDate = new Date(fromDt);
+  var toDate = new Date(toDt);
+  var daysDiff = Math.round((toDate - fromDate) / 86400000);
+
+  var jiraTickets = [];
+  try {
+    var jql = 'project = DAC AND created >= "' + fromDt + '" AND created <= "' + toDt + '"';
+    var jiraRes = await fetch('/api/jira?action=search&jql=' + encodeURIComponent(jql) + '&maxResults=200&fields=summary,priority,status,resolution,created,updated,customfield_10002,customfield_10038,assignee');
+    if (jiraRes.ok) { var jiraData = await jiraRes.json(); jiraTickets = (jiraData.issues || []); }
+  } catch(e) { console.warn('[RPT] Jira fetch error', e); }
+
+  var investigations = [];
+  try {
+    var cacheRes = await sb.from('investigation_cache')
+      .select('ticket_key,verdict,confidence,timestamp,inculpatory_count,exculpatory_count')
+      .gte('timestamp', fromDate.toISOString())
+      .lte('timestamp', toDate.toISOString())
+      .order('timestamp', { ascending: false });
+    investigations = cacheRes.data || [];
+  } catch(e) { console.warn('[RPT] Cache fetch error', e); }
+
+  var logSources = [];
+  try {
+    var lsRes = await sb.from('client_log_sources').select('*').eq('org_id', orgId);
+    logSources = lsRes.data || [];
+  } catch(e) { console.warn('[RPT] LogSrc fetch error', e); }
+
+  var totalTickets = jiraTickets.length;
+  var p1Count = jiraTickets.filter(function(t){ var p = ((t.fields||{}).priority||{}).name||''; return p.includes('1'); }).length;
+  var p2Count = jiraTickets.filter(function(t){ var p = ((t.fields||{}).priority||{}).name||''; return p.includes('2'); }).length;
+  var closedCount = jiraTickets.filter(function(t){ var s = ((t.fields||{}).status||{}).name||''; return s.toLowerCase().includes('done')||s.toLowerCase().includes('closed')||s.toLowerCase().includes('resolved'); }).length;
+  var openCount = totalTickets - closedCount;
+  var tpCount = investigations.filter(function(i){ return (i.verdict||'').toLowerCase().includes('true positive'); }).length;
+  var fpCount = investigations.filter(function(i){ return (i.verdict||'').toLowerCase().includes('false positive'); }).length;
+  var totalInvestigated = investigations.length;
+  var avgConfidence = totalInvestigated > 0 ? Math.round(investigations.reduce(function(s,i){ return s + (i.confidence||0); }, 0) / totalInvestigated) : 0;
+  var healthySources = logSources.filter(function(s){ return s.status === 'healthy'; }).length;
+  var degradedSources = logSources.filter(function(s){ return s.status === 'degraded'; }).length;
+  var silentSources = logSources.filter(function(s){ return s.status === 'silent'; }).length;
+  var totalEPS = logSources.reduce(function(s,src){ return s + (src.events_per_day||0); }, 0);
+
+  var priorityCounts = {};
+  jiraTickets.forEach(function(t) {
+    var p = ((t.fields||{}).priority||{}).name || 'Unknown';
+    priorityCounts[p] = (priorityCounts[p]||0) + 1;
+  });
+  var workCatCounts = {};
+  jiraTickets.forEach(function(t) {
+    var wc = ((t.fields||{}).customfield_10038||{}).value || 'Unclassified';
+    workCatCounts[wc] = (workCatCounts[wc]||0) + 1;
+  });
+  var criticalTickets = jiraTickets.filter(function(t){ var p = ((t.fields||{}).priority||{}).name||''; return p.includes('1'); }).slice(0, 5);
+
+  var reportDate = new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'long',year:'numeric'});
+  var periodLabel = new Date(fromDt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + ' — ' + new Date(toDt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+
+  var html = '<div style="font-family:\'IBM Plex Sans\',system-ui,sans-serif;color:#e2e8f0;background:#080c18;padding:32px;border-radius:12px;">';
+  html += '<div style="border-bottom:2px solid rgba(0,212,255,0.3);padding-bottom:20px;margin-bottom:28px;">';
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:rgba(0,212,255,0.7);margin-bottom:8px;">DACTA MSSP — SECURITY OPERATIONS REPORT</div>';
+  html += '<h1 style="font-size:24px;font-weight:800;margin:0 0 4px;color:#e2e8f0;">' + orgName + '</h1>';
+  html += '<div style="font-size:14px;color:#94a3b8;">Report Period: ' + periodLabel + ' &nbsp;·&nbsp; Generated: ' + reportDate + '</div>';
+  html += '</div>';
+
+  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px;">';
+  var kpis = [
+    { label: 'Total Tickets', value: totalTickets, sub: openCount + ' open', color: '#00d4ff' },
+    { label: 'AI Investigated', value: totalInvestigated, sub: avgConfidence + '% avg confidence', color: '#8b5cf6' },
+    { label: 'True Positives', value: tpCount, sub: 'confirmed threats', color: '#ef4444' },
+    { label: 'Log Coverage', value: logSources.length + ' sources', sub: totalEPS.toLocaleString() + ' events/day', color: '#10b981' }
+  ];
+  kpis.forEach(function(k) {
+    html += '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px;border-top:3px solid ' + k.color + ';">';
+    html += '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;margin-bottom:8px;">' + k.label + '</div>';
+    html += '<div style="font-size:28px;font-weight:800;color:' + k.color + ';font-family:\'IBM Plex Mono\',monospace;">' + k.value + '</div>';
+    html += '<div style="font-size:11px;color:#64748b;margin-top:4px;">' + k.sub + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px;">';
+
+  html += '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:20px;">';
+  html += '<h3 style="font-size:13px;font-weight:700;margin:0 0 16px;color:#cbd5e1;">Ticket Priority Breakdown</h3>';
+  if (Object.keys(priorityCounts).length > 0) {
+    var prioColors = {'P1 - Critical':'#ef4444','P2 - High':'#f97316','P3 - Medium':'#f59e0b','P4 - Low':'#22c55e'};
+    Object.keys(priorityCounts).forEach(function(p) {
+      var pct = Math.round(priorityCounts[p]/totalTickets*100);
+      var c = prioColors[p] || '#64748b';
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:#94a3b8;">' + p + '</span><span style="color:' + c + ';font-weight:700;">' + priorityCounts[p] + ' (' + pct + '%)</span></div>';
+      html += '<div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:' + c + ';border-radius:3px;"></div></div>';
+      html += '</div>';
+    });
+  } else { html += '<div style="color:#64748b;font-size:12px;">No tickets in period</div>'; }
+  html += '</div>';
+
+  html += '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:20px;">';
+  html += '<h3 style="font-size:13px;font-weight:700;margin:0 0 16px;color:#cbd5e1;">AI Investigation Results</h3>';
+  if (totalInvestigated > 0) {
+    var tpPct = Math.round(tpCount/totalInvestigated*100);
+    var fpPct = Math.round(fpCount/totalInvestigated*100);
+    var unkPct = 100 - tpPct - fpPct;
+    html += '<div style="display:flex;gap:16px;margin-bottom:16px;">';
+    html += '<div style="flex:1;text-align:center;"><div style="font-size:22px;font-weight:800;color:#ef4444;">' + tpCount + '</div><div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">True Positive</div></div>';
+    html += '<div style="flex:1;text-align:center;"><div style="font-size:22px;font-weight:800;color:#22c55e;">' + fpCount + '</div><div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">False Positive</div></div>';
+    html += '<div style="flex:1;text-align:center;"><div style="font-size:22px;font-weight:800;color:#8b5cf6;">' + avgConfidence + '%</div><div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Avg Confidence</div></div>';
+    html += '</div>';
+    var barItems = [['True Positive',tpPct,'#ef4444'],['False Positive',fpPct,'#22c55e'],['Unclassified',unkPct,'#64748b']];
+    barItems.forEach(function(b){
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px;">';
+      html += '<div style="width:8px;height:8px;border-radius:50%;background:' + b[2] + ';flex-shrink:0;"></div>';
+      html += '<span style="color:#94a3b8;width:100px;">' + b[0] + '</span>';
+      html += '<div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + b[1] + '%;background:' + b[2] + ';border-radius:3px;"></div></div>';
+      html += '<span style="color:#64748b;width:30px;text-align:right;">' + b[1] + '%</span>';
+      html += '</div>';
+    });
+  } else { html += '<div style="color:#64748b;font-size:12px;">No AI investigations in period</div>'; }
+  html += '</div>';
+  html += '</div>';
+
+  if (logSources.length > 0) {
+    html += '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:20px;margin-bottom:28px;">';
+    html += '<h3 style="font-size:13px;font-weight:700;margin:0 0 16px;color:#cbd5e1;">Log Source Health</h3>';
+    html += '<div style="display:flex;gap:20px;margin-bottom:16px;">';
+    html += '<div style="display:flex;align-items:center;gap:6px;font-size:12px;"><div style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></div><span style="color:#94a3b8;">' + healthySources + ' Healthy</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:6px;font-size:12px;"><div style="width:8px;height:8px;border-radius:50%;background:#f59e0b;"></div><span style="color:#94a3b8;">' + degradedSources + ' Degraded</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:6px;font-size:12px;"><div style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></div><span style="color:#94a3b8;">' + silentSources + ' Silent</span></div>';
+    html += '</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
+    html += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.07);">';
+    ['Source','Type','Vendor','Events/Day','Status'].forEach(function(h){ html += '<th style="text-align:left;padding:8px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;font-size:9px;">' + h + '</th>'; });
+    html += '</tr></thead><tbody>';
+    logSources.forEach(function(src){
+      var sColor = src.status==='healthy'?'#22c55e':src.status==='degraded'?'#f59e0b':'#ef4444';
+      html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">';
+      html += '<td style="padding:8px;color:#e2e8f0;font-weight:500;">' + (src.source_name||'') + '</td>';
+      html += '<td style="padding:8px;color:#94a3b8;text-transform:uppercase;font-size:9px;">' + (src.source_type||'') + '</td>';
+      html += '<td style="padding:8px;color:#64748b;font-family:monospace;">' + (src.vendor||'\u2014') + '</td>';
+      html += '<td style="padding:8px;color:#94a3b8;font-family:monospace;">' + ((src.events_per_day||0).toLocaleString()) + '</td>';
+      html += '<td style="padding:8px;"><span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;color:' + sColor + ';">' +
+        '<span style="width:6px;height:6px;border-radius:50%;background:' + sColor + ';"></span>' + (src.status||'').charAt(0).toUpperCase() + (src.status||'').slice(1) + '</span></td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    html += '</div>';
+  }
+
+  if (criticalTickets.length > 0) {
+    html += '<div style="background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:20px;margin-bottom:28px;">';
+    html += '<h3 style="font-size:13px;font-weight:700;margin:0 0 16px;color:#cbd5e1;">P1 Critical Incidents</h3>';
+    criticalTickets.forEach(function(t){
+      var f = t.fields||{};
+      var statusName = (f.status||{}).name||'Open';
+      var sColor = statusName.toLowerCase().includes('done')||statusName.toLowerCase().includes('closed')?'#22c55e':'#ef4444';
+      html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);">';
+      html += '<span style="font-family:monospace;font-size:11px;font-weight:700;color:#00d4ff;min-width:90px;">' + t.key + '</span>';
+      html += '<span style="flex:1;font-size:12px;color:#e2e8f0;">' + ((f.summary||'').substring(0,70)) + '</span>';
+      html += '<span style="font-size:10px;font-weight:600;color:' + sColor + ';white-space:nowrap;">' + statusName + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '<div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:16px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;">';
+  html += '<div style="font-size:10px;color:#475569;">Generated by DACTA MSSP AI Platform &nbsp;·&nbsp; ' + reportDate + '</div>';
+  html += '<div style="font-size:10px;color:#475569;font-family:monospace;">CONFIDENTIAL — FOR CLIENT USE ONLY</div>';
+  html += '</div>';
+  html += '</div>';
+
+  return {
+    html: html,
+    kpis: { totalTickets, p1Count, p2Count, closedCount, openCount, tpCount, fpCount, totalInvestigated, avgConfidence, healthySources, degradedSources, silentSources },
+    generated_at: new Date().toISOString(),
+    org_id: orgId,
+    period: { from: fromDt, to: toDt }
+  };
+}
+
 window.rptViewReport = function(reportId) {
-  if (typeof showToast === 'function') showToast('Opening report #' + reportId + '…', 'info');
+  var report = (_rptAllReports || []).find(function(r){ return r.id === reportId; });
+  if (!report || !report.content || !report.content.html) {
+    if (typeof showToast === 'function') showToast('No preview available for this report', 'warning');
+    return;
+  }
+  var existing = document.getElementById('rptViewModal');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'rptViewModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;backdrop-filter:blur(8px);';
+  modal.innerHTML = '<div style="background:#0d1626;border:1px solid rgba(0,212,255,0.2);border-radius:14px;width:100%;max-width:900px;overflow:hidden;">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.07);">' +
+      '<span style="font-size:14px;font-weight:700;color:#e2e8f0;">' + report.name + '</span>' +
+      '<button onclick="document.getElementById(\'rptViewModal\').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px;padding:4px;">&times;</button>' +
+    '</div>' +
+    '<div style="padding:0;overflow-y:auto;max-height:85vh;">' + report.content.html + '</div>' +
+  '</div>';
+  document.body.appendChild(modal);
 };
 
 window.rptDownloadReport = function(reportId) {
@@ -46906,7 +47214,9 @@ async function openInvestigation(ticketKey) {
       ? labels.map(function(l) { return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + l + '</span>'; }).join('')
       : '<span style="color:var(--text-muted);font-size:11px;">None</span>';
 
-    livePanel.innerHTML = '<div style="display:grid;grid-template-columns:320px 1fr;gap:12px;margin-top:4px;">' +
+    livePanel.innerHTML = '<div class="investigation-layout" style="margin-top:4px;">' +
+      '<div class="inv-verdict-area" id="invVerdictArea" style="display:none;"></div>' +
+      '<div class="inv-body-grid">' +
 
       // ── LEFT SIDEBAR (Ticket Details + SLA + Raw Alert + Timeline + Enrichment/Correlated/Actions/Playbook) ──
       '<div style="display:flex;flex-direction:column;gap:12px;">' +
@@ -47053,6 +47363,7 @@ async function openInvestigation(ticketKey) {
           '<div class="inv-collapsible-body" id="escalationDraftContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Draft will be generated after investigation...</div>' +
         '</div>' +
         // Analyst Feedback Loop panel appended here dynamically
+      '</div>' +
       '</div>' +
 
     '</div>';
@@ -47637,6 +47948,26 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
   // Apply collapsible behavior to round cards in cached content
   setTimeout(function() {
     applyCollapsibleSections(invMainContent);
+    // Reorder: move evidence (Round 2) before technical queries (Round 1)
+    var r1 = invMainContent.querySelector('[id="aiRound1"], .inv-round-1');
+    var r2 = invMainContent.querySelector('[id="aiRound2"], .inv-round-2');
+    var invVerdictArea = document.getElementById('invVerdictArea');
+    if (invVerdictArea) {
+      var vBanner = container.querySelector('.verdict-banner');
+      if (vBanner) {
+        var cloned = vBanner.cloneNode(true);
+        cloned.style.borderLeft = '4px solid ' + (vBanner.style.borderColor || 'var(--cyan)');
+        cloned.style.padding = '20px 24px';
+        var btnDiv = document.createElement('div');
+        btnDiv.style.cssText = 'margin-top:10px;';
+        btnDiv.innerHTML = '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="reInvestigate(\'' + ticketKey + '\')">' + '\uD83D\uDD04' + ' Re-investigate</button>';
+        cloned.appendChild(btnDiv);
+        invVerdictArea.innerHTML = '';
+        invVerdictArea.appendChild(cloned);
+        invVerdictArea.style.display = '';
+        vBanner.style.display = 'none';
+      }
+    }
   }, 200);
 
   // Restore sidebar panels from cache
@@ -49644,6 +49975,33 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   roundsContainer.innerHTML += verdictBannerHTML;
 
+  // Also inject verdict into the full-width verdict area at top
+  var verdictAreaEl = document.getElementById('invVerdictArea');
+  if (verdictAreaEl) {
+    var topVerdictHTML = '<div class="verdict-banner" style="border-color:' + verdictBorder + ';background:' + verdictBg + ';border-left:4px solid ' + verdictColor + ';padding:20px 24px;">' +
+      '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">' +
+        '<div style="flex:1;min-width:200px;">' +
+          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:' + verdictColor + ';margin-bottom:6px;opacity:0.8;">AI Investigation Verdict</div>' +
+          '<div class="verdict-title" style="color:' + verdictColor + ';font-size:20px;">' + verdictIcon + ' ' + verdict + '</div>' +
+          '<div class="confidence-pill" style="background:' + verdictColor + '20;color:' + verdictColor + ';border-color:' + verdictColor + '40;font-size:13px;padding:4px 14px;margin-top:6px;">' + confidence + '% CONFIDENCE</div>' +
+        '</div>' +
+        '<div class="inv-verdict-stats">' +
+          '<div class="inv-verdict-stat"><div class="inv-verdict-stat-label">Inculpatory</div><div class="inv-verdict-stat-value" style="color:var(--red-bright);">' + inculpatory.length + '</div></div>' +
+          '<div class="inv-verdict-stat"><div class="inv-verdict-stat-label">Exculpatory</div><div class="inv-verdict-stat-value" style="color:var(--green);">' + exculpatory.length + '</div></div>' +
+          '<div class="inv-verdict-stat"><div class="inv-verdict-stat-label">MITRE</div><div class="inv-verdict-stat-value" style="color:var(--cyan);">' + techniques.length + '</div></div>' +
+          '<div class="inv-verdict-stat"><div class="inv-verdict-stat-label">Confidence</div><div class="inv-verdict-stat-value" style="color:' + verdictColor + ';">' + confidence + '%</div></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+          techniques.slice(0,4).map(function(t) { return '<span class="mitre-tag">' + t.id + '</span>'; }).join('') +
+          '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);margin-left:8px;" onclick="reInvestigate(\'' + ticketKey + '\')">' + '\uD83D\uDD04' + ' Re-investigate</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top:10px;font-size:10px;color:var(--text-muted);">' + actionLabel + '</div>' +
+    '</div>';
+    verdictAreaEl.innerHTML = topVerdictHTML;
+    verdictAreaEl.style.display = '';
+  }
+
   // Make entities (IPs, hostnames) clickable in the investigation panel
   setTimeout(function() {
     var invPanel = document.getElementById('aiInvestigationPanel');
@@ -49666,6 +50024,26 @@ async function runAIInvestigation(ticketKey, issueData) {
   setTimeout(function() {
     var invMainContent = document.getElementById('invMainContent');
     applyCollapsibleSections(invMainContent);
+    // Reorder: move Round 2 evidence BEFORE Round 1 technical queries for analyst clarity
+    var roundsEl = document.getElementById('roundsContainer');
+    if (!roundsEl) return;
+    var r1 = document.getElementById('aiRound1');
+    var r2 = document.getElementById('aiRound2');
+    if (r1 && r2) {
+      roundsEl.insertBefore(r2, r1);
+      var r1Header = r1.querySelector('.reasoning-header, .card-header, [class*="round-header"]') || r1.firstChild;
+      r1.setAttribute('data-inv-collapsed', 'true');
+      var detailsToggle = document.createElement('div');
+      detailsToggle.className = 'inv-siem-details-toggle';
+      detailsToggle.innerHTML = '▶ SIEM Technical Queries &amp; Raw Results — <span style="opacity:0.6;">click to expand</span>';
+      detailsToggle.onclick = function() {
+        var isCollapsed = r1.style.display === 'none';
+        r1.style.display = isCollapsed ? '' : 'none';
+        detailsToggle.innerHTML = (isCollapsed ? '▼' : '▶') + ' SIEM Technical Queries &amp; Raw Results — <span style="opacity:0.6;">' + (isCollapsed ? 'click to collapse' : 'click to expand') + '</span>';
+      };
+      roundsEl.insertBefore(detailsToggle, r1);
+      r1.style.display = 'none';
+    }
   }, 500);
 
   // Populate Enrichment Summary card
