@@ -8444,7 +8444,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   inset: 0;
   z-index: 99999;
   background: var(--bg-base);
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -8701,6 +8701,22 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
     </div>
   </div>
 </div>
+
+<!-- Early auth check: if no Supabase session token in localStorage, show login immediately.
+     This prevents the login screen from flashing on page refresh for authenticated users. -->
+<script>
+(function() {
+  var storageKey = 'sb-qiqrizggitcqwkwshmfy-auth-token';
+  var hasToken = false;
+  try { hasToken = !!localStorage.getItem(storageKey); } catch(e) {}
+  if (!hasToken) {
+    // No token — user is not logged in, show login overlay immediately
+    var overlay = document.getElementById('loginOverlay');
+    if (overlay) overlay.style.display = 'flex';
+  }
+  // If token exists, overlay stays hidden until JS confirms session via getSession()
+})();
+</script>
 
 <div id="app">
 
