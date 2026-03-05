@@ -28856,6 +28856,13 @@ async function loadThreatIntelLive() {
       el.innerHTML = '<span style="font-size:11px;color:var(--amber);">Failed to load: ' + err.message + '</span>';
     });
   }
+
+  // Always run fixes even if OpenCTI data fetch fails
+  try {
+    if (typeof _tipInitAllFixes === 'function') { _tipInitAllFixes(); }
+  } catch(fixErr) {
+    console.warn('[ThreatIntel] Fix init error:', fixErr);
+  }
 }
 
 function tipEnrichIOC(iocValue) {
@@ -28893,9 +28900,8 @@ function _tipFixGlobalSearch() {
   var input = document.getElementById('tip-global-search');
   if (!input) return;
 
-  // Remove the existing oninput wiring and replace with a richer handler
-  input.oninput = null;
-  input.onkeydown = null;
+  // The inline oninput/onkeydown handlers call tipHandleSearch(),
+  // which we override below with _tipSearchLive() — no need to null them.
 
   function _tipSearchLive(q) {
     if (!q || q.length < 2) {
