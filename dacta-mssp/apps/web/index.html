@@ -47089,6 +47089,7 @@ async function submitCreateTicket() {
 // ── In-memory investigation cache (persisted to SIEMLess DB) ──
 var _investigationCache = {}; // { 'DAC-12345': { html, verdict, confidence, timestamp, feedback, overrideVerdict, overrideReason, promptNotes } }
 var _activeInvestigations = {}; // { 'DAC-12345': true } — tickets currently being investigated
+var _forceReinvestigateSet = new Set(); // tickets explicitly re-investigated — skip ALL cache sources regardless of DB delete success
 
 // Load cached investigations from localStorage as fallback when SIEMLess DB table doesn't exist
 (function() {
@@ -47142,6 +47143,14 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
 }
 
 async function loadInvestigationCache(ticketKey) {
+  // If re-investigate was explicitly requested, skip ALL cache sources.
+  // This is required because the Supabase DELETE may be silently blocked by RLS,
+  // leaving the old row in the DB. The flag is authoritative — clear it and force fresh.
+  if (_forceReinvestigateSet.has(ticketKey)) {
+    _forceReinvestigateSet.delete(ticketKey);
+    console.log('[InvCache] Forced re-investigation for', ticketKey, '— skipping all cache sources');
+    return null;
+  }
   // Check in-memory first
   if (_investigationCache[ticketKey]) return _investigationCache[ticketKey];
   // Try SIEMLess DB
@@ -47708,9 +47717,20 @@ function applyCollapsibleSections(container) {
 // ── Re-investigate: clear cache and re-run ──
 async function reInvestigate(ticketKey) {
   if (!ticketKey) return;
-  // Remove from cache
+  // Flag this ticket so loadInvestigationCache skips ALL sources (in-memory, DB, localStorage).
+  // This is the authoritative bypass — DB deletes may fail silently due to RLS.
+  _forceReinvestigateSet.add(ticketKey);
+  // Remove from in-memory cache
   delete _investigationCache[ticketKey];
-  // Remove from SIEMLess DB cache
+  // Also clear from localStorage so stale entry doesn't re-hydrate _investigationCache on next page load
+  try {
+    var lsCacheAll = JSON.parse(localStorage.getItem('investigationCache') || '{}');
+    if (lsCacheAll[ticketKey]) {
+      delete lsCacheAll[ticketKey];
+      localStorage.setItem('investigationCache', JSON.stringify(lsCacheAll));
+    }
+  } catch(e) { /* ignore */ }
+  // Best-effort Supabase delete (may silently fail due to RLS — flag above is the real guard)
   try {
     if (window._supabaseRef) {
       await window._supabaseRef.from('investigation_cache').delete().eq('ticket_key', ticketKey);
