@@ -675,16 +675,20 @@ export default async function handler(req, res) {
     let iteration = 0;
     let toolCallLog = [];
 
-    while (iteration < maxToolRounds + 1) { // +1 for the final synthesis call
+    while (iteration <= maxToolRounds + 1) { // <= so iteration maxToolRounds+1 (synthesis) always runs
       iteration++;
       const isLastRound = iteration > maxToolRounds;
 
       // Tool rounds: Haiku (fast, high rate limit)
       // Final synthesis: Sonnet (quality), no tools so it MUST produce text
+      // For the synthesis round, append a reminder so Claude doesn't trail off mid-sentence.
+      const synthSystem = isLastRound
+        ? systemPrompt + '\n\n[SYNTHESIS] You have completed all tool calls. Now write your complete, final analysis response to the analyst. Do NOT call any tools. Do NOT start a sentence and stop — write a full, finished response.'
+        : systemPrompt;
       const callBody = {
         model: isLastRound ? SYNTH_MODEL : TOOL_MODEL,
         max_tokens: isLastRound ? 4096 : 2048,
-        system: systemPrompt,
+        system: synthSystem,
         messages: currentMessages
       };
       if (!isLastRound) {
@@ -696,8 +700,8 @@ export default async function handler(req, res) {
       // Check if Claude wants to use tools (only possible if tools were provided)
       if (claudeData.stop_reason === 'tool_use' && !isLastRound) {
         const toolUseBlocks = claudeData.content.filter(b => b.type === 'tool_use');
-        
-        // Add Claude's response (with tool_use) to messages
+
+        // Add Claude's response (with tool_use and any interleaved text) to messages
         currentMessages.push({ role: 'assistant', content: claudeData.content });
 
         // Execute all tool calls in parallel
