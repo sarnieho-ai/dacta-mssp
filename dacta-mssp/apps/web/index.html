@@ -26972,17 +26972,16 @@ async function checkSyntaxUpdates() {
   var tsEl = document.getElementById('drOutdatedTimestamp');
   if (!listEl) return;
 
-  // Collect all unique vendors from our checks
-  var vendorNames = _vendorFieldChecks.map(function(v) { return v.vendor; });
   var results = [];
   var totalAffected = 0;
 
   try {
-    // For each vendor check, query ALL rules (paginated) with matching vendor and scan rule_content
+    // For each vendor check, query ALL rules (paginated, ORDERED by id for deterministic results)
     for (var vi = 0; vi < _vendorFieldChecks.length; vi++) {
       var vc = _vendorFieldChecks[vi];
-      // Paginate to fetch ALL matching rules (1000 per page)
+      // Paginate to fetch ALL matching rules (1000 per page) with deterministic ordering
       var allRules = [];
+      var seenIds = {}; // Deduplicate by rule ID as safety net
       var pageSize = 1000;
       var pageOffset = 0;
       var hasMore = true;
@@ -26991,9 +26990,16 @@ async function checkSyntaxUpdates() {
           .select('id,name,rule_content,vendor,log_source_product')
           .or('vendor.ilike.%' + vc.vendor + '%,log_source_product.ilike.%' + vc.log + '%')
           .not('rule_content', 'is', null)
+          .order('id', { ascending: true })
           .range(pageOffset, pageOffset + pageSize - 1);
         if (res.error || !res.data || res.data.length === 0) { hasMore = false; break; }
-        allRules = allRules.concat(res.data);
+        // Deduplicate: only add rules we haven't seen yet
+        res.data.forEach(function(r) {
+          if (!seenIds[r.id]) {
+            seenIds[r.id] = true;
+            allRules.push(r);
+          }
+        });
         if (res.data.length < pageSize) { hasMore = false; } else { pageOffset += pageSize; }
       }
 
