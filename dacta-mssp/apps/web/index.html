@@ -35230,14 +35230,30 @@ async function loadUserManagement() {
       });
     });
 
-    // Persist to DB
+    // Persist to DB (defer if Supabase client not yet initialized)
     if (newCount > 0 || updatedCount > 0) {
-      try {
-        if (window._supabaseRef) {
-          var batch = _users.map(_umLocalToDb);
-          await window._supabaseRef.from('platform_users').upsert(batch, { onConflict: 'id' });
-        }
-      } catch(e2) { console.warn('[UserSync] DB persist failed:', e2); }
+      var _persistBatch = function() {
+        try {
+          if (window._supabaseRef) {
+            var batch = _users.map(_umLocalToDb);
+            window._supabaseRef.from('platform_users').upsert(batch, { onConflict: 'id' }).then(function(r) {
+              if (r.error) console.warn('[UserSync] DB upsert error:', r.error.message);
+              else console.log('[UserSync] Persisted ' + batch.length + ' users to DB');
+            });
+          } else {
+            // Supabase not ready yet — retry in 2s (up to 5 attempts)
+            if (!_persistBatch._retries) _persistBatch._retries = 0;
+            _persistBatch._retries++;
+            if (_persistBatch._retries <= 5) {
+              console.log('[UserSync] Supabase not ready, retry ' + _persistBatch._retries + '/5 in 2s...');
+              setTimeout(_persistBatch, 2000);
+            } else {
+              console.warn('[UserSync] Supabase never initialized — users saved to localStorage only');
+            }
+          }
+        } catch(e2) { console.warn('[UserSync] DB persist failed:', e2); }
+      };
+      _persistBatch();
       try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e2) {}
       try { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); } catch(e2) {}
     }
