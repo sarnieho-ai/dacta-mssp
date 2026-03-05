@@ -50240,6 +50240,11 @@ async function runAIInvestigation(ticketKey, issueData) {
       .catch(function(e) { csEnrichment.error = e; console.warn('[CS Intel] Enrichment failed:', e); })
     : Promise.resolve();
 
+  // Fire playbook fetch NOW — runs in parallel with all SIEM queries, no extra wait
+  var _pbFetchPromise = fetchRelevantPlaybooks(techniques, summary, useCase).catch(function(e) {
+    console.warn('[R1Playbook] Fetch failed:', e.message); return [];
+  });
+
   // Real Elastic SIEM + DACTA TIP lookup (async, parallel with CrowdStrike)
   console.log('[AI Investigation] Starting real Elastic SIEM + DACTA TIP + CrowdStrike queries in parallel...');
   var elasticLogs;
@@ -50498,27 +50503,19 @@ async function runAIInvestigation(ticketKey, issueData) {
     console.log('[AI Investigation] Round ' + rnd + ' generating content...');
     var roundHTML = '';
 
-    // ── Playbook-driven Round 1: fetch matched playbooks and run automated scope checks ──
+    // ── Playbook Round 1: await the already-in-flight promise (no extra latency) ──
     var _r1Playbooks = [];
-    var _r1PlaybookResults = [];
     var _r1AutoSteps = [];
     if (rnd === 1) {
       try {
-        _r1Playbooks = await fetchRelevantPlaybooks(techniques, summary, useCase);
-        _cachedPlaybooks = _r1Playbooks; // Cache for Playbook Card reuse
+        _r1Playbooks = await _pbFetchPromise; // started in parallel with SIEM queries above
+        _cachedPlaybooks = _r1Playbooks;
         if (_r1Playbooks.length > 0) {
-          var _r1Pb = _r1Playbooks[0]; // Best match
-          // Extract automated triage steps
-          var _r1AllSteps = [];
-          if (Array.isArray(_r1Pb.triage_steps)) _r1AllSteps = _r1AllSteps.concat(_r1Pb.triage_steps);
-          // Also include investigation_queries titles as scope checks
+          var _r1Pb = _r1Playbooks[0];
+          var _r1AllSteps = Array.isArray(_r1Pb.triage_steps) ? _r1Pb.triage_steps : [];
           _r1AutoSteps = _r1AllSteps.filter(_isPlaybookStepAutomated);
-          // Run investigation_queries from playbook against Elastic
-          if (_r1Pb.investigation_queries) {
-            _r1PlaybookResults = await _runPlaybookQueries(invNamespace, _r1Pb.investigation_queries, iocs);
-          }
         }
-      } catch (e) { console.warn('[R1Playbook] Fetch/run error:', e.message); }
+      } catch (e) { console.warn('[R1Playbook] error:', e.message); }
     }
 
     try {
@@ -50531,72 +50528,28 @@ async function runAIInvestigation(ticketKey, issueData) {
       roundHTML = '<div style="color:var(--red-bright);font-size:11px;">Error generating round ' + rnd + ' analysis: ' + roundErr.message + '</div>';
     }
 
-    // ── Append Playbook Scope Assessment to Round 1 HTML ──
-    if (rnd === 1 && (_r1Playbooks.length > 0 || _r1AutoSteps.length > 0 || _r1PlaybookResults.length > 0)) {
-      var _r1Pb0 = _r1Playbooks[0] || {};
-      var _r1PbHTML = '<div class="r1-playbook-scope" style="margin-top:16px;border:1px solid rgba(139,92,246,0.25);border-radius:8px;overflow:hidden;">' +
-        '<div style="background:rgba(139,92,246,0.1);padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(139,92,246,0.2);">' +
-        dIcon('playbook', 16) + ' <span style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#a78bfa;">Playbook Response Scope</span>' +
-        '<span style="font-size:10px;color:var(--text-muted);margin-left:4px;">— ' + escapeHtml(_r1Pb0.playbook_name || 'Matched playbook') + '</span>' +
-        '<span style="margin-left:auto;font-size:9px;background:rgba(139,92,246,0.15);color:#a78bfa;padding:2px 7px;border-radius:10px;">' + (_r1Pb0.match_type || 'matched') + '</span>' +
+    // ── Compact playbook strip — inline with SIEM log queries, no extra space ──
+    if (rnd === 1 && _r1Playbooks.length > 0) {
+      var _pb0 = _r1Playbooks[0];
+      var _pbName = escapeHtml(_pb0.playbook_name || 'Matched');
+      var _pbMatch = escapeHtml(_pb0.match_type || '');
+      var _pbFpRaw = _pb0.false_positive_guidance;
+      var _pbFpText = typeof _pbFpRaw === 'string' ? _pbFpRaw : (Array.isArray(_pbFpRaw) ? _pbFpRaw.join(' ') : '');
+      var _pbStepsHtml = _r1AutoSteps.slice(0, 4).map(function(st) {
+        var txt = typeof st === 'string' ? st : (st.action || st.step || '');
+        return '<div style="padding:2px 0 2px 14px;font-size:10px;color:var(--text-secondary);border-bottom:1px solid rgba(139,92,246,0.06);">' +
+          '<span style="color:#a78bfa;margin-right:5px;">◆</span>' + escapeHtml(txt) + '</div>';
+      }).join('');
+      roundHTML += '<div style="margin-top:10px;padding:8px 10px;background:rgba(139,92,246,0.05);border-left:2px solid rgba(139,92,246,0.35);border-radius:0 4px 4px 0;">' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+        dIcon('lightning', 12) +
+        '<span style="font-size:9px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:0.8px;">Playbook:</span>' +
+        '<span style="font-size:10px;color:var(--text-secondary);">' + _pbName + '</span>' +
+        (_pbMatch ? '<span style="font-size:9px;color:var(--text-muted);background:rgba(139,92,246,0.12);padding:1px 5px;border-radius:8px;">' + _pbMatch + '</span>' : '') +
+        (_pbFpText ? '<span style="font-size:9px;color:var(--text-muted);margin-left:6px;">' + dIcon('info', 10) + ' FP: ' + escapeHtml(_pbFpText.substring(0, 70)) + (_pbFpText.length > 70 ? '…' : '') + '</span>' : '') +
+        '</div>' +
+        (_pbStepsHtml ? '<div style="margin-top:5px;">' + _pbStepsHtml + '</div>' : '') +
         '</div>';
-
-      // Automated triage steps (scope assessment items)
-      if (_r1AutoSteps.length > 0) {
-        _r1PbHTML += '<div style="padding:12px 16px;border-bottom:1px solid rgba(139,92,246,0.1);">' +
-          '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Automated Scope Checks</div>';
-        _r1AutoSteps.slice(0, 5).forEach(function(st) {
-          var stText = (typeof st === 'string') ? st : (st.action || st.step || '');
-          _r1PbHTML += '<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
-            '<span style="color:#a78bfa;font-size:10px;margin-top:2px;flex-shrink:0;">' + dIcon('search', 12) + '</span>' +
-            '<span style="font-size:11px;color:var(--text-secondary);">' + escapeHtml(stText) + '</span>' +
-            '</div>';
-        });
-        _r1PbHTML += '</div>';
-      }
-
-      // Playbook investigation query results
-      if (_r1PlaybookResults.length > 0) {
-        _r1PbHTML += '<div style="padding:12px 16px;">' +
-          '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Playbook Query Results</div>' +
-          '<div style="display:flex;flex-direction:column;gap:6px;">';
-        _r1PlaybookResults.forEach(function(qr) {
-          var hitColor = qr.hits > 0 ? 'var(--amber)' : (qr.hits === 0 ? 'var(--text-muted)' : '#ef4444');
-          var hitBg = qr.hits > 0 ? 'rgba(245,158,11,0.1)' : 'rgba(100,116,139,0.08)';
-          var hitLabel = qr.hits < 0 ? 'ERROR' : (qr.hits + ' hit' + (qr.hits !== 1 ? 's' : ''));
-          _r1PbHTML += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + hitBg + ';border-radius:5px;">' +
-            '<span style="font-size:11px;color:var(--text-secondary);flex:1;">' + escapeHtml(qr.title) + '</span>' +
-            '<span style="font-size:10px;font-weight:600;color:' + hitColor + ';background:' + hitBg + ';padding:2px 8px;border-radius:10px;white-space:nowrap;">' + hitLabel + '</span>' +
-            '</div>';
-          // Show top hit summaries if available
-          if (qr.topHits && qr.topHits.length > 0) {
-            qr.topHits.slice(0, 2).forEach(function(hit) {
-              var src = hit._source || {};
-              var hitSummary = src['event.action'] || src.action || src.message || src['process.name'] || src['host.name'] || '';
-              if (hitSummary) {
-                _r1PbHTML += '<div style="margin-left:16px;margin-top:-2px;font-size:10px;color:var(--text-muted);padding:2px 0;">' +
-                  dIcon('chevronRight', 10) + ' ' + escapeHtml(String(hitSummary).substring(0, 80)) + '</div>';
-              }
-            });
-          }
-        });
-        _r1PbHTML += '</div></div>';
-      }
-
-      // False positive guidance if available
-      if (_r1Pb0.false_positive_guidance) {
-        var fpText = (typeof _r1Pb0.false_positive_guidance === 'string') ? _r1Pb0.false_positive_guidance :
-          (Array.isArray(_r1Pb0.false_positive_guidance) ? _r1Pb0.false_positive_guidance.join(' ') : '');
-        if (fpText) {
-          _r1PbHTML += '<div style="padding:8px 16px;border-top:1px solid rgba(139,92,246,0.1);background:rgba(139,92,246,0.04);">' +
-            '<span style="font-size:9px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:0.8px;">' + dIcon('info', 10) + ' FP Guidance</span>' +
-            '<span style="font-size:10px;color:var(--text-muted);margin-left:8px;">' + escapeHtml(fpText.substring(0, 200)) + (fpText.length > 200 ? '...' : '') + '</span>' +
-            '</div>';
-        }
-      }
-
-      _r1PbHTML += '</div>'; // close r1-playbook-scope
-      roundHTML += _r1PbHTML;
     }
 
     // Update round card to complete
