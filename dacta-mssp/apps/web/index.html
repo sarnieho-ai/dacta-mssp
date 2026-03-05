@@ -9153,10 +9153,6 @@ function dIcon(name, size, color) {
       </div>
       <div class="prod-badge">PRODUCTION</div>
       <div class="topbar-right">
-        <div class="live-badge">
-          <div class="live-dot"></div>
-          <span>LIVE</span>
-        </div>
         <div class="topbar-time" id="topbarTime">00:00:00 SGT</div>
         <div class="topbar-icon-btn" data-tooltip="Notifications">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -48331,10 +48327,7 @@ async function openInvestigation(ticketKey) {
         // ── Top row: badges + title + action buttons ──
         '<div style="padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">' +
           '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">' +
-            '<div style="display:flex;align-items:center;gap:6px;padding-top:2px;flex-shrink:0;">' +
-              '<span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">\u25CF LIVE</span>' +
-              (_alertCat ? '<span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);text-transform:uppercase;letter-spacing:0.04em;">' + escapeHtml(_alertCat) + '</span>' : '') +
-            '</div>' +
+            (_alertCat ? '<div style="padding-top:3px;flex-shrink:0;"><span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);text-transform:uppercase;letter-spacing:0.04em;">' + escapeHtml(_alertCat) + '</span></div>' : '') +
             '<div style="flex:1;font-size:15px;font-weight:600;color:var(--text-primary);line-height:1.4;">' + escapeHtml(f.summary || ticketKey) + '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
               '<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:4px 12px;" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',12) + ' Re-investigate</button>' +
@@ -48483,45 +48476,61 @@ async function openInvestigation(ticketKey) {
       //  INVESTIGATION TAB
       // ══════════════════════════════════════════════════════
       '<div id="invTab-investigation" class="inv-radiant-tab-content" style="display:none;">' +
-        // Re-investigate control
-        '<div id="invReInvestigateBar" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;margin-bottom:14px;">' +
-          dIcon('refresh',14) +
+        '<div style="display:flex;flex-direction:column;gap:12px;">' +
+
+        // ── Re-investigate bar (slim, borderless) ──
+        '<div id="invReInvestigateBar" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface-1);border:1px solid var(--border-subtle);border-radius:8px;">' +
           '<div style="flex:1;">' +
-            '<div style="font-size:11px;font-weight:600;color:var(--text-primary);">Investigation Controls</div>' +
-            '<div style="font-size:9px;color:var(--text-muted);">Run or re-run AI investigation on this ticket</div>' +
+            '<div style="font-size:10px;font-weight:600;color:var(--text-secondary);">AI Investigation</div>' +
+            '<div style="font-size:9px;color:var(--text-muted);">Uses SIEM, Threat Intel, and AI to analyse this ticket end-to-end</div>' +
           '</div>' +
-          '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="if(window.invSwitchTab)window.invSwitchTab(\'investigation\');reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',12) + ' Re-investigate</button>' +
+          '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.25);white-space:nowrap;" onclick="if(window.invSwitchTab)window.invSwitchTab(\'investigation\');reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-run</button>' +
         '</div>' +
-        // Loading spinner
-        '<div id="invLoadingSpinner" class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;gap:14px;min-height:280px;border:1px solid rgba(0,212,255,0.12);border-radius:12px;margin-bottom:14px;">' +
-          '<div style="position:relative;width:52px;height:52px;">' +
+
+        // ── Loading spinner (hidden until investigation starts) ──
+        '<div id="invLoadingSpinner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;gap:12px;background:var(--surface-1);border:1px solid rgba(0,212,255,0.1);border-radius:10px;">' +
+          '<div style="position:relative;width:44px;height:44px;">' +
             '<div style="position:absolute;inset:0;border:2px solid rgba(0,212,255,0.1);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
-            '<div style="position:absolute;inset:8px;border:2px solid rgba(139,92,246,0.1);border-bottom-color:#8b5cf6;border-radius:50%;animation:spin 1.2s linear infinite reverse;"></div>' +
-            '<div style="position:absolute;inset:18px;width:16px;height:16px;background:rgba(0,212,255,0.15);border-radius:50%;border:1px solid rgba(0,212,255,0.3);"></div>' +
+            '<div style="position:absolute;inset:7px;border:2px solid rgba(139,92,246,0.1);border-bottom-color:#8b5cf6;border-radius:50%;animation:spin 1.2s linear infinite reverse;"></div>' +
           '</div>' +
           '<div style="text-align:center;">' +
-            '<div style="font-size:13px;color:var(--cyan);font-family:var(--font-mono);font-weight:600;margin-bottom:4px;" id="invSpinnerLabel">Initializing AI Investigation</div>' +
-            '<div style="font-size:10px;color:var(--text-muted);" id="invSpinnerSub">Setting up analysis pipeline...</div>' +
+            '<div style="font-size:12px;color:var(--cyan);font-family:var(--font-mono);font-weight:600;margin-bottom:3px;" id="invSpinnerLabel">Initializing AI Investigation</div>' +
+            '<div style="font-size:9px;color:var(--text-muted);" id="invSpinnerSub">Setting up analysis pipeline...</div>' +
           '</div>' +
-          '<div style="width:260px;height:4px;background:rgba(0,212,255,0.08);border-radius:2px;overflow:hidden;">' +
+          '<div style="width:220px;height:3px;background:rgba(0,212,255,0.08);border-radius:2px;overflow:hidden;">' +
             '<div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:2px;animation:invProgressBar 8s ease-in-out forwards;" id="invProgressFill"></div>' +
           '</div>' +
-          '<div style="display:flex;gap:16px;margin-top:4px;">' +
-            '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep1"><span style="width:6px;height:6px;border-radius:50%;border:1px solid rgba(0,212,255,0.4);display:inline-block;"></span>SIEM Queries</span>' +
-            '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep2"><span style="width:6px;height:6px;border-radius:50%;border:1px solid rgba(139,92,246,0.4);display:inline-block;"></span>Threat Intel</span>' +
-            '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep3"><span style="width:6px;height:6px;border-radius:50%;border:1px solid rgba(16,185,129,0.4);display:inline-block;"></span>AI Analysis</span>' +
+          '<div style="display:flex;gap:14px;">' +
+            '<span style="font-size:8px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep1"><span style="width:5px;height:5px;border-radius:50%;border:1px solid rgba(0,212,255,0.4);display:inline-block;"></span>SIEM</span>' +
+            '<span style="font-size:8px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep2"><span style="width:5px;height:5px;border-radius:50%;border:1px solid rgba(139,92,246,0.4);display:inline-block;"></span>Threat Intel</span>' +
+            '<span style="font-size:8px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep3"><span style="width:5px;height:5px;border-radius:50%;border:1px solid rgba(16,185,129,0.4);display:inline-block;"></span>AI Analysis</span>' +
           '</div>' +
         '</div>' +
-        // AI round HTML injects here + enrichment + correlated
-        '<div id="invMainContent" style="display:flex;flex-direction:column;gap:12px;">' +
-          '<div class="card" style="padding:14px;" id="enrichmentSummaryCard">' +
-            '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-            '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Enrichment data will appear after investigation...</div>' +
+
+        // ── Main AI findings + data cards ──
+        '<div id="invMainContent" style="display:flex;flex-direction:column;gap:10px;">' +
+          // Enrichment card — shown collapsed by default, opened after investigation
+          '<div class="card" style="padding:0;" id="enrichmentSummaryCard">' +
+            '<div class="card-header inv-collapsible-header" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid transparent;">' +
+              '<span style="width:6px;height:6px;border-radius:50%;background:#f59e0b;flex-shrink:0;"></span>' +
+              '<span class="card-title" style="font-size:10px;">Entity Enrichment</span>' +
+              '<span style="font-size:9px;color:var(--text-muted);margin-left:2px;">— IOC reputation, WHOIS, and passive DNS</span>' +
+              '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:10px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span>' +
+            '</div>' +
+            '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:10px;color:var(--text-muted);font-style:italic;">Enrichment data will appear after investigation runs...</div>' +
           '</div>' +
-          '<div class="card" style="padding:14px;" id="correlatedAlertsCard">' +
-            '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Correlated Alerts</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-            '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Alert correlation data will appear after investigation...</div>' +
+          // Correlated alerts card
+          '<div class="card" style="padding:0;" id="correlatedAlertsCard">' +
+            '<div class="card-header inv-collapsible-header" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid transparent;">' +
+              '<span style="width:6px;height:6px;border-radius:50%;background:#8b5cf6;flex-shrink:0;"></span>' +
+              '<span class="card-title" style="font-size:10px;">Correlated Alerts</span>' +
+              '<span style="font-size:9px;color:var(--text-muted);margin-left:2px;">— Related tickets across the same tenant</span>' +
+              '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:10px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span>' +
+            '</div>' +
+            '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:10px;color:var(--text-muted);font-style:italic;">Alert correlation data will appear after investigation runs...</div>' +
           '</div>' +
+        '</div>' +
+
         '</div>' +
       '</div>' + // end investigation tab
 
@@ -48599,49 +48608,91 @@ function initInvestigationSnapshot(ticketKey, ticketData) {
   else if (typeof f.description === 'string') desc = f.description;
   var summary = f.summary || '';
   var priority = (f.priority && f.priority.name) || 'Unknown';
+  var assignee = (f.assignee && (f.assignee.displayName || f.assignee.name)) || 'Unassigned';
+  var status = (f.status && f.status.name) || '';
   var fullText = summary + ' ' + desc.replace(/<[^>]+>/g, ' ');
   var iocs = extractIOCs(fullText);
+  var techniques = detectTechniques(fullText);
 
   var totalEntities = (iocs.hosts||[]).length + (iocs.ips||[]).length + (iocs.users||[]).length + (iocs.files||[]).length + (iocs.hashes||[]).length;
   var priorityColor = (priority||'').includes('P1') ? '#ef4444' : (priority||'').includes('P2') ? '#f97316' : (priority||'').includes('P3') ? '#f59e0b' : 'var(--cyan)';
 
-  var metrics = [
-    { label: 'Priority', value: (priority||'—').replace(' - ', ' '), color: priorityColor, bg: priorityColor + '18', icon: 'siren' },
-    { label: 'Entities', value: totalEntities + ' found', color: 'var(--cyan)', bg: 'rgba(0,212,255,0.08)', icon: 'network' },
-    { label: 'SIEM Queries', value: '6 queued', color: '#10b981', bg: 'rgba(16,185,129,0.08)', icon: 'search' },
-    { label: 'Playbook', value: 'Matching...', color: '#a78bfa', bg: 'rgba(139,92,246,0.08)', icon: 'lightning' }
+  // ── Top stat strip ──
+  var statItems = [
+    { label: 'Priority', value: (priority||'—').replace(' - ',' '), color: priorityColor },
+    { label: 'Entities', value: totalEntities > 0 ? totalEntities + ' found' : 'Scanning...', color: 'var(--cyan)' },
+    { label: 'Techniques', value: techniques.length > 0 ? techniques.length + ' detected' : 'Analysing...', color: '#a78bfa' },
+    { label: 'Assignee', value: assignee === 'Unassigned' ? '—' : assignee.split(' ')[0], color: 'var(--text-secondary)' }
   ];
-  metricsEl.innerHTML = metrics.map(function(m) {
-    return '<div style="padding:8px 6px;background:'+m.bg+';border-radius:6px;border:1px solid '+m.color+'20;text-align:center;">' +
-      '<div style="font-size:11px;color:'+m.color+';margin-bottom:3px;">'+dIcon(m.icon,13)+'</div>' +
-      '<div style="font-size:9px;font-weight:700;color:'+m.color+';margin-bottom:1px;word-break:break-word;line-height:1.2;">'+escapeHtml(m.value)+'</div>' +
-      '<div style="font-size:8px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">'+m.label+'</div>' +
-    '</div>';
-  }).join('');
+  metricsEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">' +
+    statItems.map(function(s) {
+      return '<div style="padding:7px 8px;background:' + s.color + '10;border-radius:6px;border:1px solid ' + s.color + '20;">' +
+        '<div style="font-size:10px;font-weight:700;color:' + s.color + ';margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(s.value) + '</div>' +
+        '<div style="font-size:8px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">' + s.label + '</div>' +
+      '</div>';
+    }).join('') +
+  '</div>';
 
+  // ── Entities section ──
   var entitySections = [];
-  if ((iocs.hosts||[]).length) entitySections.push({ label: 'Hosts', items: iocs.hosts, color: 'var(--cyan)' });
-  if ((iocs.ips||[]).length)   entitySections.push({ label: 'IPs',   items: iocs.ips,   color: '#8b5cf6' });
-  if ((iocs.users||[]).length) entitySections.push({ label: 'Users', items: iocs.users, color: '#10b981' });
-  if ((iocs.hashes||[]).length) entitySections.push({ label: 'Hashes', items: iocs.hashes.map(function(h){return h.substring(0,16)+'\u2026';}), color: '#f97316' });
+  if ((iocs.hosts||[]).length) entitySections.push({ label: 'Hosts', icon: '🖥', items: iocs.hosts, color: 'var(--cyan)', hint: 'Endpoint hostnames from ticket' });
+  if ((iocs.ips||[]).length)   entitySections.push({ label: 'IPs',   icon: '🌐', items: iocs.ips,   color: '#8b5cf6', hint: 'IP addresses to query in SIEM & TI' });
+  if ((iocs.users||[]).length) entitySections.push({ label: 'Users', icon: '👤', items: iocs.users, color: '#10b981', hint: 'User accounts referenced' });
+  if ((iocs.files||[]).length) entitySections.push({ label: 'Files', icon: '📄', items: iocs.files, color: '#f97316', hint: 'Executables and scripts' });
+  if ((iocs.hashes||[]).length) entitySections.push({ label: 'Hashes', icon: '#', items: iocs.hashes.map(function(h){return h.substring(0,20)+'\u2026';}), color: '#f59e0b', hint: 'File hashes for TI lookup' });
 
+  var entitiesHTML = '';
   if (entitySections.length > 0) {
-    entitiesEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:6px;">' +
+    entitiesHTML += '<div style="margin-top:10px;">' +
+      '<div style="font-size:8px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Extracted IOCs — queued for investigation</div>' +
+      '<div style="display:flex;flex-direction:column;gap:5px;">' +
       entitySections.map(function(sec) {
-        return '<div style="padding:6px 8px;background:var(--surface-1);border-radius:5px;border:1px solid var(--border-subtle);">' +
-          '<div style="font-size:8px;font-weight:700;color:'+sec.color+';text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">'+sec.label+'</div>' +
-          sec.items.slice(0, 4).map(function(v) {
-            return '<div style="font-size:9px;font-family:var(--font-mono);color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(v)+'</div>';
+        return '<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;background:var(--surface-1);border-radius:6px;border:1px solid var(--border-subtle);border-left:2px solid ' + sec.color + ';">' +
+          '<div style="font-size:9px;font-weight:700;color:' + sec.color + ';min-width:40px;flex-shrink:0;margin-top:1px;">' + sec.label + '<br><span style="font-size:8px;color:var(--text-muted);font-weight:400;">' + sec.items.length + ' item' + (sec.items.length === 1 ? '' : 's') + '</span></div>' +
+          '<div style="flex:1;min-width:0;">' +
+          sec.items.slice(0, 5).map(function(v) {
+            return '<span style="display:inline-block;font-size:9px;font-family:var(--font-mono);color:var(--text-primary);background:rgba(255,255,255,0.04);padding:1px 5px;border-radius:3px;margin:1px 2px 1px 0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(v) + '</span>';
           }).join('') +
-          (sec.items.length > 4 ? '<div style="font-size:8px;color:var(--text-muted);margin-top:2px;">+' + (sec.items.length - 4) + ' more</div>' : '') +
+          (sec.items.length > 5 ? '<span style="font-size:8px;color:var(--text-muted);margin-left:2px;">+' + (sec.items.length - 5) + ' more</span>' : '') +
+          '<div style="font-size:8px;color:var(--text-muted);margin-top:3px;">' + sec.hint + '</div>' +
+          '</div>' +
         '</div>';
       }).join('') +
-    '</div>';
+      '</div></div>';
   } else {
-    entitiesEl.innerHTML = '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:8px 0;">No IOCs extracted from ticket text</div>';
+    entitiesHTML = '<div style="margin-top:10px;padding:10px 12px;background:var(--surface-1);border-radius:6px;border:1px solid var(--border-subtle);text-align:center;">' +
+      '<div style="font-size:10px;color:var(--text-muted);">No IOCs extracted from ticket text</div>' +
+      '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">AI will analyse the raw description during investigation</div>' +
+    '</div>';
   }
 
-  if (badgeEl) badgeEl.textContent = totalEntities + ' Entities';
+  // ── Investigation pipeline preview ──
+  var pipelineItems = [
+    { label: 'Elastic SIEM', detail: (totalEntities > 0 ? totalEntities + ' entities' : 'Full text') + ' across all indexes', color: '#f59e0b' },
+    { label: 'Threat Intelligence', detail: 'DACTA TIP + CrowdStrike Intel', color: '#ef4444' },
+    { label: 'Network & Firewall', detail: 'Connection logs, blocked traffic', color: '#8b5cf6' },
+    { label: 'AI Analysis', detail: 'Verdict + recommended actions', color: 'var(--cyan)' }
+  ];
+  var pipelineHTML = '<div style="margin-top:10px;padding:8px 10px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.1);border-radius:6px;">' +
+    '<div style="font-size:8px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:7px;">Investigation pipeline (awaiting run)</div>' +
+    '<div style="display:flex;flex-direction:column;gap:4px;">' +
+    pipelineItems.map(function(p, i) {
+      return '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<div style="width:16px;height:16px;border-radius:50%;border:1px solid ' + p.color + '60;background:' + p.color + '12;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
+          '<span style="font-size:8px;font-weight:700;color:' + p.color + ';">' + (i+1) + '</span>' +
+        '</div>' +
+        '<div style="flex:1;">' +
+          '<span style="font-size:9px;font-weight:600;color:var(--text-secondary);">' + p.label + '</span>' +
+          '<span style="font-size:9px;color:var(--text-muted);margin-left:5px;">— ' + p.detail + '</span>' +
+        '</div>' +
+        '<span style="font-size:8px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:1px 5px;border-radius:3px;">Queued</span>' +
+      '</div>';
+    }).join('') +
+    '</div>' +
+  '</div>';
+
+  if (entitiesEl) entitiesEl.innerHTML = entitiesHTML + pipelineHTML;
+  if (badgeEl) badgeEl.textContent = totalEntities > 0 ? totalEntities + ' Entities' : 'Pre-scan';
 }
 
 // Called from runAIInvestigation after investigation to fill the snapshot results panel
@@ -49736,7 +49787,9 @@ function extractIOCs(text) {
 
   var m;
   m = text.match(ipPattern) || []; iocs.ips = [...new Set(m)];
-  m = text.match(hostPattern) || []; iocs.hosts = [...new Set(m)];
+  // Filter out known product/vendor names that match the host pattern accidentally
+  var HOST_DENYLIST = /^(abuseipdb|virustotal|shodan|greynoise|maxmind|urlscan|misp|opencti|dacta|crowdstrike|sentinelone|trellix|cylanceapp|cylancedb|intelsrv|elasticsrv|kibanaapp|grafanaapp|splunkapp|splunkdb|jiraapp|jiradb|confdb|oktaapp|oktadc|gsuitesrv|azuredb|awsapp|awssrv|gcpapp|gcpdb|gcpsrv|teamsapp|slackapp|zoomapp|githubsrv|gitlabsrv|bitbucketapp)$/i;
+  m = text.match(hostPattern) || []; iocs.hosts = [...new Set(m)].filter(function(h) { return !HOST_DENYLIST.test(h); });
   m = text.match(exePattern) || []; iocs.files = [...new Set(m.map(function(f){return f.toLowerCase();}))];
   m = text.match(hashSha) || []; iocs.hashes = [...new Set(m)];
   var md5 = text.match(hashMd5) || []; md5.forEach(function(h) { if (!iocs.hashes.some(function(s){return s.includes(h);})) iocs.hashes.push(h); });
@@ -50986,7 +51039,6 @@ async function runAIInvestigation(ticketKey, issueData) {
   // Insert into center main content column
   var invMainContent = document.getElementById('invMainContent');
   if (invMainContent) {
-    // Remove loading spinner
     var invSpinner = document.getElementById('invLoadingSpinner');
     if (invSpinner) invSpinner.remove();
     invMainContent.appendChild(aiPanel);
