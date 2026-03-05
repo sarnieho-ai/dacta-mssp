@@ -25248,6 +25248,7 @@ Analyst: K. Rasmussen | 2026-02-28
             <button class="ee-chip" data-type="user">👤 Users</button>
             <button class="ee-chip" data-type="domain">🌍 Domains</button>
             <button class="ee-chip" data-type="process">⚙️ Processes</button>
+            <button class="ee-chip" data-type="adversary" style="color:#dc2626;">💀 Adversaries</button>
           </div>
           <div class="ee-time-filters" id="eeTimeFilters">
             <button class="ee-time-chip active" data-range="24h">24h</button>
@@ -25261,6 +25262,40 @@ Analyst: K. Rasmussen | 2026-02-28
             <option value="connected">Sort: Most Connected</option>
             <option value="recent">Sort: Recent</option>
           </select>
+        </div>
+
+        <!-- EE Action Toolbar: Session management, pivot history, Copilot -->
+        <div id="eeActionToolbar" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 0 4px;border-bottom:1px solid var(--border-subtle);margin-bottom:8px;">
+          <button class="btn btn-xs btn-secondary" onclick="window._eeSaveSessionPrompt()" title="Save current graph as a named session">💾 Save Session</button>
+          <div style="position:relative;display:inline-block;">
+            <button class="btn btn-xs btn-secondary" id="eeSessionsBtn" onclick="window._eeToggleSessionsDropdown()" title="Load a saved session">📂 Sessions ▾</button>
+            <div id="eeSessionsDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:2000;min-width:260px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:4px;max-height:320px;overflow-y:auto;">
+              <div style="padding:8px 12px;border-bottom:1px solid var(--border-subtle);font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;">Saved Sessions</div>
+              <div id="eeSessionsList" style="padding:6px 0;"><div style="padding:10px 12px;font-size:11px;color:var(--text-muted);">Loading...</div></div>
+            </div>
+          </div>
+          <div style="width:1px;height:18px;background:var(--border-subtle);"></div>
+          <button class="btn btn-xs btn-secondary" id="eePivotHistoryBtn" onclick="window._eeTogglePivotPanel()" title="View pivot history">🔀 Pivot History <span id="eePivotCount" style="font-size:9px;background:rgba(0,212,255,0.15);border-radius:8px;padding:0 5px;">0</span></button>
+          <div style="width:1px;height:18px;background:var(--border-subtle);"></div>
+          <button class="btn btn-xs" style="background:rgba(139,92,246,0.15);color:#8b5cf6;border:1px solid rgba(139,92,246,0.3);" id="eeAnalyseBtn" onclick="window._eeAnalyseWithCopilot()" title="Send current graph cluster to AI Copilot for analysis">🤖 Analyse Cluster</button>
+          <div style="width:1px;height:18px;background:var(--border-subtle);"></div>
+          <span style="font-size:9px;color:var(--text-muted);">Timeline:</span>
+          <input type="range" id="eeTimelineFrom" min="0" max="100" value="0" style="width:80px;height:4px;accent-color:var(--cyan);" title="Timeline start" oninput="window._eeApplyTimeline()">
+          <span id="eeTimelineFromLabel" style="font-size:9px;color:var(--cyan);min-width:28px;">—</span>
+          <span style="font-size:9px;color:var(--text-muted);">→</span>
+          <input type="range" id="eeTimelineTo" min="0" max="100" value="100" style="width:80px;height:4px;accent-color:var(--cyan);" title="Timeline end" oninput="window._eeApplyTimeline()">
+          <span id="eeTimelineToLabel" style="font-size:9px;color:var(--cyan);min-width:28px;">Now</span>
+          <button class="btn btn-xs btn-secondary" onclick="window._eeResetTimeline()" title="Reset timeline to full range" style="font-size:9px;padding:1px 6px;">Reset</button>
+          <span id="eeTimelineStatus" style="font-size:9px;color:var(--text-muted);margin-left:4px;"></span>
+        </div>
+
+        <!-- Pivot History Panel (slide-in from left) -->
+        <div id="eePivotPanel" style="display:none;margin-bottom:8px;background:var(--surface-0);border:1px solid rgba(0,212,255,0.2);border-radius:8px;padding:10px 12px;max-height:160px;overflow-y:auto;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:10px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:0.08em;">🔀 Pivot Trail</span>
+            <button class="btn btn-xs btn-secondary" onclick="window._eeClearPivotHistory()" style="font-size:9px;padding:1px 6px;">Clear</button>
+          </div>
+          <div id="eePivotStepsList" style="font-size:10px;color:var(--text-secondary);">No pivots yet — right-click any node and select 'Pivot on Entity'</div>
         </div>
 
         <!-- Split: Catalog + Canvas -->
@@ -25288,6 +25323,7 @@ Analyst: K. Rasmussen | 2026-02-28
                   <div class="ee-legend-item"><div class="ee-legend-dot" style="background:#f59e0b;"></div>Domains</div>
                   <div class="ee-legend-item"><div class="ee-legend-dot" style="background:#f97316;"></div>Processes</div>
                   <div class="ee-legend-item"><div class="ee-legend-dot" style="background:#ef4444;"></div>Malicious</div>
+                  <div class="ee-legend-item"><div class="ee-legend-dot" style="background:#dc2626;box-shadow:0 0 4px #dc2626;"></div>Adversary</div>
                 </div>
               </div>
               <div class="ee-canvas-controls">
@@ -25344,14 +25380,32 @@ Analyst: K. Rasmussen | 2026-02-28
             <div>
               <div class="ee-detail-section-title">Quick Actions</div>
               <div class="ee-actions">
-                <button class="ee-action-btn primary">🔍 Investigate</button>
-                <button class="ee-action-btn danger">🚫 Isolate Host</button>
-                <button class="ee-action-btn">👁 Add to Watchlist</button>
+                <button class="ee-action-btn primary" id="eeActInvestigate" onclick="window._eeActInvestigate()">🔍 Investigate</button>
+                <button class="ee-action-btn" id="eeActPivot" onclick="window._eePivotNode(window._eeSelectedEntity)" style="color:#00d4ff;border-color:rgba(0,212,255,0.3);">🔀 Pivot Entity</button>
+                <button class="ee-action-btn" id="eeActCopilot" onclick="window._eeAnalyseWithCopilot()">🤖 AI Analyse</button>
                 <button class="ee-action-btn">📤 Export IOCs</button>
+              </div>
+              <!-- CrowdStrike enrichment for selected entity -->
+              <div id="eeDetailCSIntel" style="display:none;margin-top:12px;">
+                <div class="ee-detail-section-title">🦅 CrowdStrike Falcon Intel</div>
+                <div id="eeDetailCSContent" style="font-size:10px;color:var(--text-secondary);"></div>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Right-click context menu -->
+        <div id="eePivotMenu" style="display:none;position:fixed;z-index:9000;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);min-width:180px;overflow:hidden;">
+          <div id="eePivotMenuTitle" style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--cyan);border-bottom:1px solid var(--border-subtle);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;"></div>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--text-primary);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(0,212,255,0.08)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('pivot')">🔀 Pivot on Entity <span style="font-size:9px;color:var(--text-muted);">(CrowdStrike + TIP)</span></button>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--text-primary);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(0,212,255,0.08)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('investigate')">🔍 Open Investigation</button>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--text-primary);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(0,212,255,0.08)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('pin')">📌 Pin Node</button>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--text-primary);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(0,212,255,0.08)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('focus')">🎯 Focus View</button>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--text-primary);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(0,212,255,0.08)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('copy')">📋 Copy Entity ID</button>
+          <div style="height:1px;background:var(--border-subtle);margin:2px 0;"></div>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--red-bright);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(239,68,68,0.06)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('remove')">🗑 Remove Node</button>
+        </div>
+
       </div><!-- end entities -->
 
 
@@ -38691,7 +38745,7 @@ document.addEventListener('keydown', (e) => {
     eeNodes.forEach(node => {
       const isSelected = eeSelectedEntity === node.id;
       const isConnected = eeSelectedEntity && eeEdgesProcessed.some(e => (e.from.id === eeSelectedEntity && e.to.id === node.id) || (e.to.id === eeSelectedEntity && e.from.id === node.id));
-      const dimmed = eeSelectedEntity && !isSelected && !isConnected && eeSelectedEntity !== node.id;
+      const dimmed = (eeSelectedEntity && !isSelected && !isConnected && eeSelectedEntity !== node.id) || (node.dimmed === true);
       const isHovered = eeHovered === node.id;
       const r = isHovered ? node.size * 1.3 : (isSelected ? node.size * 1.2 : node.size);
 
@@ -38817,6 +38871,7 @@ document.addEventListener('keydown', (e) => {
 
   window._eeSelectEntity = function(id) {
     eeSelectedEntity = (eeSelectedEntity === id) ? null : id;
+    window._eeSelectedEntity = eeSelectedEntity; // expose for HTML onclick handlers
     eeBuildCatalog(eeGetActiveFilter(), document.getElementById('eeSearch')?.value || '');
     eeUpdateDetail(id);
     // Focus on node in graph
@@ -39058,6 +39113,18 @@ document.addEventListener('keydown', (e) => {
     // Click (for select if not dragged)
     eeCanvas.addEventListener('click', (e) => {
       // Handled in mouseup
+    });
+
+    // Right-click: show pivot context menu
+    eeCanvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const rect = eeCanvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const node = eeGetNodeAt(mx, my);
+      if (node && typeof window._eeRightClickNode === 'function') {
+        window._eeRightClickNode(node.id, e.clientX, e.clientY);
+      }
     });
 
     // Zoom
@@ -39510,7 +39577,506 @@ document.addEventListener('keydown', (e) => {
     const container = document.getElementById('eeCanvasContainer');
     if (container) resizeObs.observe(container);
   };
-})();
+
+  // ── Add Adversary type to EE_COLORS ──
+  EE_COLORS.adversary = '#dc2626';
+  EE_COLORS.hash = '#6366f1';
+  EE_EDGE_STYLES.attributed_to = { color: 'rgba(220,38,38,0.5)', dash: [6,3], label: 'Attributed To' };
+  EE_EDGE_STYLES.related_to    = { color: 'rgba(139,92,246,0.4)', dash: [4,4], label: 'Related To' };
+  EE_EDGE_STYLES.pivoted_from  = { color: 'rgba(0,212,255,0.6)', dash: [], label: 'Pivoted From' };
+
+  // ── Pivot History ──
+  let eePivotHistory = [];
+
+  function eeUpdatePivotUI() {
+    var countEl = document.getElementById('eePivotCount');
+    if (countEl) countEl.textContent = eePivotHistory.length;
+    var listEl = document.getElementById('eePivotStepsList');
+    if (!listEl) return;
+    if (eePivotHistory.length === 0) {
+      listEl.innerHTML = '<span style="color:var(--text-muted);">No pivots yet — right-click any node and select \'Pivot on Entity\'</span>';
+      return;
+    }
+    listEl.innerHTML = eePivotHistory.slice().reverse().map(function(step, idx) {
+      var rel = eePivotHistory.length - idx;
+      var statusColor = step.newNodes > 0 ? '#10b981' : 'var(--text-muted)';
+      return '<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0;border-bottom:1px solid var(--border-subtle);">' +
+        '<span style="font-size:8px;color:var(--text-muted);min-width:16px;">' + rel + '</span>' +
+        '<span style="font-family:var(--font-mono);color:var(--cyan);">' + step.entity.substring(0, 28) + (step.entity.length > 28 ? '…' : '') + '</span>' +
+        '<span style="font-size:9px;color:var(--text-muted);">→</span>' +
+        '<span style="font-size:9px;color:' + statusColor + ';font-weight:600;">' + step.newNodes + ' new nodes</span>' +
+        '<span style="font-size:8px;color:var(--text-muted);margin-left:auto;">' + step.source + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  window._eeTogglePivotPanel = function() {
+    var panel = document.getElementById('eePivotPanel');
+    if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
+  };
+
+  window._eeClearPivotHistory = function() {
+    eePivotHistory = [];
+    eeUpdatePivotUI();
+  };
+
+  // ── Multi-hop Pivot Engine ──
+  window._eePivotNode = async function(nodeId) {
+    if (!nodeId) return;
+    var pivotMenuEl = document.getElementById('eePivotMenu');
+    if (pivotMenuEl) pivotMenuEl.style.display = 'none';
+
+    showToast('Pivoting on ' + nodeId.substring(0, 30) + '…', 'info');
+    var newNodes = 0;
+    var pivotSource = 'CS+TIP';
+
+    try {
+      // ── CrowdStrike: get related indicators for this IOC ──
+      var csRelated = [];
+      try {
+        var csResp = await fetch('/api/crowdstrike', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'search_indicators', filter: 'indicator:"' + nodeId + '"', limit: 20 })
+        });
+        if (csResp.ok) {
+          var csData = await csResp.json();
+          csRelated = csData.resources || [];
+        }
+      } catch(e) { console.warn('[EE Pivot] CS lookup failed:', e); }
+
+      // ── Enrich the pivoted node itself ──
+      var csEnrichResp = null;
+      try {
+        var enrResp = await fetch('/api/crowdstrike', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'enrich_iocs', indicators: [nodeId] })
+        });
+        if (enrResp.ok) csEnrichResp = await enrResp.json();
+      } catch(e) {}
+
+      // ── Add related indicator nodes ──
+      var entityEdgeSet = new Set(EE_EDGES.map(function(e) { return [e.from, e.to].sort().join('|'); }));
+
+      csRelated.forEach(function(rel) {
+        var relId = rel.indicator;
+        if (!relId || relId === nodeId) return;
+        if (!EE_ENTITIES.find(function(e) { return e.id === relId; })) {
+          var type = 'ip';
+          var icon = '🌐';
+          if (/[a-f0-9]{32,}/i.test(relId)) { type = 'hash'; icon = '#'; }
+          else if (relId.indexOf('.') !== -1 && !relId.match(/^\d+\.\d+\.\d+\.\d+$/)) { type = 'domain'; icon = '🌍'; }
+          var conf = rel.malicious_confidence || 'unverified';
+          var riskScore = { high: 90, medium: 60, low: 30, unverified: 10 }[conf] || 10;
+          EE_ENTITIES.push({
+            id: relId, type: type, icon: icon,
+            label: conf === 'high' ? 'CS HIGH' : (conf === 'medium' ? 'CS MED' : ''),
+            sub: (rel.malware_families || []).slice(0,2).join(', ') || '',
+            risk: riskScore,
+            malicious: conf === 'high',
+            alerts: 0, alertList: [],
+            lastSeen: rel.last_updated ? new Date(rel.last_updated).toLocaleDateString() : 'recent',
+            pivoted: true
+          });
+          newNodes++;
+        }
+        var ek = [nodeId, relId].sort().join('|');
+        if (!entityEdgeSet.has(ek)) {
+          entityEdgeSet.add(ek);
+          EE_EDGES.push({ from: nodeId, to: relId, type: 'pivoted_from' });
+        }
+      });
+
+      // ── Add adversary actor nodes from CS enrichment ──
+      var actorsAdded = [];
+      if (csEnrichResp && csEnrichResp.lookup && csEnrichResp.lookup[nodeId]) {
+        var iocData = csEnrichResp.lookup[nodeId];
+        (iocData.actors || []).forEach(function(actor) {
+          var actorId = 'ACTOR:' + actor;
+          if (!EE_ENTITIES.find(function(e) { return e.id === actorId; })) {
+            EE_ENTITIES.push({
+              id: actorId, type: 'adversary', icon: '💀',
+              label: actor,
+              sub: 'CrowdStrike Adversary',
+              risk: 95, malicious: true,
+              alerts: 0, alertList: [],
+              lastSeen: 'active', pivoted: true
+            });
+            newNodes++;
+            actorsAdded.push(actor);
+          }
+          var ak = [nodeId, actorId].sort().join('|');
+          if (!entityEdgeSet.has(ak)) {
+            entityEdgeSet.add(ak);
+            EE_EDGES.push({ from: nodeId, to: actorId, type: 'attributed_to' });
+          }
+        });
+        // Show CS intel in detail panel
+        window._eeShowCSIntelForNode(nodeId, iocData);
+      }
+
+      // Record pivot step
+      eePivotHistory.push({
+        entity: nodeId,
+        newNodes: newNodes,
+        actors: actorsAdded,
+        source: pivotSource,
+        timestamp: new Date().toISOString()
+      });
+      eeUpdatePivotUI();
+
+      // Rebuild graph with new entities
+      if (typeof eeInitNodes === 'function') eeInitNodes();
+      eeBuildCatalog(eeGetActiveFilter(), document.getElementById('eeSearch') ? document.getElementById('eeSearch').value : '');
+
+      var msg = newNodes > 0
+        ? 'Pivot complete: ' + newNodes + ' new node(s) added' + (actorsAdded.length > 0 ? ' — actors: ' + actorsAdded.slice(0,2).join(', ') : '')
+        : 'Pivot complete: no new related indicators found in CrowdStrike';
+      showToast(msg, newNodes > 0 ? 'success' : 'info');
+
+    } catch(err) {
+      console.error('[EE Pivot] Error:', err);
+      showToast('Pivot failed: ' + err.message, 'error');
+    }
+  };
+
+  // ── Show CS Intel in detail panel ──
+  window._eeShowCSIntelForNode = function(nodeId, iocData) {
+    var csSection = document.getElementById('eeDetailCSIntel');
+    var csContent = document.getElementById('eeDetailCSContent');
+    if (!csSection || !csContent) return;
+    if (!iocData) { csSection.style.display = 'none'; return; }
+    var conf = iocData.malicious_confidence || 'unverified';
+    var confColor = conf === 'high' ? '#ef4444' : conf === 'medium' ? '#f59e0b' : conf === 'low' ? '#10b981' : 'var(--text-muted)';
+    var html = '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">' +
+      '<span style="font-size:9px;padding:2px 8px;border-radius:8px;background:' + confColor + '20;color:' + confColor + ';border:1px solid ' + confColor + '40;font-weight:700;text-transform:uppercase;">' + conf + '</span>' +
+      '<span style="font-size:9px;color:var(--text-muted);">confidence</span></div>';
+    if (iocData.actors && iocData.actors.length > 0) {
+      html += '<div style="margin-bottom:4px;font-size:9px;color:var(--amber);">👤 ' + iocData.actors.slice(0,4).join(', ') + '</div>';
+    }
+    if (iocData.malware_families && iocData.malware_families.length > 0) {
+      html += '<div style="font-size:9px;color:var(--red-bright);">🦠 ' + iocData.malware_families.slice(0,3).join(', ') + '</div>';
+    }
+    if (iocData.labels && iocData.labels.length > 0) {
+      html += '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:4px;">';
+      iocData.labels.slice(0,5).forEach(function(l) {
+        html += '<span style="font-size:7px;padding:1px 5px;border-radius:6px;background:rgba(239,68,68,0.06);color:var(--red-bright);border:1px solid rgba(239,68,68,0.15);">' + l + '</span>';
+      });
+      html += '</div>';
+    }
+    csContent.innerHTML = html;
+    csSection.style.display = '';
+  };
+
+  // ── Right-click context menu ──
+  var _eeContextNodeId = null;
+
+  window._eeShowContextMenu = function(nodeId, x, y) {
+    _eeContextNodeId = nodeId;
+    var menu = document.getElementById('eePivotMenu');
+    var title = document.getElementById('eePivotMenuTitle');
+    if (!menu) return;
+    if (title) title.textContent = nodeId.length > 30 ? nodeId.substring(0, 30) + '…' : nodeId;
+    menu.style.display = '';
+    // Position safely within viewport
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var mw = 190, mh = 220;
+    menu.style.left = (x + mw > vw ? vw - mw - 8 : x) + 'px';
+    menu.style.top  = (y + mh > vh ? vh - mh - 8 : y) + 'px';
+    // Close on outside click
+    setTimeout(function() {
+      document.addEventListener('click', function closeMenu() {
+        menu.style.display = 'none';
+        document.removeEventListener('click', closeMenu);
+      }, { once: true });
+    }, 50);
+  };
+
+  window._eeContextAction = function(action) {
+    var nodeId = _eeContextNodeId;
+    var menu = document.getElementById('eePivotMenu');
+    if (menu) menu.style.display = 'none';
+    if (!nodeId) return;
+    if (action === 'pivot') {
+      window._eePivotNode(nodeId);
+    } else if (action === 'investigate') {
+      window._eeActInvestigate(nodeId);
+    } else if (action === 'pin') {
+      var node = eeNodes.find(function(n) { return n.id === nodeId; });
+      if (node) { node.pinned = !node.pinned; showToast(node.pinned ? 'Node pinned' : 'Node unpinned', 'info'); }
+    } else if (action === 'focus') {
+      var focusNode = eeNodes.find(function(n) { return n.id === nodeId; });
+      if (focusNode) {
+        var cont = document.getElementById('eeCanvasContainer');
+        if (cont) {
+          eeCamera.x = cont.clientWidth / 2 - focusNode.x;
+          eeCamera.y = cont.clientHeight / 2 - focusNode.y;
+          eeCamera.zoom = 1.8;
+        }
+      }
+    } else if (action === 'copy') {
+      try { navigator.clipboard.writeText(nodeId); showToast('Copied: ' + nodeId, 'info'); } catch(e) { showToast('Copy failed', 'error'); }
+    } else if (action === 'remove') {
+      var idx = EE_ENTITIES.findIndex(function(e) { return e.id === nodeId; });
+      if (idx !== -1) {
+        EE_ENTITIES.splice(idx, 1);
+        EE_EDGES = EE_EDGES.filter(function(e) { return e.from !== nodeId && e.to !== nodeId; });
+        if (typeof eeInitNodes === 'function') eeInitNodes();
+        eeBuildCatalog(eeGetActiveFilter(), '');
+        showToast('Node removed from graph', 'info');
+      }
+    }
+  };
+
+  window._eeActInvestigate = function(nodeId) {
+    var id = nodeId || (typeof eeSelectedEntity !== 'undefined' ? eeSelectedEntity : null);
+    if (!id) return;
+    navigate('investigation');
+    setTimeout(function() {
+      if (typeof window._eeDynamicAddEntity === 'function') window._eeDynamicAddEntity(id);
+      if (typeof window._eeSelectEntity === 'function') window._eeSelectEntity(id);
+    }, 300);
+  };
+
+  // Hook right-click into existing canvas event setup via window exposure
+  window._eeRightClickNode = window._eeShowContextMenu;
+
+  // ── Timeline Scrubber ──
+  var _eeTimelineMin = 0;  // epoch ms
+  var _eeTimelineMax = 0;
+  var _eeTimelineActive = false;
+
+  function eeInitTimeline() {
+    // Compute min/max epoch from entity lastSeen
+    var now = Date.now();
+    var times = EE_ENTITIES.map(function(e) {
+      if (!e.lastSeen || e.lastSeen === 'recent') return now;
+      var t = new Date(e.lastSeen).getTime();
+      return isNaN(t) ? now : t;
+    });
+    _eeTimelineMin = times.length > 0 ? Math.min.apply(null, times) : now - 7 * 86400000;
+    _eeTimelineMax = now;
+    var fromEl = document.getElementById('eeTimelineFrom');
+    var toEl = document.getElementById('eeTimelineTo');
+    var fromLbl = document.getElementById('eeTimelineFromLabel');
+    var toLbl = document.getElementById('eeTimelineToLabel');
+    if (fromEl) { fromEl.value = 0; }
+    if (toEl) { toEl.value = 100; }
+    if (fromLbl) fromLbl.textContent = new Date(_eeTimelineMin).toLocaleDateString('en-SG', {day:'2-digit', month:'short'});
+    if (toLbl) toLbl.textContent = 'Now';
+    _eeTimelineActive = false;
+    var statusEl = document.getElementById('eeTimelineStatus');
+    if (statusEl) statusEl.textContent = '';
+  }
+
+  window._eeApplyTimeline = function() {
+    var fromEl = document.getElementById('eeTimelineFrom');
+    var toEl = document.getElementById('eeTimelineTo');
+    if (!fromEl || !toEl) return;
+    var fromPct = parseInt(fromEl.value) / 100;
+    var toPct   = parseInt(toEl.value) / 100;
+    var range = _eeTimelineMax - _eeTimelineMin;
+    var tFrom = _eeTimelineMin + fromPct * range;
+    var tTo   = _eeTimelineMin + toPct   * range;
+    _eeTimelineActive = true;
+
+    var fromLbl = document.getElementById('eeTimelineFromLabel');
+    var toLbl = document.getElementById('eeTimelineToLabel');
+    if (fromLbl) fromLbl.textContent = new Date(tFrom).toLocaleDateString('en-SG', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+    if (toLbl) toLbl.textContent = toPct >= 0.99 ? 'Now' : new Date(tTo).toLocaleDateString('en-SG', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+
+    // Dim nodes outside the window
+    eeNodes.forEach(function(node) {
+      var ent = EE_ENTITIES.find(function(e) { return e.id === node.id; });
+      if (!ent) return;
+      var t = ent.lastSeen && ent.lastSeen !== 'recent' ? new Date(ent.lastSeen).getTime() : _eeTimelineMax;
+      node.dimmed = isNaN(t) ? false : (t < tFrom || t > tTo);
+    });
+
+    var active = eeNodes.filter(function(n) { return !n.dimmed; }).length;
+    var statusEl = document.getElementById('eeTimelineStatus');
+    if (statusEl) statusEl.textContent = active + '/' + eeNodes.length + ' nodes active';
+  };
+
+  window._eeResetTimeline = function() {
+    _eeTimelineActive = false;
+    eeNodes.forEach(function(n) { n.dimmed = false; });
+    var fromEl = document.getElementById('eeTimelineFrom');
+    var toEl   = document.getElementById('eeTimelineTo');
+    if (fromEl) fromEl.value = 0;
+    if (toEl)   toEl.value   = 100;
+    var statusEl = document.getElementById('eeTimelineStatus');
+    if (statusEl) statusEl.textContent = '';
+    eeInitTimeline();
+  };
+
+  // ── Session persistence (Supabase entity_graph_sessions) ──
+  window._eeSaveSessionPrompt = function() {
+    var name = prompt('Enter a name for this graph session:', 'Graph ' + new Date().toLocaleDateString('en-SG'));
+    if (!name) return;
+    window._eeSaveSession(name);
+  };
+
+  window._eeSaveSession = async function(name) {
+    if (!window._dactaSupabase) { showToast('Supabase not connected', 'error'); return; }
+    var ticketKey = _currentTicketKey || '';
+    var analystEmail = (window._currentAnalystJira && window._currentAnalystJira.emailAddress) || 'analyst';
+    var viewport = JSON.parse(JSON.stringify(eeCamera));
+    var payload = {
+      created_by: analystEmail,
+      name: name,
+      ticket_key: ticketKey || null,
+      org_id: null,
+      nodes: EE_ENTITIES.map(function(e) { var n = eeNodes.find(function(nd) { return nd.id === e.id; }); return Object.assign({}, e, { x: n ? n.x : 0, y: n ? n.y : 0 }); }),
+      edges: EE_EDGES,
+      viewport: viewport,
+      pivot_history: eePivotHistory,
+      adversary_nodes: EE_ENTITIES.filter(function(e) { return e.type === 'adversary'; }).map(function(e) { return e.id; }),
+      metadata: { savedAt: new Date().toISOString(), nodeCount: EE_ENTITIES.length, edgeCount: EE_EDGES.length }
+    };
+    try {
+      var { error } = await window._dactaSupabase.from('entity_graph_sessions').insert(payload);
+      if (error) throw new Error(error.message);
+      showToast('Graph session "' + name + '" saved', 'success');
+      window._eeLoadSessionsList(); // Refresh dropdown
+    } catch(e) {
+      showToast('Failed to save session: ' + e.message, 'error');
+    }
+  };
+
+  window._eeLoadSessionsList = async function() {
+    var listEl = document.getElementById('eeSessionsList');
+    if (!listEl) return;
+    if (!window._dactaSupabase) { listEl.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--text-muted);">Supabase not connected</div>'; return; }
+    listEl.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--text-muted);">Loading...</div>';
+    try {
+      var { data, error } = await window._dactaSupabase
+        .from('entity_graph_sessions')
+        .select('id, name, created_at, ticket_key, metadata')
+        .order('updated_at', { ascending: false })
+        .limit(20);
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) {
+        listEl.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--text-muted);">No saved sessions</div>';
+        return;
+      }
+      listEl.innerHTML = data.map(function(s) {
+        var ts = new Date(s.created_at).toLocaleDateString('en-SG', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+        var nodes = (s.metadata && s.metadata.nodeCount) || '?';
+        return '<div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:2px;" ' +
+          'onmouseover="this.style.background=\'rgba(0,212,255,0.06)\'" onmouseout="this.style.background=\'\'" ' +
+          'onclick="window._eeRestoreSession(\'' + s.id + '\')">' +
+          '<div style="font-size:11px;font-weight:600;color:var(--text-primary);">' + s.name + '</div>' +
+          '<div style="font-size:9px;color:var(--text-muted);">' + ts + ' · ' + nodes + ' nodes' + (s.ticket_key ? ' · ' + s.ticket_key : '') + '</div>' +
+          '</div>';
+      }).join('');
+    } catch(e) {
+      listEl.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--red-bright);">Error: ' + e.message + '</div>';
+    }
+  };
+
+  window._eeToggleSessionsDropdown = function() {
+    var dd = document.getElementById('eeSessionsDropdown');
+    if (!dd) return;
+    if (dd.style.display === 'none') {
+      dd.style.display = '';
+      window._eeLoadSessionsList();
+    } else {
+      dd.style.display = 'none';
+    }
+  };
+
+  window._eeRestoreSession = async function(sessionId) {
+    var dd = document.getElementById('eeSessionsDropdown');
+    if (dd) dd.style.display = 'none';
+    if (!window._dactaSupabase) { showToast('Supabase not connected', 'error'); return; }
+    try {
+      var { data, error } = await window._dactaSupabase
+        .from('entity_graph_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
+      if (error) throw new Error(error.message);
+      // Restore entities and edges
+      EE_ENTITIES.length = 0;
+      EE_EDGES.length = 0;
+      (data.nodes || []).forEach(function(n) { EE_ENTITIES.push(n); });
+      (data.edges || []).forEach(function(e) { EE_EDGES.push(e); });
+      eePivotHistory = data.pivot_history || [];
+      // Restore camera
+      if (data.viewport) Object.assign(eeCamera, data.viewport);
+      // Rebuild
+      eeInitNodes();
+      eeBuildCatalog(eeGetActiveFilter(), '');
+      eeInitTimeline();
+      eeUpdatePivotUI();
+      showToast('Session "' + data.name + '" restored — ' + EE_ENTITIES.length + ' entities', 'success');
+    } catch(e) {
+      showToast('Failed to restore session: ' + e.message, 'error');
+    }
+  };
+
+  // ── AI Copilot "Analyse Cluster" integration ──
+  window._eeAnalyseWithCopilot = function() {
+    var nodeCount = EE_ENTITIES.length;
+    if (nodeCount === 0) { showToast('No entities in graph to analyse', 'info'); return; }
+
+    // Build a structured text summary of the current graph
+    var maliciousEntities = EE_ENTITIES.filter(function(e) { return e.malicious; });
+    var adversaryEntities = EE_ENTITIES.filter(function(e) { return e.type === 'adversary'; });
+    var highRiskEntities  = EE_ENTITIES.filter(function(e) { return e.risk >= 70 && !e.malicious; });
+
+    var graphSummary = 'ENTITY GRAPH CLUSTER ANALYSIS REQUEST\n\n' +
+      'Graph contains ' + nodeCount + ' entities and ' + EE_EDGES.length + ' relationships.\n\n' +
+      '--- MALICIOUS ENTITIES (' + maliciousEntities.length + ') ---\n';
+    maliciousEntities.forEach(function(e) {
+      graphSummary += '- [' + e.type.toUpperCase() + '] ' + e.id + (e.label ? ' (' + e.label + ')' : '') + (e.sub ? ' | ' + e.sub : '') + '\n';
+    });
+
+    if (adversaryEntities.length > 0) {
+      graphSummary += '\n--- ADVERSARY ATTRIBUTION (' + adversaryEntities.length + ') ---\n';
+      adversaryEntities.forEach(function(e) {
+        graphSummary += '- ' + e.label + ' (CrowdStrike actor)\n';
+      });
+    }
+
+    if (highRiskEntities.length > 0) {
+      graphSummary += '\n--- HIGH RISK ENTITIES ---\n';
+      highRiskEntities.slice(0, 10).forEach(function(e) {
+        graphSummary += '- [' + e.type.toUpperCase() + '] ' + e.id + ' (risk: ' + e.risk + ')' + (e.sub ? ' | ' + e.sub : '') + '\n';
+      });
+    }
+
+    graphSummary += '\n--- PIVOT TRAIL (' + eePivotHistory.length + ' pivots) ---\n';
+    eePivotHistory.forEach(function(p) {
+      graphSummary += '- Pivoted from ' + p.entity + ' → ' + p.newNodes + ' new nodes via ' + p.source + '\n';
+    });
+
+    graphSummary += '\nPlease analyse this entity cluster and: (1) identify the likely attack pattern or threat actor campaign, (2) suggest the next pivot entities to investigate, (3) assign a threat severity rating, (4) recommend immediate containment actions.';
+
+    // Navigate to Copilot and pre-fill
+    navigate('copilot');
+    setTimeout(function() {
+      var copilotInput = document.getElementById('copilotInput');
+      if (copilotInput) {
+        copilotInput.value = graphSummary;
+        copilotInput.focus();
+        copilotInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }, 400);
+    showToast('Graph cluster sent to AI Copilot', 'info');
+  };
+
+  // Init timeline once live data loads — patch loadLiveEntityData completion
+  var _origLoadLive = loadLiveEntityData;
+  loadLiveEntityData = async function() {
+    await _origLoadLive();
+    eeInitTimeline();
+    eeUpdatePivotUI();
+  };
+
+})(); // end Entity Explorer IIFE
 
 // ============================================================
 //  COMMAND CENTER VISUALIZATION
