@@ -47411,12 +47411,40 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
       '</div></div>';
   }
 
+  // ── Verdict Reconciliation: warn if Jira resolution contradicts AI verdict ──
+  var reconciliationBanner = '';
+  if (issueData) {
+    var jiraStatus = (issueData.fields && issueData.fields.status) ? issueData.fields.status.name : '';
+    var jiraResolution = (issueData.fields && issueData.fields.resolution) ? issueData.fields.resolution.name : '';
+    var jiraWorkCat = (issueData.fields && issueData.fields.customfield_10038) ? (issueData.fields.customfield_10038.value || '') : '';
+    var aiVerdict = (cacheEntry.verdict || '').toLowerCase();
+    var jiraStatusLower = (jiraStatus + ' ' + jiraResolution + ' ' + jiraWorkCat).toLowerCase();
+    var isAITruePositive = aiVerdict.includes('true positive') || aiVerdict.includes('confirmed threat');
+    var isJiraFalsePositive = jiraStatusLower.includes('false positive') || jiraStatusLower.includes('fp') || jiraStatusLower.includes('business justified') || jiraStatusLower.includes('benign') || jiraStatusLower.includes('not a threat');
+    var isJiraClosed = jiraStatusLower.includes('closed') || jiraStatusLower.includes('resolved') || jiraStatusLower.includes('done');
+    var showReconciliation = isAITruePositive && (isJiraFalsePositive || isJiraClosed);
+    if (showReconciliation) {
+      reconciliationBanner = '<div style="margin-bottom:10px;padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:8px;display:flex;align-items:flex-start;gap:10px;">' +
+        '<span style="font-size:16px;flex-shrink:0;">\u26A0\uFE0F</span>' +
+        '<div>' +
+          '<div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:3px;">Verdict Discrepancy Detected</div>' +
+          '<div style="font-size:10px;color:var(--text-secondary);line-height:1.5;">' +
+            'AI investigation assessed this as <span style="color:var(--red-bright);font-weight:600;">TRUE POSITIVE</span> ' +
+            'but the Jira ticket is currently <span style="color:#f59e0b;font-weight:600;">' + (jiraStatus || 'Closed') + (jiraResolution ? ' / ' + jiraResolution : '') + '</span>. ' +
+            'This may indicate the AI missed exculpatory evidence (e.g., firewall block logs, analyst findings). ' +
+            'Consider re-investigating to capture the latest data.' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+  }
+
   // Remove spinner, inject cached content
   var spinner = document.getElementById('invLoadingSpinner');
   if (spinner) spinner.remove();
 
   var container = document.createElement('div');
-  container.innerHTML = bannerHTML + overrideBanner + (cacheEntry.html || '<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:11px;">Cached investigation data unavailable. Click Re-investigate to run a fresh analysis.</div>');
+  container.innerHTML = bannerHTML + overrideBanner + reconciliationBanner + (cacheEntry.html || '<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:11px;">Cached investigation data unavailable. Click Re-investigate to run a fresh analysis.</div>');
   invMainContent.appendChild(container);
 
   // Apply collapsible behavior to round cards in cached content
@@ -48002,6 +48030,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     childProcesses: [], networkConnections: [], fileEvents: [],
     authEvents: [], edrActions: [], queryResults: [],
     rawAlerts: [], hostInfo: null, alertHistory: null,
+    firewallBlocks: [],  // ← NEW: dedicated deny/drop events from firewall connector
     openctiResults: [],
     elasticConnected: false, openctiConnected: false,
     queriesRun: 0, queryDetails: []
@@ -48244,6 +48273,9 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     // No host info or alert history from EDR
 
     // ── FALLBACK Query 5: IP-based alert correlation (network/ML alerts without EDR) ──
+    // RFC1918 filter intentionally kept here: searching internal IPs in logs-* (SIEM alerts index)
+    // generates massive noise. Firewall deny/drop for internal IPs is handled separately by the
+    // Firewall Block/Deny Connector Query above (Block B), which uses ALL IPs correctly.
     var corrIPs = (iocs.ips || []).filter(function(ip) {
       return !ip.startsWith('10.') && !ip.startsWith('172.') && !ip.startsWith('192.168.') && !ip.startsWith('127.');
     });
@@ -48285,6 +48317,97 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     }
 
     logs.authEvents.push({ status: 'INFO', user: 'N/A', result: 'User context requires EDR telemetry. Not available for this client.', live: true });
+  }
+
+  // ── FIREWALL BLOCK/DENY Connector Query (runs independently for ALL orgs with firewall connector) ──
+  // This is the connector-aware dispatcher: it always runs when _hasFirewall = true, regardless of
+  // whether EDR found an alert. Firewall deny/drop evidence is critical and must NEVER be skipped.
+  // Uses ALL ticket IPs (internal RFC1918 + external) — internal hosts are the SOURCE of outbound traffic.
+  if (_hasFirewall) {
+    var fwBlockMeta = _fwConnector ? _fwConnector.metadata : {};
+    var fwBlockIndex = fwBlockMeta.index_pattern || ('logs-panw.panos-' + namespace + '-*');
+    if (_fwConnector && _fwConnector.vendor && _fwConnector.vendor.toLowerCase().includes('fortinet')) {
+      fwBlockIndex = fwBlockMeta.index_pattern || ('logs-fortinet_fortigate.log-' + namespace + '-*');
+    }
+    // Use ALL ticket IPs — RFC1918 filter is correct only for threat-intel enrichment, NOT for firewall queries
+    var allTicketIPs = (iocs.ips || []);
+    if (allTicketIPs.length > 0) {
+      var fwBlockQ = {
+        size: 20,
+        query: {
+          bool: {
+            must: [
+              { range: { '@timestamp': { gte: 'now-7d' } } }
+            ],
+            should: allTicketIPs.map(function(ip) {
+              return { bool: { should: [{ match: { 'source.ip': ip } }, { match: { 'destination.ip': ip } }], minimum_should_match: 1 } };
+            }),
+            minimum_should_match: 1,
+            filter: [
+              { bool: {
+                should: [
+                  { terms: { 'event.action': ['deny', 'drop', 'block', 'reset-both', 'reset-server', 'reset-client', 'DENY', 'DROP', 'BLOCK'] } },
+                  { terms: { 'network.direction': ['outbound'] } }
+                ]
+              }}
+            ]
+          }
+        },
+        sort: [{ '@timestamp': 'desc' }],
+        _source: ['@timestamp', 'source.ip', 'destination.ip', 'destination.port', 'event.action', 'network.bytes', 'rule.name', 'observer.name', 'network.direction']
+      };
+      var qDFBlock = { name: 'Firewall Block/Deny (connector-aware)', index: fwBlockIndex, query: 'action:(deny|drop|block) ALL ticket IPs (7d)', status: 'running' };
+      logs.queryDetails.push(qDFBlock); logs.queriesRun++;
+      var fwBlockResult = await queryElastic('search', fwBlockIndex, fwBlockQ);
+      if (fwBlockResult && fwBlockResult.hits) {
+        logs.elasticConnected = true;
+        qDFBlock.status = 'success';
+        qDFBlock.hits = fwBlockResult.hits.total ? fwBlockResult.hits.total.value : 0;
+        var blockHits = fwBlockResult.hits.hits || [];
+        if (blockHits.length > 0) {
+          blockHits.forEach(function(hit) {
+            var s = hit._source;
+            logs.firewallBlocks.push({
+              timestamp: s['@timestamp'],
+              srcIp: (s.source || {}).ip || '',
+              dstIp: (s.destination || {}).ip || '',
+              dstPort: (s.destination || {}).port || '',
+              action: (s.event || {}).action || 'unknown',
+              ruleName: (s.rule || {}).name || '',
+              bytes: (s.network || {}).bytes || 0,
+              direction: (s.network || {}).direction || '',
+              evidenceSource: 'SIEM_CONFIRMED'
+            });
+          });
+          // Add to networkConnections as a SIEM_CONFIRMED firewall block finding
+          logs.networkConnections.push({
+            status: 'ALERT',
+            query: 'Firewall BLOCK/DENY: event.action:(deny|drop|block) for ticket IPs',
+            result: qDFBlock.hits + ' firewall BLOCK/DENY event(s) — traffic was actively DROPPED by firewall policy. This is SIEM-confirmed, not inferred from ticket text.',
+            ip: allTicketIPs.join(', '),
+            count: qDFBlock.hits,
+            live: true,
+            actionType: 'FIREWALL_BLOCK',
+            evidenceSource: 'SIEM_CONFIRMED'
+          });
+        } else {
+          // No blocks found — this is significant exculpatory evidence
+          logs.networkConnections.push({
+            status: 'CLEAR',
+            query: 'Firewall BLOCK/DENY: event.action:(deny|drop|block) for ticket IPs (7d)',
+            result: 'No firewall BLOCK/DENY events found for any ticket IP in last 7 days. Traffic was either allowed or no firewall policy triggered.',
+            ip: allTicketIPs.join(', '),
+            count: 0,
+            live: true,
+            actionType: 'FIREWALL_ALLOW',
+            evidenceSource: 'SIEM_CONFIRMED'
+          });
+        }
+      } else {
+        qDFBlock.status = 'error';
+        logs.queryDetails[logs.queryDetails.length - 1].note = 'Query failed — firewall index may be offline';
+      }
+    }
   }
 
   // ── QUERY 6: DACTA TIP IOC Lookups ──
@@ -48425,32 +48548,32 @@ function generateInculpatoryEvidence(summary, desc, techniques, iocs, cmdCtx) {
 
   // Process chain analysis
   if (lower.includes('powershell') && (lower.includes('-enc') || lower.includes('encoded'))) {
-    evidence.push({ title: 'Encoded PowerShell execution', severity: 'high', detail: 'Base64-encoded PowerShell command detected (T1059.001 + T1027). Encoded execution is a well-documented defense evasion technique used to bypass command-line logging and AV signatures.' });
+    evidence.push({ title: 'Encoded PowerShell execution', severity: 'high', source: 'TICKET_TEXT', detail: 'Base64-encoded PowerShell command detected (T1059.001 + T1027). Encoded execution is a well-documented defense evasion technique used to bypass command-line logging and AV signatures.' });
   }
   if (lower.includes('nc.exe') || lower.includes('netcat')) {
     var portMention = lower.includes('4444') ? ' on port 4444 (default Metasploit listener)' : '';
-    evidence.push({ title: 'Reverse shell utility detected', severity: 'high', detail: 'nc.exe (netcat) with command execution flag (-e cmd.exe) targeting' + portMention + '. This is the canonical pattern for establishing a reverse shell for remote command-and-control.' });
+    evidence.push({ title: 'Reverse shell utility detected', severity: 'high', source: 'TICKET_TEXT', detail: 'nc.exe (netcat) with command execution flag (-e cmd.exe) targeting' + portMention + '. This is the canonical pattern for establishing a reverse shell for remote command-and-control.' });
   }
   if (lower.includes('ollama') && (lower.includes('powershell') || lower.includes('nc.exe'))) {
-    evidence.push({ title: 'AI tool in attack chain', severity: 'medium', detail: 'ollama.exe (local LLM runtime) appeared in the same process context as offensive security tools. Could indicate AI-assisted payload generation or weaponized local model.' });
+    evidence.push({ title: 'AI tool in attack chain', severity: 'medium', source: 'TICKET_TEXT', detail: 'ollama.exe (local LLM runtime) appeared in the same process context as offensive security tools. Could indicate AI-assisted payload generation or weaponized local model.' });
   }
   if (lower.includes('ransomware') || (lower.includes('encrypt') && lower.includes('file'))) {
-    evidence.push({ title: 'Ransomware indicators', severity: 'critical', detail: 'File encryption activity and/or ransomware markers detected. Mass file renaming patterns consistent with ransomware payload execution.' });
+    evidence.push({ title: 'Ransomware indicators', severity: 'critical', source: 'TICKET_TEXT', detail: 'File encryption activity and/or ransomware markers detected. Mass file renaming patterns consistent with ransomware payload execution.' });
   }
   if (lower.includes('lateral') || lower.includes('admin$') || lower.includes('psexec')) {
-    evidence.push({ title: 'Lateral movement detected', severity: 'high', detail: 'Evidence of lateral movement via remote administration tools or network shares. Attacker expanding foothold across the environment.' });
+    evidence.push({ title: 'Lateral movement detected', severity: 'high', source: 'TICKET_TEXT', detail: 'Evidence of lateral movement via remote administration tools or network shares. Attacker expanding foothold across the environment.' });
   }
   if (lower.includes('credential') || lower.includes('mimikatz') || lower.includes('lsass')) {
-    evidence.push({ title: 'Credential theft attempt', severity: 'critical', detail: 'Credential dumping tools or techniques detected targeting authentication material stored in memory or on disk.' });
+    evidence.push({ title: 'Credential theft attempt', severity: 'critical', source: 'TICKET_TEXT', detail: 'Credential dumping tools or techniques detected targeting authentication material stored in memory or on disk.' });
   }
   if (techniques.some(function(t) { return t.id === 'EDR-BLOCK'; })) {
-    evidence.push({ title: 'EDR behavioral detection triggered', severity: 'medium', detail: 'The endpoint protection platform independently flagged and blocked this activity based on behavioral analysis, corroborating the threat classification.' });
+    evidence.push({ title: 'EDR behavioral detection triggered', severity: 'medium', source: 'TICKET_TEXT', detail: 'The endpoint protection platform independently flagged and blocked this activity based on behavioral analysis, corroborating the threat classification.' });
   }
   // Generic technique-based evidence
   techniques.forEach(function(t) {
     if (!evidence.some(function(e) { return e.title.toLowerCase().includes(t.name.toLowerCase().split(':')[0].trim().substring(0,10)); })) {
       if (t.id !== 'EDR-BLOCK' && evidence.length < 6) {
-        evidence.push({ title: t.name + ' (' + t.id + ')', severity: 'medium', detail: t.desc });
+        evidence.push({ title: t.name + ' (' + t.id + ')', severity: 'medium', source: 'TICKET_TEXT', detail: t.desc });
       }
     }
   });
@@ -48986,6 +49109,36 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   var inculpatory = generateInculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx);
   var exculpatory = generateExculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs);
+
+  // ── Inject SIEM-confirmed firewall block evidence (source: SIEM_CONFIRMED, not ticket text) ──
+  if (elasticLogs.firewallBlocks && elasticLogs.firewallBlocks.length > 0) {
+    var fbCount = elasticLogs.firewallBlocks.length;
+    var fbActions = [...new Set(elasticLogs.firewallBlocks.map(function(b) { return b.action; }))].join('/');
+    var fbSrcIPs = [...new Set(elasticLogs.firewallBlocks.map(function(b) { return b.srcIp; }).filter(Boolean))].slice(0,3).join(', ');
+    var fbDstIPs = [...new Set(elasticLogs.firewallBlocks.map(function(b) { return b.dstIp; }).filter(Boolean))].slice(0,3).join(', ');
+    inculpatory.unshift({
+      title: 'Firewall BLOCKED ' + fbCount + ' event(s) — action: ' + fbActions,
+      severity: 'high',
+      source: 'SIEM_CONFIRMED',
+      detail: 'SIEM-confirmed (Elastic/Palo Alto): Firewall actively blocked/dropped traffic for ticket IPs. ' +
+        (fbSrcIPs ? 'Source: ' + fbSrcIPs + '. ' : '') +
+        (fbDstIPs ? 'Destination: ' + fbDstIPs + '. ' : '') +
+        'This is direct evidence from firewall logs, not inferred from ticket text.'
+    });
+    // If firewall blocked traffic, remove any ticket-text-only "no network connection" exculpatory evidence
+    exculpatory = exculpatory.filter(function(e) {
+      return !(e.title && e.title.toLowerCase().includes('no network connection') && e.source !== 'SIEM_CONFIRMED');
+    });
+  } else if (elasticLogs.firewallBlocks && elasticLogs.firewallBlocks.length === 0 &&
+             elasticLogs.networkConnections.some(function(nc) { return nc.actionType === 'FIREWALL_ALLOW' && nc.evidenceSource === 'SIEM_CONFIRMED'; })) {
+    // Firewall was queried but found NO blocks — this is exculpatory SIEM evidence
+    exculpatory.unshift({
+      title: 'Firewall query: no BLOCK/DENY events found (SIEM verified)',
+      severity: 'strong',
+      source: 'SIEM_CONFIRMED',
+      detail: 'The firewall connector was queried for deny/drop/block events against all ticket IPs over the last 7 days. Zero blocking events were found. This is SIEM-confirmed exculpatory evidence, not an inference.'
+    });
+  }
 
   // Inject CrowdStrike confirmed IOC evidence into inculpatory chain
   if (csHighConfirmCount > 0) {
@@ -50507,11 +50660,26 @@ function buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs
   if (inculpatory.length > 0) {
     inculpatory.forEach(function(ev, i) {
       var sevColor = ev.severity === 'critical' ? 'var(--red-bright)' : (ev.severity === 'high' ? '#f97316' : 'var(--amber)');
+      var sourceBadgeBg, sourceBadgeColor, sourceBadgeText;
+      if (ev.source === 'SIEM_CONFIRMED') {
+        sourceBadgeBg = 'rgba(16,185,129,0.15)';
+        sourceBadgeColor = '#10b981';
+        sourceBadgeText = '[SIEM CONFIRMED]';
+      } else if (ev.title.toLowerCase().includes('crowdstrike')) {
+        sourceBadgeBg = 'rgba(234,88,12,0.15)';
+        sourceBadgeColor = '#ea580c';
+        sourceBadgeText = '[THREAT INTEL]';
+      } else {
+        sourceBadgeBg = 'rgba(245,158,11,0.15)';
+        sourceBadgeColor = '#f59e0b';
+        sourceBadgeText = '[TICKET TEXT]';
+      }
       html += '<div class="reasoning-item" style="' + (i === inculpatory.length - 1 ? 'border-bottom:none;' : '') + '">' +
         '<div class="reasoning-num" style="background:rgba(239,68,68,0.15);color:var(--red-bright);">' + (i + 1) + '</div>' +
         '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;">' +
           '<strong style="color:var(--text-primary);">' + ev.title + '</strong>' +
           '<span style="font-size:9px;font-weight:600;color:' + sevColor + ';margin-left:6px;text-transform:uppercase;">[' + ev.severity + ']</span>' +
+          '<span style="font-size:8px;font-weight:600;color:' + sourceBadgeColor + ';margin-left:6px;padding:2px 6px;background:' + sourceBadgeBg + ';border-radius:3px;">' + sourceBadgeText + '</span>' +
           ' \u2014 ' + ev.detail + '</div></div>';
     });
   } else {
@@ -50528,10 +50696,21 @@ function buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs
   if (exculpatory.length > 0) {
     exculpatory.forEach(function(ev) {
       var sevColor = ev.severity === 'strong' ? 'var(--green)' : 'var(--cyan)';
+      var sourceBadgeBg, sourceBadgeColor, sourceBadgeText;
+      if (ev.source === 'SIEM_CONFIRMED') {
+        sourceBadgeBg = 'rgba(16,185,129,0.15)';
+        sourceBadgeColor = '#10b981';
+        sourceBadgeText = '[SIEM CONFIRMED]';
+      } else {
+        sourceBadgeBg = 'rgba(0,212,255,0.15)';
+        sourceBadgeColor = 'var(--cyan)';
+        sourceBadgeText = '[TICKET TEXT]';
+      }
       html += '<div class="counter-item">' +
         '<span class="counter-icon" style="color:' + sevColor + ';">' + (ev.severity === 'strong' ? '\u2705' : '\u26A0') + '</span>' +
         '<div style="flex:1;"><strong style="color:var(--text-primary);font-size:11px;">' + ev.title + '</strong>' +
         '<span style="font-size:9px;font-weight:600;color:' + sevColor + ';margin-left:6px;text-transform:uppercase;">[' + ev.severity + ']</span>' +
+        '<span style="font-size:8px;font-weight:600;color:' + sourceBadgeColor + ';margin-left:6px;padding:2px 6px;background:' + sourceBadgeBg + ';border-radius:3px;">' + sourceBadgeText + '</span>' +
         '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;line-height:1.5;">' + ev.detail + '</div></div></div>';
     });
   } else {

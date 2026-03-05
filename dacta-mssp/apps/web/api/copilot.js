@@ -180,6 +180,20 @@ const TOOLS = [
       },
       required: ["ticket_key"]
     }
+  },
+  {
+    name: 'get_investigation_result',
+    description: 'Retrieve the AI investigation result for a specific Jira ticket from the investigation cache. Returns the cached verdict, confidence score, MITRE techniques, IOCs, and full investigation HTML if available. Use this when the analyst asks about a previous AI investigation, asks if a ticket was investigated, or wants to know the AI verdict for a ticket.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        ticket_key: {
+          type: 'string',
+          description: 'The Jira ticket key to look up (e.g., "DAC-18883")'
+        }
+      },
+      required: ['ticket_key']
+    }
   }
 ];
 
@@ -461,6 +475,33 @@ function extractJiraText(doc) {
   return walk(doc.content).trim();
 }
 
+async function executeGetInvestigationResult(input) {
+  const ticketKey = input.ticket_key || '';
+  if (!ticketKey) return { error: 'ticket_key is required' };
+  try {
+    const jiraBase = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+    const resp = await fetch(`${jiraBase}/api/jira?action=investigationResult&ticket_key=${encodeURIComponent(ticketKey)}`);
+    if (!resp.ok) return { error: `Investigation cache lookup failed: HTTP ${resp.status}` };
+    const data = await resp.json();
+    if (!data.found) return { found: false, ticket_key: ticketKey, message: 'No AI investigation result found for ' + ticketKey + '. The ticket may not have been investigated yet.' };
+    return {
+      found: true,
+      ticket_key: ticketKey,
+      verdict: data.verdict || 'Unknown',
+      confidence: data.confidence || 0,
+      investigated_at: data.investigated_at || null,
+      mitre_techniques: data.metadata ? (data.metadata.techniques || []) : [],
+      iocs: data.metadata ? (data.metadata.iocs || {}) : {},
+      override_verdict: data.override_verdict || null,
+      override_reason: data.override_reason || null,
+      feedback_rating: data.feedback_rating || null,
+      summary: `AI investigated ${ticketKey} at ${data.investigated_at}. Verdict: ${data.verdict} (${data.confidence}% confidence).${data.override_verdict ? ' Analyst overrode verdict to: ' + data.override_verdict : ''}`
+    };
+  } catch(e) {
+    return { error: 'Failed to retrieve investigation result: ' + e.message };
+  }
+}
+
 // ── Execute a tool call ──
 async function executeTool(name, input) {
   switch (name) {
@@ -474,6 +515,8 @@ async function executeTool(name, input) {
       return await executeJiraSearch(input);
     case 'get_jira_ticket_details':
       return await executeJiraTicketDetails(input);
+    case 'get_investigation_result':
+      return await executeGetInvestigationResult(input);
     default:
       return { error: `Unknown tool: ${name}` };
   }
