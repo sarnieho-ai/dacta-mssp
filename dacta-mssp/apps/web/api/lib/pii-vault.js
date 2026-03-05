@@ -48,12 +48,14 @@ class PiiVault {
         regex: /\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b|\b(?:[0-9a-fA-F]{1,4}:){1,7}:\b|\b::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}\b/g,
         priority: 41
       },
-      // Hostnames — patterns like WIN-SRV-DC01, DACTASG-WS-047, etc.
-      // Only match uppercase hostnames with hyphens/numbers (avoids false positives)
+      // Hostnames — patterns like WIN-SRV-DC01, DACTASG-WS-047, WKST-0xDA24C1EF, etc.
+      // First segment must start uppercase (avoids matching plain lowercase words).
+      // Subsequent segments use [A-Za-z0-9] so hex-style suffixes (0xDA24C1EF)
+      // with lowercase 'x' are captured as a whole token rather than split.
       // Excludes: Jira ticket keys (DAC-18819), MITRE IDs (T1059-001)
       {
         category: 'HOST',
-        regex: /\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+){1,5}\b/g,
+        regex: /\b[A-Z][A-Z0-9]*(?:-[A-Za-z0-9]+){1,5}\b/g,
         priority: 50,
         exclude: /^[A-Z]{1,6}-\d+$|^T\d{4}(?:\.\d{3})?(?:-\d+)?$/  // Skip Jira keys (PROJ-12345) and MITRE IDs (T1059, T1059.001, T1059-001)
       },
