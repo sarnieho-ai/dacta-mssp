@@ -47842,18 +47842,74 @@ async function runAIInvestigation(ticketKey, issueData) {
   var iocs = extractIOCs(fullText);
   var techniques = detectTechniques(fullText);
   var cmdCtx = analyzeCommandContext(fullText);
-  // Real Elastic SIEM + DACTA TIP lookup (async)
-  console.log('[AI Investigation] Starting real Elastic SIEM + DACTA TIP queries...');
+
+  // ── CrowdStrike Falcon Intel enrichment (parallel with Elastic) ──
+  var csEnrichment = { lookup: {}, total: 0, queried: 0, actors: [], error: null };
+  var csAllIOCs = [].concat(
+    iocs.ips || [], iocs.domains || [], iocs.hashes || [], iocs.urls || []
+  ).filter(Boolean).slice(0, 100); // CS limit guard
+
+  var csEnrichPromise = (csAllIOCs.length > 0)
+    ? fetch('/api/crowdstrike', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'enrich_iocs', indicators: csAllIOCs })
+      })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
+      .then(function(data) {
+        csEnrichment = Object.assign(csEnrichment, data);
+        // Collect unique adversary actors attributed across all IOCs
+        var actorSet = {};
+        Object.values(csEnrichment.lookup || {}).forEach(function(ioc) {
+          (ioc.actors || []).forEach(function(a) { actorSet[a] = true; });
+        });
+        csEnrichment.actors = Object.keys(actorSet);
+        console.log('[CS Intel] Enriched ' + csEnrichment.total + '/' + csAllIOCs.length + ' IOCs. Actors: ' + (csEnrichment.actors.join(', ') || 'none'));
+      })
+      .catch(function(e) { csEnrichment.error = e; console.warn('[CS Intel] Enrichment failed:', e); })
+    : Promise.resolve();
+
+  // Real Elastic SIEM + DACTA TIP lookup (async, parallel with CrowdStrike)
+  console.log('[AI Investigation] Starting real Elastic SIEM + DACTA TIP + CrowdStrike queries in parallel...');
   var elasticLogs;
-  try {
-    elasticLogs = await realElasticLookup(ticketKey, iocs, techniques, issueData);
-    console.log('[AI Investigation] Elastic lookup complete: ' + elasticLogs.queriesRun + ' queries, connected=' + elasticLogs.elasticConnected);
-  } catch (elErr) {
+  var [, elasticResult] = await Promise.allSettled([csEnrichPromise, realElasticLookup(ticketKey, iocs, techniques, issueData).catch(function(elErr) {
     console.error('[AI Investigation] Elastic lookup failed, falling back to simulation:', elErr);
-    elasticLogs = simulateElasticLookup(summary, cleanDesc, iocs, techniques);
-  }
+    return simulateElasticLookup(summary, cleanDesc, iocs, techniques);
+  })]);
+  elasticLogs = elasticResult.value || simulateElasticLookup(summary, cleanDesc, iocs, techniques);
+  console.log('[AI Investigation] Elastic lookup complete: ' + elasticLogs.queriesRun + ' queries, connected=' + elasticLogs.elasticConnected);
+
+  // ── Boost inculpatory weight if CrowdStrike confirms HIGH/MEDIUM malicious IOCs ──
+  var csHighConfirmCount = 0, csMediumConfirmCount = 0;
+  Object.values(csEnrichment.lookup || {}).forEach(function(ioc) {
+    if (ioc.malicious_confidence === 'high') csHighConfirmCount++;
+    else if (ioc.malicious_confidence === 'medium') csMediumConfirmCount++;
+  });
+
   var inculpatory = generateInculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx);
   var exculpatory = generateExculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs);
+
+  // Inject CrowdStrike confirmed IOC evidence into inculpatory chain
+  if (csHighConfirmCount > 0) {
+    var csActorStr = csEnrichment.actors.length > 0 ? ' — attributed to: ' + csEnrichment.actors.slice(0,3).join(', ') : '';
+    inculpatory.unshift({
+      title: 'CrowdStrike Intel: ' + csHighConfirmCount + ' IOC(s) confirmed MALICIOUS (HIGH confidence)',
+      severity: 'critical',
+      detail: csHighConfirmCount + ' indicator(s) in this ticket were positively identified as malicious by CrowdStrike Falcon Intelligence' + csActorStr + '. CrowdStrike high-confidence verdicts are based on multi-source validation across their global sensor network.'
+    });
+  } else if (csMediumConfirmCount > 0) {
+    inculpatory.push({
+      title: 'CrowdStrike Intel: ' + csMediumConfirmCount + ' IOC(s) flagged SUSPICIOUS (MEDIUM confidence)',
+      severity: 'high',
+      detail: csMediumConfirmCount + ' indicator(s) have a medium-confidence malicious verdict from CrowdStrike Falcon Intelligence. Recommend treating as malicious pending further analysis.'
+    });
+  } else if (csAllIOCs.length > 0 && csEnrichment.total === 0 && !csEnrichment.error) {
+    exculpatory.push({
+      title: 'CrowdStrike Intel: All ' + csAllIOCs.length + ' IOC(s) returned UNVERIFIED/CLEAN',
+      severity: 'moderate',
+      detail: 'No IOCs in this ticket were identified as malicious by CrowdStrike Falcon Intelligence. This is a moderate indicator of false positive or novel threat not yet in the intelligence database.'
+    });
+  }
 
   // ── Compute balanced verdict ──
   var tpWeight = 0, fpWeight = 0;
@@ -47868,6 +47924,10 @@ async function runAIInvestigation(ticketKey, issueData) {
   // Priority weight
   if (pShort === 'P1') tpWeight += 15;
   else if (pShort === 'P2') tpWeight += 10;
+  // ── CrowdStrike verdict weight boost ──
+  if (csHighConfirmCount > 0) tpWeight += csHighConfirmCount * 35; // High CS confidence = very strong TP signal
+  if (csMediumConfirmCount > 0) tpWeight += csMediumConfirmCount * 18;
+  if (csEnrichment.actors.length > 0) tpWeight += 15; // Named adversary attribution = significant TP signal
 
   var verdict, confidence, verdictIcon, verdictColor, verdictBg, verdictBorder, actionLabel;
   var tpRatio = tpWeight / Math.max(tpWeight + fpWeight, 1);
@@ -48016,7 +48076,7 @@ async function runAIInvestigation(ticketKey, issueData) {
     console.log('[AI Investigation] Round ' + rnd + ' generating content...');
     var roundHTML = '';
     try {
-    if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority);
+    if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment);
     else if (rnd === 2) roundHTML = buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs);
     else if (rnd === 3) roundHTML = buildRound3HTML(inculpatory, exculpatory, techniques, iocs, elasticLogs, cmdCtx, verdict, confidence, fullText);
     console.log('[AI Investigation] Round ' + rnd + ' HTML generated, length=' + roundHTML.length);
@@ -48140,6 +48200,34 @@ async function runAIInvestigation(ticketKey, issueData) {
       eHTML += '<div style="margin-top:8px;display:flex;align-items:center;gap:6px;"><div style="width:6px;height:6px;border-radius:50%;background:#10b981;"></div><span style="font-size:10px;color:#10b981;font-weight:600;">Elastic SIEM CONNECTED</span></div>' +
         '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">' + elasticLogs.queriesRun + ' queries executed</div>';
     }
+    // ── CrowdStrike Falcon Intel summary in enrichment sidebar ──
+    var csEn = csEnrichment || {};
+    var csEnLookup = csEn.lookup || {};
+    var csEnKeys = Object.keys(csEnLookup);
+    var csEnHighCount = csEnKeys.filter(function(k) { return csEnLookup[k].malicious_confidence === 'high'; }).length;
+    var csEnMedCount  = csEnKeys.filter(function(k) { return csEnLookup[k].malicious_confidence === 'medium'; }).length;
+    eHTML += '<div style="margin-top:8px;">';
+    eHTML += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><div style="width:6px;height:6px;border-radius:50%;background:' + (!csEn.error ? '#ea580c' : '#6b7280') + ';"></div>' +
+      '<span style="font-size:10px;color:' + (!csEn.error ? '#ea580c' : 'var(--text-muted)') + ';font-weight:600;">\uD83E\uDD85 CROWDSTRIKE FALCON INTEL' + (!csEn.error && csEn.total !== undefined ? ' LIVE' : csEn.error ? ' \u2014 ERROR' : '') + '</span></div>';
+    if (csEn.error) {
+      eHTML += '<div style="font-size:9px;color:var(--text-muted);">API error: ' + csEn.error + '</div>';
+    } else if (csEnKeys.length === 0) {
+      eHTML += '<div style="font-size:9px;color:var(--text-muted);">' + (csEn.queried > 0 ? csEn.queried + ' IOC(s) returned clean — no threat intel matches' : 'No IOCs to enrich') + '</div>';
+    } else {
+      if (csEnHighCount > 0) {
+        eHTML += '<div style="padding:5px 8px;background:rgba(239,68,68,0.06);border-radius:4px;border-left:3px solid #ef4444;margin-bottom:4px;">' +
+          '<div style="font-size:10px;font-weight:600;color:#ef4444;">' + csEnHighCount + ' IOC(s) \u2014 HIGH CONFIDENCE MALICIOUS</div>';
+        if (csEn.actors && csEn.actors.length > 0) eHTML += '<div style="font-size:9px;color:var(--amber);margin-top:2px;">\uD83C\uDFAF ' + csEn.actors.slice(0,3).join(', ') + '</div>';
+        eHTML += '</div>';
+      }
+      if (csEnMedCount > 0) {
+        eHTML += '<div style="padding:5px 8px;background:rgba(245,158,11,0.06);border-radius:4px;border-left:3px solid #f59e0b;margin-bottom:4px;">' +
+          '<div style="font-size:10px;font-weight:600;color:#f59e0b;">' + csEnMedCount + ' IOC(s) \u2014 MEDIUM CONFIDENCE SUSPICIOUS</div></div>';
+      }
+      var csEnClean = csEnKeys.length - csEnHighCount - csEnMedCount;
+      if (csEnClean > 0) eHTML += '<div style="font-size:9px;color:var(--text-muted);">' + csEnClean + ' other indicator(s) \u2014 low/unverified</div>';
+    }
+    eHTML += '</div>';
     var enrichBody = enrichCard.querySelector('.inv-collapsible-body');
     if (enrichBody) { enrichBody.innerHTML = eHTML; enrichBody.style.display = ''; }
     else { enrichCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + eHTML + '</div>'; }
@@ -48369,8 +48457,8 @@ async function runAIInvestigation(ticketKey, issueData) {
     }
   }
 
-  // Generate client escalation draft
-  generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, f);
+  // Generate client escalation draft (pass CrowdStrike enrichment for actor-attributed email)
+  generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, f, csEnrichment);
 
   } catch (aiErr) {
     console.error('[AI Investigation] Error:', aiErr);
@@ -48539,7 +48627,7 @@ function buildAttackPathHTML(ticketKey, techniques, summary) {
 // Global store for current escalation draft data (used by modal)
 var _currentEscalationDraft = {};
 
-async function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData) {
+async function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData, csEnrichment) {
   var card = document.getElementById('clientEscalationCard');
   if (!card) return;
   var content = document.getElementById('escalationDraftContent');
@@ -48722,7 +48810,13 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
     actionsTaken.push('1. Alert triaged and escalated by Dacta SG SOC');
     if (iocs.hosts && iocs.hosts.length > 0) actionsTaken.push('2. Affected host(s) flagged for isolation review');
     if (iocs.users && iocs.users.length > 0) actionsTaken.push('3. Affected user account(s) flagged for review');
-    actionsTaken.push((actionsTaken.length + 1) + '. IOC enrichment via DACTA TIP and threat intelligence feeds completed');
+    var csActionNote = 'IOC enrichment via DACTA TIP and CrowdStrike Falcon Intelligence completed';
+    if (csEnrichment && !csEnrichment.error) {
+      var csActN = csEnrichment.actors && csEnrichment.actors.length > 0;
+      var csHN = Object.values(csEnrichment.lookup || {}).filter(function(i) { return i.malicious_confidence === 'high'; }).length;
+      if (csHN > 0) csActionNote = csHN + ' IOC(s) confirmed MALICIOUS by CrowdStrike Falcon Intelligence' + (csActN ? ' — attributed to: ' + csEnrichment.actors.slice(0,3).join(', ') : '');
+    }
+    actionsTaken.push((actionsTaken.length + 1) + '. ' + csActionNote);
   } else {
     actionsTaken.push('1. Alert triaged by Dacta SG SOC');
     actionsTaken.push('2. AI investigation completed — ' + verdict.split('\u2014')[0].trim());
@@ -48768,6 +48862,33 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
     'INDICATORS OF COMPROMISE (IOCs)\n' +
     '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
     iocText + '\n\n' +
+    (function() {
+      if (!csEnrichment || csEnrichment.error) return '';
+      var csLk = csEnrichment.lookup || {};
+      var csHighItems = Object.entries(csLk).filter(function(e) { return e[1].malicious_confidence === 'high'; });
+      var csMedItems  = Object.entries(csLk).filter(function(e) { return e[1].malicious_confidence === 'medium'; });
+      if (csHighItems.length === 0 && csMedItems.length === 0) return '';
+      var csSection = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+        'CROWDSTRIKE FALCON INTEL VERDICT\n' +
+        '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n';
+      if (csHighItems.length > 0) {
+        csSection += '[HIGH CONFIDENCE MALICIOUS]\n';
+        csHighItems.slice(0, 5).forEach(function(e) {
+          var ioc = e[1];
+          csSection += '- ' + e[0];
+          if (ioc.malware_families && ioc.malware_families.length > 0) csSection += ' | Malware: ' + ioc.malware_families.slice(0,2).join(', ');
+          csSection += '\n';
+        });
+      }
+      if (csMedItems.length > 0) {
+        csSection += '[MEDIUM CONFIDENCE SUSPICIOUS]\n';
+        csMedItems.slice(0, 3).forEach(function(e) { csSection += '- ' + e[0] + '\n'; });
+      }
+      if (csEnrichment.actors && csEnrichment.actors.length > 0) {
+        csSection += 'Adversary Attribution: ' + csEnrichment.actors.slice(0, 4).join(', ') + '\n';
+      }
+      return csSection + '\n';
+    })() +
     '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
     'ACTIONS TAKEN BY DACTA SOC\n' +
     '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
@@ -48982,7 +49103,7 @@ async function submitEscalationToJira(ticketKey) {
 }
 
 // ── Round 1 HTML: Classification + Elastic Log Query ──
-function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, priority) {
+function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment) {
   var html = '';
 
   // Classification grid
@@ -49133,6 +49254,75 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
   });
 
   html += '</div>'; // end elastic section
+
+  // ── CrowdStrike Falcon Intel (Round 1 enrichment) ──
+  if (csEnrichment) {
+    var csLookup = csEnrichment.lookup || {};
+    var csKeys = Object.keys(csLookup);
+    var csHighIOCs = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'high'; });
+    var csMedIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'medium'; });
+    var csLowIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'low'; });
+    var csUnvIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'unverified'; });
+    var csConnected = !csEnrichment.error && (csEnrichment.total !== undefined);
+    html += '<div style="margin-top:8px;padding:10px 12px;background:rgba(234,88,12,0.03);border:1px solid rgba(234,88,12,0.18);border-radius:6px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#ea580c;margin-bottom:8px;">' +
+        '\uD83E\uDD85 CROWDSTRIKE FALCON INTEL' + (csEnrichment.error ? ' \u2014 ERROR' : (csConnected ? ' (LIVE)' : ' \u2014 OFFLINE')) + '</div>';
+    if (csEnrichment.error) {
+      html += '<div style="font-size:9px;color:var(--text-muted);">Could not reach CrowdStrike API: ' + csEnrichment.error + '</div>';
+    } else if (csKeys.length === 0 && csEnrichment.queried === 0) {
+      html += '<div style="font-size:9px;color:var(--text-muted);">No IOCs extracted from ticket to enrich.</div>';
+    } else {
+      // Summary confidence badges
+      html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">';
+      if (csHighIOCs.length > 0) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);font-weight:700;">\u25CF HIGH: ' + csHighIOCs.length + '</span>';
+      if (csMedIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-weight:700;">\u25CF MEDIUM: ' + csMedIOCs.length + '</span>';
+      if (csLowIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">LOW: ' + csLowIOCs.length + '</span>';
+      if (csUnvIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">UNVERIFIED: ' + csUnvIOCs.length + '</span>';
+      if (csKeys.length === 0 && csEnrichment.queried > 0) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">\u2705 All ' + csEnrichment.queried + ' IOC(s) Clean</span>';
+      html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">' + csEnrichment.queried + ' QUERIED \u00B7 ' + csEnrichment.total + ' MATCHED</span>';
+      html += '</div>';
+      // Per-IOC rows (top 8)
+      csKeys.slice(0, 8).forEach(function(indicator) {
+        var ioc = csLookup[indicator];
+        var conf = ioc.malicious_confidence;
+        var confColor = conf === 'high' ? '#ef4444' : conf === 'medium' ? '#f59e0b' : conf === 'low' ? '#10b981' : 'var(--text-muted)';
+        var confBg    = conf === 'high' ? 'rgba(239,68,68,0.05)' : conf === 'medium' ? 'rgba(245,158,11,0.05)' : 'var(--surface-1)';
+        html += '<div style="margin-bottom:5px;padding:5px 8px;background:' + confBg + ';border-radius:4px;border-left:3px solid ' + confColor + ';">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<span style="font-size:9px;font-family:var(--font-mono);color:var(--text-primary);">' + indicator.substring(0, 36) + (indicator.length > 36 ? '\u2026' : '') + '</span>' +
+            '<span style="font-size:8px;font-weight:700;color:' + confColor + ';text-transform:uppercase;min-width:60px;text-align:right;">' + (conf || 'unverified') + '</span>' +
+          '</div>';
+        if (ioc.actors && ioc.actors.length > 0) {
+          html += '<div style="margin-top:2px;font-size:8px;color:var(--amber);">\uD83D\uDC64 ' + ioc.actors.slice(0, 3).join(', ') + '</div>';
+        }
+        if (ioc.malware_families && ioc.malware_families.length > 0) {
+          html += '<div style="margin-top:1px;font-size:8px;color:var(--red-bright);">Malware: ' + ioc.malware_families.slice(0, 2).join(', ') + '</div>';
+        }
+        if (ioc.labels && ioc.labels.length > 0) {
+          html += '<div style="margin-top:2px;display:flex;gap:2px;flex-wrap:wrap;">';
+          ioc.labels.slice(0, 3).forEach(function(l) {
+            html += '<span style="font-size:7px;padding:1px 4px;border-radius:6px;background:rgba(239,68,68,0.06);color:var(--red-bright);border:1px solid rgba(239,68,68,0.15);">' + l + '</span>';
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      });
+      if (csKeys.length > 8) {
+        html += '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:4px 0;">+ ' + (csKeys.length - 8) + ' more indicators</div>';
+      }
+      // Adversary attribution block
+      if (csEnrichment.actors && csEnrichment.actors.length > 0) {
+        html += '<div style="margin-top:8px;padding:6px 8px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:4px;">' +
+          '<div style="font-size:9px;font-weight:700;color:var(--amber);margin-bottom:4px;">\uD83C\uDFAF ADVERSARY ATTRIBUTION</div>' +
+          '<div style="display:flex;gap:4px;flex-wrap:wrap;">';
+        csEnrichment.actors.slice(0, 6).forEach(function(actor) {
+          html += '<span style="font-size:8px;padding:2px 8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:10px;color:var(--amber);font-weight:600;">' + actor + '</span>';
+        });
+        html += '</div></div>';
+      }
+    }
+    html += '</div>';
+  }
 
   // ── DACTA TIP Results ──
   if (elasticLogs.openctiResults && elasticLogs.openctiResults.length > 0) {
