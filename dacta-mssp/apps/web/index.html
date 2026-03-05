@@ -52064,6 +52064,21 @@ function getTimeAgo(ts) {
   }
 })();
 
+// ── DEF-009: Suppress non-critical WebSocket reconnect errors ──
+window.addEventListener('error', function(e) {
+  if (e.message && (e.message.includes('WebSocket') || e.message.includes('websocket'))) {
+    e.preventDefault();
+    console.debug('[WS] Reconnect attempt (suppressed):', e.message);
+    return true;
+  }
+});
+window.addEventListener('unhandledrejection', function(e) {
+  if (e.reason && e.reason.message && (e.reason.message.includes('WebSocket') || e.reason.message.includes('websocket') || e.reason.message.includes('realtime'))) {
+    e.preventDefault();
+    console.debug('[WS] Realtime reconnect (suppressed):', e.reason.message);
+  }
+});
+
 </script>
 
 <!-- ==============================================================
@@ -52231,19 +52246,4 @@ function getTimeAgo(ts) {
 </div>
 </body>
 </html>
-
-// ── DEF-009: Suppress non-critical WebSocket reconnect errors ──
-window.addEventListener('error', function(e) {
-  if (e.message && (e.message.includes('WebSocket') || e.message.includes('websocket'))) {
-    e.preventDefault();
-    console.debug('[WS] Reconnect attempt (suppressed):', e.message);
-    return true;
-  }
-});
-window.addEventListener('unhandledrejection', function(e) {
-  if (e.reason && e.reason.message && (e.reason.message.includes('WebSocket') || e.reason.message.includes('websocket') || e.reason.message.includes('realtime'))) {
-    e.preventDefault();
-    console.debug('[WS] Realtime reconnect (suppressed):', e.reason.message);
-  }
-});
 
