@@ -681,9 +681,22 @@ export default async function handler(req, res) {
 
       // Tool rounds: Haiku (fast, high rate limit)
       // Final synthesis: Sonnet (quality), no tools so it MUST produce text
-      // For the synthesis round, append a reminder so Claude doesn't trail off mid-sentence.
+      // For the synthesis round:
+      //   1. Inject a user-turn forcing message — far more effective than system prompt alone
+      //      because the model treats user turns as the active instruction, not background context.
+      //   2. Strengthen the system prompt so the model doesn't produce "Let me…" transition phrases.
+      if (isLastRound) {
+        currentMessages.push({
+          role: 'user',
+          content: 'All tool calls are complete. Write your complete, final answer to my question right now. ' +
+            'Do NOT say "Let me…", "I will…", "Now I\'ll…", or any phrase implying further investigation. ' +
+            'Start immediately with your findings and conclusions. Do not trail off or stop mid-sentence.'
+        });
+      }
       const synthSystem = isLastRound
-        ? systemPrompt + '\n\n[SYNTHESIS] You have completed all tool calls. Now write your complete, final analysis response to the analyst. Do NOT call any tools. Do NOT start a sentence and stop — write a full, finished response.'
+        ? systemPrompt + '\n\n[SYNTHESIS] All tool calls are done. Produce your COMPLETE final answer immediately. ' +
+          'Forbidden phrases: "Let me", "I will", "Now I\'ll", "I\'m going to". ' +
+          'Begin directly with findings. Write every section fully before moving on. Never stop mid-sentence.'
         : systemPrompt;
       const callBody = {
         model: isLastRound ? SYNTH_MODEL : TOOL_MODEL,
