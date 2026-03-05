@@ -39353,6 +39353,126 @@ document.addEventListener('keydown', (e) => {
     return 'risk-low';
   }
 
+  // ── Live search fallback: query Elastic when search yields 0 local results ──
+  var _eeLiveFallbackTimer = null;
+  async function _eeLiveFallbackSearch(term) {
+    // Debounce — wait 400ms before firing
+    if (_eeLiveFallbackTimer) clearTimeout(_eeLiveFallbackTimer);
+    _eeLiveFallbackTimer = setTimeout(async function() {
+      var catalogEl = document.querySelector('.ee-catalog');
+      var list = document.getElementById('eeCatalogList');
+      if (list) list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:11px;">' + dIcon('search',14) + ' Searching SIEM for <strong>' + escapeHtml(term) + '</strong>...</div>';
+      if (catalogEl) catalogEl.classList.add('ee-catalog-open');
+
+      // Determine current namespace from active org
+      var ns = (typeof getCurrentNamespace === 'function') ? getCurrentNamespace() :
+               (window._activeOrgNamespace || window._currentNamespace || '');
+
+      var found = [];
+      try {
+        // Detect if IP, hostname, or user
+        var isIP = /^\d{1,3}(\.\d{1,3}){3}$/.test(term);
+        var isUser = term.includes('@') || term.includes('\\');
+        var termLower = term.toLowerCase();
+
+        // Query 1: EDR host/alert index
+        var edrIdx = ns ? '.ds-logs-crowdstrike.alert-' + ns + '-*,.ds-logs-crowdstrike.host-' + ns + '-*' : '.ds-logs-crowdstrike.alert-*,.ds-logs-crowdstrike.host-*';
+        var edrQuery = isIP
+          ? { bool: { should: [ { term: { 'source.ip': term } }, { term: { 'destination.ip': term } }, { term: { 'device_details.local_ip': term } }, { term: { 'network.ip': term } } ], minimum_should_match: 1 } }
+          : isUser
+            ? { bool: { should: [ { wildcard: { 'user.name': { value: '*' + termLower + '*' } } }, { wildcard: { 'UserName': { value: '*' + termLower + '*' } } } ], minimum_should_match: 1 } }
+            : { bool: { should: [ { wildcard: { 'device_details.hostname': { value: '*' + termLower + '*' } } }, { wildcard: { 'host.hostname': { value: '*' + termLower + '*' } } }, { wildcard: { 'host.name': { value: '*' + termLower + '*' } } } ], minimum_should_match: 1 } };
+
+        var r1 = await fetch('/api/elastic', { method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ action: 'search', index: edrIdx, body: { size: 5, query: edrQuery, sort: [{'@timestamp': 'desc'}] } }) });
+        var d1 = r1.ok ? await r1.json() : null;
+        if (d1 && d1.hits && d1.hits.hits.length > 0) {
+          d1.hits.hits.forEach(function(h) {
+            var s = h._source || {};
+            var entityId = (isIP ? term : (s['device_details.hostname'] || s['host.hostname'] || s['host.name'] || term));
+            if (entityId && !found.find(function(f) { return f.id === entityId; })) {
+              found.push({
+                id: entityId, type: isIP ? 'ip' : isUser ? 'user' : 'host',
+                label: s['device_details.hostname'] || s['host.name'] || entityId,
+                sub: (s['source.ip'] || s['device_details.local_ip'] || '') + (s['@timestamp'] ? ' \u00b7 ' + s['@timestamp'].substring(0,10) : ''),
+                ip: isIP ? term : (s['device_details.local_ip'] || s['source.ip'] || ''),
+                risk: 40, malicious: false, firewallBlocked: false,
+                _liveResult: true, _lastSeen: s['@timestamp']
+              });
+            }
+          });
+        }
+
+        // Query 2: Firewall/Palo Alto index
+        if (isIP) {
+          var fwIdx = ns ? 'logs-panw.panos-' + ns + '-*,logs-fortinet_fortigate.log-' + ns + '-*' : 'logs-panw.panos-*,logs-fortinet_fortigate.log-*';
+          var fwQuery = { bool: { should: [ { term: { 'source.ip': term } }, { term: { 'destination.ip': term } }, { term: { 'network.forwarded_ip': term } } ], minimum_should_match: 1 } };
+          var r2 = await fetch('/api/elastic', { method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ action: 'search', index: fwIdx, body: { size: 3, query: fwQuery, sort: [{'@timestamp': 'desc'}] } }) });
+          var d2 = r2.ok ? await r2.json() : null;
+          if (d2 && d2.hits && d2.hits.hits.length > 0) {
+            var fwHit = d2.hits.hits[0]._source || {};
+            var existing = found.find(function(f) { return f.id === term; });
+            if (existing) {
+              existing.firewallBlocked = ['deny','drop','block','reset-client','reset-server'].includes((fwHit['event.action']||'').toLowerCase());
+              existing.sub = (existing.sub || '') + ' \u00b7 FW:' + (fwHit['event.action'] || 'seen');
+            } else {
+              found.push({
+                id: term, type: 'ip', label: term,
+                sub: 'FW ' + (fwHit['event.action'] || 'seen') + ' \u00b7 ' + (fwHit['@timestamp'] || '').substring(0,10),
+                ip: term, risk: 30,
+                malicious: false,
+                firewallBlocked: ['deny','drop','block','reset-client','reset-server'].includes((fwHit['event.action']||'').toLowerCase()),
+                _liveResult: true, _lastSeen: fwHit['@timestamp']
+              });
+            }
+          }
+        }
+
+        // Query 3: All SIEM logs as last resort
+        if (found.length === 0) {
+          var siemIdx = ns ? (ns + '-*') : 'logs-*';
+          var siemQuery = { bool: { should: [
+            { query_string: { query: '"' + term + '"', fields: ['source.ip','destination.ip','host.name','host.hostname','user.name','process.name'] } }
+          ], minimum_should_match: 1 } };
+          var r3 = await fetch('/api/elastic', { method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ action: 'search', index: siemIdx, body: { size: 3, query: siemQuery, sort: [{'@timestamp': 'desc'}] } }) });
+          var d3 = r3.ok ? await r3.json() : null;
+          if (d3 && d3.hits && d3.hits.hits.length > 0) {
+            var sh = d3.hits.hits[0]._source || {};
+            found.push({
+              id: term, type: isIP ? 'ip' : 'host', label: term,
+              sub: (sh['event.dataset'] || sh['event.module'] || '') + ' \u00b7 ' + (sh['@timestamp'] || '').substring(0,10),
+              ip: isIP ? term : (sh['source.ip'] || ''), risk: 20,
+              malicious: false, firewallBlocked: false, _liveResult: true
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[EE LiveSearch] Error:', e.message);
+      }
+
+      if (found.length > 0) {
+        // Add found entities to EE_ENTITIES (dedup)
+        found.forEach(function(ent) {
+          if (!EE_ENTITIES.find(function(e) { return e.id === ent.id; })) {
+            EE_ENTITIES.push(ent);
+          } else {
+            // Update existing with live data
+            var ex = EE_ENTITIES.find(function(e) { return e.id === ent.id; });
+            if (ent.firewallBlocked) ex.firewallBlocked = true;
+            if (ent._lastSeen) ex._lastSeen = ent._lastSeen;
+          }
+        });
+        // Re-run the catalog with now-populated EE_ENTITIES
+        eeBuildCatalog(eeGetActiveFilter ? eeGetActiveFilter() : 'all', term);
+      } else {
+        // No results anywhere — show not found message
+        if (list) list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:11px;">' + dIcon('search',14) + ' No entity found for <strong>' + escapeHtml(term) + '</strong><br><span style="font-size:10px;opacity:0.6;">Not found in EDR, firewall, or SIEM logs</span></div>';
+      }
+    }, 400);
+  }
+
   // -- Build Catalog HTML --
   function eeBuildCatalog(filter, search) {
     const list = document.getElementById('eeCatalogList');
@@ -39375,6 +39495,13 @@ document.addEventListener('keydown', (e) => {
       if (toggleEl) toggleEl.classList.add('ee-has-results');
       // Render only matching entities to canvas
       eeFilterCanvasToEntities(entities.map(e => e.id));
+    } else if (entities.length === 0 && search && search.trim().length >= 3) {
+      // Show catalog open with searching... state while live fallback runs
+      if (catalogEl) catalogEl.classList.add('ee-catalog-open');
+      if (toggleEl) toggleEl.classList.add('ee-has-results');
+      // Don't clear canvas yet — live fallback will update if found
+      // ─── Live fallback: if no local match, query Elastic live ───
+      _eeLiveFallbackSearch(search.trim());
     } else if (!search && filter === 'all') {
       // Empty search — hide panel and clear canvas
       if (catalogEl) catalogEl.classList.remove('ee-catalog-open');
@@ -39451,9 +39578,11 @@ document.addEventListener('keydown', (e) => {
     // Include directly matched entities + 1 hop of relationships
     var expandedIds = new Set(ids);
     EE_EDGES.forEach(function(e) {
-      if (idSet.has(e.from) || idSet.has(e.to)) {
-        expandedIds.add(e.source);
-        expandedIds.add(e.target);
+      var edgeSrc = e.source || e.from || '';
+      var edgeDst = e.target || e.to || '';
+      if (idSet.has(edgeSrc) || idSet.has(edgeDst)) {
+        expandedIds.add(edgeSrc);
+        expandedIds.add(edgeDst);
       }
     });
 
@@ -39491,8 +39620,10 @@ document.addEventListener('keydown', (e) => {
     });
 
     eeEdgesProcessed = EE_EDGES.map(function(ed) {
-      var fromNode = eeNodes.find(function(n) { return n.id === ed.source; });
-      var toNode = eeNodes.find(function(n) { return n.id === ed.target; });
+      var srcId = ed.source || ed.from || '';
+      var dstId = ed.target || ed.to || '';
+      var fromNode = eeNodes.find(function(n) { return n.id === srcId; });
+      var toNode = eeNodes.find(function(n) { return n.id === dstId; });
       var style = EE_EDGE_STYLES[ed.type] || EE_EDGE_STYLES.communicated_with;
       var isMalicious = (fromNode && fromNode.malicious) || (toNode && toNode.malicious);
       return { from: fromNode, to: toNode, type: ed.type, style: style, isMalicious: isMalicious };
@@ -40613,6 +40744,15 @@ document.addEventListener('keydown', (e) => {
 
       // Data loaded but NOT auto-rendered — wait for search or entity navigation
       window._eeDataLoaded = true;
+
+      // Re-run any pending search after data loads
+      var searchEl = document.getElementById('eeSearch');
+      if (searchEl && searchEl.value && searchEl.value.trim().length >= 2) {
+        setTimeout(function() {
+          eeBuildCatalog(typeof eeGetActiveFilter === 'function' ? eeGetActiveFilter() : 'all', searchEl.value);
+        }, 100);
+      }
+
       var emptyEl = document.getElementById('eeCanvasEmpty');
       if (emptyEl) {
         emptyEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);"><div style="font-size:24px;margin-bottom:8px;">🔍</div><strong style="color:var(--text-primary);font-size:13px;">Search for an entity</strong><br><span style="font-size:11px;">or navigate from an investigation to explore relationships</span></div>';
