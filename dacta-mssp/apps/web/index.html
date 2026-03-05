@@ -48775,7 +48775,7 @@ function viewQueuedRuleDetail(queueId) {
 async function viewAffectedRules(vendor, log) {
   if (!window._dactaSupabase) { showToast('SIEMLess DB not connected', 'warn'); return; }
   showToast('Loading affected rules for ' + vendor + '...', 'info');
-
+  try {
   var vc = _vendorFieldChecks.find(function(v) { return v.vendor === vendor; });
   if (!vc) { showToast('Vendor check config not found', 'warn'); return; }
 
@@ -48836,6 +48836,7 @@ async function viewAffectedRules(vendor, log) {
       html += '</div></div>';
 
       showModal(affected.length + ' Affected Rules — ' + escHtml(vendor), html);
+  } catch (e) { console.error('[viewAffectedRules]', e); showToast('Error loading affected rules: ' + e.message, 'warn'); }
 }
 
 // ── Syntax Check: "Flag for Review" — submit rule(s) to validation queue ──
@@ -49057,6 +49058,22 @@ function getTimeAgo(ts) {
   if (hrs < 24) return hrs + 'h ago';
   return Math.floor(hrs / 24) + 'd ago';
 }
+
+  // ── Expose IIFE-scoped functions to global scope for onclick handlers ──
+  window.viewAffectedRules = viewAffectedRules;
+  window.flagAllAffectedRules = flagAllAffectedRules;
+  window.flagRuleForReview = flagRuleForReview;
+  window.approveAndSaveRule = approveAndSaveRule;
+  window.viewQueuedRuleDetail = viewQueuedRuleDetail;
+  window.loadRuleIntoEditor = loadRuleIntoEditor;
+  window.runLiveValidation = runLiveValidation;
+  window.showModal = showModal;
+  window.escHtml = escHtml;
+  window.escAttr = escAttr;
+  window.loadRuleValidationQueue = loadRuleValidationQueue;
+  window.renderRVQLive = renderRVQLive;
+  window.updateRVQStats = updateRVQStats;
+  window.loadTestLabStats = loadTestLabStats;
 
   } catch (e) {
     console.error('[RuleLab] Initialization error:', e);
