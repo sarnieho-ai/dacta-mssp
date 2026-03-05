@@ -48619,8 +48619,15 @@ function updateRoundHTML(container, num, totalRounds, state, content) {
     // Intercept SIEMLess DB REST calls to ensure auth token is present
     if (typeof url === 'string' && url.indexOf('supabase.co/rest/') !== -1) {
       var headers = (opts && opts.headers) || {};
-      var authHeader = headers['Authorization'] || headers['authorization'] || '';
-      // If only anon key (no Bearer with user JWT), block write operations
+      // Support both plain objects and Headers instances
+      var authHeader = '';
+      if (typeof headers.get === 'function') {
+        authHeader = headers.get('Authorization') || headers.get('authorization') || '';
+      } else {
+        authHeader = headers['Authorization'] || headers['authorization'] || '';
+      }
+      // If no auth header at all (no anon key or user JWT), block write operations
+      // Note: Supabase anon key is a valid JWT — allow it for platform writes
       if (opts && opts.method && opts.method !== 'GET' && !authHeader.match(/Bearer ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/)) {
         console.warn('[Security] Blocked unauthenticated write to SIEMLess DB');
         return Promise.reject(new Error('Authentication required'));
