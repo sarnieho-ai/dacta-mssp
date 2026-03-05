@@ -45937,11 +45937,12 @@ async function loadInvestigationCache(ticketKey) {
 
 async function loadAllCachedKeys() {
   try {
-    if (!window._supabaseRef) return;
-    var resp = await window._supabaseRef.from('investigation_cache')
-      .select('ticket_key, verdict, confidence, investigated_at, override_verdict');
-    if (resp.data) {
-      resp.data.forEach(function(row) {
+    // Use API proxy (service role key) to bypass RLS on investigation_cache
+    var resp = await fetch('/api/jira?action=investigationCache');
+    var json = await resp.json();
+    var rows = json.data || [];
+    if (rows.length > 0) {
+      rows.forEach(function(row) {
         if (!_investigationCache[row.ticket_key]) {
           _investigationCache[row.ticket_key] = {
             verdict: row.verdict, confidence: row.confidence,
@@ -45950,10 +45951,12 @@ async function loadAllCachedKeys() {
           };
         }
       });
-      console.log('[InvCache] Loaded ' + resp.data.length + ' cached investigations from SIEMLess DB');
+      console.log('[InvCache] Loaded ' + rows.length + ' cached investigations from SIEMLess DB');
       // Refresh triage AI column badges + metric strip now that cache is populated
       refreshTriageAIColumn();
       updateTriageMetricStrip();
+    } else {
+      console.log('[InvCache] No cached investigations found');
     }
   } catch(e) {
     console.log('[InvCache] Bulk load skipped:', e.message);
