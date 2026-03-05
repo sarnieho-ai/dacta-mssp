@@ -24803,10 +24803,12 @@ Analyst: K. Rasmussen | 2026-02-28
             <div class="card-header"><span class="card-title">Tenant Settings</span></div>
             <div style="display:flex;flex-direction:column;gap:10px;">
               <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Organization Name</div><input class="filter-input" value="Dacta SG Pte Ltd" style="width:100%;"></div>
-              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Timezone</div><select class="filter-select" style="width:100%;"><option>Asia/Singapore (UTC+8)</div>
-                    <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;">🔒 Encryption: <strong>AES-256-GCM</strong> at rest &amp; in transit</div>
-                    <div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">🛡 Data Pipeline: <strong>3-Round Redaction Pipeline</strong> for PII/PHI compliance</div>
-                    <div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">📍 Data Residency: <strong>Singapore (SG)</strong> — PDPA compliant</option><option>UTC</option></select></div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Timezone</div><select class="filter-select" style="width:100%;"><option>Asia/Singapore (UTC+8)</option><option>UTC</option></select></div>
+              <div style="margin-top:8px;">
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;">🔒 Encryption: <strong>AES-256-GCM</strong> at rest &amp; in transit</div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">🛡 Data Pipeline: <strong>3-Round Redaction Pipeline</strong> for PII/PHI compliance</div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">📍 Data Residency: <strong>Singapore (SG)</strong> — PDPA compliant</div>
+              </div>
               <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Data Retention Policy</div><select class="filter-select" style="width:100%;"><option>12 months</option><option>24 months</option><option>7 years (Compliance)</option></select></div>
               <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:5px;">Ticket ID Prefix</div><input class="filter-input" value="DAC-" style="width:100%;"></div>
             </div>
@@ -25969,29 +25971,6 @@ Analyst: K. Rasmussen | 2026-02-28
 
         </div>
 
-        <!-- Command Bar Overlay (keep) -->
-        <div class="copilot-cmdbar-overlay" id="copilotCmdOverlay" onclick="closeCopilotCmd(event)">
-          <div class="copilot-cmdbar" onclick="event.stopPropagation()">
-            <div class="cmdbar-input-row">
-              <span class="cmdbar-icon">&#x26A1;</span>
-              <input class="cmdbar-input" id="cmdbarInput" oninput="updateCmdBar(this.value)" placeholder="Search commands, pages, tickets, orgs..." oninput="updateCmdBar(this.value)" />
-              <span class="cmdbar-esc">ESC</span>
-            </div>
-            <div class="cmdbar-suggestions">
-              <div class="cmdbar-suggestion-group-label">Quick Actions</div>
-              <div class="cmdbar-item" onclick="document.getElementById('copilotInput').value='Check IP ';document.getElementById('copilotInput').focus();closeCopilotCmd();"><div class="cmdbar-item-icon">&#x1F50D;</div><div class="cmdbar-item-label">Check IP / IOC</div></div>
-              <div class="cmdbar-item" onclick="document.getElementById('copilotInput').value='Show me ';document.getElementById('copilotInput').focus();closeCopilotCmd();"><div class="cmdbar-item-icon">&#x1F4CA;</div><div class="cmdbar-item-label">Search Logs</div></div>
-              <div class="cmdbar-item" onclick="document.getElementById('copilotInput').value='What is T';document.getElementById('copilotInput').focus();closeCopilotCmd();"><div class="cmdbar-item-icon">&#x1F5FA;</div><div class="cmdbar-item-label">MITRE Technique Lookup</div></div>
-              <div class="cmdbar-item" onclick="document.getElementById('copilotInput').value='Show tickets ';document.getElementById('copilotInput').focus();closeCopilotCmd();"><div class="cmdbar-item-icon">&#x1F4CB;</div><div class="cmdbar-item-label">Search Jira Tickets</div></div>
-            </div>
-            <div class="cmdbar-footer">
-              <span><kbd>&#x2191;</kbd><kbd>&#x2193;</kbd> Navigate</span>
-              <span><kbd>&#x21B5;</kbd> Select</span>
-              <span><kbd>Esc</kbd> Close</span>
-            </div>
-          </div>
-        </div>
-
       </div><!-- end page-copilot -->
 
       <!-- ============================================================
@@ -26004,6 +25983,8 @@ Analyst: K. Rasmussen | 2026-02-28
             <input type="text" class="cmdbar-input" id="cmdbarInput" oninput="updateCmdBar(this.value)" placeholder="Search IPs, domains, hashes, tickets, techniques..." autocomplete="off" oninput="updateCmdBar(this.value)">
             <span class="cmdbar-esc">ESC</span>
           </div>
+          <!-- Dynamic search results (populated by updateCmdBar) -->
+          <div id="cmdbarDynamicResults"></div>
           <div class="cmdbar-suggestions" id="cmdbarSuggestions">
             <div class="cmdbar-suggestion-group-label">Quick Actions</div>
             <div class="cmdbar-item selected" onclick="closeCopilotCmd(); copilotAsk('Check IP...')">
@@ -36385,14 +36366,32 @@ function editNamespace(id) {
   }
 }
 
-function deleteClient(id) {
+async function deleteClient(id) {
   var org = ORG_CONNECTORS[id];
   if (!org) return;
-  if (confirm('Delete organization "' + org.name + '"? This action cannot be undone.')) {
-    delete ORG_CONNECTORS[id];
-    showToast(org.name + ' removed', 'success');
-    loadClientsPage();
+  if (!confirm('Delete organization "' + org.name + '"? This will remove it from the database.')) return;
+
+  // Persist deletion to Supabase org_connectors table
+  if (window._dactaSupabase) {
+    try {
+      var { error } = await window._dactaSupabase
+        .from('org_connectors')
+        .delete()
+        .eq('org_id', id);
+      if (error) {
+        showToast('DB error: ' + error.message, 'warn');
+        // Still remove from local cache so UI is consistent
+      }
+    } catch(e) {
+      showToast('Could not reach database — removed from session only', 'warn');
+    }
+  } else {
+    showToast(org.name + ' removed (session only — DB not connected)', 'warn');
   }
+
+  delete ORG_CONNECTORS[id];
+  showToast(org.name + ' removed', 'success');
+  loadClientsPage();
 }
 
 function navigate(page) {
@@ -42579,12 +42578,26 @@ function openCopilotCmd() {
 function closeCopilotCmd(e) {
   var overlay = document.getElementById('copilotCmdOverlay');
   if (overlay) overlay.classList.remove('open');
+  // Reset dynamic results and restore static suggestions
+  var resultsEl = document.getElementById('cmdbarDynamicResults');
+  var staticEl = document.getElementById('cmdbarSuggestions');
+  var inputEl = document.getElementById('cmdbarInput');
+  if (resultsEl) resultsEl.innerHTML = '';
+  if (staticEl) staticEl.style.display = '';
+  if (inputEl) inputEl.value = '';
 }
 function updateCmdBar(val) {
   // TC-CMD-003 + TC-CMD-004: Dynamic search in command palette
   var resultsEl = document.getElementById('cmdbarDynamicResults');
+  var staticEl = document.getElementById('cmdbarSuggestions');
   if (!resultsEl) return;
-  if (!val || val.trim().length < 2) { resultsEl.innerHTML = ''; return; }
+  if (!val || val.trim().length < 2) {
+    resultsEl.innerHTML = '';
+    if (staticEl) staticEl.style.display = '';
+    return;
+  }
+  // Hide static suggestions while showing live results
+  if (staticEl) staticEl.style.display = 'none';
   var q = val.toLowerCase().trim();
   var html = '';
   // Search pages/routes dynamically
