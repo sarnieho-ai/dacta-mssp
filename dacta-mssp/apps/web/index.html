@@ -28819,12 +28819,14 @@ async function loadThreatIntelLive() {
 
     console.log('[ThreatIntel] Loaded: ' + indicators.length + ' indicators, ' + malwares.length + ' malware, ' + reports.length + ' reports, ' + threatActors.length + ' actors, ' + attackPatterns.length + ' attack patterns');
     showToast('Threat Intel loaded from DACTA TIP \u2014 ' + indicators.length + ' indicators, ' + threatActors.length + ' actors');
+    window._tipLoadPath = 'success';
 
     // Run Threat Intel page fixes/enhancements (with delay for DOM stability)
     if (typeof _tipInitAllFixes === 'function') { setTimeout(_tipInitAllFixes, 300); }
 
   } catch (err) {
     console.error('[ThreatIntel] Error loading DACTA TIP data:', err);
+    window._tipLoadPath = 'error: ' + err.message;
     page.querySelectorAll('.tip-live-loader').forEach(function(el) {
       el.innerHTML = '<span style="font-size:11px;color:var(--amber);">Failed to load: ' + err.message + '</span>';
     });
@@ -29849,11 +29851,18 @@ window._tipRenderSIEMPushFromOrgs = _tipRenderSIEMPushFromOrgs;
    --------------------------------------------------------------------------- */
 function _tipInitAllFixes() {
   console.log('[TIP] Running _tipInitAllFixes...');
-  try { _tipFixGlobalSearch(); } catch(e) { console.error('[TIP Fix 1 Error]', e); }
-  try { _tipFixAddActorSearch(); } catch(e) { console.error('[TIP Fix 2 Error]', e); }
-  try { _tipAddReportBuilder(); } catch(e) { console.error('[TIP Fix 3 Error]', e); }
-  try { _tipMakeReportsClickable(); } catch(e) { console.error('[TIP Fix 4 Error]', e); }
-  try { _tipLoadSightingsFromDB(); } catch(e) { console.error('[TIP Fix 5 Error]', e); }
+  // Temporary visible debug
+  var dbg = document.createElement('div');
+  dbg.id = 'tip-debug-banner';
+  dbg.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;color:#0f0;font-family:monospace;font-size:10px;padding:6px 12px;z-index:99999;border-top:1px solid #0f0;max-height:120px;overflow:auto;';
+  dbg.textContent = '[TIP FIXES] Starting...';
+  document.body.appendChild(dbg);
+  window._tipDbg = function(msg) { var d = document.getElementById('tip-debug-banner'); if(d) d.textContent += ' | ' + msg; console.log('[TIP DBG] ' + msg); };
+  try { _tipFixGlobalSearch(); window._tipDbg && window._tipDbg('Fix1:OK'); } catch(e) { console.error('[TIP Fix 1 Error]', e); window._tipDbg && window._tipDbg('Fix1:ERR:' + e.message); }
+  try { _tipFixAddActorSearch(); window._tipDbg && window._tipDbg('Fix2:OK'); } catch(e) { console.error('[TIP Fix 2 Error]', e); window._tipDbg && window._tipDbg('Fix2:ERR:' + e.message); }
+  try { _tipAddReportBuilder(); window._tipDbg && window._tipDbg('Fix3:OK'); } catch(e) { console.error('[TIP Fix 3 Error]', e); window._tipDbg && window._tipDbg('Fix3:ERR:' + e.message); }
+  try { _tipMakeReportsClickable(); window._tipDbg && window._tipDbg('Fix4:OK'); } catch(e) { console.error('[TIP Fix 4 Error]', e); window._tipDbg && window._tipDbg('Fix4:ERR:' + e.message); }
+  try { _tipLoadSightingsFromDB(); window._tipDbg && window._tipDbg('Fix5:OK'); } catch(e) { console.error('[TIP Fix 5 Error]', e); window._tipDbg && window._tipDbg('Fix5:ERR:' + e.message); }
   // Fix 6 (_tipSubmitSighting) self-installs via window.tipSubmitSighting override above
   try { _tipRenderSIEMPushFromOrgs(); } catch(e) { console.error('[TIP Fix 7 Error]', e); }
   
