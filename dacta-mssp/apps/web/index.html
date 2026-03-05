@@ -9403,6 +9403,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   <th>P</th>
                   <th>Title</th>
                   <th>AI Status</th>
+                  <th title="CrowdStrike Falcon Intel pre-enrichment">CS Intel</th>
                   <th>Organization</th>
                   <th>Source</th>
                   <th>Status</th>
@@ -38050,7 +38051,7 @@ function applyProductionMode() {
 
     // Table — clear body, show empty
     triagePage.querySelectorAll('table tbody').forEach(function(tbody) {
-      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:80px 24px;">' +
+      tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:80px 24px;">' +
         emptyState('📋', 'No tickets in queue — connect Jira to populate') + '</td></tr>';
     });
 
@@ -44315,7 +44316,7 @@ async function populateLiveTriage(pageOrAppend) {
   // Show loading in table
   var tbody = triagePage.querySelector('table tbody');
   if (tbody) {
-    tbody.innerHTML = '<tr><td colspan="11">' + jiraProgressBarHTML() + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12">' + jiraProgressBarHTML() + '</td></tr>';
   }
 
   try {
@@ -44354,6 +44355,7 @@ async function populateLiveTriage(pageOrAppend) {
           '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
           '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
           '<td data-ai-status="' + t.key + '">' + getTriageAIBadge(t.key) + '</td>' +
+          '<td data-cs-status="' + t.key + '">' + getCSBadge(t.key) + '</td>' +
           '<td style="font-size:11px;">' + t.org + '</td>' +
           '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
           '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
@@ -44368,8 +44370,13 @@ async function populateLiveTriage(pageOrAppend) {
 
       tbody.innerHTML = rowsHTML;
 
+      // Kick off CrowdStrike pre-enrichment in the background (non-blocking)
+      if (_triageCurrentIssues.length > 0) {
+        setTimeout(function() { enrichTriageWithCrowdStrike(_triageCurrentIssues); }, 600);
+      }
+
       if (_triageCurrentIssues.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;">' +
+        tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:60px;">' +
           '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;">' +
           '<div style="font-size:24px;opacity:0.5;">📋</div>' +
           '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div>' +
@@ -44418,7 +44425,7 @@ async function populateLiveTriage(pageOrAppend) {
   } catch (err) {
     console.error('[DactaJira] Triage error:', err);
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="11">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="12">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
     }
   } finally {
     _triageLoading = false;
@@ -44736,6 +44743,7 @@ function rerenderTriageTable() {
       '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
       '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
       '<td data-ai-status="' + t.key + '">' + getTriageAIBadge(t.key) + '</td>' +
+      '<td data-cs-status="' + t.key + '">' + getCSBadge(t.key) + '</td>' +
       '<td style="font-size:11px;">' + t.org + '</td>' +
       '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
       '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
@@ -44747,7 +44755,7 @@ function rerenderTriageTable() {
   tbody.innerHTML = rowsHTML;
   if (filtered.length === 0) {
     var emptyMsg = _triageClientSearch ? 'No tickets match "' + _triageClientSearch.replace(/</g,'&lt;') + '"' : 'No tickets match the current filters';
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">' + emptyMsg + '</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">' + emptyMsg + '</div></td></tr>';
   }
   var tqSum = triagePage.querySelector('.tq-summary');
   if (tqSum) {
@@ -46352,6 +46360,144 @@ function refreshTriageAIColumn() {
     var key = cell.getAttribute('data-ai-status');
     if (key) cell.innerHTML = getTriageAIBadge(key);
   });
+}
+
+// ── CrowdStrike pre-enrichment badge system ──
+
+// Cache: ticketKey → { status: 'loading'|'done'|'error', high: 0, medium: 0, low: 0, actors: [], error: null }
+var _csBadgeCache = {};
+
+/**
+ * Returns inline HTML badge for a ticket's CrowdStrike pre-enrichment status.
+ * Shows a spinner while loading, then HIGH/MEDIUM/CLEAN verdict chips.
+ */
+function getCSBadge(ticketKey) {
+  var c = _csBadgeCache[ticketKey];
+  if (!c) {
+    return '<span style="font-size:8px;color:var(--text-muted);font-family:var(--font-mono);">—</span>';
+  }
+  if (c.status === 'loading') {
+    return '<span style="font-size:8px;color:var(--text-muted);display:inline-flex;align-items:center;gap:3px;"><span class="jira-spinner" style="width:7px;height:7px;"></span>scanning</span>';
+  }
+  if (c.status === 'error') {
+    return '<span style="font-size:8px;color:var(--text-muted);" title="CS API error">—</span>';
+  }
+  // done
+  if (c.high > 0) {
+    var tip = 'HIGH confidence malicious IOC(s)' + (c.actors.length > 0 ? ' — ' + c.actors.slice(0,2).join(', ') : '');
+    return '<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);font-weight:700;cursor:default;white-space:nowrap;" title="' + tip + '">\uD83D\uDED1 HIGH ' + c.high + '</span>';
+  }
+  if (c.medium > 0) {
+    return '<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-weight:600;cursor:default;white-space:nowrap;" title="Medium confidence suspicious IOC(s)">\u26A0 MED ' + c.medium + '</span>';
+  }
+  if (c.queried > 0) {
+    return '<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:rgba(16,185,129,0.08);color:#10b981;border:1px solid rgba(16,185,129,0.2);cursor:default;white-space:nowrap;" title="All IOCs clean in CrowdStrike">\u2713 CLEAN</span>';
+  }
+  return '<span style="font-size:8px;color:var(--text-muted);" title="No IOCs in this ticket">—</span>';
+}
+
+/** Targeted refresh of just the CS Intel column cells */
+function refreshCSBadgeColumn() {
+  document.querySelectorAll('[data-cs-status]').forEach(function(cell) {
+    var key = cell.getAttribute('data-cs-status');
+    if (key) cell.innerHTML = getCSBadge(key);
+  });
+}
+
+/**
+ * Batch-enrich all triage tickets with CrowdStrike.
+ * Extracts IOCs from ticket summaries, calls /api/crowdstrike, updates _csBadgeCache,
+ * then re-renders the CS Intel column without touching the rest of the table.
+ */
+async function enrichTriageWithCrowdStrike(issues) {
+  if (!issues || !issues.length) return;
+
+  // Mark all as loading and render spinners
+  issues.forEach(function(t) {
+    if (!_csBadgeCache[t.key]) {
+      _csBadgeCache[t.key] = { status: 'loading', high: 0, medium: 0, low: 0, queried: 0, actors: [], error: null };
+    }
+  });
+  refreshCSBadgeColumn();
+
+  // Collect IOCs per ticket from summary text
+  var ticketIOCMap = {}; // ticketKey → [ioc, ioc, ...]
+  var allIOCs = []; // flat deduplicated list to batch-query
+  var iocToTickets = {}; // ioc → [ticketKey, ...]
+
+  issues.forEach(function(t) {
+    var iocs = extractIOCs(t.summary || '');
+    var ticketList = [].concat(iocs.ips || [], iocs.domains || [], iocs.hashes || []).filter(Boolean).slice(0, 10);
+    ticketIOCMap[t.key] = ticketList;
+    ticketList.forEach(function(ioc) {
+      if (!iocToTickets[ioc]) { iocToTickets[ioc] = []; allIOCs.push(ioc); }
+      if (iocToTickets[ioc].indexOf(t.key) === -1) iocToTickets[ioc].push(t.key);
+    });
+  });
+
+  // Deduplicate allIOCs (summaries often share IPs)
+  allIOCs = allIOCs.filter(function(v, i, a) { return a.indexOf(v) === i; }).slice(0, 200);
+
+  // Tickets with no IOCs → mark as done/no-iocs
+  issues.forEach(function(t) {
+    if (!ticketIOCMap[t.key] || ticketIOCMap[t.key].length === 0) {
+      _csBadgeCache[t.key] = { status: 'done', high: 0, medium: 0, low: 0, queried: 0, actors: [], error: null };
+    }
+  });
+
+  if (allIOCs.length === 0) {
+    refreshCSBadgeColumn();
+    return;
+  }
+
+  console.log('[CS Triage] Enriching ' + allIOCs.length + ' unique IOCs from ' + issues.length + ' tickets...');
+
+  try {
+    var resp = await fetch('/api/crowdstrike', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'enrich_iocs', indicators: allIOCs })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var lookup = data.lookup || {};
+
+    console.log('[CS Triage] Got ' + data.total + ' matches from CrowdStrike for ' + allIOCs.length + ' queried IOCs');
+
+    // Reset all ticket caches that had IOCs
+    issues.forEach(function(t) {
+      if (ticketIOCMap[t.key] && ticketIOCMap[t.key].length > 0) {
+        _csBadgeCache[t.key] = { status: 'done', high: 0, medium: 0, low: 0, queried: ticketIOCMap[t.key].length, actors: [], error: null };
+      }
+    });
+
+    // Map results back to per-ticket counts
+    Object.entries(lookup).forEach(function(entry) {
+      var ioc = entry[0], result = entry[1];
+      var tickets = iocToTickets[ioc] || [];
+      tickets.forEach(function(key) {
+        var cache = _csBadgeCache[key];
+        if (!cache) return;
+        var conf = result.malicious_confidence;
+        if (conf === 'high') cache.high++;
+        else if (conf === 'medium') cache.medium++;
+        else if (conf === 'low') cache.low++;
+        // Collect actors
+        (result.actors || []).forEach(function(a) { if (cache.actors.indexOf(a) === -1) cache.actors.push(a); });
+      });
+    });
+
+  } catch (err) {
+    console.warn('[CS Triage] Enrichment failed:', err.message);
+    // Mark all pending as error
+    issues.forEach(function(t) {
+      if (_csBadgeCache[t.key] && _csBadgeCache[t.key].status === 'loading') {
+        _csBadgeCache[t.key] = { status: 'error', high: 0, medium: 0, low: 0, queried: 0, actors: [], error: err.message };
+      }
+    });
+  }
+
+  refreshCSBadgeColumn();
 }
 
 // ── Cached investigation renderer ──
