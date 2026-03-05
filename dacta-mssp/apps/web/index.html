@@ -48203,121 +48203,222 @@ async function openInvestigation(ticketKey) {
       ? labels.map(function(l) { return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + l + '</span>'; }).join('')
       : '<span style="color:var(--text-muted);font-size:11px;">None</span>';
 
-    livePanel.innerHTML = '<div class="investigation-layout" style="margin-top:4px;">' +
-      '<div class="inv-verdict-area" id="invVerdictArea" style="display:none;"></div>' +
-      '<div class="inv-body-grid">' +
+    // ── Radiant-style tab switch helper ──
+    window.invSwitchTab = function(tabId) {
+      document.querySelectorAll('.inv-radiant-tab-content').forEach(function(t) { t.style.display = 'none'; });
+      var target = document.getElementById('invTab-' + tabId);
+      if (target) target.style.display = 'block';
+      document.querySelectorAll('.inv-tab-btn').forEach(function(b) {
+        var isActive = b.getAttribute('data-tab') === tabId;
+        b.style.color = isActive ? 'var(--text-primary)' : 'var(--text-muted)';
+        b.style.fontWeight = isActive ? '600' : '500';
+        b.style.borderBottom = isActive ? '2px solid var(--cyan)' : '2px solid transparent';
+      });
+    };
 
-      // ── LEFT SIDEBAR (Ticket Details + SLA + Raw Alert + Timeline + Enrichment/Correlated/Actions/Playbook) ──
-      '<div style="display:flex;flex-direction:column;gap:12px;">' +
-        // Ticket Details card
-        '<div class="card" style="padding:14px;">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">Ticket Details</span></div>' +
-          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">' +
-            '<span class="mono" style="color:var(--cyan);font-size:14px;font-weight:700;">' + ticketKey + '</span>' +
-            '<span class="badge ' + jiraPriorityBadge(priority) + '">' + (priority.split(' - ')[0]) + '</span>' +
-            '<span class="badge ' + jiraStatusBadge(status) + '">' + status + '</span>' +
+    // ── Stage detection from Jira status ──
+    var _statusLow = status.toLowerCase();
+    var _invStageIdx = _statusLow.includes('triage') || _statusLow === 'open' ? 0
+                     : _statusLow.includes('invest') || _statusLow.includes('progress') ? 1
+                     : _statusLow.includes('contain') ? 2
+                     : (_statusLow.includes('remed') || _statusLow.includes('clos') || _statusLow.includes('resolv')) ? 3 : 0;
+    var _invStages = ['Triage', 'Investigation', 'Containment', 'Remediation'];
+    var _alertCat = workCatStr || useCase || (labels.length > 0 ? labels[0] : '');
+
+    // ── Build timeline HTML ──
+    var _tlHTML = timelineItems.length === 0
+      ? '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-muted);">No activity recorded</div>'
+      : timelineItems.slice(0, 20).map(function(item) {
+          if (item.type === 'comment') {
+            return '<div style="padding:8px 12px;border-left:2px solid rgba(0,212,255,0.3);margin-left:8px;margin-bottom:8px;">' +
+              '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+                '<span style="font-size:10px;font-weight:600;color:var(--cyan);">' + escapeHtml(item.author) + '</span>' +
+                '<span style="font-size:9px;color:var(--text-muted);">' + jiraTimeAgo(item.time) + '</span>' +
+              '</div>' +
+              '<div style="font-size:10px;color:var(--text-secondary);line-height:1.4;max-height:100px;overflow:hidden;">' + (item.body || '') + '</div></div>';
+          } else {
+            return '<div style="padding:4px 12px;border-left:1px solid rgba(255,255,255,0.06);margin-left:8px;margin-bottom:2px;">' +
+              '<div style="font-size:9px;color:var(--text-muted);">' + escapeHtml(item.author) + ' \u00b7 ' + jiraTimeAgo(item.time) + '</div>' +
+              '<div style="font-size:9px;color:var(--text-secondary);margin-top:1px;">' + escapeHtml(item.field || '') + ': ' +
+                (item.from ? '<span style="text-decoration:line-through;opacity:0.4;">' + escapeHtml(item.from) + '</span> \u2192 ' : '') +
+                '<span style="color:var(--text-primary);">' + escapeHtml(item.to || '') + '</span></div></div>';
+          }
+        }).join('');
+
+    livePanel.innerHTML =
+      '<div id="invVerdictArea" style="display:none;"></div>' +
+
+      // ══════════════════════════════════════════════════════
+      //  RADIANT-STYLE INCIDENT HEADER
+      // ══════════════════════════════════════════════════════
+      '<div style="background:#0d1526;border:1px solid rgba(255,255,255,0.08);border-radius:12px;margin-bottom:16px;overflow:hidden;">' +
+
+        // ── Top row: badges + title + action buttons ──
+        '<div style="padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+          '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">' +
+            '<div style="display:flex;align-items:center;gap:6px;padding-top:2px;flex-shrink:0;">' +
+              '<span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">\u25CF LIVE</span>' +
+              (_alertCat ? '<span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);text-transform:uppercase;letter-spacing:0.04em;">' + escapeHtml(_alertCat) + '</span>' : '') +
+            '</div>' +
+            '<div style="flex:1;font-size:15px;font-weight:600;color:var(--text-primary);line-height:1.4;">' + escapeHtml(f.summary || ticketKey) + '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
+              '<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:4px 12px;" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',12) + ' Re-investigate</button>' +
+              '<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:4px 12px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\',\'_blank\')">Open in Jira \u2197</button>' +
+            '</div>' +
           '</div>' +
-          '<div style="font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.4;margin-bottom:12px;">' + (f.summary || '') + '</div>' +
-          '<div class="divider" style="margin:8px 0;"></div>' +
-          '<div style="display:flex;flex-direction:column;gap:6px;font-size:11px;">' +
-            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Organization</span><span style="color:var(--text-primary);font-weight:500;">' + (orgs.join(', ') || '\u2014') + '</span></div>' +
-            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Source</span><span style="color:var(--text-primary);">Jira</span></div>' +
-            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Assignee</span><span style="color:var(--cyan);font-weight:500;">' + assignee + '</span></div>' +
-            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Reporter</span><span style="color:var(--text-primary);">' + reporter + '</span></div>' +
-            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Created</span><span style="color:var(--text-primary);font-family:var(--font-mono);font-size:10px;">' + jiraFormatDT(f.created) + '</span></div>' +
-            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Updated</span><span style="color:var(--text-primary);font-family:var(--font-mono);font-size:10px;">' + jiraFormatDT(f.updated) + '</span></div>' +
-            '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Use Case</span><span style="color:var(--text-primary);font-size:10px;">' + (useCase || '\u2014') + '</span></div>' +
-            (workCatStr ? '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Work Category</span><span style="color:#a78bfa;font-size:10px;">' + workCatStr + '</span></div>' : '') +
-          '</div>' +
-          (labels.length > 0 ? '<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">' + labels.map(function(l) { return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + l + '</span>'; }).join('') + '</div>' : '') +
-        '</div>' +
-
-        // SLA Details — below Ticket Details, collapsible, pulls from Jira API
-        '<div id="invSLAPanel" class="card" style="padding:14px;border-color:rgba(245,158,11,0.2);">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">\u23F1 SLA Details</span><span class="badge" style="font-size:8px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);margin-left:6px;">Jira</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" id="invSLAContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Loading SLA data from Jira...</div>' +
-        '</div>' +
-
-        // Raw Alert card (from description)
-        '<div class="card" style="padding:14px;">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Raw Alert</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="font-size:11px;color:var(--text-secondary);line-height:1.5;max-height:300px;overflow-y:auto;font-family:var(--font-mono);background:var(--surface-0);padding:10px;border-radius:6px;border:1px solid var(--border-subtle);word-break:break-all;">' +
-            (description ? highlightEntities(description) : '<span style="color:var(--text-muted);font-style:italic;">No raw alert data</span>') +
-          '</div>' +
-        '</div>' +
-
-        // Activity Timeline
-        '<div class="card" style="padding:14px;">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + '</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="max-height:600px;overflow-y:auto;">' +
-          (timelineItems.length === 0
-            ? '<div style="text-align:center;padding:16px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">No activity recorded</div>'
-            : '<div style="display:flex;flex-direction:column;gap:0;">' +
-              timelineItems.slice(0, 20).map(function(item) {
-                if (item.type === 'comment') {
-                  return '<div style="padding:8px 10px;border-left:2px solid rgba(0,212,255,0.3);margin-left:6px;margin-bottom:6px;">' +
-                    '<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">' +
-                      '<span style="font-size:10px;font-weight:600;color:var(--cyan);">' + item.author + '</span>' +
-                      '<span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">' + jiraTimeAgo(item.time) + '</span>' +
-                    '</div>' +
-                    '<div style="font-size:10px;color:var(--text-secondary);line-height:1.4;max-height:100px;overflow:hidden;">' + (item.body || '') + '</div>' +
-                  '</div>';
-                } else {
-                  return '<div style="padding:4px 10px;border-left:2px solid rgba(255,255,255,0.06);margin-left:6px;margin-bottom:2px;">' +
-                    '<div style="font-size:9px;color:var(--text-muted);">' + item.author + ' \u00b7 ' + jiraTimeAgo(item.time) + '</div>' +
-                    '<div style="font-size:9px;color:var(--text-secondary);margin-top:1px;">' +
-                      item.field + ': ' +
-                      (item.from ? '<span style="text-decoration:line-through;opacity:0.5;">' + item.from + '</span> \u2192 ' : '') +
-                      '<span style="color:var(--text-primary);">' + item.to + '</span>' +
-                    '</div>' +
-                  '</div>';
-                }
-              }).join('') +
-            '</div>'
-          ) +
+          // Metadata strip
+          '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;font-size:10px;">' +
+            '<span style="color:var(--text-muted);">Incident <span style="color:var(--cyan);font-family:var(--font-mono);font-weight:700;margin-left:3px;">' + escapeHtml(ticketKey) + '</span></span>' +
+            '<span style="color:var(--text-muted);">Reported <span style="color:var(--text-secondary);margin-left:3px;">' + jiraFormatDT(f.created) + '</span></span>' +
+            '<span style="color:var(--text-muted);">Status <span class="badge ' + jiraStatusBadge(status) + '" style="font-size:9px;margin-left:3px;">' + escapeHtml(status) + '</span></span>' +
+            '<span style="color:var(--text-muted);">Priority <span class="badge ' + jiraPriorityBadge(priority) + '" style="font-size:9px;margin-left:3px;">' + escapeHtml(priority.split(' - ')[0]) + '</span></span>' +
+            '<span style="color:var(--text-muted);">Assigned to <span style="color:' + (assignee === 'Unassigned' ? 'var(--text-muted)' : 'var(--cyan)') + ';font-weight:500;margin-left:3px;">' + escapeHtml(assignee) + '</span></span>' +
           '</div>' +
         '</div>' +
 
-        // Enrichment Summary — collapsed by default
-        '<div class="card" style="padding:14px;" id="enrichmentSummaryCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Enrichment data will appear after investigation...</div>' +
-        '</div>' +
-        // Correlated Alerts — collapsed by default
-        '<div class="card" style="padding:14px;" id="correlatedAlertsCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Correlated Alerts</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Alert correlation data will appear after investigation...</div>' +
-        '</div>' +
-        // AI Recommended Actions — collapsed by default
-        '<div class="card" style="padding:14px;" id="recommendedActionsCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">AI Recommended Actions</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Actions will appear after investigation...</div>' +
-        '</div>' +
-        // Playbook Actions — collapsed by default
-        '<div class="card" style="padding:14px;" id="playbookActionsCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Playbook Actions</span><span class="badge" style="font-size:8px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);">Detection Rules</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Playbook steps will appear after investigation...</div>' +
+        // ── Stage progress bar ──
+        '<div style="display:flex;align-items:stretch;">' +
+          _invStages.map(function(stage, i) {
+            var done = i < _invStageIdx, active = i === _invStageIdx;
+            return '<div style="flex:1;padding:9px 16px;font-size:11px;font-weight:' + (active?'700':'500') + ';color:' + (active?'var(--text-primary)':done?'#10b981':'var(--text-muted)') + ';border-right:' + (i<3?'1px solid rgba(255,255,255,0.05)':'none') + ';position:relative;transition:color 0.2s;">' +
+              (done?'<span style="color:#10b981;margin-right:5px;">\u2713</span>':'') +
+              (active?'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);margin-right:5px;vertical-align:middle;box-shadow:0 0 6px var(--cyan);"></span>':'') +
+              stage +
+              (active?'<div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--cyan),#8b5cf6);"></div>':'') +
+              (done?'<div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:rgba(16,185,129,0.4);"></div>':'') +
+            '</div>';
+          }).join('') +
         '</div>' +
 
-        // Quick actions
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-          '<button class="btn btn-secondary btn-sm" style="flex:1;font-size:10px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\', \'_blank\')">Open in Jira \u2197</button>' +
+        // ── Tab navigation ──
+        '<div style="display:flex;align-items:center;padding:0 8px;background:rgba(0,0,0,0.15);border-top:1px solid rgba(255,255,255,0.05);">' +
+          [['overview','Overview'],['triage','Triage'],['investigation','Investigation'],['containment','Containment'],['timeline','Timeline']].map(function(t, i) {
+            var first = i === 0;
+            return '<button class="inv-tab-btn" data-tab="' + t[0] + '" onclick="window.invSwitchTab(\'' + t[0] + '\')" style="padding:10px 16px;font-size:11px;font-weight:' + (first?'600':'500') + ';color:' + (first?'var(--text-primary)':'var(--text-muted)') + ';background:none;border:none;border-bottom:2px solid ' + (first?'var(--cyan)':'transparent') + ';cursor:pointer;white-space:nowrap;transition:all 0.15s;">' + t[1] + '</button>';
+          }).join('') +
         '</div>' +
-      '</div>' +
 
-      // ── RIGHT MAIN CONTENT (Investigation Controls + AI spinner + Escalation Draft + Feedback) ──
-      '<div id="invMainContent" style="display:flex;flex-direction:column;gap:12px;">' +
-        // Re-investigate button (always visible for ALL tickets — fresh + cached)
-        '<div id="invReInvestigateBar" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;">' +
-          '<span style="font-size:14px;">' + dIcon('refresh',14) + '</span>' +
+      '</div>' + // end radiant header
+
+      // ══════════════════════════════════════════════════════
+      //  OVERVIEW TAB
+      // ══════════════════════════════════════════════════════
+      '<div id="invTab-overview" class="inv-radiant-tab-content" style="display:block;">' +
+        // Quick info strip
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">' +
+          '<div class="card" style="padding:12px 14px;">' +
+            '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:5px;">Organisation</div>' +
+            '<div style="font-size:13px;font-weight:600;color:var(--text-primary);">' + escapeHtml(orgs.join(', ') || '\u2014') + '</div>' +
+          '</div>' +
+          '<div class="card" style="padding:12px 14px;">' +
+            '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:5px;">Reporter</div>' +
+            '<div style="font-size:13px;font-weight:600;color:var(--text-primary);">' + escapeHtml(reporter) + '</div>' +
+          '</div>' +
+          '<div class="card" style="padding:12px 14px;">' +
+            '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:5px;">Use Case / Category</div>' +
+            '<div style="font-size:13px;font-weight:600;color:#a78bfa;">' + escapeHtml(useCase || workCatStr || '\u2014') + '</div>' +
+          '</div>' +
+        '</div>' +
+        // Investigation Snapshot card
+        '<div class="card" style="padding:16px;border-color:rgba(0,212,255,0.15);" id="alertGraphCard">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+            '<span class="card-title">Investigation Snapshot</span>' +
+            '<span class="badge" id="invSnapshotBadge" style="font-size:8px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);">Pre-scan</span>' +
+          '</div>' +
+          '<div id="alertGraphBody">' +
+            '<div id="invSnapshotMetrics" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;"></div>' +
+            '<div id="invSnapshotEntities" style="margin-bottom:10px;"></div>' +
+            '<div id="invSnapshotResults" style="font-size:9px;color:var(--text-muted);text-align:center;padding:12px 0;font-style:italic;">SIEM analysis results will appear here after investigation runs...</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' + // end overview tab
+
+      // ══════════════════════════════════════════════════════
+      //  TRIAGE TAB
+      // ══════════════════════════════════════════════════════
+      '<div id="invTab-triage" class="inv-radiant-tab-content" style="display:none;">' +
+        '<div style="display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start;">' +
+
+          // Left — Alert list
+          '<div>' +
+            '<div style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Alerts</div>' +
+            '<div class="card" style="padding:0;overflow:hidden;cursor:pointer;border-color:rgba(239,68,68,0.25);">' +
+              '<div style="padding:12px 14px;border-left:3px solid var(--red);">' +
+                '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+                  '<span style="font-size:8px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.05em;">Escalated</span>' +
+                  '<span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">' + escapeHtml(ticketKey) + '</span>' +
+                '</div>' +
+                '<div style="font-size:11px;color:var(--text-secondary);line-height:1.4;">' + escapeHtml((f.summary || '').substring(0, 65)) + ((f.summary||'').length>65?'\u2026':'') + '</div>' +
+                '<div style="font-size:9px;color:var(--text-muted);margin-top:5px;">' + jiraFormatDT(f.created) + '</div>' +
+              '</div>' +
+            '</div>' +
+            (orgs.length > 0 ? '<div style="margin-top:10px;padding:10px 12px;background:var(--surface-1);border-radius:6px;border:1px solid var(--border-subtle);font-size:10px;"><span style="color:var(--text-muted);">Org:</span> <span style="color:var(--cyan);font-weight:600;">' + escapeHtml(orgs.join(', ')) + '</span></div>' : '') +
+            (labels.length>0 ? '<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">' + labels.map(function(l){return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + escapeHtml(l) + '</span>';}).join('') + '</div>' : '') +
+          '</div>' +
+
+          // Right — Alert detail + escalation reason + playbook
+          '<div style="display:flex;flex-direction:column;gap:14px;">' +
+
+            // Alert detail card
+            '<div class="card" style="padding:16px;">' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+                '<div style="display:flex;align-items:center;gap:8px;">' +
+                  '<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:#ef4444;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);padding:3px 8px;border-radius:5px;">Escalated Alert</span>' +
+                  '<span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">' + escapeHtml(ticketKey) + '</span>' +
+                '</div>' +
+                '<div style="display:flex;align-items:center;gap:12px;font-size:9px;color:var(--text-muted);">' +
+                  'Priority <span class="badge ' + jiraPriorityBadge(priority) + '" style="font-size:9px;">' + escapeHtml(priority.split(' - ')[0]) + '</span>' +
+                  '<span style="color:var(--text-muted);">Detected <span style="color:var(--text-secondary);">' + jiraFormatDT(f.created) + '</span></span>' +
+                '</div>' +
+              '</div>' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.4;margin-bottom:14px;">' + escapeHtml(f.summary || '') + '</div>' +
+              '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;font-size:10px;">' +
+                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Recipient</div><div style="color:var(--text-primary);font-weight:500;">' + escapeHtml(reporter) + '</div></div>' +
+                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Received at</div><div style="color:var(--text-secondary);">' + jiraFormatDT(f.created) + '</div></div>' +
+                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Reporter</div><div style="color:var(--text-primary);">' + escapeHtml(reporter) + '</div></div>' +
+                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Assignee</div><div style="color:var(--cyan);font-weight:500;">' + escapeHtml(assignee) + '</div></div>' +
+                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Organisation</div><div style="color:var(--text-primary);">' + escapeHtml(orgs.join(', ')||'\u2014') + '</div></div>' +
+                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Use Case</div><div style="color:#a78bfa;">' + escapeHtml(useCase||workCatStr||'\u2014') + '</div></div>' +
+              '</div>' +
+            '</div>' +
+
+            // Why escalated
+            '<div class="card" style="padding:16px;">' +
+              '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Why was this alert escalated?</div>' +
+              '<div style="font-size:10px;color:var(--text-muted);margin-bottom:12px;">This alert failed the following triage step or contained these escalation details:</div>' +
+              '<div style="font-size:11px;color:var(--text-secondary);line-height:1.6;max-height:260px;overflow-y:auto;background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:12px;word-break:break-word;">' +
+                (description ? highlightEntities(description) : '<span style="color:var(--text-muted);font-style:italic;">No escalation details provided in this ticket.</span>') +
+              '</div>' +
+            '</div>' +
+
+            // Playbook triage steps
+            '<div class="card" style="padding:16px;border-color:rgba(139,92,246,0.2);" id="playbookActionsCard">' +
+              '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">' +
+                '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">Playbook Triage Steps</div>' +
+                '<span style="font-size:8px;padding:2px 7px;border-radius:8px;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);">Detection Rules</span>' +
+              '</div>' +
+              '<div style="font-size:10px;color:var(--text-muted);font-style:italic;" id="playbookActionsContent">Triage steps will populate after investigation runs...</div>' +
+            '</div>' +
+
+          '</div>' + // end triage right
+        '</div>' + // end triage grid
+      '</div>' + // end triage tab
+
+      // ══════════════════════════════════════════════════════
+      //  INVESTIGATION TAB
+      // ══════════════════════════════════════════════════════
+      '<div id="invTab-investigation" class="inv-radiant-tab-content" style="display:none;">' +
+        // Re-investigate control
+        '<div id="invReInvestigateBar" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;margin-bottom:14px;">' +
+          dIcon('refresh',14) +
           '<div style="flex:1;">' +
             '<div style="font-size:11px;font-weight:600;color:var(--text-primary);">Investigation Controls</div>' +
             '<div style="font-size:9px;color:var(--text-muted);">Run or re-run AI investigation on this ticket</div>' +
           '</div>' +
-          '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',14) + ' Re-investigate</button>' +
+          '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="if(window.invSwitchTab)window.invSwitchTab(\'investigation\');reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',12) + ' Re-investigate</button>' +
         '</div>' +
-        // AI Investigation loading panel
-        '<div id="invLoadingSpinner" class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;gap:14px;min-height:300px;background:var(--bg-card);border:1px solid rgba(0,212,255,0.12);border-radius:12px;">' +
+        // Loading spinner
+        '<div id="invLoadingSpinner" class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;gap:14px;min-height:280px;border:1px solid rgba(0,212,255,0.12);border-radius:12px;margin-bottom:14px;">' +
           '<div style="position:relative;width:52px;height:52px;">' +
             '<div style="position:absolute;inset:0;border:2px solid rgba(0,212,255,0.1);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
             '<div style="position:absolute;inset:8px;border:2px solid rgba(139,92,246,0.1);border-bottom-color:#8b5cf6;border-radius:50%;animation:spin 1.2s linear infinite reverse;"></div>' +
@@ -48336,32 +48437,50 @@ async function openInvestigation(ticketKey) {
             '<span style="font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep3"><span style="width:6px;height:6px;border-radius:50%;border:1px solid rgba(16,185,129,0.4);display:inline-block;"></span>AI Analysis</span>' +
           '</div>' +
         '</div>' +
-        // ── Investigation Snapshot (replaces alert graph — more actionable) ──
-        '<div class="card" style="padding:14px;border-color:rgba(0,212,255,0.15);" id="alertGraphCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;">' +
-            '<span class="card-title">Investigation Snapshot</span>' +
-            '<span class="badge" id="invSnapshotBadge" style="font-size:8px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);">Pre-scan</span>' +
-            '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span>' +
+        // AI round HTML injects here + enrichment + correlated
+        '<div id="invMainContent" style="display:flex;flex-direction:column;gap:12px;">' +
+          '<div class="card" style="padding:14px;" id="enrichmentSummaryCard">' +
+            '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+            '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Enrichment data will appear after investigation...</div>' +
           '</div>' +
-          '<div class="inv-collapsible-body" id="alertGraphBody">' +
-            // 4-metric mini grid (priority, entities, SIEM queries, playbook)
-            '<div id="invSnapshotMetrics" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;"></div>' +
-            // Entity list
-            '<div id="invSnapshotEntities" style="margin-bottom:10px;"></div>' +
-            // Post-investigation results (filled by runAIInvestigation)
-            '<div id="invSnapshotResults" style="font-size:9px;color:var(--text-muted);text-align:center;padding:12px 0;font-style:italic;">SIEM analysis results will appear here after investigation runs...</div>' +
+          '<div class="card" style="padding:14px;" id="correlatedAlertsCard">' +
+            '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Correlated Alerts</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+            '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Alert correlation data will appear after investigation...</div>' +
           '</div>' +
         '</div>' +
-        // Client Escalation Draft (just above Analyst Feedback Loop)
+      '</div>' + // end investigation tab
+
+      // ══════════════════════════════════════════════════════
+      //  CONTAINMENT TAB
+      // ══════════════════════════════════════════════════════
+      '<div id="invTab-containment" class="inv-radiant-tab-content" style="display:none;">' +
+        '<div style="display:flex;flex-direction:column;gap:14px;">' +
+        '<div class="card" style="padding:14px;" id="recommendedActionsCard">' +
+          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">AI Recommended Actions</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
+          '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Actions will appear after investigation...</div>' +
+        '</div>' +
         '<div class="card" style="padding:14px;border-color:rgba(0,212,255,0.2);" id="clientEscalationCard">' +
           '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Client Escalation Draft</span><span class="badge badge-cyan" style="font-size:9px;">AI Generated</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
           '<div class="inv-collapsible-body" id="escalationDraftContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Draft will be generated after investigation...</div>' +
         '</div>' +
-        // Analyst Feedback Loop panel appended here dynamically
-      '</div>' +
-      '</div>' +
+      '</div>' + // end inner flex wrapper
+      '</div>' + // end containment tab
 
-    '</div>';
+      // ══════════════════════════════════════════════════════
+      //  TIMELINE TAB
+      // ══════════════════════════════════════════════════════
+      '<div id="invTab-timeline" class="inv-radiant-tab-content" style="display:none;">' +
+        '<div style="display:flex;flex-direction:column;gap:14px;">' +
+        '<div id="invSLAPanel" class="card" style="padding:14px;border-color:rgba(245,158,11,0.2);">' +
+          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">\u23F1 SLA Details</span><span class="badge" style="font-size:8px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);margin-left:6px;">Jira</span></div>' +
+          '<div id="invSLAContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Loading SLA data from Jira...</div>' +
+        '</div>' +
+        '<div class="card" style="padding:14px;">' +
+          '<div class="card-header" style="margin-bottom:12px;"><span class="card-title">Activity Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + ' events</span></div>' +
+          _tlHTML +
+        '</div>' +
+        '</div>' + // end inner flex wrapper
+      '</div>';  // end timeline tab
 
     // ── Initialize collapsible panels ──
     initCollapsiblePanels();
@@ -51213,10 +51332,10 @@ async function runAIInvestigation(ticketKey, issueData) {
         // Outcome summary badges
         (_pbOkCount > 0 ? '<span style="font-size:8px;color:var(--green);background:rgba(16,185,129,0.1);padding:1px 6px;border-radius:8px;border:1px solid rgba(16,185,129,0.25);font-weight:700;">\u2713 '+_pbOkCount+' OK</span>' : '') +
         (_pbWarnCount > 0 ? '<span style="font-size:8px;color:var(--amber);background:rgba(245,158,11,0.1);padding:1px 6px;border-radius:8px;border:1px solid rgba(245,158,11,0.25);font-weight:700;">\u26A0 '+_pbWarnCount+' flags</span>' : '') +
-        (_pbUnkCount > 0 ? '<span style="font-size:8px;color:var(--text-muted);background:rgba(255,255,255,0.05);padding:1px 6px;border-radius:8px;border:1px solid var(--border-subtle);">? '+_pbUnkCount+' pending</span>' : '') +
+        (_pbUnkCount > 0 ? '<span style="font-size:8px;color:var(--text-muted);background:rgba(255,255,255,0.05);padding:1px 6px;border-radius:8px;border:1px solid var(--border-subtle);">&#8203; '+_pbUnkCount+' no data</span>' : '') +
         '</div>' +
-        // FP guidance (subtle, collapsed style)
-        (_pbFpText ? '<div style="padding:4px 10px;font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.15);border-bottom:1px solid rgba(139,92,246,0.1);">' + dIcon('info', 10) + ' FP guidance: ' + escapeHtml(_pbFpText.substring(0, 90)) + (_pbFpText.length > 90 ? '\u2026' : '') + '</div>' : '') +
+        // FP guidance — expandable, full text
+        (_pbFpText ? '<details style="margin:0;"><summary style="padding:5px 10px;font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.15);border-bottom:1px solid rgba(139,92,246,0.1);cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;">' + dIcon('info', 10) + ' FP Guidance <span style="font-size:8px;opacity:0.6;">(click to expand)</span></summary><div style="padding:7px 10px 8px;font-size:9px;color:var(--text-secondary);background:rgba(0,0,0,0.1);border-bottom:1px solid rgba(139,92,246,0.08);line-height:1.5;">' + escapeHtml(_pbFpText) + '</div></details>' : '') +
         // Steps with outcomes
         (_pbStepsHtml ? _pbStepsHtml : '<div style="padding:6px 10px;font-size:9px;color:var(--text-muted);">No automated triage steps found for this playbook.</div>') +
         '</div>';
