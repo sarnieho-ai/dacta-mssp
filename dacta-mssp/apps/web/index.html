@@ -14167,30 +14167,118 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
            PAGE 8: LOG SOURCE CATALOG
            ===================================================== -->
       <div class="page" id="page-logsources">
+        <style>
+          .lsc-org-select{background:rgba(0,0,0,0.35);border:1px solid rgba(0,212,255,0.18);color:var(--text-primary);font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;font-family:var(--font-display);cursor:pointer;outline:none;min-width:240px;-webkit-appearance:none;transition:border-color .15s;}
+          .lsc-org-select:focus{border-color:rgba(0,212,255,0.45);}
+          .lsc-org-select option{background:#0f172a;color:#e2e8f0;}
+          .lsc-gap-card{background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:none;}
+          .lsc-gap-card.visible{display:block;}
+          .lsc-source-card{background:rgba(15,23,42,0.5);border:1px solid var(--border-card);border-radius:10px;padding:16px;margin-bottom:10px;transition:border-color .18s;}
+          .lsc-source-card:hover{border-color:rgba(0,212,255,0.2);}
+          .lsc-source-card .src-header{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+          .lsc-source-card .src-status{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+          .lsc-source-card .src-status.healthy{background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.4);}
+          .lsc-source-card .src-status.degraded{background:#f59e0b;box-shadow:0 0 6px rgba(245,158,11,0.4);}
+          .lsc-source-card .src-status.silent{background:#ef4444;box-shadow:0 0 6px rgba(239,68,68,0.4);}
+          .lsc-source-card .src-name{font-size:14px;font-weight:600;color:var(--text-primary);flex:1;}
+          .lsc-source-card .src-type-badge{font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;letter-spacing:0.5px;text-transform:uppercase;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.15);}
+          .lsc-source-card .src-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px 16px;}
+          .lsc-source-card .src-meta-item{display:flex;flex-direction:column;gap:2px;}
+          .lsc-source-card .src-meta-item .lbl{font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--font-mono);}
+          .lsc-source-card .src-meta-item .val{font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);}
+          .lsc-source-card .src-notes{font-size:11px;color:var(--text-muted);margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04);font-style:italic;}
+          .lsc-source-card .src-actions{display:flex;gap:6px;margin-top:10px;}
+          /* Add/Edit modal */
+          .lsc-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:9000;align-items:center;justify-content:center;}
+          .lsc-modal-overlay.active{display:flex;}
+          .lsc-modal{background:var(--bg-card);border:1px solid var(--border-card);border-radius:14px;width:95%;max-width:600px;max-height:88vh;overflow-y:auto;}
+          .lsc-modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border-subtle);}
+          .lsc-modal-body{padding:20px;}
+          .lsc-field{margin-bottom:14px;}
+          .lsc-field label{display:block;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:6px;}
+          .lsc-field input,.lsc-field select,.lsc-field textarea{background:rgba(0,0,0,0.3);border:1px solid rgba(0,212,255,0.12);color:var(--text-primary);font-size:12px;padding:8px 12px;border-radius:6px;outline:none;width:100%;box-sizing:border-box;font-family:var(--font-mono);transition:border-color .15s;}
+          .lsc-field input:focus,.lsc-field select:focus,.lsc-field textarea:focus{border-color:rgba(0,212,255,0.35);}
+          .lsc-field textarea{resize:vertical;min-height:60px;}
+          .lsc-field select{cursor:pointer;-webkit-appearance:none;}
+        </style>
+
         <div class="page-header">
           <div>
             <div class="page-title">Log Source Catalog</div>
-            <div class="page-subtitle">All monitored log sources across client environments</div>
+            <div class="page-subtitle">Per-client monitoring checklist &mdash; what log sources are we actively ingesting</div>
           </div>
-          <div class="page-actions">
-            <button class="btn btn-secondary btn-sm" onclick="showToast('Generating health report...', 'info')">&#x2193; Health Report</button>
-            <button class="btn btn-primary btn-sm" onclick="showToast('Log source onboarding — use Log Parser wizard to add a new source', 'info')">+ Add Source</button>
+          <div class="page-actions" style="display:flex;align-items:center;gap:10px;">
+            <select id="lscOrgSelect" class="lsc-org-select" onchange="lscLoadOrg(this.value)">
+              <option value="">Select Client...</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" id="lscExportBtn" style="display:none;" onclick="lscExportCSV()">&#x2193; Export CSV</button>
+            <button class="btn btn-primary btn-sm" id="lscAddBtn" style="display:none;" onclick="lscOpenAddModal()">+ Add Source</button>
           </div>
         </div>
 
-        <div class="metrics-row" style="margin-bottom:16px;">
-          <div class="metric-card green"><div class="metric-label">Healthy</div><div class="metric-value">74</div><div class="metric-sub">sources</div></div>
-          <div class="metric-card amber"><div class="metric-label">Degraded</div><div class="metric-value">0</div><div class="metric-sub">sources</div></div>
-          <div class="metric-card red"><div class="metric-label">Silent</div><div class="metric-value">0</div><div class="metric-sub">sources</div></div>
-          <div class="metric-card cyan"><div class="metric-label">Total Rules</div><div class="metric-value">37.8<span style="font-size:14px;">K</span></div><div class="metric-sub">across all sources</div></div>
+        <!-- Metrics row (populated per-client) -->
+        <div class="metrics-row" id="lscMetrics" style="margin-bottom:16px;">
+          <div class="metric-card green"><div class="metric-label">Healthy</div><div class="metric-value" id="lscHealthy">—</div><div class="metric-sub">sources</div></div>
+          <div class="metric-card amber"><div class="metric-label">Degraded</div><div class="metric-value" id="lscDegraded">—</div><div class="metric-sub">sources</div></div>
+          <div class="metric-card red"><div class="metric-label">Silent</div><div class="metric-value" id="lscSilent">—</div><div class="metric-sub">sources</div></div>
+          <div class="metric-card cyan"><div class="metric-label">Total EPS</div><div class="metric-value" id="lscTotalEPS">—</div><div class="metric-sub">events/day</div></div>
         </div>
 
-        <div class="card">
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Status</th><th>Source Name</th><th>Vendor / Type</th><th>Vendor</th><th>Index Pattern</th><th>Organization</th><th>Rules</th><th>Category</th><th>Coverage</th><th>Last Event</th></tr></thead>
-              <tbody id="logSourcesBody"></tbody>
-            </table>
+        <!-- Gap alert (shown if client expects more sources than monitored) -->
+        <div class="lsc-gap-card" id="lscGapAlert">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#ef4444;">Monitoring Gap Detected</div>
+              <div id="lscGapText" style="font-size:11px;color:var(--text-muted);margin-top:2px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Source cards container -->
+        <div id="lscSourcesContainer">
+          <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:0.3;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <div style="font-size:14px;font-weight:600;margin-bottom:6px;">Select a client organization</div>
+            <div style="font-size:12px;line-height:1.6;">Choose a client from the dropdown above to view their monitored log sources, health status, and ingestion metrics.</div>
+          </div>
+        </div>
+
+        <!-- Add/Edit Modal -->
+        <div class="lsc-modal-overlay" id="lscModalOverlay">
+          <div class="lsc-modal">
+            <div class="lsc-modal-header">
+              <span id="lscModalTitle" style="font-size:13px;font-weight:700;color:var(--text-primary);">Add Log Source</span>
+              <button onclick="lscCloseModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px;">&times;</button>
+            </div>
+            <div class="lsc-modal-body">
+              <input type="hidden" id="lscEditId">
+              <div class="lsc-field"><label>Source Name</label><input type="text" id="lscFName" placeholder="e.g. CrowdStrike Falcon EDR"></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="lsc-field"><label>Vendor</label><input type="text" id="lscFVendor" placeholder="e.g. crowdstrike"></div>
+                <div class="lsc-field"><label>Source Type</label>
+                  <select id="lscFType">
+                    <option value="edr">EDR</option><option value="firewall">Firewall</option><option value="siem">SIEM</option>
+                    <option value="audit">Audit</option><option value="identity">Identity</option><option value="security">Security</option>
+                    <option value="email">Email</option><option value="cloud">Cloud</option><option value="custom">Custom</option>
+                  </select>
+                </div>
+              </div>
+              <div class="lsc-field"><label>Index Pattern</label><input type="text" id="lscFIndex" placeholder="e.g. crowdstrike-*"></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="lsc-field"><label>Status</label>
+                  <select id="lscFStatus">
+                    <option value="healthy">Healthy</option><option value="degraded">Degraded</option><option value="silent">Silent</option>
+                  </select>
+                </div>
+                <div class="lsc-field"><label>Expected Events/Day</label><input type="number" id="lscFEPD" placeholder="e.g. 50000"></div>
+              </div>
+              <div class="lsc-field"><label>Notes</label><textarea id="lscFNotes" placeholder="Operational notes about this source..."></textarea></div>
+              <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+                <button class="btn btn-secondary btn-sm" onclick="lscCloseModal()">Cancel</button>
+                <button class="btn btn-primary btn-sm" id="lscSaveBtn" onclick="lscSaveSource()">Save Source</button>
+              </div>
+            </div>
           </div>
         </div>
       </div><!-- end logsources -->
@@ -25940,83 +26028,266 @@ function renderMitreIcs() {
 }
 
 function renderLogSources() {
-  if (window._dactaMode === 'production') { loadLogSourceCatalogLive(); return; }
-  const tbody = document.getElementById('logSourcesBody');
-  if (!tbody) return;
-  const statusLabel = { 'green': 'Healthy', 'amber': 'Degraded', 'red': 'Silent' };
-  tbody.innerHTML = logSourcesData.map(s => `
-    <tr>
-      <td><div style="display:flex;align-items:center;gap:6px;"><div class="status-dot ${s.status}"></div><span style="font-size:10px;color:var(--text-muted);">${statusLabel[s.status]}</span></div></td>
-      <td style="color:var(--text-primary);font-weight:500;">${s.name}</td>
-      <td style="font-size:11px;">${s.vendor} / ${s.siem}</td>
-      <td>${s.siem}</td>
-      <td class="mono" style="font-size:10px;">${s.index}</td>
-      <td style="font-size:11px;">${s.org}</td>
-      <td style="font-family:var(--font-mono);font-weight:600;">${s.eventsDay}</td>
-      <td style="font-family:var(--font-mono);font-size:11px;">${s.volume}</td>
-      <td><span class="badge badge-${parseFloat(s.parse) >= 98 ? 'green' : parseFloat(s.parse) >= 90 ? 'amber' : 'red'}">${s.parse}</span></td>
-      <td class="mono">${s.last}</td>
-    </tr>
-  `).join('');
+  if (window._dactaMode === 'production') { lscInit(); return; }
 }
 
-// ── Load Log Source Catalog from known vendor mapping + live DB rule counts ──
-var _logSourceCatalogData = [
-  {v:"akamai",s:"Akamai Web Security",c:"security"},{v:"alibaba_cloud",s:"Alibaba Cloud ActionTrail",c:"cloud"},{v:"aqua",s:"Aqua Security Platform",c:"cloud"},{v:"arcsight",s:"ArcSight ESM",c:"security"},{v:"attivo",s:"Attivo ThreatDefend",c:"security"},{v:"aws",s:"AWS CloudTrail",c:"cloud"},{v:"azure",s:"Azure AD / Entra ID",c:"identity"},{v:"barracuda",s:"Barracuda ESG",c:"email"},{v:"beyondtrust",s:"BeyondTrust Privileged Access",c:"identity"},{v:"bitdefender",s:"Bitdefender GravityZone",c:"edr"},{v:"carbon_black",s:"Carbon Black Cloud EDR",c:"edr"},{v:"checkpoint",s:"Check Point NGFW",c:"firewall"},{v:"cisco",s:"Cisco ASA/Meraki",c:"firewall"},{v:"cloudflare",s:"Cloudflare WAF/CDN",c:"security"},{v:"correlation",s:"Multi-Source Correlation",c:"correlation"},{v:"crowdstrike",s:"CrowdStrike Falcon EDR",c:"edr"},{v:"crowdstrike_identity",s:"CrowdStrike Falcon Identity",c:"identity"},{v:"crowdstrike_intel",s:"CrowdStrike Falcon Intelligence",c:"security"},{v:"cyberark",s:"CyberArk Vault Audit",c:"identity"},{v:"darktrace",s:"Darktrace AI Detection",c:"security"},{v:"digital_guardian",s:"Digital Guardian Endpoint DLP",c:"edr"},{v:"digitalocean",s:"DigitalOcean Audit Log",c:"cloud"},{v:"docker",s:"Docker Container Runtime",c:"cloud"},{v:"duo",s:"Cisco Duo MFA",c:"identity"},{v:"elastic",s:"Elastic Security SIEM",c:"security"},{v:"eset",s:"ESET PROTECT Cloud",c:"edr"},{v:"f5_bigip",s:"F5 BIG-IP ASM WAF",c:"firewall"},{v:"forcepoint",s:"Forcepoint Data Loss Prevention",c:"security"},{v:"fortimail",s:"FortiMail Email Gateway",c:"email"},{v:"fortinet",s:"FortiGate Firewall",c:"firewall"},{v:"fortinet_ztna",s:"FortiSASE ZTNA",c:"firewall"},{v:"gcp",s:"GCP Audit Logs",c:"cloud"},{v:"github",s:"GitHub Enterprise Audit",c:"audit"},{v:"google_workspace",s:"Google Workspace Audit",c:"audit"},{v:"imperva",s:"Imperva Web Application Firewall",c:"firewall"},{v:"juniper",s:"Juniper SRX Firewall",c:"firewall"},{v:"kaspersky",s:"Kaspersky Security Center",c:"edr"},{v:"kubernetes",s:"Kubernetes Audit Log",c:"cloud"},{v:"logrhythm",s:"LogRhythm SIEM",c:"security"},{v:"m365",s:"Microsoft 365 Unified Audit Log",c:"audit"},{v:"mandiant",s:"Mandiant Advantage",c:"security"},{v:"mcafee",s:"McAfee ePolicy Orchestrator",c:"edr"},{v:"meraki",s:"Cisco Meraki Cloud",c:"firewall"},{v:"microsoft_defender",s:"Microsoft Defender for Endpoint",c:"edr"},{v:"mimecast",s:"Mimecast Email Security",c:"email"},{v:"nagios",s:"Nagios Monitoring",c:"audit"},{v:"netskope",s:"Netskope CASB/SSE",c:"cloud"},{v:"okta",s:"Okta System Log",c:"identity"},{v:"onelogin",s:"OneLogin Event API",c:"identity"},{v:"oracle_cloud",s:"OCI Audit Logs",c:"cloud"},{v:"palo_alto",s:"PAN-OS Firewall",c:"firewall"},{v:"ping_identity",s:"Ping Identity SSO",c:"identity"},{v:"prisma_cloud",s:"Prisma Cloud",c:"cloud"},{v:"proofpoint",s:"Proofpoint TAP Email",c:"email"},{v:"qradar",s:"IBM QRadar",c:"security"},{v:"qualys",s:"Qualys Vulnerability Management",c:"security"},{v:"rapid7",s:"Rapid7 InsightVM",c:"security"},{v:"sailpoint",s:"SailPoint IdentityNow",c:"identity"},{v:"sentinelone",s:"SentinelOne Deep Visibility",c:"edr"},{v:"snort_suricata",s:"Snort/Suricata IDS",c:"security"},{v:"solarwinds",s:"SolarWinds Orion Platform",c:"audit"},{v:"sophos",s:"Sophos XG Firewall",c:"firewall"},{v:"splunk_uba",s:"Splunk UBA Analytics",c:"security"},{v:"symantec",s:"Symantec Endpoint Protection",c:"edr"},{v:"tenable",s:"Tenable Vulnerability Scanner",c:"security"},{v:"trellix",s:"Trellix ENS/ePO",c:"edr"},{v:"trend_micro",s:"Trend Micro Vision One",c:"edr"},{v:"vectra",s:"Vectra AI NDR",c:"security"},{v:"veeam",s:"Veeam Backup",c:"audit"},{v:"wazuh",s:"Wazuh HIDS/XDR",c:"security"},{v:"windows_security",s:"Windows Security Event Log",c:"security"},{v:"windows_sysmon",s:"Sysmon Event Log",c:"process_creation"},{v:"zeek",s:"Zeek Network Monitor",c:"security"},{v:"zscaler",s:"Zscaler Internet Access",c:"cloud"}
-];
-var _logSourceCatalogLoaded = false;
-async function loadLogSourceCatalogLive() {
-  if (_logSourceCatalogLoaded) return;
-  var tbody = document.getElementById('logSourcesBody');
-  if (!tbody) return;
-  var VENDOR_NAMES = {"akamai":"Akamai","alibaba_cloud":"Alibaba Cloud","aqua":"Aqua Security","arcsight":"ArcSight","attivo":"Attivo Networks","aws":"AWS","azure":"Microsoft Azure","barracuda":"Barracuda","beyondtrust":"BeyondTrust","bitdefender":"Bitdefender","carbon_black":"Carbon Black","checkpoint":"Check Point","cisco":"Cisco","cloudflare":"Cloudflare","correlation":"Multi-Source Correlation","crowdstrike":"CrowdStrike","crowdstrike_identity":"CrowdStrike Identity","crowdstrike_intel":"CrowdStrike Intel","cyberark":"CyberArk","darktrace":"Darktrace","digital_guardian":"Digital Guardian","digitalocean":"DigitalOcean","docker":"Docker","duo":"Cisco Duo","elastic":"Elastic","eset":"ESET","f5_bigip":"F5 BIG-IP","forcepoint":"Forcepoint","fortimail":"FortiMail","fortinet":"Fortinet","fortinet_ztna":"Fortinet ZTNA","gcp":"Google Cloud Platform","github":"GitHub","google_workspace":"Google Workspace","imperva":"Imperva","juniper":"Juniper","kaspersky":"Kaspersky","kubernetes":"Kubernetes","logrhythm":"LogRhythm","m365":"Microsoft 365","mandiant":"Mandiant","mcafee":"McAfee","meraki":"Cisco Meraki","microsoft365":"Microsoft 365","microsoft_defender":"Microsoft Defender","mimecast":"Mimecast","nagios":"Nagios","netskope":"Netskope","okta":"Okta","onelogin":"OneLogin","oracle_cloud":"Oracle Cloud","palo_alto":"Palo Alto Networks","paloalto":"Palo Alto Networks","ping_identity":"Ping Identity","prisma_cloud":"Prisma Cloud","proofpoint":"Proofpoint","qradar":"IBM QRadar","qualys":"Qualys","rapid7":"Rapid7","sailpoint":"SailPoint","sentinelone":"SentinelOne","snort_suricata":"Snort/Suricata","solarwinds":"SolarWinds","sophos":"Sophos","splunk_uba":"Splunk UBA","symantec":"Symantec","tenable":"Tenable","trellix":"Trellix","trend_micro":"Trend Micro","vectra":"Vectra AI","veeam":"Veeam","wazuh":"Wazuh","windows_security":"Windows Security","windows_sysmon":"Windows Sysmon","zeek":"Zeek","zscaler":"Zscaler"};
-  var CAT_LABELS = {"edr":"EDR","firewall":"Firewall","cloud":"Cloud","identity":"Identity","email":"Email","security":"Security","audit":"Audit","correlation":"Correlation","process_creation":"Process"};
-  // Render table immediately with known catalog data
-  var items = _logSourceCatalogData;
-  var html = '';
-  items.forEach(function(s, idx) {
-    var displayName = VENDOR_NAMES[s.v] || s.v;
-    html += '<tr>';
-    html += '<td><div style="display:flex;align-items:center;gap:6px;"><div class="status-dot green"></div><span style="font-size:10px;color:var(--text-muted);">Healthy</span></div></td>';
-    html += '<td style="color:var(--text-primary);font-weight:500;">' + s.s + '</td>';
-    html += '<td style="font-size:11px;">' + displayName + ' / SIEMLess</td>';
-    html += '<td>' + displayName + '</td>';
-    html += '<td class="mono" style="font-size:10px;">' + s.v + '_*</td>';
-    html += '<td style="font-size:11px;">All Tenants</td>';
-    html += '<td id="lsc-count-' + idx + '" style="font-family:var(--font-mono);font-weight:600;color:var(--text-muted);">—</td>';
-    html += '<td style="font-family:var(--font-mono);font-size:11px;">' + (CAT_LABELS[s.c] || s.c) + '</td>';
-    html += '<td><span class="badge badge-green">Active</span></td>';
-    html += '<td class="mono" style="font-size:10px;">—</td>';
-    html += '</tr>';
-  });
-  tbody.innerHTML = html;
-  // Update healthy count metric
-  var healthyEl = document.querySelector('#page-logsources .metric-card.green .metric-value');
-  if (healthyEl) healthyEl.textContent = items.length;
-  _logSourceCatalogLoaded = true;
-  // Async: fetch rule counts per vendor from DB (non-blocking, updates cells as they load)
-  if (window._dactaSupabase) {
-    // Fire count queries in batches of 10 to avoid overwhelming the DB
-    var countIdx = 0;
-    function runCountBatch() {
-      var end = Math.min(countIdx + 10, items.length);
-      for (var i = countIdx; i < end; i++) {
-        (function(cellIdx, vendorKey) {
-          window._dactaSupabase.from('detection_rules').select('id', {count:'exact'}).eq('vendor', vendorKey).limit(1).then(function(res) {
-            var el = document.getElementById('lsc-count-' + cellIdx);
-            if (el && res && typeof res.count === 'number' && res.count > 0) {
-              el.textContent = res.count.toLocaleString();
-              el.style.color = 'var(--text-primary)';
-            }
-          }).catch(function(e) { console.warn('[LSC] Count error for', vendorKey, e); });
-        })(i, items[i].v);
-      }
-      countIdx = end;
-      if (countIdx < items.length) setTimeout(runCountBatch, 300);
+// ── Log Source Catalog (Per-Client) ──────────────────────────────────────────
+var _lscCurrentOrgId = null;
+var _lscCurrentData = [];
+var _lscOrgsLoaded = false;
+
+function lscInit() {
+  if (!_lscOrgsLoaded) lscLoadOrgs();
+}
+
+async function lscLoadOrgs() {
+  var sel = document.getElementById('lscOrgSelect');
+  if (!sel || !window._dactaSupabase) return;
+  try {
+    var res = await window._dactaSupabase.from('organizations').select('id,name').order('name');
+    if (res.data && res.data.length) {
+      var html = '<option value="">Select Client...</option>';
+      res.data.forEach(function(o) {
+        html += '<option value="' + o.id + '">' + o.name + '</option>';
+      });
+      sel.innerHTML = html;
+      _lscOrgsLoaded = true;
     }
-    runCountBatch();
+  } catch(e) { console.warn('[LSC] Failed to load orgs', e); }
+}
+
+async function lscLoadOrg(orgId) {
+  _lscCurrentOrgId = orgId;
+  var container = document.getElementById('lscSourcesContainer');
+  var addBtn = document.getElementById('lscAddBtn');
+  var exportBtn = document.getElementById('lscExportBtn');
+  var gapAlert = document.getElementById('lscGapAlert');
+  if (gapAlert) gapAlert.classList.remove('visible');
+  if (!orgId) {
+    if (addBtn) addBtn.style.display = 'none';
+    if (exportBtn) exportBtn.style.display = 'none';
+    lscUpdateMetrics([]);
+    container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:0.3;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><div style="font-size:14px;font-weight:600;margin-bottom:6px;">Select a client organization</div><div style="font-size:12px;line-height:1.6;">Choose a client from the dropdown above to view their monitored log sources, health status, and ingestion metrics.</div></div>';
+    return;
+  }
+  if (addBtn) addBtn.style.display = '';
+  if (exportBtn) exportBtn.style.display = '';
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);"><div class="spinner" style="margin:0 auto 12px auto;"></div><div style="font-size:12px;">Loading log sources...</div></div>';
+
+  try {
+    var res = await window._dactaSupabase
+      .from('client_log_sources')
+      .select('*')
+      .eq('org_id', orgId)
+      .order('source_name');
+    if (res.error) throw res.error;
+    _lscCurrentData = res.data || [];
+    lscUpdateMetrics(_lscCurrentData);
+    lscRenderCards(_lscCurrentData);
+    // Gap detection: count expected_by_client=true vs monitoring_active
+    var expectedCount = _lscCurrentData.filter(function(s){ return s.expected_by_client === true; }).length;
+    var monitoredCount = _lscCurrentData.filter(function(s){ return s.monitoring_active !== false && s.status !== 'silent'; }).length;
+    if (expectedCount > 0 && monitoredCount < expectedCount) {
+      var gapText = document.getElementById('lscGapText');
+      if (gapText) gapText.textContent = 'Client expects ' + expectedCount + ' source(s) but only ' + monitoredCount + ' are actively monitored. Review silent or missing sources.';
+      if (gapAlert) gapAlert.classList.add('visible');
+    }
+  } catch(e) {
+    console.error('[LSC] Load error', e);
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--red-bright);"><div style="font-size:13px;font-weight:600;">Failed to load log sources</div><div style="font-size:11px;margin-top:4px;color:var(--text-muted);">' + (e.message || 'Unknown error') + '</div></div>';
   }
 }
+
+function lscUpdateMetrics(data) {
+  var h = 0, d = 0, s = 0, eps = 0;
+  data.forEach(function(src) {
+    if (src.status === 'healthy') h++;
+    else if (src.status === 'degraded') d++;
+    else if (src.status === 'silent') s++;
+    eps += (src.events_per_day || 0);
+  });
+  var hEl = document.getElementById('lscHealthy');
+  var dEl = document.getElementById('lscDegraded');
+  var sEl = document.getElementById('lscSilent');
+  var eEl = document.getElementById('lscTotalEPS');
+  if (hEl) hEl.textContent = data.length ? h : '\u2014';
+  if (dEl) dEl.textContent = data.length ? d : '\u2014';
+  if (sEl) sEl.textContent = data.length ? s : '\u2014';
+  if (eEl) {
+    if (!data.length) { eEl.innerHTML = '\u2014'; }
+    else if (eps >= 1000000) { eEl.innerHTML = (eps / 1000000).toFixed(1) + '<span style="font-size:14px;">M</span>'; }
+    else if (eps >= 1000) { eEl.innerHTML = (eps / 1000).toFixed(1) + '<span style="font-size:14px;">K</span>'; }
+    else { eEl.textContent = eps.toLocaleString(); }
+  }
+}
+
+function lscRenderCards(data) {
+  var container = document.getElementById('lscSourcesContainer');
+  if (!container) return;
+  if (!data.length) {
+    container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:0.3;"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><div style="font-size:14px;font-weight:600;margin-bottom:6px;">No log sources configured</div><div style="font-size:12px;line-height:1.6;">This client has no log sources onboarded yet. Click "+ Add Source" to register one.</div></div>';
+    return;
+  }
+  var TYPE_LABELS = {"edr":"EDR","firewall":"Firewall","siem":"SIEM","audit":"Audit","identity":"Identity","security":"Security","email":"Email","cloud":"Cloud","custom":"Custom"};
+  var html = '';
+  data.forEach(function(src) {
+    var statusClass = src.status || 'healthy';
+    var statusLabel = statusClass.charAt(0).toUpperCase() + statusClass.slice(1);
+    var typeLabel = TYPE_LABELS[src.source_type] || (src.source_type || 'Unknown');
+    var epsDisplay = src.events_per_day ? src.events_per_day.toLocaleString() : '\u2014';
+    var onboardDate = src.onboarded_at ? new Date(src.onboarded_at).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '\u2014';
+    var lastEvent = src.last_event_at ? _lscTimeAgo(src.last_event_at) : '\u2014';
+
+    html += '<div class="lsc-source-card" data-lsc-id="' + src.id + '">';
+    html += '<div class="src-header">';
+    html += '<div class="src-status ' + statusClass + '" title="' + statusLabel + '"></div>';
+    html += '<div class="src-name">' + _lscEsc(src.source_name) + '</div>';
+    html += '<span class="src-type-badge">' + typeLabel + '</span>';
+    html += '<span style="font-size:10px;font-weight:600;color:' + (statusClass === 'healthy' ? '#22c55e' : statusClass === 'degraded' ? '#f59e0b' : '#ef4444') + ';">' + statusLabel + '</span>';
+    html += '</div>';
+    html += '<div class="src-meta">';
+    html += '<div class="src-meta-item"><div class="lbl">Vendor</div><div class="val">' + _lscEsc(src.vendor || '\u2014') + '</div></div>';
+    html += '<div class="src-meta-item"><div class="lbl">Index Pattern</div><div class="val">' + _lscEsc(src.index_pattern || '\u2014') + '</div></div>';
+    html += '<div class="src-meta-item"><div class="lbl">Events/Day</div><div class="val">' + epsDisplay + '</div></div>';
+    html += '<div class="src-meta-item"><div class="lbl">Onboarded</div><div class="val">' + onboardDate + '</div></div>';
+    html += '<div class="src-meta-item"><div class="lbl">Last Event</div><div class="val">' + lastEvent + '</div></div>';
+    html += '</div>';
+    if (src.notes) {
+      html += '<div class="src-notes">' + _lscEsc(src.notes) + '</div>';
+    }
+    html += '<div class="src-actions">';
+    html += '<button class="btn btn-secondary btn-xs" onclick="lscEditSource(\'' + src.id + '\')">Edit</button>';
+    html += '<button class="btn btn-xs" style="background:rgba(239,68,68,0.08);color:#ef4444;border:1px solid rgba(239,68,68,0.2);" onclick="lscDeleteSource(\'' + src.id + '\',\'' + _lscEsc(src.source_name).replace(/'/g, "\\'") + '\')">Remove</button>';
+    html += '</div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function _lscEsc(str) { var d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+function _lscTimeAgo(dateStr) {
+  var d = new Date(dateStr);
+  var diff = Date.now() - d.getTime();
+  var mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  var hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  var days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  return d.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+}
+
+// ── Add/Edit Modal ──
+function lscOpenAddModal() {
+  document.getElementById('lscEditId').value = '';
+  document.getElementById('lscFName').value = '';
+  document.getElementById('lscFVendor').value = '';
+  document.getElementById('lscFType').value = 'edr';
+  document.getElementById('lscFIndex').value = '';
+  document.getElementById('lscFStatus').value = 'healthy';
+  document.getElementById('lscFEPD').value = '';
+  document.getElementById('lscFNotes').value = '';
+  document.getElementById('lscModalTitle').textContent = 'Add Log Source';
+  document.getElementById('lscSaveBtn').textContent = 'Add Source';
+  document.getElementById('lscModalOverlay').classList.add('active');
+}
+
+function lscEditSource(id) {
+  var src = _lscCurrentData.find(function(s){ return s.id === id; });
+  if (!src) return;
+  document.getElementById('lscEditId').value = src.id;
+  document.getElementById('lscFName').value = src.source_name || '';
+  document.getElementById('lscFVendor').value = src.vendor || '';
+  document.getElementById('lscFType').value = src.source_type || 'edr';
+  document.getElementById('lscFIndex').value = src.index_pattern || '';
+  document.getElementById('lscFStatus').value = src.status || 'healthy';
+  document.getElementById('lscFEPD').value = src.events_per_day || '';
+  document.getElementById('lscFNotes').value = src.notes || '';
+  document.getElementById('lscModalTitle').textContent = 'Edit Log Source';
+  document.getElementById('lscSaveBtn').textContent = 'Update Source';
+  document.getElementById('lscModalOverlay').classList.add('active');
+}
+
+function lscCloseModal() {
+  document.getElementById('lscModalOverlay').classList.remove('active');
+}
+
+async function lscSaveSource() {
+  if (!window._dactaSupabase || !_lscCurrentOrgId) return;
+  var editId = document.getElementById('lscEditId').value;
+  var payload = {
+    source_name: document.getElementById('lscFName').value.trim(),
+    vendor: document.getElementById('lscFVendor').value.trim().toLowerCase(),
+    source_type: document.getElementById('lscFType').value,
+    index_pattern: document.getElementById('lscFIndex').value.trim(),
+    status: document.getElementById('lscFStatus').value,
+    events_per_day: parseInt(document.getElementById('lscFEPD').value) || 0,
+    notes: document.getElementById('lscFNotes').value.trim()
+  };
+  if (!payload.source_name) { showToast('Source name is required', 'error'); return; }
+  try {
+    var res;
+    if (editId) {
+      payload.updated_at = new Date().toISOString();
+      res = await window._dactaSupabase.from('client_log_sources').update(payload).eq('id', editId);
+    } else {
+      payload.org_id = _lscCurrentOrgId;
+      payload.onboarded_at = new Date().toISOString();
+      payload.monitoring_active = true;
+      payload.expected_by_client = true;
+      res = await window._dactaSupabase.from('client_log_sources').insert(payload);
+    }
+    if (res.error) throw res.error;
+    lscCloseModal();
+    showToast(editId ? 'Log source updated' : 'Log source added', 'success');
+    lscLoadOrg(_lscCurrentOrgId);
+  } catch(e) {
+    console.error('[LSC] Save error', e);
+    showToast('Save failed: ' + (e.message || 'Unknown error'), 'error');
+  }
+}
+
+async function lscDeleteSource(id, name) {
+  if (!confirm('Remove "' + name + '" from this client\u2019s monitored sources?')) return;
+  try {
+    var res = await window._dactaSupabase.from('client_log_sources').delete().eq('id', id);
+    if (res.error) throw res.error;
+    showToast('Log source removed', 'success');
+    lscLoadOrg(_lscCurrentOrgId);
+  } catch(e) {
+    console.error('[LSC] Delete error', e);
+    showToast('Delete failed: ' + (e.message || 'Unknown error'), 'error');
+  }
+}
+
+function lscExportCSV() {
+  if (!_lscCurrentData.length) { showToast('No data to export', 'info'); return; }
+  var orgName = document.getElementById('lscOrgSelect');
+  orgName = orgName ? orgName.options[orgName.selectedIndex].text : 'export';
+  var lines = ['Source Name,Vendor,Type,Index Pattern,Status,Events/Day,Onboarded,Notes'];
+  _lscCurrentData.forEach(function(s) {
+    lines.push([
+      '"' + (s.source_name||'').replace(/"/g,'""') + '"',
+      s.vendor || '',
+      s.source_type || '',
+      s.index_pattern || '',
+      s.status || '',
+      s.events_per_day || 0,
+      s.onboarded_at ? new Date(s.onboarded_at).toISOString().split('T')[0] : '',
+      '"' + (s.notes||'').replace(/"/g,'""') + '"'
+    ].join(','));
+  });
+  var blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'log_sources_' + orgName.replace(/\s+/g,'_').toLowerCase() + '.csv';
+  a.click();
+  showToast('CSV exported', 'success');
+}
+
+
 
 function renderAssets() {
   if (window._dactaMode === 'production') return;
@@ -29795,7 +30066,7 @@ function navigate(page) {
   if (page === 'intel') setTimeout(loadThreatIntelLive, 100);
   if (page === 'hunting') setTimeout(loadThreatHuntingLive, 100);
   if (page === 'rules') { loadDetectionRulesLive(); }
-  if (page === 'logsources') setTimeout(loadLogSourceCatalogLive, 100);
+  if (page === 'logsources') setTimeout(lscInit, 100);
   if (page === 'entities') setTimeout(function() { if (typeof initEntityExplorer === 'function') initEntityExplorer(); }, 50);
   if (page === 'assets') setTimeout(loadAssetManagement, 100);
   if (page === 'users') setTimeout(loadUserManagement, 100);
