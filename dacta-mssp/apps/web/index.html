@@ -46616,6 +46616,40 @@ async function openInvestigation(ticketKey) {
     
     var f = issueData.fields || {};
     var orgs = (f.customfield_10002 || []).map(function(o) { return o.name; });
+
+    // ── Auto-sync Copilot org selector to this ticket's org (source of truth: customfield_10002) ──
+    // Ensures War Room Copilot always uses correct client context — no manual selection needed.
+    (function() {
+      var orgName0 = (f.customfield_10002 && f.customfield_10002[0]) ? (f.customfield_10002[0].name || '') : '';
+      if (!orgName0) return;
+      var orgL = orgName0.toLowerCase();
+      var autoNS = 'default';
+      if (orgL.includes('naga')) autoNS = 'nagaworld';
+      else if (orgL.includes('dacta') && !orgL.includes('training')) autoNS = 'dacta';
+      else if (orgL.includes('foxwood')) autoNS = 'foxwood';
+      else if (orgL.includes('silver')) autoNS = 'silverkey';
+      else if (orgL.includes('spmt') || orgL.includes('sp media')) autoNS = 'spmt';
+      else if (orgL.includes('em ') || orgL.includes('em service')) autoNS = 'emservices';
+      else if (orgL.includes('sp tele') || orgL.includes('sptele')) autoNS = 'sptelecom';
+      else if (orgL.includes('toyota')) autoNS = 'toyotafinancial';
+      else if (orgL.includes('training')) autoNS = 'dactatraining';
+      else if (orgL.includes('adv')) autoNS = 'advpartners';
+      if (autoNS === 'default') return;
+      // Find the ORG_CONNECTORS entry whose namespace matches, then drive the Copilot dropdown
+      if (typeof ORG_CONNECTORS !== 'undefined' && ORG_CONNECTORS) {
+        var matchedId = Object.keys(ORG_CONNECTORS).find(function(id) {
+          return ORG_CONNECTORS[id] && ORG_CONNECTORS[id].namespace === autoNS;
+        });
+        if (matchedId) {
+          var copilotSel = document.getElementById('copilotOrgSelect');
+          if (copilotSel) {
+            copilotSel.value = matchedId;
+            console.log('[Investigation] Copilot org auto-synced to:', ORG_CONNECTORS[matchedId].name, '(ticket org:', orgName0 + ')');
+          }
+        }
+      }
+    })();
+
     var assignee = f.assignee ? f.assignee.displayName : 'Unassigned';
     var reporter = f.reporter ? f.reporter.displayName : 'Unknown';
     var priority = f.priority ? f.priority.name : 'Unknown';
