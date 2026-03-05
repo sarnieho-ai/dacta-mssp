@@ -3362,6 +3362,23 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   display: flex;
   flex-direction: column;
   gap: 0;
+  transform: translateX(-100%);
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  padding: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.ee-catalog.ee-catalog-open {
+  transform: translateX(0);
+  max-width: 38%;
+  opacity: 1;
+  overflow: visible;
+  pointer-events: auto;
+  padding: var(--topbar-height) 0 0 0;
 }
 .ee-catalog-header {
   font-family: var(--font-display);
@@ -3583,6 +3600,36 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 }
 .ee-toggle-physics:hover { border-color: var(--border-accent); color: var(--text-primary); }
 .ee-toggle-physics.active { background: var(--cyan-dim); border-color: var(--cyan); color: var(--cyan); }
+
+.ee-panel-toggle {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1e2836;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 6px 4px;
+  border-radius: 0 4px 4px 0;
+  z-index: 10;
+  display: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.ee-panel-toggle:hover {
+  background: #1f3a4a;
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.ee-panel-toggle.ee-has-results {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .ee-legend {
   display: flex;
@@ -25526,6 +25573,7 @@ Analyst: K. Rasmussen | 2026-02-28
             </div>
             <div class="ee-canvas-container" id="eeCanvasContainer">
               <canvas id="eeCanvas"></canvas>
+              <button class="ee-panel-toggle" id="eePanelToggle" onclick="eePanelToggle()" title="Toggle entity panel">◀</button>
               <div id="eeCanvasEmpty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;"><div style="text-align:center;color:var(--text-muted);font-size:12px;"><div style="font-size:28px;margin-bottom:8px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>Entity Relationship Mind Map<br><span style="font-size:10px;">Select entities to visualize relationships</span></div></div>
               <div class="ee-tooltip" id="eeTooltip">
                 <div class="ee-tooltip-name" id="eeTipName"></div>
@@ -26725,14 +26773,27 @@ async function syncDetectionRulesToSupabase(rules) {
             author: rule.author || 'Custom',
             version: 1,
             avg_daily_hits: rule.hits || 0
-          }).select('id').single();
-          if (!ins.error && ins.data) {
-            _ruleVersionCache[rule.name] = { id: ins.data.id, version: 1 };
+          });
+          if (ins.error) {
+            console.warn('[RuleSync] Insert failed for rule:', rule.name, ins.error.message);
+            return;
+          }
+          // Re-fetch the inserted row to get its ID
+          if (!ins.data || !ins.data[0]) {
+            var fetch_ins = await window._dactaSupabase.from('detection_rules').select('id').eq('name', rule.name).limit(1).single();
+            if (fetch_ins.error || !fetch_ins.data) {
+              console.warn('[RuleSync] Failed to fetch inserted rule:', rule.name);
+              return;
+            }
+            ins.data = [fetch_ins.data];
+          }
+          if (ins.data && ins.data[0]) {
+            _ruleVersionCache[rule.name] = { id: ins.data[0].id, version: 1 };
             logToSupabase('audit_log', {
               user_email: 'system',
               action: 'rule_sync',
               resource_type: 'detection_rule',
-              resource_id: ins.data.id,
+              resource_id: ins.data[0].id,
               details: { rule_name: rule.name, version: 1, change_type: 'sync_from_elastic', event: 'new_rule' }
             });
           }
@@ -27507,10 +27568,13 @@ async function saveRuleToSupabase() {
 
   try {
     showToast('Saving rule to repository...', 'info');
-    var res = await window._dactaSupabase.from('detection_rules').insert(ruleData).select('id,name').single();
+    var res = await window._dactaSupabase.from('detection_rules').insert(ruleData);
     if (res.error) throw res.error;
+    // Re-fetch to get the full inserted data
+    var fetch_res = await window._dactaSupabase.from('detection_rules').select('id,name').eq('name', title).limit(1).single();
+    if (fetch_res.error) throw fetch_res.error;
     showToast('Rule "' + title + '" saved to repository');
-    console.log('[RuleBuilder] Saved rule:', res.data.id, title);
+    console.log('[RuleBuilder] Saved rule:', fetch_res.data.id, title);
 
     // Invalidate cache and refresh count
     _ruleDetailCache = {};
@@ -28897,7 +28961,7 @@ function renderIntegrations() {
         <div class="int-stat"><div class="int-stat-val" style="color:var(--green);">${i.uptime}</div><div class="int-stat-lbl">Uptime</div></div>
       </div>
       <div style="margin-top:12px;display:flex;gap:6px;">
-        <button class="btn btn-secondary btn-sm" style="flex:1;">' + dIcon('gear',14) + ' Configure</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;">${dIcon('gear',14)} Configure</button>
         <button class="btn btn-${i.connected ? 'success' : 'danger'} btn-sm">${i.connected ? dIcon('check',14) + ' Connected' : dIcon('close',14) + ' Disconnected'}</button>
       </div>
     </div>`;
@@ -29556,14 +29620,21 @@ async function tipLoadCrowdStrikeIntel(page, iocFeedBody) {
   if (!page) return;
 
   // ── Actors: search CS for active adversaries ──
+  var csActorsAvailable = false;
   try {
     var csActorResp = await fetch('/api/crowdstrike', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'search_actors', limit: 12, offset: 0 })
     });
-    var csActorData = await csActorResp.json();
-    var csActors = (csActorData && csActorData.resources) ? csActorData.resources : [];
+    var csActors = [];
+    if (csActorResp.ok) {
+      var csActorData = await csActorResp.json();
+      csActors = (csActorData && csActorData.resources) ? csActorData.resources : [];
+      csActorsAvailable = csActors.length > 0;
+    } else {
+      console.warn('[ThreatIntel] CrowdStrike actors API returned', csActorResp.status);
+    }
 
     if (csActors.length > 0) {
       var actorGrid = page.querySelector('#tip-panel-actors .tip-actor-grid');
@@ -29639,18 +29710,26 @@ async function tipLoadCrowdStrikeIntel(page, iocFeedBody) {
       }
     }
   } catch(csActErr) {
-    console.warn('[CS Intel] Actor load failed:', csActErr.message);
+    console.warn('[ThreatIntel] CrowdStrike actors unavailable:', csActErr.message);
+    csActorsAvailable = false;
   }
 
   // ── Reports: fetch CrowdStrike finished intelligence reports ──
+  var csReportsAvailable = false;
   try {
     var csRepResp = await fetch('/api/crowdstrike', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'search_reports', limit: 10, offset: 0 })
     });
-    var csRepData = await csRepResp.json();
-    var csReports = (csRepData && csRepData.resources) ? csRepData.resources : [];
+    var csReports = [];
+    if (csRepResp.ok) {
+      var csRepData = await csRepResp.json();
+      csReports = (csRepData && csRepData.resources) ? csRepData.resources : [];
+      csReportsAvailable = csReports.length > 0;
+    } else {
+      console.warn('[ThreatIntel] CrowdStrike reports API returned', csRepResp.status);
+    }
 
     if (csReports.length > 0 && page) {
       var recentReportsContainer = page.querySelector('#tip-panel-report .tip-recent-reports');
@@ -29695,7 +29774,8 @@ async function tipLoadCrowdStrikeIntel(page, iocFeedBody) {
       }
     }
   } catch(csRepErr) {
-    console.warn('[CS Intel] Reports load failed:', csRepErr.message);
+    console.warn('[ThreatIntel] CrowdStrike reports unavailable:', csRepErr.message);
+    csReportsAvailable = false;
   }
 
   // ── IOC Feed: add CS column header + Enrich All button ──
@@ -29777,14 +29857,21 @@ async function tipCSEnrichIOCFeed() {
   if (!indicators.length) { showToast('No indicator values found', 'info'); return; }
   showToast('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M12 2L4 7v5c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V7l-8-5z"/><path d="M9 12l2 2 4-4"/></svg> CrowdStrike enriching ' + indicators.length + ' IOCs...', 'info');
 
+  var csEnrichAvailable = false;
   try {
     var resp = await fetch('/api/crowdstrike', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'enrich_iocs', indicators: indicators })
     });
-    var data = await resp.json();
-    var lookup = (data && data.lookup) ? data.lookup : {};
+    var lookup = {};
+    if (resp.ok) {
+      var data = await resp.json();
+      lookup = (data && data.lookup) ? data.lookup : {};
+      csEnrichAvailable = Object.keys(lookup).length > 0;
+    } else {
+      console.warn('[ThreatIntel] CrowdStrike IOC enrichment API returned', resp.status);
+    }
 
     rows.forEach(function(row) {
       var cell = row.querySelector('.cs-ioc-cell');
@@ -29806,16 +29893,26 @@ async function tipCSEnrichIOCFeed() {
       cell.innerHTML = badge;
     });
 
-    var highCount = Object.values(lookup).filter(function(r) { return r.malicious_confidence === 'high'; }).length;
-    showToast('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M12 2L4 7v5c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V7l-8-5z"/><path d="M9 12l2 2 4-4"/></svg> CS enrichment complete — ' + highCount + ' HIGH confidence IOCs', highCount > 0 ? 'warning' : 'success');
-    console.log('[CS Intel] IOC enrichment complete:', Object.keys(lookup).length, 'matched,', highCount, 'HIGH');
+    if (csEnrichAvailable) {
+      var highCount = Object.values(lookup).filter(function(r) { return r.malicious_confidence === 'high'; }).length;
+      showToast('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M12 2L4 7v5c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V7l-8-5z"/><path d="M9 12l2 2 4-4"/></svg> CS enrichment complete — ' + highCount + ' HIGH confidence IOCs', highCount > 0 ? 'warning' : 'success');
+      console.log('[CS Intel] IOC enrichment complete:', Object.keys(lookup).length, 'matched,', highCount, 'HIGH');
+    } else {
+      rows.forEach(function(row) {
+        var cell = row.querySelector('.cs-ioc-cell');
+        if (cell) cell.innerHTML = '<span style="font-size:9px;color:#9ca3af;">N/A</span>';
+      });
+      showToast('<span style="color:#f59e0b;">⚠</span> CrowdStrike enrichment unavailable', 'warning');
+      console.warn('[ThreatIntel] CrowdStrike IOC enrichment unavailable');
+    }
 
   } catch(e) {
     rows.forEach(function(row) {
       var cell = row.querySelector('.cs-ioc-cell');
-      if (cell) cell.innerHTML = '<span style="font-size:9px;color:#ef4444;">ERR</span>';
+      if (cell) cell.innerHTML = '<span style="font-size:9px;color:#9ca3af;">N/A</span>';
     });
-    console.error('[CS Intel] IOC enrichment failed:', e.message);
+    console.warn('[ThreatIntel] CrowdStrike IOC enrichment unavailable:', e.message);
+    showToast('<span style="color:#f59e0b;">⚠</span> CrowdStrike enrichment failed', 'warning');
   }
 }
 
@@ -37551,6 +37648,7 @@ function getOrgConnectors(ns, connType) {
 var _jiraOrgs = [];
 var _onboardingQueue = [];
 var _dismissedJiraOrgIds = JSON.parse(localStorage.getItem('dismissedJiraOrgIds') || '[]');
+var _supabaseActiveOrgIds = {}; // Track orgs actually in SIEMLess DB (active status)
 
 async function syncJiraOrgs() {
   var btn = document.getElementById('onboardSyncBtn');
@@ -37633,10 +37731,24 @@ function renderOnboardingPage() {
   }
 
   // Render onboarded table
+  // FIX 2: Filter to only show orgs that are in the SIEMLess DB (active status)
   var thtml = '';
   var orgKeys = Object.keys(ORG_CONNECTORS);
   orgKeys.forEach(function(id) {
     var org = ORG_CONNECTORS[id];
+
+    // Check if this org is in the SIEMLess DB — only show "Registered Clients" if they're actually in the DB
+    var isInSupabase = _supabaseActiveOrgIds[id] ||
+                       _supabaseActiveOrgIds[org.name.toLowerCase().trim()] ||
+                       _supabaseActiveOrgIds[org.namespace ? org.namespace.toLowerCase().trim() : ''] ||
+                       _supabaseActiveOrgIds[org.code ? org.code.toLowerCase() : ''];
+
+    // Skip orgs not in Supabase (unless they're internal or pending approval)
+    if (!isInSupabase && org.type !== 'internal' && !_onboardingQueue.find(function(q) { return q.name === org.name; })) {
+      console.log('[Onboarding] Skipping org not in SIEMLess DB:', org.name);
+      return; // Skip rendering this org
+    }
+
     var jiraMatch = _jiraOrgs.find(function(jo) { var jn=jo.name.toLowerCase().trim(), on=org.name.toLowerCase().trim(); return jn===on||on.indexOf(jn)===0||jn.indexOf(on)===0; });
     var typeLabel = org.type === 'internal' ? 'Internal' : org.type === 'mdr' ? 'MDR' : 'SOCaaS';
     var typeBadge = org.type === 'internal' ? 'badge-cyan' : org.type === 'mdr' ? 'badge-amber' : 'badge-green';
@@ -38187,7 +38299,14 @@ function dismissOnboardOrg(idx) {
 
 async function loadOnboardingPage() {
   await loadOrgsFromSupabase();
-  syncJiraOrgs();
+  renderOnboardingPage();
+
+  // Sync Jira in background (non-blocking)
+  syncJiraOrgs().then(function() {
+    renderOnboardingPage();
+  }).catch(function(e) {
+    console.warn('[Onboarding] Jira sync failed in background:', e.message);
+  });
 }
 
 // Load orgs from SIEMLess DB into ORG_CONNECTORS on startup
@@ -38214,6 +38333,16 @@ async function loadOrgsFromSupabase() {
     var resp = await window._supabaseRef.from('organizations').select('*').eq('status', 'active');
     var rows = (resp.data || []);
     console.log('[Onboarding] Loaded ' + rows.length + ' orgs from SIEMLess DB');
+
+    // Track active orgs from Supabase (for filtering in renderOnboardingPage)
+    _supabaseActiveOrgIds = {};
+    rows.forEach(function(row) {
+      _supabaseActiveOrgIds[row.id] = true;
+      _supabaseActiveOrgIds[row.name.toLowerCase().trim()] = true;
+      if (row.namespace) _supabaseActiveOrgIds[row.namespace.toLowerCase().trim()] = true;
+      if (row.short_name) _supabaseActiveOrgIds[row.short_name.toLowerCase().trim()] = true;
+    });
+
     rows.forEach(function(row) {
       // Check if this org is already in ORG_CONNECTORS by ID or name
       if (ORG_CONNECTORS[row.id]) return; // already present by ID
@@ -39234,6 +39363,21 @@ document.addEventListener('keydown', (e) => {
       entities = entities.filter(e => e.id.toLowerCase().includes(s) || (e.label && e.label.toLowerCase().includes(s)) || (e.sub && e.sub.toLowerCase().includes(s)) || (e.ip && e.ip.toLowerCase().includes(s)));
     }
 
+    // Show/hide catalog panel based on results
+    var catalogEl = document.querySelector('.ee-catalog');
+    var toggleEl = document.querySelector('.ee-panel-toggle');
+    if (entities.length > 0 && (search || filter !== 'all')) {
+      if (catalogEl) catalogEl.classList.add('ee-catalog-open');
+      if (toggleEl) toggleEl.classList.add('ee-has-results');
+      // Render only matching entities to canvas
+      eeFilterCanvasToEntities(entities.map(e => e.id));
+    } else if (!search && filter === 'all') {
+      // Empty search — hide panel and clear canvas
+      if (catalogEl) catalogEl.classList.remove('ee-catalog-open');
+      if (toggleEl) toggleEl.classList.remove('ee-has-results');
+      eeFilterCanvasToEntities([]); // empty canvas
+    }
+
     // Sort
     const sortVal = document.getElementById('eeSort')?.value || 'risk';
     if (sortVal === 'risk') entities.sort((a, b) => b.risk - a.risk);
@@ -39287,6 +39431,85 @@ document.addEventListener('keydown', (e) => {
       pagHTML += '</div>';
       list.innerHTML += pagHTML;
     }
+  }
+
+  // -- Filter Canvas to Show Only Matched Entities --
+  function eeFilterCanvasToEntities(ids) {
+    var emptyEl = document.getElementById('eeCanvasEmpty');
+    if (!ids || ids.length === 0) {
+      eeNodes = [];
+      eeEdgesProcessed = [];
+      if (emptyEl) emptyEl.style.display = 'flex';
+      return;
+    }
+
+    var idSet = new Set(ids);
+    // Include directly matched entities + 1 hop of relationships
+    var expandedIds = new Set(ids);
+    EE_EDGES.forEach(function(e) {
+      if (idSet.has(e.from) || idSet.has(e.to)) {
+        expandedIds.add(e.source);
+        expandedIds.add(e.target);
+      }
+    });
+
+    var filteredEntities = EE_ENTITIES.filter(function(e) { return expandedIds.has(e.id); });
+
+    // Re-init nodes with filtered set
+    var container = document.getElementById('eeCanvasContainer');
+    var w = container ? container.clientWidth : 800;
+    var h = container ? container.clientHeight : 600;
+
+    eeNodes = filteredEntities.map(function(e, i) {
+      var angle = (i / filteredEntities.length) * Math.PI * 2;
+      var radius = 150 + Math.random() * 80;
+      var nodeColor = e.malicious ? EE_MALICIOUS_COLOR : (EE_COLORS[e.type] || '#888');
+      var size = e.type === 'host' ? 22 : (e.type === 'process' ? 14 : 18);
+      return {
+        id: e.id,
+        type: e.type,
+        malicious: e.malicious,
+        risk: e.risk,
+        alerts: e.alerts,
+        icon: e.icon,
+        label: e.label || '',
+        x: w / 2 + Math.cos(angle) * radius,
+        y: h / 2 + Math.sin(angle) * radius,
+        vx: 0,
+        vy: 0,
+        size: size,
+        color: nodeColor,
+        conns: eeGetConnections(e.id),
+        pinned: false,
+        glowPhase: Math.random() * Math.PI * 2,
+        firewallBlocked: e.firewallBlocked || false,
+      };
+    });
+
+    eeEdgesProcessed = EE_EDGES.map(function(ed) {
+      var fromNode = eeNodes.find(function(n) { return n.id === ed.source; });
+      var toNode = eeNodes.find(function(n) { return n.id === ed.target; });
+      var style = EE_EDGE_STYLES[ed.type] || EE_EDGE_STYLES.communicated_with;
+      var isMalicious = (fromNode && fromNode.malicious) || (toNode && toNode.malicious);
+      return { from: fromNode, to: toNode, type: ed.type, style: style, isMalicious: isMalicious };
+    }).filter(function(ed) { return ed.from && ed.to; });
+
+    // Re-init particles
+    eeParticles = [];
+    eeEdgesProcessed.forEach(function(edge, ei) {
+      var count = edge.isMalicious ? 4 : 2;
+      for (var p = 0; p < count; p++) {
+        eeParticles.push({
+          edgeIdx: ei,
+          t: Math.random(),
+          speed: (0.002 + Math.random() * 0.003) * (edge.isMalicious ? 1.5 : 1),
+          size: edge.isMalicious ? 2.5 : 1.5,
+          color: edge.isMalicious ? EE_MALICIOUS_COLOR : edge.style.color,
+        });
+      }
+    });
+
+    if (emptyEl) emptyEl.style.display = 'none';
   }
 
   // -- Init Graph Nodes --
@@ -40384,9 +40607,16 @@ document.addEventListener('keydown', (e) => {
       var totalEntities = EE_ENTITIES.length;
       console.log('[EntityExplorer] Live data built: ' + totalEntities + ' entities, ' + EE_EDGES.length + ' edges (incl. Jira IOC correlations)');
 
-      // (Re-)initialize the canvas/catalog with live data
-      eeInitNodes();
-      eeBuildCatalog('all', '');
+      // Data loaded but NOT auto-rendered — wait for search or entity navigation
+      window._eeDataLoaded = true;
+      var emptyEl = document.getElementById('eeCanvasEmpty');
+      if (emptyEl) {
+        emptyEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);"><div style="font-size:24px;margin-bottom:8px;">🔍</div><strong style="color:var(--text-primary);font-size:13px;">Search for an entity</strong><br><span style="font-size:11px;">or navigate from an investigation to explore relationships</span></div>';
+        emptyEl.style.display = 'flex';
+      }
+      // Clear any existing nodes and edges — they will be populated on search
+      eeNodes = [];
+      eeEdgesProcessed = [];
       eeSetupCanvasEvents();
       eeSetupUI();
       if (typeof eeAnimFrame !== 'undefined' && eeAnimFrame) {
@@ -40395,9 +40625,9 @@ document.addEventListener('keydown', (e) => {
       }
       eeAnimate();
 
-      // Update catalog count
+      // Update catalog count to reflect data is ready
       var countEl = document.getElementById('eeCatalogCount');
-      if (countEl) countEl.textContent = totalEntities + ' entities (live)';
+      if (countEl) countEl.textContent = totalEntities + ' entities ready';
 
     } catch (err) {
       console.error('[EntityExplorer] loadLiveEntityData error:', err);
@@ -43670,7 +43900,7 @@ async function copilotCheckSources() {
     var r4 = await fetch('/api/copilot', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({messages:[{role:'user',content:'ping'}]}) });
     sources.push(r4.ok ? 'Claude AI ' + dIcon('check',14) + '' : 'Claude AI ' + dIcon('close',14) + '');
   } catch(e) { sources.push('Claude AI ' + dIcon('close',14) + ''); }
-  if (statusEl) statusEl.textContent = sources.join(' \u00b7 ');
+  if (statusEl) statusEl.innerHTML = sources.join(' \u00b7 ');
 }
 
 // ── Clear / New Session ──
@@ -46595,6 +46825,16 @@ function openEntityExplorer(entity, type) {
       }, 300);
     }
   }, 600);
+}
+
+// Entity Explorer: Toggle catalog panel open/closed
+function eePanelToggle() {
+  var catalogEl = document.querySelector('.ee-catalog');
+  var toggleBtn = document.getElementById('eePanelToggle');
+  if (catalogEl) {
+    var isOpen = catalogEl.classList.toggle('ee-catalog-open');
+    if (toggleBtn) toggleBtn.textContent = isOpen ? '◀' : '▶';
+  }
 }
 
 // ── INVESTIGATION LIVE DATA ─────────────────────────────────
@@ -52342,9 +52582,19 @@ async function loadTestLabStats() {
   if (window._dactaSupabase) {
     try {
       var countRes = await window._dactaSupabase.from('detection_rules').select('id', { count: 'exact' }).limit(1);
-      var totalRules = countRes.count || 0;
-      if (statCards[0]) statCards[0].textContent = totalRules.toLocaleString();
-    } catch(e) {}
+      if (countRes.error) {
+        console.warn('[TestLab] Failed to count detection_rules:', countRes.error.message);
+        if (statCards[0]) statCards[0].textContent = '—';
+      } else {
+        var totalRules = countRes.count || 0;
+        if (statCards[0]) statCards[0].textContent = (totalRules > 0 ? totalRules : '—').toLocaleString();
+      }
+    } catch(e) {
+      console.warn('[TestLab] Attack Actions count error:', e.message);
+      if (statCards[0]) statCards[0].textContent = '—';
+    }
+  } else {
+    if (statCards[0]) statCards[0].textContent = '—';
   }
 
   // Query Elastic for live event counts across all namespaces for prevention/detection estimates
