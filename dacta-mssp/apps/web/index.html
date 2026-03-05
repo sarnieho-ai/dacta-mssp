@@ -28704,43 +28704,30 @@ async function loadThreatIntelLive() {
       malwareContainer.innerHTML = malHTML;
     }
 
-    // ── Reports Section ──
-    var reportContainer = page.querySelector('#tipReportsList');
-    if (!reportContainer) {
-      var panels2 = page.querySelectorAll('.tip-panel');
-      panels2.forEach(function(p) {
-        var title = p.querySelector('.tip-panel-title');
-        if (title && (title.textContent.toLowerCase().indexOf('report') >= 0 || title.textContent.toLowerCase().indexOf('bulletin') >= 0)) {
-          reportContainer = p.querySelector('.tip-panel-body, .tip-panel-scroll');
-        }
-      });
-    }
-    if (reportContainer && reports.length > 0) {
+    // ── Reports Section (inject into Recent Reports only, NOT Report Builder) ──
+    // Use #tip-panel-report to scope, then find the .tip-recent-reports container
+    var recentReportsContainer = page.querySelector('#tip-panel-report .tip-recent-reports');
+    if (recentReportsContainer && reports.length > 0) {
       var repHTML = '';
       reports.forEach(function(r) {
         var pub = r.published ? new Date(r.published).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : r.created_at ? new Date(r.created_at).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '\u2014';
-        repHTML += '<div style="padding:10px 14px;background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.1);border-radius:8px;margin-bottom:8px;cursor:pointer;" onmouseenter="this.style.borderColor=\'rgba(0,212,255,0.3)\'" onmouseleave="this.style.borderColor=\'rgba(0,212,255,0.1)\'">' +
-          '<div style="display:flex;align-items:center;gap:8px;">' +
-          '<span style="font-size:12px;font-weight:600;color:var(--text-primary);">' + (r.name || 'Untitled Report') + '</span>' +
-          '<span style="margin-left:auto;font-size:10px;color:var(--text-muted);">' + pub + '</span>' +
+        repHTML += '<div class="tip-report-row" style="cursor:pointer;">' +
+          '<span class="tip-report-type-badge tip-rtype-monthly">Intel Report</span>' +
+          '<div class="tip-report-info">' +
+            '<div class="tip-report-name">' + (r.name || 'Untitled Report') + '</div>' +
+            '<div class="tip-report-meta">' + pub + (r.description ? ' \u00b7 ' + (r.description.length > 60 ? r.description.substring(0, 57) + '...' : r.description) : '') + '</div>' +
           '</div>' +
-          (r.description ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.4;">' + (r.description.length > 150 ? r.description.substring(0, 147) + '...' : r.description) + '</div>' : '') +
+          '<span class="tip-status-published">Published</span>' +
+          '<div class="tip-report-actions">' +
+            '<button class="tip-btn tip-btn-secondary tip-btn-xs" onclick="event.stopPropagation();tipToast(\'\ud83d\udcc4\',\'Opening report...\')">View</button>' +
+          '</div>' +
         '</div>';
       });
-      reportContainer.innerHTML = repHTML;
+      recentReportsContainer.innerHTML = repHTML;
     }
 
-    // ── Threat Actors Tab ──
-    var actorPanel = page.querySelector('[data-tab="actors"] .tip-panel-body, [data-tab="actors"] .tip-panel-scroll');
-    if (!actorPanel) {
-      page.querySelectorAll('.tip-tab-panel').forEach(function(p) {
-        var allText = p.textContent.toLowerCase();
-        if (allText.indexOf('threat actor') >= 0 || allText.indexOf('apt') >= 0) {
-          var body = p.querySelector('.tip-panel-body, .tip-panel-scroll, .tip-grid');
-          if (body) actorPanel = body;
-        }
-      });
-    }
+    // ── Threat Actors Tab (use panel ID) ──
+    var actorPanel = page.querySelector('#tip-panel-actors .tip-panel-body, #tip-panel-actors .tip-panel-scroll, #tip-panel-actors .tip-grid');
     if (actorPanel && threatActors.length > 0) {
       var actHTML = '';
       threatActors.forEach(function(a) {
@@ -28763,15 +28750,8 @@ async function loadThreatIntelLive() {
       actorPanel.innerHTML = actHTML;
     }
 
-    // ── Attack Patterns Tab ──
-    var attackPanel = null;
-    page.querySelectorAll('.tip-tab-panel').forEach(function(p) {
-      var allText = p.textContent.toLowerCase();
-      if (allText.indexOf('attack pattern') >= 0 || allText.indexOf('mitre') >= 0 || allText.indexOf('technique') >= 0) {
-        var body = p.querySelector('.tip-panel-body, .tip-panel-scroll, .tip-grid');
-        if (body) attackPanel = body;
-      }
-    });
+    // ── Attack Patterns Tab (use panel ID to avoid matching Report panel) ──
+    var attackPanel = page.querySelector('#tip-panel-attack .tip-panel-body, #tip-panel-attack .tip-panel-scroll, #tip-panel-attack .tip-grid');
     if (attackPanel && attackPatterns.length > 0) {
       var atkHTML = '';
       attackPatterns.forEach(function(a) {
@@ -28789,15 +28769,22 @@ async function loadThreatIntelLive() {
       attackPanel.innerHTML = atkHTML;
     }
 
-    // ── Vulnerability Tab (from Elastic) ──
-    var vulnPanel = null;
-    page.querySelectorAll('.tip-tab-panel').forEach(function(p) {
-      var allText = p.textContent.toLowerCase();
-      if (allText.indexOf('vulnerabilit') >= 0 || allText.indexOf('cve') >= 0) {
-        var body = p.querySelector('.tip-panel-body, .tip-panel-scroll, .tip-grid, table tbody');
-        if (body) vulnPanel = body;
+    // ── Vulnerability Tab (from Elastic, scoped to ops panel) ──
+    // Vulnerabilities are shown in the Operations tab, not a separate panel
+    var vulnPanel = page.querySelector('#tip-panel-ops table tbody');
+    if (!vulnPanel) {
+      // Fallback: look for a vulnerability-related panel body in ops
+      var opsPanel = page.querySelector('#tip-panel-ops');
+      if (opsPanel) {
+        var vulnPanels = opsPanel.querySelectorAll('.tip-panel');
+        vulnPanels.forEach(function(p) {
+          var title = p.querySelector('.tip-panel-title');
+          if (title && (title.textContent.toLowerCase().indexOf('vulnerabilit') >= 0 || title.textContent.toLowerCase().indexOf('cve') >= 0)) {
+            vulnPanel = p.querySelector('.tip-panel-body, .tip-panel-scroll, table tbody');
+          }
+        });
       }
-    });
+    }
     if (vulnPanel) {
       var cveBuckets = vulns.cves ? vulns.cves.buckets : [];
       var sevBuckets = vulns.by_severity ? vulns.by_severity.buckets : [];
