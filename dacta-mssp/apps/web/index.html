@@ -48347,6 +48347,20 @@ function simulateElasticLookup(summary, desc, iocs, techniques) {
     }
   }
 
+  // ── Alert History stub (simulation — no live Elastic data) ──
+  logs.alertHistory = {
+    totalAlerts: 0,
+    byName: [],
+    bySeverity: [],
+    correlatedIPs: iocs.ips || [],
+    correlationMode: 'simulated'
+  };
+  logs.queriesRun = logs.queriesRun || 0;
+  logs.elasticConnected = logs.elasticConnected || false;
+  logs.openctiConnected = logs.openctiConnected || false;
+  logs.openctiResults = logs.openctiResults || [];
+  logs.queryDetails = logs.queryDetails || [];
+
   return logs;
 }
 
@@ -49269,11 +49283,14 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (corrCard && elasticLogs && elasticLogs.alertHistory) {
     var ah = elasticLogs.alertHistory;
     var isIPMode = ah.correlationMode === 'ip';
+    var isSimulated = ah.correlationMode === 'simulated';
     var scopeLabel = isIPMode
       ? 'correlated alerts matching IPs: ' + (ah.correlatedIPs || []).join(', ')
-      : 'historical alerts on this host';
+      : isSimulated
+        ? 'results — Elastic SIEM unavailable (simulated)'
+        : 'historical alerts on this host';
     var cHTML = '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' +
-      (ah.totalAlerts || 0) + ' ' + scopeLabel + ' (last 30d)</div>';
+      (ah.totalAlerts || 0) + ' ' + scopeLabel + (isSimulated ? '' : ' (last 30d)') + '</div>';
 
     if (ah.byName && ah.byName.length > 0) {
       ah.byName.slice(0, 8).forEach(function(b) {
