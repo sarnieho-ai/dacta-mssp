@@ -37095,11 +37095,18 @@ function orgHasConnector(ns, connType) {
   return conn && conn.is_enabled;
 }
 
-// Helper: get connector metadata
+// Helper: get connector metadata (first match)
 function getOrgConnector(ns, connType) {
   var org = getOrgByNamespace(ns);
   if (!org) return null;
   return org.connectors.find(function(c) { return c.connector_type === connType; }) || null;
+}
+
+// Helper: get ALL connectors of a type for the org (some orgs have multiple firewall vendors)
+function getOrgConnectors(ns, connType) {
+  var org = getOrgByNamespace(ns);
+  if (!org) return [];
+  return org.connectors.filter(function(c) { return c.connector_type === connType && c.is_enabled !== false; });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -48238,6 +48245,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   var _hasFirewall = orgHasConnector(namespace, 'firewall');
   var _edrConnector = getOrgConnector(namespace, 'edr');
   var _fwConnector = getOrgConnector(namespace, 'firewall');
+  var _allFwConnectors = getOrgConnectors(namespace, 'firewall'); // ALL firewall connectors (Palo Alto + FortiGate + etc)
   console.log('[Investigation] Org: ' + namespace + ' | EDR: ' + _hasEDR + ' | Firewall: ' + _hasFirewall);
 
   // ── QUERY 1: EDR Alert Correlation (connector-aware) ──
@@ -48499,95 +48507,129 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     logs.authEvents.push({ status: 'INFO', user: 'N/A', result: 'User context requires EDR telemetry. Not available for this client.', live: true });
   }
 
-  // ── FIREWALL BLOCK/DENY Connector Query (runs independently for ALL orgs with firewall connector) ──
-  // This is the connector-aware dispatcher: it always runs when _hasFirewall = true, regardless of
-  // whether EDR found an alert. Firewall deny/drop evidence is critical and must NEVER be skipped.
-  // Uses ALL ticket IPs (internal RFC1918 + external) — internal hosts are the SOURCE of outbound traffic.
+  // ── FIREWALL BLOCK/DENY Connector Query (multi-connector, with health check) ──
+  // Queries ALL registered firewall connectors for the org (Palo Alto + FortiGate + etc).
+  // CRITICAL: zero Elastic results ≠ confirmed absence of blocking. We first check if the
+  // index is actively ingesting (health check) before drawing any conclusions from zero results.
   if (_hasFirewall) {
-    var fwBlockMeta = _fwConnector ? _fwConnector.metadata : {};
-    var fwBlockIndex = fwBlockMeta.index_pattern || ('logs-panw.panos-' + namespace + '-*');
-    if (_fwConnector && _fwConnector.vendor && _fwConnector.vendor.toLowerCase().includes('fortinet')) {
-      fwBlockIndex = fwBlockMeta.index_pattern || ('logs-fortinet_fortigate.log-' + namespace + '-*');
-    }
-    // Use ALL ticket IPs — RFC1918 filter is correct only for threat-intel enrichment, NOT for firewall queries
     var allTicketIPs = (iocs.ips || []);
-    if (allTicketIPs.length > 0) {
-      var fwBlockQ = {
-        size: 20,
-        query: {
-          bool: {
-            must: [
-              { range: { '@timestamp': { gte: 'now-7d' } } }
-            ],
-            should: allTicketIPs.map(function(ip) {
-              return { bool: { should: [{ match: { 'source.ip': ip } }, { match: { 'destination.ip': ip } }], minimum_should_match: 1 } };
-            }),
-            minimum_should_match: 1,
-            filter: [
-              { bool: {
-                should: [
-                  { terms: { 'event.action': ['deny', 'drop', 'block', 'reset-both', 'reset-server', 'reset-client', 'DENY', 'DROP', 'BLOCK'] } },
-                  { terms: { 'network.direction': ['outbound'] } }
-                ]
-              }}
-            ]
-          }
-        },
-        sort: [{ '@timestamp': 'desc' }],
-        _source: ['@timestamp', 'source.ip', 'destination.ip', 'destination.port', 'event.action', 'network.bytes', 'rule.name', 'observer.name', 'network.direction']
-      };
-      var qDFBlock = { name: 'Firewall Block/Deny (connector-aware)', index: fwBlockIndex, query: 'action:(deny|drop|block) ALL ticket IPs (7d)', status: 'running' };
-      logs.queryDetails.push(qDFBlock); logs.queriesRun++;
-      var fwBlockResult = await queryElastic('search', fwBlockIndex, fwBlockQ);
-      if (fwBlockResult && fwBlockResult.hits) {
-        logs.elasticConnected = true;
-        qDFBlock.status = 'success';
-        qDFBlock.hits = fwBlockResult.hits.total ? fwBlockResult.hits.total.value : 0;
-        var blockHits = fwBlockResult.hits.hits || [];
-        if (blockHits.length > 0) {
-          blockHits.forEach(function(hit) {
-            var s = hit._source;
-            logs.firewallBlocks.push({
-              timestamp: s['@timestamp'],
-              srcIp: (s.source || {}).ip || '',
-              dstIp: (s.destination || {}).ip || '',
-              dstPort: (s.destination || {}).port || '',
-              action: (s.event || {}).action || 'unknown',
-              ruleName: (s.rule || {}).name || '',
-              bytes: (s.network || {}).bytes || 0,
-              direction: (s.network || {}).direction || '',
+    var fwConnectorsToQuery = _allFwConnectors.length > 0 ? _allFwConnectors : (_fwConnector ? [_fwConnector] : []);
+    var totalFwBlocksFound = 0;
+    var queriedIndexes = [];
+    var healthyIndexes = []; // indexes that have data (connector is ingesting)
+    var offlineIndexes = []; // indexes with 0 total docs (connector may be offline/misconfigured)
+
+    if (allTicketIPs.length > 0 && fwConnectorsToQuery.length > 0) {
+      for (var fwci = 0; fwci < fwConnectorsToQuery.length; fwci++) {
+        var fwConn = fwConnectorsToQuery[fwci];
+        var fwMeta = fwConn.metadata || {};
+        var fwIdx;
+        if (fwMeta.index_pattern) {
+          fwIdx = fwMeta.index_pattern;
+        } else if (fwConn.vendor && fwConn.vendor.toLowerCase().includes('fortinet')) {
+          fwIdx = 'logs-fortinet_fortigate.log-' + namespace + '-*';
+        } else {
+          fwIdx = 'logs-panw.panos-' + namespace + '-*';
+        }
+        queriedIndexes.push(fwIdx);
+        var vendorLabel = (fwConn.vendor || fwConn.display_name || fwIdx).replace('logs-', '').split('.')[0];
+
+        // ── Step 1: Index health check — does this index have ANY data in 7 days? ──
+        var healthQ = { size: 0, query: { range: { '@timestamp': { gte: 'now-7d' } } } };
+        var healthResult = await queryElastic('search', fwIdx, healthQ);
+        var indexTotal = (healthResult && healthResult.hits && healthResult.hits.total) ? healthResult.hits.total.value : 0;
+        var indexHealthy = indexTotal > 0;
+        if (indexHealthy) { healthyIndexes.push(vendorLabel); } else { offlineIndexes.push(vendorLabel); }
+
+        // ── Step 2: Block/deny query for ticket IPs ──
+        var fwBlockQ = {
+          size: 20,
+          query: {
+            bool: {
+              must: [
+                { range: { '@timestamp': { gte: 'now-7d' } } },
+                { terms: { 'event.action': ['deny', 'drop', 'block', 'reset-both', 'reset-server', 'reset-client', 'DENY', 'DROP', 'BLOCK', 'Deny', 'Drop', 'Block'] } }
+              ],
+              should: allTicketIPs.map(function(ip) {
+                return { bool: { should: [{ term: { 'source.ip': ip } }, { term: { 'destination.ip': ip } }], minimum_should_match: 1 } };
+              }),
+              minimum_should_match: 1
+            }
+          },
+          sort: [{ '@timestamp': 'desc' }],
+          _source: ['@timestamp', 'source.ip', 'destination.ip', 'destination.port', 'event.action', 'network.bytes', 'rule.name', 'observer.name', 'network.direction']
+        };
+        var qDFBlock = { name: 'Firewall Block/Deny (' + vendorLabel + ')', index: fwIdx, query: 'action:(deny|drop|block) ALL ticket IPs (7d) · index health: ' + (indexHealthy ? indexTotal + ' docs' : 'OFFLINE/EMPTY'), status: 'running' };
+        logs.queryDetails.push(qDFBlock); logs.queriesRun++;
+        var fwBlockResult = await queryElastic('search', fwIdx, fwBlockQ);
+        if (fwBlockResult && fwBlockResult.hits) {
+          logs.elasticConnected = true;
+          qDFBlock.status = indexHealthy ? 'success' : 'unclear';
+          qDFBlock.hits = fwBlockResult.hits.total ? fwBlockResult.hits.total.value : 0;
+          var blockHits = fwBlockResult.hits.hits || [];
+          if (blockHits.length > 0) {
+            totalFwBlocksFound += blockHits.length;
+            blockHits.forEach(function(hit) {
+              var s = hit._source;
+              logs.firewallBlocks.push({
+                timestamp: s['@timestamp'],
+                srcIp: (s.source || {}).ip || '',
+                dstIp: (s.destination || {}).ip || '',
+                dstPort: (s.destination || {}).port || '',
+                action: (s.event || {}).action || 'unknown',
+                ruleName: (s.rule || {}).name || '',
+                bytes: (s.network || {}).bytes || 0,
+                direction: (s.network || {}).direction || '',
+                vendor: vendorLabel,
+                evidenceSource: 'SIEM_CONFIRMED'
+              });
+            });
+            logs.networkConnections.push({
+              status: 'ALERT',
+              query: 'Firewall BLOCK/DENY [' + vendorLabel + ']: event.action:(deny|drop|block) for ticket IPs',
+              result: qDFBlock.hits + ' firewall BLOCK/DENY event(s) [' + vendorLabel + '] — traffic was actively DROPPED. SIEM-confirmed from ' + fwIdx,
+              ip: allTicketIPs.join(', '),
+              count: qDFBlock.hits,
+              live: true,
+              actionType: 'FIREWALL_BLOCK',
               evidenceSource: 'SIEM_CONFIRMED'
             });
-          });
-          // Add to networkConnections as a SIEM_CONFIRMED firewall block finding
-          logs.networkConnections.push({
-            status: 'ALERT',
-            query: 'Firewall BLOCK/DENY: event.action:(deny|drop|block) for ticket IPs',
-            result: qDFBlock.hits + ' firewall BLOCK/DENY event(s) — traffic was actively DROPPED by firewall policy. This is SIEM-confirmed, not inferred from ticket text.',
-            ip: allTicketIPs.join(', '),
-            count: qDFBlock.hits,
-            live: true,
-            actionType: 'FIREWALL_BLOCK',
-            evidenceSource: 'SIEM_CONFIRMED'
-          });
+          } else if (indexHealthy) {
+            // Index IS ingesting but no blocks matched ticket IPs — this is meaningful
+            logs.networkConnections.push({
+              status: 'CLEAR',
+              query: 'Firewall BLOCK/DENY [' + vendorLabel + ']: event.action:(deny|drop|block) for ticket IPs (7d)',
+              result: 'No BLOCK/DENY events found for ticket IPs in ' + vendorLabel + ' (' + indexTotal + ' total events in window). Traffic not blocked according to this firewall.',
+              ip: allTicketIPs.join(', '),
+              count: 0,
+              live: true,
+              actionType: 'FIREWALL_NO_BLOCK_CONFIRMED',
+              evidenceSource: 'SIEM_CHECKED'
+            });
+          } else {
+            // Index is empty/offline — zero results are MEANINGLESS
+            qDFBlock.note = 'Index has 0 total documents in 7-day window — connector may be offline or log ingestion not configured for this org';
+            logs.networkConnections.push({
+              status: 'UNCLEAR',
+              query: 'Firewall BLOCK/DENY [' + vendorLabel + ']: (7d)',
+              result: 'Firewall index ' + fwIdx + ' returned 0 total events — connector offline or logs not ingested. Cannot determine if traffic was blocked. Verify connector health.',
+              ip: allTicketIPs.join(', '),
+              count: 0,
+              live: true,
+              actionType: 'FIREWALL_CONNECTOR_OFFLINE',
+              evidenceSource: 'UNCLEAR'
+            });
+          }
         } else {
-          // No blocks found — this is significant exculpatory evidence
-          logs.networkConnections.push({
-            status: 'CLEAR',
-            query: 'Firewall BLOCK/DENY: event.action:(deny|drop|block) for ticket IPs (7d)',
-            result: 'No firewall BLOCK/DENY events found for any ticket IP in last 7 days. Traffic was either allowed or no firewall policy triggered.',
-            ip: allTicketIPs.join(', '),
-            count: 0,
-            live: true,
-            actionType: 'FIREWALL_ALLOW',
-            evidenceSource: 'SIEM_CONFIRMED'
-          });
+          qDFBlock.status = 'error';
+          qDFBlock.note = 'Query failed — ' + fwIdx + ' may not exist or is unreachable';
+          offlineIndexes.push(vendorLabel + ' (query error)');
         }
-      } else {
-        qDFBlock.status = 'error';
-        logs.queryDetails[logs.queryDetails.length - 1].note = 'Query failed — firewall index may be offline';
       }
     }
+
+    // Log multi-connector summary
+    console.log('[Investigation] Firewall multi-connector: queried=[' + queriedIndexes.join(', ') + '] healthy=[' + healthyIndexes.join(', ') + '] offline=[' + offlineIndexes.join(', ') + '] totalBlocks=' + totalFwBlocksFound);
   }
 
   // ── QUERY 6: DACTA TIP IOC Lookups ──
@@ -49309,15 +49351,33 @@ async function runAIInvestigation(ticketKey, issueData) {
     exculpatory = exculpatory.filter(function(e) {
       return !(e.title && e.title.toLowerCase().includes('no network connection') && e.source !== 'SIEM_CONFIRMED');
     });
-  } else if (elasticLogs.firewallBlocks && elasticLogs.firewallBlocks.length === 0 &&
-             elasticLogs.networkConnections.some(function(nc) { return nc.actionType === 'FIREWALL_ALLOW' && nc.evidenceSource === 'SIEM_CONFIRMED'; })) {
-    // Firewall was queried but found NO blocks — this is exculpatory SIEM evidence
-    exculpatory.unshift({
-      title: 'Firewall query: no BLOCK/DENY events found (SIEM verified)',
-      severity: 'strong',
-      source: 'SIEM_CONFIRMED',
-      detail: 'The firewall connector was queried for deny/drop/block events against all ticket IPs over the last 7 days. Zero blocking events were found. This is SIEM-confirmed exculpatory evidence, not an inference.'
-    });
+  } else if (elasticLogs.firewallBlocks && elasticLogs.firewallBlocks.length === 0) {
+    // Firewall was queried — classify the result carefully based on connector health
+    var hasConfirmedNoBlock = elasticLogs.networkConnections.some(function(nc) { return nc.actionType === 'FIREWALL_NO_BLOCK_CONFIRMED'; });
+    var hasOfflineConnector = elasticLogs.networkConnections.some(function(nc) { return nc.actionType === 'FIREWALL_CONNECTOR_OFFLINE'; });
+    var allConnectorsOffline = elasticLogs.networkConnections.filter(function(nc) {
+      return nc.actionType === 'FIREWALL_NO_BLOCK_CONFIRMED' || nc.actionType === 'FIREWALL_CONNECTOR_OFFLINE';
+    }).every(function(nc) { return nc.actionType === 'FIREWALL_CONNECTOR_OFFLINE'; });
+
+    if (hasConfirmedNoBlock && !allConnectorsOffline) {
+      // At least one healthy connector confirmed no blocks — meaningful exculpatory, but caveat any offline connectors
+      var offlineNote = hasOfflineConnector ? ' Note: one or more firewall connectors were offline/not ingesting — coverage may be incomplete.' : '';
+      exculpatory.unshift({
+        title: 'Firewall query: no BLOCK/DENY events found (connector active)',
+        severity: 'strong',
+        source: 'SIEM_CHECKED',
+        detail: 'Queried ' + (elasticLogs.networkConnections.filter(function(nc){ return nc.actionType === 'FIREWALL_NO_BLOCK_CONFIRMED'; }).length) + ' active firewall connector(s). Zero block/deny events matched ticket IPs in the last 7 days.' + offlineNote + ' If analyst found blocks in the firewall console, check whether all firewall vendors are registered as connectors.'
+      });
+    } else if (hasOfflineConnector) {
+      // All queried connectors were offline/empty — zero results are meaningless
+      exculpatory.unshift({
+        title: 'Firewall connector offline — block status UNKNOWN',
+        severity: 'moderate',
+        source: 'UNCLEAR',
+        detail: 'Firewall log index returned 0 total events (connector may be offline or logs not ingested for this org). Zero matches for ticket IPs is INCONCLUSIVE — it does not confirm traffic was allowed. Manually verify blocking status in the firewall management console and check connector health in Settings.'
+      });
+    }
+    // If no firewall networkConnection entries at all (e.g. 0 IPs in ticket), add nothing
   }
 
   // Inject CrowdStrike confirmed IOC evidence into inculpatory chain
@@ -50669,12 +50729,28 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
 
   // Network queries
   elasticLogs.networkConnections.forEach(function(nc) {
-    var statusColor = nc.status === 'CLEAR' ? 'var(--green)' : (nc.status === 'ALERT' ? 'var(--red-bright)' : 'var(--amber)');
-    var statusIcon = nc.status === 'CLEAR' ? '\u2705' : (nc.status === 'ALERT' ? '\uD83D\uDEA8' : '\u2753');
+    var statusColor, statusIcon, evidenceBadge = '';
+    if (nc.status === 'CLEAR') {
+      statusColor = 'var(--green)'; statusIcon = '\u2705';
+    } else if (nc.status === 'ALERT') {
+      statusColor = 'var(--red-bright)'; statusIcon = '\uD83D\uDEA8';
+    } else if (nc.status === 'UNCLEAR') {
+      statusColor = 'var(--amber)'; statusIcon = '\u26A0';
+    } else {
+      statusColor = 'var(--amber)'; statusIcon = '\u2753';
+    }
+    // Evidence source badge for firewall results
+    if (nc.evidenceSource === 'SIEM_CONFIRMED') {
+      evidenceBadge = '<span style="font-size:8px;font-weight:600;color:#10b981;margin-left:6px;padding:1px 5px;background:rgba(16,185,129,0.12);border-radius:3px;">SIEM CONFIRMED</span>';
+    } else if (nc.evidenceSource === 'SIEM_CHECKED') {
+      evidenceBadge = '<span style="font-size:8px;font-weight:600;color:var(--cyan);margin-left:6px;padding:1px 5px;background:rgba(0,212,255,0.10);border-radius:3px;">SIEM QUERIED</span>';
+    } else if (nc.evidenceSource === 'UNCLEAR') {
+      evidenceBadge = '<span style="font-size:8px;font-weight:600;color:#f59e0b;margin-left:6px;padding:1px 5px;background:rgba(245,158,11,0.12);border-radius:3px;">CONNECTOR OFFLINE</span>';
+    }
     html += '<div style="margin-bottom:8px;padding:6px 8px;background:var(--surface-1);border-radius:4px;border:1px solid var(--border-subtle);">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">' +
         '<span style="font-size:9px;color:var(--text-muted);">Network Connection Query</span>' +
-        '<span style="font-size:9px;font-weight:600;color:' + statusColor + ';">' + statusIcon + ' ' + nc.status + '</span></div>' +
+        '<span style="font-size:9px;font-weight:600;color:' + statusColor + ';">' + statusIcon + ' ' + nc.status + evidenceBadge + '</span></div>' +
       '<div style="font-size:9px;font-family:var(--font-mono);color:var(--cyan);margin-bottom:3px;">' + nc.query + '</div>' +
       '<div style="font-size:10px;color:var(--text-secondary);">' + nc.result + '</div></div>';
   });
@@ -50875,19 +50951,31 @@ function buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs
 
   if (exculpatory.length > 0) {
     exculpatory.forEach(function(ev) {
-      var sevColor = ev.severity === 'strong' ? 'var(--green)' : 'var(--cyan)';
-      var sourceBadgeBg, sourceBadgeColor, sourceBadgeText;
+      var sevColor = ev.severity === 'strong' ? 'var(--green)' : (ev.severity === 'moderate' ? 'var(--amber)' : 'var(--cyan)');
+      var sourceBadgeBg, sourceBadgeColor, sourceBadgeText, counterIcon;
       if (ev.source === 'SIEM_CONFIRMED') {
         sourceBadgeBg = 'rgba(16,185,129,0.15)';
         sourceBadgeColor = '#10b981';
         sourceBadgeText = '[SIEM CONFIRMED]';
+        counterIcon = '\u2705';
+      } else if (ev.source === 'SIEM_CHECKED') {
+        sourceBadgeBg = 'rgba(0,212,255,0.12)';
+        sourceBadgeColor = 'var(--cyan)';
+        sourceBadgeText = '[SIEM QUERIED]';
+        counterIcon = '\u2705';
+      } else if (ev.source === 'UNCLEAR') {
+        sourceBadgeBg = 'rgba(245,158,11,0.15)';
+        sourceBadgeColor = '#f59e0b';
+        sourceBadgeText = '[CONNECTOR OFFLINE]';
+        counterIcon = '\u26A0';
       } else {
         sourceBadgeBg = 'rgba(0,212,255,0.15)';
         sourceBadgeColor = 'var(--cyan)';
         sourceBadgeText = '[TICKET TEXT]';
+        counterIcon = '\u26A0';
       }
       html += '<div class="counter-item">' +
-        '<span class="counter-icon" style="color:' + sevColor + ';">' + (ev.severity === 'strong' ? '\u2705' : '\u26A0') + '</span>' +
+        '<span class="counter-icon" style="color:' + sevColor + ';">' + counterIcon + '</span>' +
         '<div style="flex:1;"><strong style="color:var(--text-primary);font-size:11px;">' + ev.title + '</strong>' +
         '<span style="font-size:9px;font-weight:600;color:' + sevColor + ';margin-left:6px;text-transform:uppercase;">[' + ev.severity + ']</span>' +
         '<span style="font-size:8px;font-weight:600;color:' + sourceBadgeColor + ';margin-left:6px;padding:2px 6px;background:' + sourceBadgeBg + ';border-radius:3px;">' + sourceBadgeText + '</span>' +
