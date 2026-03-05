@@ -40048,7 +40048,16 @@ document.addEventListener('keydown', (e) => {
   // ── Live entity enrichment: fires when entity is selected from live search ──
   async function eeEnrichEntityLive(entityId) {
     var entity = EE_ENTITIES.find(function(e) { return e.id === entityId; });
-    if (!entity || entity._enriching || entity._enriched) return;
+    if (!entity) return;
+
+    // ── Already enriched: re-render cached HTML into panel and return ──
+    if (entity._enriched && entity._enrichHTML) {
+      var enrichEl2 = document.getElementById('eeDetailEnrichment');
+      if (enrichEl2 && eeSelectedEntity === entityId) enrichEl2.innerHTML = entity._enrichHTML;
+      return;
+    }
+
+    if (entity._enriching) return;
     entity._enriching = true;
 
     // Get current namespace
@@ -40062,7 +40071,10 @@ document.addEventListener('keydown', (e) => {
     var profileEl = document.getElementById('eeDetailProfile');
 
     // Show loading states immediately
-    if (enrichEl) enrichEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">' + dIcon('loading',12) + ' Querying SIEM, Jira, DACTA TIP, WHOIS &amp; DNS...</div>';
+    var loadingMsg = isRFC1918
+      ? 'Querying SIEM, Jira, DACTA TIP &amp; CrowdStrike endpoint...'
+      : 'Querying SIEM, Jira, DACTA TIP, WHOIS &amp; DNS...';
+    if (enrichEl) enrichEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">' + dIcon('loading',12) + ' ' + loadingMsg + '</div>';
     if (alertsEl) alertsEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);">Loading...</div>';
 
     var jiraTickets = [];
@@ -40070,6 +40082,7 @@ document.addEventListener('keydown', (e) => {
     var fwEvents = [];
     var tipData = null;
     var whoisData = null;
+    var csDeviceData = null;
     var pdnsData = null;
     var peerIPs = new Set();
     var peerHosts = new Set();
@@ -40255,7 +40268,46 @@ document.addEventListener('keydown', (e) => {
       } catch(e) { console.warn('[EE Enrich] WHOIS/RDAP error:', e.message); }
     }
 
-    // ── 6. Passive DNS (pDNS) — via internal /api/pdns if available ──
+    // ── 6. CrowdStrike Device Lookup — internal/RFC1918 IPs only ──
+    if (isIP && isRFC1918) {
+      try {
+        var csDevR = await fetch('/api/crowdstrike', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'device_search', local_ip: entityId, limit: 3 })
+        });
+        if (csDevR.ok) {
+          var csDevD = await csDevR.json();
+          var csDevices = csDevD.devices || [];
+          if (csDevices.length > 0) {
+            var dev = csDevices[0]; // primary match
+            csDeviceData = {
+              hostname: dev.hostname || '',
+              local_ip: dev.local_ip || entityId,
+              external_ip: dev.external_ip || '',
+              os: dev.os_version || '',
+              platform: dev.platform_name || '',
+              domain: dev.machine_domain || '',
+              ou: dev.ou || '',
+              manufacturer: dev.system_manufacturer || '',
+              model: dev.system_product_name || '',
+              agent: dev.agent_version || '',
+              first_seen: dev.first_seen ? new Date(dev.first_seen).toLocaleDateString() : '',
+              last_seen: dev.last_seen ? new Date(dev.last_seen).toLocaleDateString() : '',
+              status: dev.status || '',
+              tags: dev.tags || [],
+              all_devices: csDevices.length // how many matched
+            };
+            // Update entity with hostname/OS info
+            if (csDeviceData.hostname) entity.hostname = csDeviceData.hostname;
+            if (csDeviceData.os) entity.os = csDeviceData.os;
+            if (csDeviceData.last_seen) entity._lastSeen = csDeviceData.last_seen;
+          }
+        }
+      } catch(e) { console.warn('[EE Enrich] CS Device lookup error:', e.message); }
+    }
+
+    // ── 7. Passive DNS (pDNS) — via internal /api/pdns if available ──
     if (isIP) {
       try {
         var pdnsR = await fetch('/api/pdns', { method:'POST', headers:{'Content-Type':'application/json'},
@@ -40354,6 +40406,24 @@ document.addEventListener('keydown', (e) => {
         '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Confidence: ' + tipData.confidence + '%</div>' +
         '</div>';
     }
+    if (csDeviceData) {
+      var devStatusColor = csDeviceData.status === 'normal' ? '#10b981' : csDeviceData.status === 'contained' ? '#f59e0b' : 'var(--text-muted)';
+      enrichHTML += '<div style="margin-bottom:10px;padding:6px 8px;background:rgba(239,68,68,0.06);border-left:2px solid rgba(239,68,68,0.4);border-radius:0 4px 4px 0;">' +
+        '<div style="font-size:9px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">' + dIcon('monitor',10) + ' CrowdStrike Endpoint' + (csDeviceData.all_devices > 1 ? ' (' + csDeviceData.all_devices + ' matches)' : '') + '</div>' +
+        (csDeviceData.hostname ? '<div style="font-size:11px;color:var(--text-primary);font-weight:600;font-family:var(--font-mono);margin-bottom:3px;">' + escapeHtml(csDeviceData.hostname) + '</div>' : '') +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;">' +
+        (csDeviceData.os ? '<div style="font-size:9px;color:var(--text-secondary);">' + dIcon('monitor',8) + ' ' + escapeHtml(csDeviceData.os) + '</div>' : '') +
+        (csDeviceData.platform ? '<div style="font-size:9px;color:var(--text-muted);">' + escapeHtml(csDeviceData.platform) + '</div>' : '') +
+        (csDeviceData.domain ? '<div style="font-size:9px;color:var(--text-secondary);">Domain: ' + escapeHtml(csDeviceData.domain) + '</div>' : '') +
+        (csDeviceData.external_ip ? '<div style="font-size:9px;color:var(--text-muted);">Ext IP: <span style="font-family:var(--font-mono);">' + escapeHtml(csDeviceData.external_ip) + '</span></div>' : '') +
+        (csDeviceData.manufacturer ? '<div style="font-size:9px;color:var(--text-muted);">' + escapeHtml(csDeviceData.manufacturer) + (csDeviceData.model ? ' ' + escapeHtml(csDeviceData.model) : '') + '</div>' : '') +
+        (csDeviceData.status ? '<div style="font-size:9px;color:' + devStatusColor + ';text-transform:capitalize;">' + escapeHtml(csDeviceData.status) + '</div>' : '') +
+        (csDeviceData.last_seen ? '<div style="font-size:9px;color:var(--text-muted);">Last Seen: ' + escapeHtml(csDeviceData.last_seen) + '</div>' : '') +
+        (csDeviceData.agent ? '<div style="font-size:9px;color:var(--text-muted);">Agent: ' + escapeHtml(csDeviceData.agent) + '</div>' : '') +
+        '</div>' +
+        (csDeviceData.tags.length > 0 ? '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">' + csDeviceData.tags.slice(0, 5).map(function(t) { return '<span style="font-size:8px;padding:1px 5px;background:rgba(239,68,68,0.1);border-radius:8px;color:#f87171;">' + escapeHtml(t) + '</span>'; }).join('') + '</div>' : '') +
+        '</div>';
+    }
     if (whoisData) {
       enrichHTML += '<div style="margin-bottom:10px;padding:6px 8px;background:rgba(6,182,212,0.06);border-left:2px solid rgba(6,182,212,0.4);border-radius:0 4px 4px 0;">' +
         '<div style="font-size:9px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">' + dIcon('globe',10) + ' WHOIS / RDAP</div>' +
@@ -40389,6 +40459,10 @@ document.addEventListener('keydown', (e) => {
     if (!enrichHTML) {
       enrichHTML = '<div style="font-size:10px;color:var(--text-muted);">No enrichment data found in SIEM or TIP for this entity</div>';
     }
+    // ── Persist enrichment data on entity so re-selection re-renders without re-fetching ──
+    entity._enrichHTML = enrichHTML;
+    if (whoisData) entity._whoisData = whoisData;
+    if (pdnsData) entity._pdnsData = pdnsData;
     if (enrichEl && eeSelectedEntity === entityId) enrichEl.innerHTML = enrichHTML;
 
     // ── Render: Jira tickets & alerts ──
@@ -40428,6 +40502,7 @@ document.addEventListener('keydown', (e) => {
         ['Risk Score', entity.risk],
         ['Connections', eeGetConnections(entity.id) || entity._liveConnections || 0],
       ];
+      if (entity.hostname) profileItems2.push(['Hostname', entity.hostname]);
       if (entity.os) profileItems2.push(['OS', entity.os]);
       if (entity.dept) profileItems2.push(['Dept', entity.dept]);
       profileItems2.push(['Last Seen', entity.lastSeen || entity._lastSeen || '—']);

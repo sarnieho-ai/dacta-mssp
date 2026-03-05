@@ -16,6 +16,7 @@
 //   get_malware      — Malware family detail
 //   search_indicators — Search indicators with filters
 //   get_vulnerabilities — CVE intelligence lookup
+//   device_search    — Find endpoint by local_ip or FQL filter; returns hostname, OS, last_seen, tags
 
 const CS_BASE = process.env.CROWDSTRIKE_BASE_URL || 'https://api.us-2.crowdstrike.com';
 const CS_CLIENT_ID = process.env.CROWDSTRIKE_CLIENT_ID || '';
@@ -343,6 +344,44 @@ export default async function handler(req, res) {
           limit: parseInt(body.limit || req.query.limit || 20),
           offset: parseInt(body.offset || req.query.offset || 0)
         });
+        break;
+      }
+
+      // ── Device search — find endpoint by IP, hostname, or FQL filter ──
+      // POST body: { filter: "local_ip:'10.20.14.1'" } or { hostname: 'WS-CORP-001' }
+      case 'device_search': {
+        const deviceFilter = body.filter ||
+          (body.local_ip ? `local_ip:'${body.local_ip}'` : null) ||
+          (body.hostname ? `hostname:'${body.hostname}'` : null) ||
+          req.query.filter;
+        if (!deviceFilter) return res.status(400).json({ error: 'Missing filter or local_ip/hostname' });
+        const searchResp = await csGet('/devices/queries/devices/v1', {
+          filter: deviceFilter,
+          limit: parseInt(body.limit || req.query.limit || 5)
+        });
+        const deviceIds = searchResp.resources || [];
+        if (!deviceIds.length) { result = { devices: [], total: 0 }; break; }
+        // Fetch full device details
+        const detailResp = await csGet('/devices/entities/devices/v2', { ids: deviceIds });
+        const devices = (detailResp.resources || []).map(d => ({
+          device_id: d.device_id,
+          hostname: d.hostname,
+          local_ip: d.local_ip,
+          external_ip: d.external_ip,
+          os_version: d.os_version,
+          platform_name: d.platform_name,
+          machine_domain: d.machine_domain,
+          ou: (d.ou || []).join(', '),
+          system_manufacturer: d.system_manufacturer,
+          system_product_name: d.system_product_name,
+          agent_version: d.agent_version,
+          first_seen: d.first_seen,
+          last_seen: d.last_seen,
+          status: d.status,
+          tags: d.tags || [],
+          groups: (d.groups || [])
+        }));
+        result = { devices, total: devices.length };
         break;
       }
 
