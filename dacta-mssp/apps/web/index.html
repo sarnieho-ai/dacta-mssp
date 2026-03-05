@@ -35154,20 +35154,121 @@ async function loadUserManagement() {
   }
 
   // ============================================================
-  //  LOAD DATA FROM SUPABASE / FALLBACK
+  //  DB ↔ CODE FIELD MAPPING  (DB uses 'name', code uses 'display_name')
+  // ============================================================
+  function _umDbToLocal(row) {
+    if (!row) return row;
+    var u = Object.assign({}, row);
+    if (u.name !== undefined && u.display_name === undefined) { u.display_name = u.name; delete u.name; }
+    if (!u.assigned_orgs) u.assigned_orgs = ['all'];
+    return u;
+  }
+  function _umLocalToDb(u) {
+    var row = { id: u.id, email: u.email || null, name: u.display_name || u.name || null, role: u.role || 'soc_l1', status: u.status || 'active' };
+    if (u.last_login) row.last_login = u.last_login;
+    return row;
+  }
+
+  // ============================================================
+  //  SHARED: Sync users from Jira Teams → delta merge → persist
+  //  Returns { newCount, existCount, teams }
+  // ============================================================
+  async function _umSyncFromJira(opts) {
+    opts = opts || {};
+    var resp = await fetch('/api/jira?action=teams');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var teams = data.teams || [];
+    var newCount = 0, existCount = 0, updatedCount = 0;
+    var seen = {};
+
+    teams.forEach(function(team) {
+      var teamName = team.displayName || 'Unknown Team';
+      var members = team.members || [];
+      members.forEach(function(m) {
+        var key = (m.emailAddress || '').toLowerCase() || (m.displayName || '').toLowerCase();
+        if (!key || seen[key]) return;
+        seen[key] = true;
+
+        // Check if user already exists
+        var existIdx = -1;
+        for (var i = 0; i < _users.length; i++) {
+          if (m.emailAddress && (_users[i].email || '').toLowerCase() === m.emailAddress.toLowerCase()) { existIdx = i; break; }
+          if (!m.emailAddress && (_users[i].display_name || '').toLowerCase() === (m.displayName || '').toLowerCase()) { existIdx = i; break; }
+        }
+
+        if (existIdx >= 0) {
+          // Delta update: refresh team assignment + active status
+          var eu = _users[existIdx];
+          if (teamName && eu.jira_team !== teamName) { eu.jira_team = teamName; updatedCount++; }
+          if (m.active === false && eu.status !== 'disabled') { eu.status = 'disabled'; updatedCount++; }
+          existCount++;
+        } else {
+          var newUser = {
+            id: 'u_jira_' + (m.accountId || Date.now() + '_' + newCount),
+            email: m.emailAddress || '',
+            display_name: m.displayName || m.emailAddress || 'Unknown',
+            role: 'soc_l1',
+            assigned_orgs: ['all'],
+            status: m.active === false ? 'disabled' : 'active',
+            jira_team: teamName,
+            jira_account_id: m.accountId || null,
+            last_login: null,
+            created_at: new Date().toISOString()
+          };
+          _users.push(newUser);
+          _auditLog.unshift({
+            id: 'a_' + Date.now() + '_' + newCount,
+            created_at: new Date().toISOString(),
+            actor: 'auto_sync',
+            action: 'user_created',
+            target: m.emailAddress || m.displayName,
+            details: 'Auto-synced from Jira Team: ' + teamName + ', Role: soc_l1'
+          });
+          newCount++;
+        }
+      });
+    });
+
+    // Persist to DB
+    if (newCount > 0 || updatedCount > 0) {
+      try {
+        if (window._supabaseRef) {
+          var batch = _users.map(_umLocalToDb);
+          await window._supabaseRef.from('platform_users').upsert(batch, { onConflict: 'id' });
+        }
+      } catch(e2) { console.warn('[UserSync] DB persist failed:', e2); }
+      try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e2) {}
+      try { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); } catch(e2) {}
+    }
+
+    return { newCount: newCount, existCount: existCount, updatedCount: updatedCount, teamCount: teams.length };
+  }
+
+  // Helper: re-render everything + update subtitle
+  function _umRefreshUI() {
+    umRenderUsers(_users);
+    umRenderRoleCards(_users);
+    umRenderAudit(_auditLog);
+    var actCnt = _users.filter(function(u){ return u.status !== 'disabled'; }).length;
+    var subEl = document.getElementById('um-subtitle');
+    if (subEl) subEl.textContent = actCnt + ' active users \u00B7 ' + Object.keys(RBAC_ROLES).length + ' roles';
+  }
+
+  // ============================================================
+  //  LOAD DATA FROM DB / FALLBACK  (instant render)
   // ============================================================
   try {
     var dbUsers = null;
     if (window._supabaseRef) {
       try {
         var res = await window._supabaseRef.from('platform_users').select('*').order('created_at', { ascending: false });
-        if (!res.error && res.data && res.data.length > 0) dbUsers = res.data;
+        if (!res.error && res.data && res.data.length > 0) dbUsers = res.data.map(_umDbToLocal);
       } catch(e) { console.warn('[UserMgmt] DB users fetch failed:', e); }
     }
-    if (dbUsers) {
+    if (dbUsers && dbUsers.length > 0) {
       _users = dbUsers;
     } else {
-      // Try localStorage
       try {
         var lsUsers = localStorage.getItem('dacta_platform_users');
         if (lsUsers) _users = JSON.parse(lsUsers);
@@ -35197,18 +35298,43 @@ async function loadUserManagement() {
   } catch(e) { _auditLog = SEED_AUDIT; }
 
   // ============================================================
-  //  INITIAL RENDER
+  //  INITIAL RENDER  (show DB / seed data immediately)
   // ============================================================
   umRenderUsers(_users);
   umRenderRoleCards(_users);
   umRenderMatrix();
   umRenderAudit(_auditLog);
-
-  // Update subtitle
   var activeCount = _users.filter(function(u){ return u.status !== 'disabled'; }).length;
   var roleCount = Object.keys(RBAC_ROLES).length;
   var subtitle = document.getElementById('um-subtitle');
   if (subtitle) subtitle.textContent = activeCount + ' active users \u00B7 ' + roleCount + ' roles';
+
+  // ============================================================
+  //  AUTO-SYNC: Background Jira pull on every page load (delta)
+  // ============================================================
+  (async function _umAutoSync() {
+    var subEl = document.getElementById('um-subtitle');
+    var syncBtn = document.getElementById('um-jira-sync-btn');
+    try {
+      if (subEl) subEl.innerHTML = subEl.textContent + ' <span style="color:var(--cyan);font-size:10px;margin-left:6px;">⟳ Syncing from Jira...</span>';
+      if (syncBtn) { syncBtn.disabled = true; syncBtn.textContent = 'Syncing...'; }
+
+      var result = await _umSyncFromJira();
+
+      // Re-render with merged data
+      _umRefreshUI();
+
+      if (result.newCount > 0) {
+        showToast('Auto-synced ' + result.newCount + ' new user' + (result.newCount !== 1 ? 's' : '') + ' from ' + result.teamCount + ' Jira teams', 'success');
+      }
+      console.log('[UserMgmt] Auto-sync complete — ' + result.newCount + ' new, ' + result.existCount + ' existing, ' + result.updatedCount + ' updated');
+    } catch(err) {
+      console.warn('[UserMgmt] Auto-sync failed (non-blocking):', err.message);
+      // Non-blocking: page still shows DB/seed data
+    } finally {
+      if (syncBtn) { syncBtn.disabled = false; syncBtn.innerHTML = '&#x1F504; Sync from Jira'; }
+    }
+  })();
 
   // ============================================================
   //  TAB SWITCHING
@@ -35417,19 +35543,17 @@ async function loadUserManagement() {
         created_at:   new Date().toISOString()
       };
 
-      // Try SIEMLess DB
+      // Persist to DB (map display_name → name for DB schema)
+      _users.push(newUser);
       var saved = false;
       try {
         if (window._supabaseRef) {
-          var ins = await window._supabaseRef.from('platform_users').insert([newUser]);
+          var ins = await window._supabaseRef.from('platform_users').insert([_umLocalToDb(newUser)]);
           if (!ins.error) saved = true;
         }
       } catch(e) {}
       if (!saved) {
-        _users.push(newUser);
         try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e) {}
-      } else {
-        _users.push(newUser);
       }
 
       // Audit entry
@@ -35468,7 +35592,7 @@ async function loadUserManagement() {
   }
 
   // ============================================================
-  //  SYNC FROM JIRA TEAMS
+  //  MANUAL FORCE-REFRESH (reuses shared _umSyncFromJira)
   // ============================================================
   var jiraSyncBtn = document.getElementById('um-jira-sync-btn');
   if (jiraSyncBtn) {
@@ -35476,84 +35600,9 @@ async function loadUserManagement() {
       jiraSyncBtn.disabled = true;
       jiraSyncBtn.textContent = 'Syncing Teams...';
       try {
-        var resp = await fetch('/api/jira?action=teams');
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        var data = await resp.json();
-        var teams = data.teams || [];
-        var newCount = 0;
-        var existCount = 0;
-        var seen = {};  // dedup by displayName (some users lack email)
-
-        teams.forEach(function(team) {
-          var teamName = team.displayName || 'Unknown Team';
-          var members = team.members || [];
-          members.forEach(function(m) {
-            var key = (m.emailAddress || '').toLowerCase() || (m.displayName || '').toLowerCase();
-            if (!key || seen[key]) return;
-            seen[key] = true;
-
-            // Check if user already exists (by email if available, else displayName)
-            var exists = false;
-            for (var i = 0; i < _users.length; i++) {
-              if (m.emailAddress && (_users[i].email || '').toLowerCase() === m.emailAddress.toLowerCase()) {
-                exists = true; break;
-              }
-              if (!m.emailAddress && (_users[i].display_name || '').toLowerCase() === (m.displayName || '').toLowerCase()) {
-                exists = true; break;
-              }
-            }
-            if (exists) {
-              existCount++;
-            } else {
-              var newUser = {
-                id: 'u_jira_' + (m.accountId || Date.now() + '_' + newCount),
-                email: m.emailAddress || '',
-                display_name: m.displayName || m.emailAddress || 'Unknown',
-                role: 'soc_l1',
-                assigned_orgs: ['all'],
-                status: m.active === false ? 'disabled' : 'active',
-                jira_team: teamName,
-                last_login: null,
-                created_at: new Date().toISOString()
-              };
-              _users.push(newUser);
-              var auditE = {
-                id: 'a_' + Date.now() + '_' + newCount,
-                created_at: new Date().toISOString(),
-                actor: 'jira_sync',
-                action: 'user_created',
-                target: m.emailAddress || m.displayName,
-                details: 'Synced from Jira Team: ' + teamName + ', Role: soc_l1'
-              };
-              _auditLog.unshift(auditE);
-              newCount++;
-            }
-          });
-        });
-
-        if (newCount > 0) {
-          var saved2 = false;
-          try {
-            if (window._supabaseRef) {
-              for (var j = 0; j < _users.length; j++) {
-                if (_users[j].id && _users[j].id.indexOf('u_jira_') === 0) {
-                  await window._supabaseRef.from('platform_users').upsert([_users[j]], { onConflict: 'id' });
-                }
-              }
-              saved2 = true;
-            }
-          } catch(e2) {}
-          if (!saved2) { try { localStorage.setItem('dacta_platform_users', JSON.stringify(_users)); } catch(e2) {} }
-          try { localStorage.setItem('dacta_rbac_audit', JSON.stringify(_auditLog)); } catch(e2) {}
-        }
-
-        umRenderUsers(_users);
-        umRenderRoleCards(_users);
-        umRenderAudit(_auditLog);
-        var subEl = document.getElementById('um-subtitle');
-        var actCnt = _users.filter(function(u){ return u.status !== 'disabled'; }).length;
-        if (subEl) subEl.textContent = actCnt + ' active users \u00B7 ' + Object.keys(RBAC_ROLES).length + ' roles';
-        showToast('Synced ' + newCount + ' new user' + (newCount !== 1 ? 's' : '') + ' from ' + teams.length + ' Jira Teams (' + existCount + ' already exist)', newCount > 0 ? 'success' : 'info');
+        var result = await _umSyncFromJira();
+        _umRefreshUI();
+        showToast('Synced ' + result.newCount + ' new user' + (result.newCount !== 1 ? 's' : '') + ' from ' + result.teamCount + ' Jira Teams (' + result.existCount + ' already exist)', result.newCount > 0 ? 'success' : 'info');
       } catch(err) {
         console.error('[JiraTeamsSync]', err);
         showToast('Jira Teams sync failed: ' + err.message, 'error');
@@ -35671,7 +35720,7 @@ async function loadUserManagement() {
       try {
         if (window._supabaseRef) {
           var upd = await window._supabaseRef.from('platform_users').update({
-            display_name: newName, role: newRole2, assigned_orgs: selectedOrgs2, mfa_enabled: newMfa
+            name: newName, role: newRole2
           }).eq('id', uid2);
           if (!upd.error) saved2 = true;
         }
