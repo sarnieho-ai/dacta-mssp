@@ -18145,7 +18145,7 @@ body.mode-production .prod-badge { display: flex; }
 
     <!-- Inline Search -->
     <div class="tip-tabnav-search">
-      <input type="text" class="tip-search-input" placeholder="Search DACTA TIP..." id="tip-global-search" oninput="tipHandleSearch(this.value)" onfocus="if(this.value.length>1)tipShowSearchOverlay()" onkeydown="if(event.keyCode===13)tipHandleSearch(this.value)" onblur="setTimeout(function(){tipHideSearchOverlay()},200)">
+      <input type="text" class="tip-search-input" placeholder="Search DACTA TIP..." id="tip-global-search" autocomplete="off">
       <span class="tip-search-icon">⌕</span>
       <div class="tip-search-overlay" id="tip-search-overlay">
         <div class="tip-search-overlay-header">DACTA TIP Search Results</div>
@@ -28815,40 +28815,13 @@ async function loadThreatIntelLive() {
       }
     }
 
-    // Wire up search functionality
-    var searchInput = page.querySelector('.tip-search-input');
-    if (searchInput && !searchInput._tipWired) {
-      searchInput._tipWired = true;
-      searchInput.addEventListener('input', function() {
-        var q = this.value.toLowerCase().trim();
-        var overlay = page.querySelector('.tip-search-overlay');
-        if (!overlay) return;
-        if (!q || q.length < 2) { overlay.classList.remove('open'); return; }
-        overlay.classList.add('open');
-        var results = [];
-        (window._tipLiveData || {}).indicators && window._tipLiveData.indicators.forEach(function(i) {
-          if ((i.name || '').toLowerCase().indexOf(q) >= 0 || (i.pattern || '').toLowerCase().indexOf(q) >= 0) results.push({ type: 'IOC', name: i.name || i.pattern, score: i.x_opencti_score });
-        });
-        (window._tipLiveData || {}).malwares && window._tipLiveData.malwares.forEach(function(m) {
-          if ((m.name || '').toLowerCase().indexOf(q) >= 0) results.push({ type: 'Malware', name: m.name });
-        });
-        (window._tipLiveData || {}).threatActors && window._tipLiveData.threatActors.forEach(function(a) {
-          if ((a.name || '').toLowerCase().indexOf(q) >= 0) results.push({ type: 'Threat Actor', name: a.name });
-        });
-        var resHTML = '<div class="tip-search-overlay-header">' + results.length + ' results for "' + q + '"</div>';
-        results.slice(0, 10).forEach(function(r) {
-          resHTML += '<div class="tip-search-result-card"><div class="tip-src-top"><span style="font-size:9px;padding:1px 6px;background:rgba(0,212,255,0.1);border-radius:3px;color:var(--cyan);">' + r.type + '</span><span style="font-size:12px;color:var(--text-primary);">' + (r.name || '') + '</span></div></div>';
-        });
-        if (results.length === 0) resHTML += '<div style="padding:16px;text-align:center;font-size:11px;color:var(--text-muted);">No matching results</div>';
-        overlay.innerHTML = resHTML;
-      });
-    }
+    // Search functionality handled by _tipFixGlobalSearch() in _tipInitAllFixes()
 
     console.log('[ThreatIntel] Loaded: ' + indicators.length + ' indicators, ' + malwares.length + ' malware, ' + reports.length + ' reports, ' + threatActors.length + ' actors, ' + attackPatterns.length + ' attack patterns');
     showToast('Threat Intel loaded from DACTA TIP \u2014 ' + indicators.length + ' indicators, ' + threatActors.length + ' actors');
 
-    // Run Threat Intel page fixes/enhancements
-    if (typeof _tipInitAllFixes === 'function') { _tipInitAllFixes(); }
+    // Run Threat Intel page fixes/enhancements (with delay for DOM stability)
+    if (typeof _tipInitAllFixes === 'function') { setTimeout(_tipInitAllFixes, 300); }
 
   } catch (err) {
     console.error('[ThreatIntel] Error loading DACTA TIP data:', err);
@@ -28857,12 +28830,14 @@ async function loadThreatIntelLive() {
     });
   }
 
-  // Always run fixes even if OpenCTI data fetch fails
-  try {
-    if (typeof _tipInitAllFixes === 'function') { _tipInitAllFixes(); }
-  } catch(fixErr) {
-    console.warn('[ThreatIntel] Fix init error:', fixErr);
-  }
+  // Always run fixes even if OpenCTI data fetch fails (with delay for DOM stability)
+  setTimeout(function() {
+    try {
+      if (typeof _tipInitAllFixes === 'function') { _tipInitAllFixes(); }
+    } catch(fixErr) {
+      console.warn('[ThreatIntel] Fix init error:', fixErr);
+    }
+  }, 500);
 }
 
 function tipEnrichIOC(iocValue) {
@@ -28898,35 +28873,34 @@ function tipEnrichIOC(iocValue) {
    --------------------------------------------------------------------------- */
 function _tipFixGlobalSearch() {
   var input = document.getElementById('tip-global-search');
-  if (!input) return;
-
-  // The inline oninput/onkeydown handlers call tipHandleSearch(),
-  // which we override below with _tipSearchLive() — no need to null them.
+  if (!input) { console.warn('[TIP Fix 1] Search input not found'); return; }
+  if (input._tipSearchWired) { console.log('[TIP Fix 1] Already wired'); return; }
+  input._tipSearchWired = true;
 
   function _tipSearchLive(q) {
+    var overlay = document.getElementById('tip-search-overlay');
+    if (!overlay) return;
     if (!q || q.length < 2) {
-      var ov = document.getElementById('tip-search-overlay');
-      if (ov) ov.classList.remove('open');
+      overlay.classList.remove('open');
       return;
     }
     var qLower = q.toLowerCase();
     var results = [];
     var live = window._tipLiveData || {};
 
-    // Search indicators
+    // Search live indicators
     if (live.indicators) {
       live.indicators.forEach(function(ind) {
         var name = (ind.name || ind.pattern || '');
         if (name.toLowerCase().indexOf(qLower) >= 0 ||
             (ind.pattern_type || '').toLowerCase().indexOf(qLower) >= 0) {
-          var score = ind.x_opencti_score || 0;
           results.push({
             type: (ind.pattern_type || 'IOC').toUpperCase(),
             typeClass: ind.pattern_type === 'yara' ? 'tip-ioc-hash' : (ind.pattern_type === 'stix' ? 'tip-ioc-ip' : 'tip-ioc-domain'),
             category: 'Indicator',
             value: name.length > 60 ? name.substring(0, 57) + '...' : name,
-            meta: 'Score: ' + score,
-            score: score,
+            meta: 'Score: ' + (ind.x_opencti_score || 0),
+            score: ind.x_opencti_score || 0,
             action: 'tipEnrichIOC',
             actionArg: name
           });
@@ -28934,81 +28908,65 @@ function _tipFixGlobalSearch() {
       });
     }
 
-    // Search malware
+    // Search live malware
     if (live.malwares) {
       live.malwares.forEach(function(m) {
         if ((m.name || '').toLowerCase().indexOf(qLower) >= 0 ||
             (m.description || '').toLowerCase().indexOf(qLower) >= 0) {
           results.push({
-            type: 'MALWARE',
-            typeClass: 'tip-ioc-url',
-            category: 'Malware',
-            value: m.name || 'Unknown',
-            meta: m.is_family ? 'Family' : 'Sample',
-            score: null,
-            action: null
+            type: 'MALWARE', typeClass: 'tip-ioc-url', category: 'Malware',
+            value: m.name || 'Unknown', meta: m.is_family ? 'Family' : 'Sample', score: null, action: null
           });
         }
       });
     }
 
-    // Search threat actors
+    // Search live threat actors
     if (live.threatActors) {
       live.threatActors.forEach(function(a) {
         if ((a.name || '').toLowerCase().indexOf(qLower) >= 0 ||
             (a.description || '').toLowerCase().indexOf(qLower) >= 0 ||
             (a.primary_motivation || '').toLowerCase().indexOf(qLower) >= 0) {
           results.push({
-            type: 'ACTOR',
-            typeClass: 'tip-ioc-domain',
-            category: 'Threat Actor',
+            type: 'ACTOR', typeClass: 'tip-ioc-domain', category: 'Threat Actor',
             value: a.name || 'Unknown Actor',
-            meta: (a.sophistication ? a.sophistication : '') + (a.primary_motivation ? ' · ' + a.primary_motivation : ''),
-            score: null,
-            action: null
+            meta: (a.sophistication ? a.sophistication : '') + (a.primary_motivation ? ' \u00b7 ' + a.primary_motivation : ''),
+            score: null, action: null
           });
         }
       });
     }
 
-    // Search attack patterns
+    // Search live attack patterns
     if (live.attackPatterns) {
       live.attackPatterns.forEach(function(ap) {
         if ((ap.name || '').toLowerCase().indexOf(qLower) >= 0 ||
             (ap.x_mitre_id || '').toLowerCase().indexOf(qLower) >= 0 ||
             (ap.description || '').toLowerCase().indexOf(qLower) >= 0) {
           results.push({
-            type: ap.x_mitre_id || 'ATT\u0026CK',
-            typeClass: 'tip-ioc-hash',
-            category: 'Attack Pattern',
-            value: ap.name || 'Unknown',
-            meta: 'MITRE ATT\u0026CK',
-            score: null,
-            action: null
+            type: ap.x_mitre_id || 'ATT&CK', typeClass: 'tip-ioc-hash', category: 'Attack Pattern',
+            value: ap.name || 'Unknown', meta: 'MITRE ATT&CK', score: null, action: null
           });
         }
       });
     }
 
-    // Search reports
+    // Search live reports
     if (live.reports) {
       live.reports.forEach(function(r) {
         if ((r.name || '').toLowerCase().indexOf(qLower) >= 0 ||
             (r.description || '').toLowerCase().indexOf(qLower) >= 0) {
           results.push({
-            type: 'REPORT',
-            typeClass: 'tip-ioc-ip',
-            category: 'Intelligence Report',
+            type: 'REPORT', typeClass: 'tip-ioc-ip', category: 'Intelligence Report',
             value: r.name || 'Untitled Report',
             meta: r.published ? new Date(r.published).toLocaleDateString('en-SG') : '',
-            score: null,
-            action: null
+            score: null, action: null
           });
         }
       });
     }
 
-    // Also merge static SEARCH_DATA if available (fallback for when live data not loaded)
+    // Fallback: also search static SEARCH_DATA if no live results
     if (results.length === 0 && typeof SEARCH_DATA !== 'undefined') {
       SEARCH_DATA.forEach(function(d) {
         if ((d.value || '').toLowerCase().indexOf(qLower) >= 0 ||
@@ -29016,83 +28974,64 @@ function _tipFixGlobalSearch() {
             (d.campaign || '').toLowerCase().indexOf(qLower) >= 0 ||
             (d.type || '').toLowerCase().indexOf(qLower) >= 0) {
           results.push({
-            type: d.type || 'IOC',
-            typeClass: d.typeClass || 'tip-ioc-ip',
-            category: 'Indicator',
+            type: d.type || 'IOC', typeClass: d.typeClass || 'tip-ioc-ip', category: 'Indicator',
             value: d.value || '',
-            meta: (d.actor ? 'Actor: ' + d.actor : '') + (d.campaign ? ' · Campaign: ' + d.campaign : ''),
-            score: d.conf,
-            action: null
+            meta: (d.actor ? 'Actor: ' + d.actor : '') + (d.campaign ? ' \u00b7 Campaign: ' + d.campaign : ''),
+            score: d.conf, action: null
           });
         }
       });
     }
 
-    _tipRenderSearchResults(q, results);
-    var overlay = document.getElementById('tip-search-overlay');
-    if (overlay) overlay.classList.add('open');
-  }
-
-  function _tipRenderSearchResults(q, results) {
+    // Render results
     var container = document.getElementById('tip-search-results-container');
-    if (!container) {
-      // Fallback: inject directly into overlay
-      var ov2 = document.getElementById('tip-search-overlay');
-      if (!ov2) return;
-      var hdr = ov2.querySelector('.tip-search-overlay-header');
-      if (hdr) hdr.textContent = results.length + ' results for "' + escapeHtml(q) + '"';
-      return;
-    }
+    var headerEl = overlay.querySelector('.tip-search-overlay-header');
 
     if (results.length === 0) {
-      container.innerHTML = '<div style="padding:14px;text-align:center;font-size:11px;color:#64748b;">No results found in DACTA TIP for "' + escapeHtml(q) + '"</div>';
-      // Update header
-      var hdr2 = document.getElementById('tip-search-overlay');
-      if (hdr2) {
-        var h = hdr2.querySelector('.tip-search-overlay-header');
-        if (h) h.textContent = '0 results for "' + escapeHtml(q) + '"';
+      if (headerEl) headerEl.textContent = '0 results for "' + q + '"';
+      if (container) {
+        container.innerHTML = '<div style="padding:14px;text-align:center;font-size:11px;color:#64748b;">No results found in DACTA TIP for "' + q.replace(/</g,'&lt;') + '"</div>';
       }
+      overlay.classList.add('open');
       return;
     }
 
-    var html = '';
-    results.slice(0, 12).forEach(function(r) {
-      var scoreHtml = '';
-      if (r.score !== null && r.score !== undefined) {
-        var scoreColor = r.score >= 90 ? '#10b981' : r.score >= 70 ? '#f59e0b' : '#ff6b6b';
-        scoreHtml = '<span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:' + scoreColor + ';font-weight:600;">' + r.score + '%</span>';
-      }
-      var actionHtml = '';
-      if (r.action === 'tipEnrichIOC') {
-        actionHtml = '<div style="margin-top:6px;">' +
-          '<button class="tip-btn tip-btn-primary tip-btn-xs" onclick="event.stopPropagation();tipEnrichIOC(\'' + r.value.replace(/'/g, "\\'") + '\')">' +
-          'Enrich' +
-          '</button>' +
-          '<button class="tip-btn tip-btn-secondary tip-btn-xs" style="margin-left:4px;" onclick="event.stopPropagation();tipToast(\'📡\',\'' + escapeHtml(r.value) + ' queued for SIEM push\')">' +
-          'Push to SIEMs' +
-          '</button>' +
+    if (headerEl) headerEl.textContent = results.length + ' result' + (results.length !== 1 ? 's' : '') + ' for "' + q + '"';
+
+    if (container) {
+      var html = '';
+      results.slice(0, 12).forEach(function(r) {
+        var scoreHtml = '';
+        if (r.score !== null && r.score !== undefined) {
+          var scoreColor = r.score >= 90 ? '#10b981' : r.score >= 70 ? '#f59e0b' : '#ff6b6b';
+          scoreHtml = '<span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:' + scoreColor + ';font-weight:600;">' + r.score + '%</span>';
+        }
+        var actionHtml = '';
+        if (r.action === 'tipEnrichIOC' && r.actionArg) {
+          var safeArg = (r.actionArg || '').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+          var safeVal = (r.value || '').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+          actionHtml = '<div style="margin-top:6px;">' +
+            '<button class="tip-btn tip-btn-primary tip-btn-xs" onclick="event.stopPropagation();tipEnrichIOC(this.dataset.v)" data-v="' + safeArg + '">' +
+            'Enrich</button>' +
+            '<button class="tip-btn tip-btn-secondary tip-btn-xs" style="margin-left:4px;" onclick="event.stopPropagation();showToast(this.dataset.v + \' queued for SIEM push\')" data-v="' + safeVal + '">' +
+            'Push to SIEMs</button>' +
+          '</div>';
+        }
+        html += '<div class="tip-search-result-card">' +
+          '<div class="tip-src-top">' +
+            '<span class="tip-ioc-badge ' + (r.typeClass || '') + '" style="font-size:9px;padding:1px 6px;">' + (r.type || '').replace(/</g,'&lt;') + '</span>' +
+            '<span style="font-size:11px;color:#94a3b8;margin-left:4px;">' + (r.category || '').replace(/</g,'&lt;') + '</span>' +
+            scoreHtml +
+          '</div>' +
+          '<div style="font-size:12px;color:#e8edf5;margin-top:3px;font-family:\'IBM Plex Mono\',monospace;">' + (r.value || '').replace(/</g,'&lt;') + '</div>' +
+          (r.meta ? '<div style="font-size:10px;color:#64748b;margin-top:2px;">' + (r.meta || '').replace(/</g,'&lt;') + '</div>' : '') +
+          actionHtml +
         '</div>';
-      }
-      html += '<div class="tip-search-result-card">' +
-        '<div class="tip-src-top">' +
-          '<span class="tip-ioc-badge ' + r.typeClass + '" style="font-size:9px;padding:1px 6px;">' + escapeHtml(r.type) + '</span>' +
-          '<span style="font-size:11px;color:#94a3b8;margin-left:4px;">' + escapeHtml(r.category) + '</span>' +
-          scoreHtml +
-        '</div>' +
-        '<div style="font-size:12px;color:#e8edf5;margin-top:3px;font-family:\'IBM Plex Mono\',monospace;">' + escapeHtml(r.value) + '</div>' +
-        (r.meta ? '<div style="font-size:10px;color:#64748b;margin-top:2px;">' + escapeHtml(r.meta) + '</div>' : '') +
-        actionHtml +
-      '</div>';
-    });
-
-    container.innerHTML = html;
-
-    // Update header
-    var ovEl = document.getElementById('tip-search-overlay');
-    if (ovEl) {
-      var hdrEl = ovEl.querySelector('.tip-search-overlay-header');
-      if (hdrEl) hdrEl.textContent = results.length + ' result' + (results.length !== 1 ? 's' : '') + ' for "' + q + '"';
+      });
+      container.innerHTML = html;
     }
+
+    overlay.classList.add('open');
   }
 
   // Wire input event
@@ -29100,29 +29039,37 @@ function _tipFixGlobalSearch() {
     _tipSearchLive(this.value.trim());
   });
 
-  // Wire Enter key
+  // Wire Enter key and Escape
   input.addEventListener('keydown', function(e) {
     if (e.keyCode === 13) {
       e.preventDefault();
       _tipSearchLive(this.value.trim());
     }
     if (e.keyCode === 27) {
-      var ov3 = document.getElementById('tip-search-overlay');
-      if (ov3) ov3.classList.remove('open');
+      var ov = document.getElementById('tip-search-overlay');
+      if (ov) ov.classList.remove('open');
     }
   });
 
-  // Wire onfocus (re-show if query already present)
+  // Wire focus (re-show if query already present)
   input.addEventListener('focus', function() {
     if (this.value.trim().length >= 2) {
       _tipSearchLive(this.value.trim());
     }
   });
 
-  // Re-wire global tipHandleSearch to use our live version so existing callers still work
+  // Wire blur (hide after delay)
+  input.addEventListener('blur', function() {
+    setTimeout(function() {
+      var ov = document.getElementById('tip-search-overlay');
+      if (ov) ov.classList.remove('open');
+    }, 250);
+  });
+
+  // Override global tipHandleSearch for any remaining callers
   window.tipHandleSearch = function(q) { _tipSearchLive(q); };
 
-  console.log('[TIP Fix 1] Global search wired to live data');
+  console.log('[TIP Fix 1] Global search wired — single handler, no conflicts');
 }
 window._tipFixGlobalSearch = _tipFixGlobalSearch;
 
@@ -29254,20 +29201,24 @@ window._tipFixAddActorSearch = _tipFixAddActorSearch;
    --------------------------------------------------------------------------- */
 function _tipAddReportBuilder() {
   // Check if we already injected it (idempotent)
-  if (document.getElementById('tip-ai-report-btn')) return;
+  if (document.getElementById('tip-ai-report-btn')) { console.log('[TIP Fix 3] AI button already exists'); return; }
 
-  // Find the Report Builder panel body — look for the form-group containing
-  // the Generate Report button (⚡ Generate Report button already exists).
+  // Find the Generate Report button in the Report panel
   var genBtn = null;
-  var allBtns = document.querySelectorAll('#tip-panel-report .tip-btn-primary');
+  var panel = document.getElementById('tip-panel-report');
+  if (!panel) { console.warn('[TIP Fix 3] Report panel not found'); return; }
+  var allBtns = panel.querySelectorAll('.tip-btn-primary');
+  console.log('[TIP Fix 3] Found ' + allBtns.length + ' primary buttons in report panel');
   for (var i = 0; i < allBtns.length; i++) {
-    if (allBtns[i].textContent.indexOf('Generate Report') >= 0) {
+    var btnText = allBtns[i].textContent || '';
+    console.log('[TIP Fix 3] Button ' + i + ': "' + btnText.trim().substring(0, 30) + '"');
+    if (btnText.indexOf('Generate Report') >= 0) {
       genBtn = allBtns[i];
       break;
     }
   }
 
-  if (!genBtn) return;
+  if (!genBtn) { console.warn('[TIP Fix 3] Generate Report button not found'); return; }
 
   // Create AI Report button
   var aiBtn = document.createElement('button');
@@ -29897,6 +29848,7 @@ window._tipRenderSIEMPushFromOrgs = _tipRenderSIEMPushFromOrgs;
    This gets appended to the loadThreatIntelLive() flow.
    --------------------------------------------------------------------------- */
 function _tipInitAllFixes() {
+  console.log('[TIP] Running _tipInitAllFixes...');
   try { _tipFixGlobalSearch(); } catch(e) { console.error('[TIP Fix 1 Error]', e); }
   try { _tipFixAddActorSearch(); } catch(e) { console.error('[TIP Fix 2 Error]', e); }
   try { _tipAddReportBuilder(); } catch(e) { console.error('[TIP Fix 3 Error]', e); }
@@ -29904,6 +29856,25 @@ function _tipInitAllFixes() {
   try { _tipLoadSightingsFromDB(); } catch(e) { console.error('[TIP Fix 5 Error]', e); }
   // Fix 6 (_tipSubmitSighting) self-installs via window.tipSubmitSighting override above
   try { _tipRenderSIEMPushFromOrgs(); } catch(e) { console.error('[TIP Fix 7 Error]', e); }
+  
+  // Verify critical fixes applied
+  var searchOK = document.getElementById('tip-global-search') && document.getElementById('tip-global-search')._tipSearchWired;
+  var aiBtn = document.getElementById('tip-ai-report-btn');
+  var rows = document.querySelectorAll('#tip-panel-report .tip-report-row');
+  var clickableRows = 0;
+  rows.forEach(function(r) { if (r._tipClickWired) clickableRows++; });
+  console.log('[TIP] Fix status — Search: ' + (searchOK ? 'OK' : 'FAIL') + 
+    ', AI Button: ' + (aiBtn ? 'OK' : 'FAIL') + 
+    ', Clickable rows: ' + clickableRows + '/' + rows.length);
+  
+  // If AI button failed, retry once after a short delay
+  if (!aiBtn) {
+    setTimeout(function() {
+      try { _tipAddReportBuilder(); } catch(e) {}
+      console.log('[TIP] AI button retry: ' + (document.getElementById('tip-ai-report-btn') ? 'OK' : 'FAIL'));
+    }, 500);
+  }
+  
   console.log('[TIP] All fixes initialised');
 }
 window._tipInitAllFixes = _tipInitAllFixes;
