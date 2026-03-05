@@ -9403,6 +9403,7 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
                   <th>P</th>
                   <th>Title</th>
                   <th>AI Status</th>
+                  <th title="CrowdStrike Falcon Intel pre-enrichment">CS Intel</th>
                   <th>Organization</th>
                   <th>Source</th>
                   <th>Status</th>
@@ -25247,6 +25248,7 @@ Analyst: K. Rasmussen | 2026-02-28
             <button class="ee-chip" data-type="user">👤 Users</button>
             <button class="ee-chip" data-type="domain">🌍 Domains</button>
             <button class="ee-chip" data-type="process">⚙️ Processes</button>
+            <button class="ee-chip" data-type="adversary" style="color:#dc2626;">💀 Adversaries</button>
           </div>
           <div class="ee-time-filters" id="eeTimeFilters">
             <button class="ee-time-chip active" data-range="24h">24h</button>
@@ -25260,6 +25262,40 @@ Analyst: K. Rasmussen | 2026-02-28
             <option value="connected">Sort: Most Connected</option>
             <option value="recent">Sort: Recent</option>
           </select>
+        </div>
+
+        <!-- EE Action Toolbar: Session management, pivot history, Copilot -->
+        <div id="eeActionToolbar" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 0 4px;border-bottom:1px solid var(--border-subtle);margin-bottom:8px;">
+          <button class="btn btn-xs btn-secondary" onclick="window._eeSaveSessionPrompt()" title="Save current graph as a named session">💾 Save Session</button>
+          <div style="position:relative;display:inline-block;">
+            <button class="btn btn-xs btn-secondary" id="eeSessionsBtn" onclick="window._eeToggleSessionsDropdown()" title="Load a saved session">📂 Sessions ▾</button>
+            <div id="eeSessionsDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:2000;min-width:260px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:4px;max-height:320px;overflow-y:auto;">
+              <div style="padding:8px 12px;border-bottom:1px solid var(--border-subtle);font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;">Saved Sessions</div>
+              <div id="eeSessionsList" style="padding:6px 0;"><div style="padding:10px 12px;font-size:11px;color:var(--text-muted);">Loading...</div></div>
+            </div>
+          </div>
+          <div style="width:1px;height:18px;background:var(--border-subtle);"></div>
+          <button class="btn btn-xs btn-secondary" id="eePivotHistoryBtn" onclick="window._eeTogglePivotPanel()" title="View pivot history">🔀 Pivot History <span id="eePivotCount" style="font-size:9px;background:rgba(0,212,255,0.15);border-radius:8px;padding:0 5px;">0</span></button>
+          <div style="width:1px;height:18px;background:var(--border-subtle);"></div>
+          <button class="btn btn-xs" style="background:rgba(139,92,246,0.15);color:#8b5cf6;border:1px solid rgba(139,92,246,0.3);" id="eeAnalyseBtn" onclick="window._eeAnalyseWithCopilot()" title="Send current graph cluster to AI Copilot for analysis">🤖 Analyse Cluster</button>
+          <div style="width:1px;height:18px;background:var(--border-subtle);"></div>
+          <span style="font-size:9px;color:var(--text-muted);">Timeline:</span>
+          <input type="range" id="eeTimelineFrom" min="0" max="100" value="0" style="width:80px;height:4px;accent-color:var(--cyan);" title="Timeline start" oninput="window._eeApplyTimeline()">
+          <span id="eeTimelineFromLabel" style="font-size:9px;color:var(--cyan);min-width:28px;">—</span>
+          <span style="font-size:9px;color:var(--text-muted);">→</span>
+          <input type="range" id="eeTimelineTo" min="0" max="100" value="100" style="width:80px;height:4px;accent-color:var(--cyan);" title="Timeline end" oninput="window._eeApplyTimeline()">
+          <span id="eeTimelineToLabel" style="font-size:9px;color:var(--cyan);min-width:28px;">Now</span>
+          <button class="btn btn-xs btn-secondary" onclick="window._eeResetTimeline()" title="Reset timeline to full range" style="font-size:9px;padding:1px 6px;">Reset</button>
+          <span id="eeTimelineStatus" style="font-size:9px;color:var(--text-muted);margin-left:4px;"></span>
+        </div>
+
+        <!-- Pivot History Panel (slide-in from left) -->
+        <div id="eePivotPanel" style="display:none;margin-bottom:8px;background:var(--surface-0);border:1px solid rgba(0,212,255,0.2);border-radius:8px;padding:10px 12px;max-height:160px;overflow-y:auto;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:10px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:0.08em;">🔀 Pivot Trail</span>
+            <button class="btn btn-xs btn-secondary" onclick="window._eeClearPivotHistory()" style="font-size:9px;padding:1px 6px;">Clear</button>
+          </div>
+          <div id="eePivotStepsList" style="font-size:10px;color:var(--text-secondary);">No pivots yet — right-click any node and select 'Pivot on Entity'</div>
         </div>
 
         <!-- Split: Catalog + Canvas -->
@@ -25287,6 +25323,7 @@ Analyst: K. Rasmussen | 2026-02-28
                   <div class="ee-legend-item"><div class="ee-legend-dot" style="background:#f59e0b;"></div>Domains</div>
                   <div class="ee-legend-item"><div class="ee-legend-dot" style="background:#f97316;"></div>Processes</div>
                   <div class="ee-legend-item"><div class="ee-legend-dot" style="background:#ef4444;"></div>Malicious</div>
+                  <div class="ee-legend-item"><div class="ee-legend-dot" style="background:#dc2626;box-shadow:0 0 4px #dc2626;"></div>Adversary</div>
                 </div>
               </div>
               <div class="ee-canvas-controls">
@@ -25343,14 +25380,32 @@ Analyst: K. Rasmussen | 2026-02-28
             <div>
               <div class="ee-detail-section-title">Quick Actions</div>
               <div class="ee-actions">
-                <button class="ee-action-btn primary">🔍 Investigate</button>
-                <button class="ee-action-btn danger">🚫 Isolate Host</button>
-                <button class="ee-action-btn">👁 Add to Watchlist</button>
+                <button class="ee-action-btn primary" id="eeActInvestigate" onclick="window._eeActInvestigate()">🔍 Investigate</button>
+                <button class="ee-action-btn" id="eeActPivot" onclick="window._eePivotNode(window._eeSelectedEntity)" style="color:#00d4ff;border-color:rgba(0,212,255,0.3);">🔀 Pivot Entity</button>
+                <button class="ee-action-btn" id="eeActCopilot" onclick="window._eeAnalyseWithCopilot()">🤖 AI Analyse</button>
                 <button class="ee-action-btn">📤 Export IOCs</button>
+              </div>
+              <!-- CrowdStrike enrichment for selected entity -->
+              <div id="eeDetailCSIntel" style="display:none;margin-top:12px;">
+                <div class="ee-detail-section-title">🦅 CrowdStrike Falcon Intel</div>
+                <div id="eeDetailCSContent" style="font-size:10px;color:var(--text-secondary);"></div>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Right-click context menu -->
+        <div id="eePivotMenu" style="display:none;position:fixed;z-index:9000;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);min-width:180px;overflow:hidden;">
+          <div id="eePivotMenuTitle" style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--cyan);border-bottom:1px solid var(--border-subtle);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;"></div>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--text-primary);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(0,212,255,0.08)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('pivot')">🔀 Pivot on Entity <span style="font-size:9px;color:var(--text-muted);">(CrowdStrike + TIP)</span></button>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--text-primary);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(0,212,255,0.08)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('investigate')">🔍 Open Investigation</button>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--text-primary);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(0,212,255,0.08)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('pin')">📌 Pin Node</button>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--text-primary);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(0,212,255,0.08)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('focus')">🎯 Focus View</button>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--text-primary);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(0,212,255,0.08)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('copy')">📋 Copy Entity ID</button>
+          <div style="height:1px;background:var(--border-subtle);margin:2px 0;"></div>
+          <button style="display:block;width:100%;padding:8px 12px;text-align:left;font-size:11px;color:var(--red-bright);background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(239,68,68,0.06)'" onmouseout="this.style.background=''" onclick="window._eeContextAction('remove')">🗑 Remove Node</button>
+        </div>
+
       </div><!-- end entities -->
 
 
@@ -29192,6 +29247,9 @@ async function loadThreatIntelLive() {
     console.log('[ThreatIntel] Loaded: ' + indicators.length + ' indicators, ' + malwares.length + ' malware, ' + reports.length + ' reports, ' + threatActors.length + ' actors, ' + attackPatterns.length + ' attack patterns');
     showToast('Threat Intel loaded from DACTA TIP \u2014 ' + indicators.length + ' indicators, ' + threatActors.length + ' actors');
 
+    // ── CrowdStrike Falcon Intel enrichment (fire-and-forget, non-blocking) ──
+    tipLoadCrowdStrikeIntel(page, iocFeedBody);
+
     // Run Threat Intel page fixes/enhancements (with delay for DOM stability)
     if (typeof _tipInitAllFixes === 'function') { setTimeout(_tipInitAllFixes, 300); }
 
@@ -29226,6 +29284,280 @@ function tipEnrichIOC(iocValue) {
       }
     }, 300);
   }, 500);
+}
+
+// ── Phase 4: CrowdStrike Falcon Intel — Active Adversaries + Finished Reports ──
+
+/**
+ * Load CrowdStrike actor cards and finished intelligence reports into the TI page.
+ * Called after DACTA TIP data loads, so it fires concurrently without blocking the page.
+ */
+async function tipLoadCrowdStrikeIntel(page, iocFeedBody) {
+  if (!page) page = document.getElementById('page-intel');
+  if (!page) return;
+
+  // ── Actors: search CS for active adversaries ──
+  try {
+    var csActorResp = await fetch('/api/crowdstrike', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'search_actors', limit: 12, offset: 0 })
+    });
+    var csActorData = await csActorResp.json();
+    var csActors = (csActorData && csActorData.resources) ? csActorData.resources : [];
+
+    if (csActors.length > 0) {
+      var actorGrid = page.querySelector('#tip-panel-actors .tip-actor-grid');
+      if (actorGrid) {
+        // Insert a section divider before CS cards
+        var divider = document.createElement('div');
+        divider.id = 'tip-cs-actors-section';
+        divider.style.cssText = 'grid-column:1/-1;margin-top:16px;';
+        divider.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">' +
+          '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#f97316;">🦅 CrowdStrike Falcon Intel</span>' +
+          '<div style="flex:1;height:1px;background:rgba(249,115,22,0.2);"></div>' +
+          '<span style="font-size:9px;color:#64748b;">' + csActors.length + ' active adversaries</span>' +
+          '</div>';
+        actorGrid.appendChild(divider);
+
+        csActors.forEach(function(a) {
+          var name = a.name || (a.slug ? a.slug.replace(/-/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}) : 'Unknown Actor');
+          var aliases = a.known_as || [];
+          var aliasStr = Array.isArray(aliases) ? aliases.slice(0,3).join(' · ') : (aliases || '');
+          var origins = (a.origins || []).map(function(o) { return o.value || o; }).join(', ') || 'Unknown';
+          var isActive = a.active !== false;
+          var dotColor = isActive ? 'red' : '';
+          var severity = isActive ? '<span class="tip-tag tip-tag-high">ACTIVE</span>' : '<span style="font-size:9px;padding:2px 6px;background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.2);border-radius:4px;color:#64748b;">INACTIVE</span>';
+          var industries = (a.target_industries || []).map(function(i) { return i.value || i; });
+          var countries = (a.target_countries || []).map(function(c) { return c.value || c; });
+          var motivations = (a.motivations || []).map(function(m) { return m.value || m; }).join(', ') || '';
+          var lastSeen = a.last_activity_date ? new Date(a.last_activity_date * 1000).toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+          var slug = (a.slug || a.id || name).replace(/[^a-z0-9]/gi, '-').toLowerCase();
+          var cardId = 'tip-cs-actor-' + slug;
+          var shortDesc = a.short_description || '';
+          if (shortDesc.length > 180) shortDesc = shortDesc.substring(0, 177) + '...';
+
+          var card = document.createElement('div');
+          card.className = 'tip-actor-card';
+          card.id = cardId;
+          card.innerHTML =
+            '<div class="tip-actor-header" onclick="tipToggleActor(\'' + cardId + '\')" style="cursor:pointer;">' +
+              (isActive ? '<div class="tip-live-dot red"></div>' : '<div style="width:8px;height:8px;border-radius:50%;background:#374151;flex-shrink:0;"></div>') +
+              '<div class="tip-actor-name-wrap">' +
+                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+                  '<div class="tip-actor-name">' + name + '</div>' +
+                  severity +
+                  '<span style="font-size:9px;padding:2px 6px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);border-radius:4px;color:#f97316;font-weight:600;">🦅 CS Intel</span>' +
+                '</div>' +
+                (aliasStr ? '<div class="tip-actor-alias">' + aliasStr + '</div>' : '') +
+                '<div class="tip-actor-origin">🌐 ' + origins + (motivations ? ' · ' + motivations : '') + '</div>' +
+              '</div>' +
+              '<div style="text-align:right;flex-shrink:0;">' +
+                '<div style="font-size:10px;color:#64748b;margin-top:4px;">Last active: ' + lastSeen + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="tip-actor-body" id="' + cardId + '-body">' +
+              '<div class="tip-actor-expand">' +
+                (industries.length > 0 ? '<div class="tip-actor-section-label">Target Industries</div>' +
+                  '<div class="tip-sector-tags">' + industries.slice(0,6).map(function(i){ return '<span class="tip-sector-tag">' + i + '</span>'; }).join('') + '</div>' : '') +
+                (countries.length > 0 ? '<div class="tip-actor-section-label">Target Countries</div>' +
+                  '<div class="tip-sector-tags">' + countries.slice(0,6).map(function(c){ return '<span class="tip-sector-tag">' + c + '</span>'; }).join('') + '</div>' : '') +
+                (shortDesc ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;line-height:1.5;">' + shortDesc + '</div>' : '') +
+                '<div class="tip-actor-quick-actions">' +
+                  '<button class="tip-btn tip-btn-primary tip-btn-sm" onclick="openEntityExplorer(\'' + name.replace(/'/g, "\\'") + '\',\'actor\')">🔗 Investigate</button>' +
+                  '<button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="tipToast(\'🎯\',\'Hunt job created for ' + name.replace(/'/g, "\\'") + ' TTPs\')">🎯 Hunt</button>' +
+                  '<button class="tip-btn tip-btn-secondary tip-btn-sm" onclick="switchTiTab(\'report\');tipToast(\'📄\',\'Report Builder pre-populated with ' + name.replace(/'/g, "\\'") + ' context\')">📄 Brief</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+
+          actorGrid.appendChild(card);
+        });
+
+        // Store for window
+        if (window._tipLiveData) window._tipLiveData.csActors = csActors;
+        console.log('[CS Intel] Loaded ' + csActors.length + ' active adversaries');
+      }
+    }
+  } catch(csActErr) {
+    console.warn('[CS Intel] Actor load failed:', csActErr.message);
+  }
+
+  // ── Reports: fetch CrowdStrike finished intelligence reports ──
+  try {
+    var csRepResp = await fetch('/api/crowdstrike', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'search_reports', limit: 10, offset: 0 })
+    });
+    var csRepData = await csRepResp.json();
+    var csReports = (csRepData && csRepData.resources) ? csRepData.resources : [];
+
+    if (csReports.length > 0 && page) {
+      var recentReportsContainer = page.querySelector('#tip-panel-report .tip-recent-reports');
+      if (recentReportsContainer) {
+        var csRepHTML = '';
+
+        // Section header
+        csRepHTML += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-top:1px solid rgba(249,115,22,0.1);margin-top:8px;">' +
+          '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#f97316;">🦅 CrowdStrike Finished Intel</span>' +
+          '<div style="flex:1;height:1px;background:rgba(249,115,22,0.15);"></div>' +
+          '</div>';
+
+        csReports.forEach(function(r) {
+          var pub = r.last_modified_date
+            ? new Date(r.last_modified_date * 1000).toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' })
+            : r.created_date
+              ? new Date(r.created_date * 1000).toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' })
+              : '—';
+          var title = r.name || r.short_description || 'Intel Report';
+          var desc = r.description || r.short_description || '';
+          if (desc.length > 80) desc = desc.substring(0, 77) + '...';
+          var repType = r.report_type || 'Intelligence Report';
+
+          csRepHTML += '<div class="tip-report-row" style="cursor:pointer;">' +
+            '<span class="tip-report-type-badge" style="background:rgba(249,115,22,0.08);color:#f97316;border:1px solid rgba(249,115,22,0.2);">🦅 ' + repType + '</span>' +
+            '<div class="tip-report-info">' +
+              '<div class="tip-report-name">' + title + '</div>' +
+              '<div class="tip-report-meta">' + pub + (desc ? ' · ' + desc : '') + '</div>' +
+            '</div>' +
+            '<span class="tip-status-published">Published</span>' +
+            '<div class="tip-report-actions">' +
+              '<button class="tip-btn tip-btn-secondary tip-btn-xs" onclick="event.stopPropagation();tipToast(\'📄\',\'Opening CrowdStrike report...\')">View</button>' +
+            '</div>' +
+          '</div>';
+        });
+
+        // Append CS reports after existing
+        var existing = recentReportsContainer.innerHTML;
+        recentReportsContainer.innerHTML = existing + csRepHTML;
+        if (window._tipLiveData) window._tipLiveData.csReports = csReports;
+        console.log('[CS Intel] Loaded ' + csReports.length + ' finished intel reports');
+      }
+    }
+  } catch(csRepErr) {
+    console.warn('[CS Intel] Reports load failed:', csRepErr.message);
+  }
+
+  // ── IOC Feed: add CS column header + Enrich All button ──
+  if (iocFeedBody) {
+    var iocTable = iocFeedBody.closest('table');
+    if (iocTable) {
+      // Add CS Intel column to header
+      var thead = iocTable.querySelector('thead tr');
+      if (thead && !thead.querySelector('.cs-intel-th')) {
+        var csTh = document.createElement('th');
+        csTh.className = 'cs-intel-th';
+        csTh.title = 'CrowdStrike Falcon Intel confidence';
+        csTh.style.cssText = 'font-size:9px;white-space:nowrap;';
+        csTh.innerHTML = '🦅 CS Intel';
+        // Insert before last Actions column
+        var ths = thead.querySelectorAll('th');
+        if (ths.length > 0) thead.insertBefore(csTh, ths[ths.length - 1]);
+        else thead.appendChild(csTh);
+      }
+      // Add placeholder CS cells to existing rows (without removing onclick)
+      iocFeedBody.querySelectorAll('tr').forEach(function(row) {
+        if (!row.querySelector('.cs-ioc-cell')) {
+          var td = document.createElement('td');
+          td.className = 'cs-ioc-cell';
+          td.innerHTML = '<span style="font-size:9px;color:#374151;">—</span>';
+          var tds = row.querySelectorAll('td');
+          if (tds.length > 0) row.insertBefore(td, tds[tds.length - 1]);
+          else row.appendChild(td);
+        }
+      });
+      // Add Enrich All button near the IOC feed header
+      var tipPanel = iocTable.closest('.tip-panel, [id^="tip-panel"]');
+      if (tipPanel) {
+        var panelHeader = tipPanel.querySelector('.tip-panel-header, .tip-panel-title');
+        if (panelHeader && !tipPanel.querySelector('#tipCSEnrichAllBtn')) {
+          var enrichBtn = document.createElement('button');
+          enrichBtn.id = 'tipCSEnrichAllBtn';
+          enrichBtn.className = 'tip-btn tip-btn-secondary tip-btn-sm';
+          enrichBtn.style.cssText = 'margin-left:8px;font-size:10px;';
+          enrichBtn.innerHTML = '🦅 CS Enrich All';
+          enrichBtn.onclick = tipCSEnrichIOCFeed;
+          panelHeader.appendChild(enrichBtn);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Batch-enrich all IOC rows in the TI feed table via CrowdStrike.
+ * Reads indicator values from each row's first mono column, fires enrich_iocs,
+ * then updates each row's .cs-ioc-cell with confidence badge.
+ */
+async function tipCSEnrichIOCFeed() {
+  var page = document.getElementById('page-intel');
+  if (!page) return;
+  var iocFeedBody = page.querySelector('#tipIocFeedBody') || (page.querySelectorAll('tbody')[0] || null);
+  if (!iocFeedBody) return;
+
+  var rows = Array.from(iocFeedBody.querySelectorAll('tr'));
+  if (!rows.length) { showToast('No IOC rows to enrich', 'info'); return; }
+
+  // Mark all as loading
+  rows.forEach(function(row) {
+    var cell = row.querySelector('.cs-ioc-cell');
+    if (cell) cell.innerHTML = '<div class="jira-spinner" style="width:10px;height:10px;border-width:1px;display:inline-block;vertical-align:middle;"></div>';
+  });
+
+  // Extract indicator values from the second cell (name/pattern column)
+  var indicators = rows.map(function(row) {
+    var tds = row.querySelectorAll('td');
+    if (tds.length < 2) return null;
+    var val = tds[1].textContent.trim();
+    // Strip STIX pattern wrapper [ipv4-addr:value = 'X']
+    var m = val.match(/['"]([^'"]+)['"]/);
+    return m ? m[1] : val;
+  }).filter(function(v) { return v && v.length > 3; });
+
+  if (!indicators.length) { showToast('No indicator values found', 'info'); return; }
+  showToast('🦅 CrowdStrike enriching ' + indicators.length + ' IOCs...', 'info');
+
+  try {
+    var resp = await fetch('/api/crowdstrike', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'enrich_iocs', indicators: indicators })
+    });
+    var data = await resp.json();
+    var lookup = (data && data.lookup) ? data.lookup : {};
+
+    rows.forEach(function(row) {
+      var cell = row.querySelector('.cs-ioc-cell');
+      if (!cell) return;
+      var tds = row.querySelectorAll('td');
+      if (tds.length < 2) { cell.innerHTML = '<span style="color:#374151;font-size:9px;">—</span>'; return; }
+      var raw = tds[1].textContent.trim();
+      var m = raw.match(/['"]([^'"]+)['"]/);
+      var key = m ? m[1] : raw;
+      var result = lookup[key];
+      if (!result) { cell.innerHTML = '<span style="font-size:9px;color:#374151;">—</span>'; return; }
+      var conf = result.malicious_confidence || 'unverified';
+      var badge = {
+        high:       '<span style="font-size:9px;font-weight:700;padding:1px 6px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:3px;color:#ef4444;white-space:nowrap;">🛑 HIGH</span>',
+        medium:     '<span style="font-size:9px;font-weight:700;padding:1px 6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:3px;color:#f59e0b;white-space:nowrap;">⚠ MED</span>',
+        low:        '<span style="font-size:9px;padding:1px 6px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:3px;color:#10b981;white-space:nowrap;">✓ LOW</span>',
+        unverified: '<span style="font-size:9px;color:#64748b;white-space:nowrap;">? UNV</span>'
+      }[conf] || '<span style="font-size:9px;color:#374151;">—</span>';
+      cell.innerHTML = badge;
+    });
+
+    var highCount = Object.values(lookup).filter(function(r) { return r.malicious_confidence === 'high'; }).length;
+    showToast('🦅 CS enrichment complete — ' + highCount + ' HIGH confidence IOCs', highCount > 0 ? 'warning' : 'success');
+    console.log('[CS Intel] IOC enrichment complete:', Object.keys(lookup).length, 'matched,', highCount, 'HIGH');
+
+  } catch(e) {
+    rows.forEach(function(row) {
+      var cell = row.querySelector('.cs-ioc-cell');
+      if (cell) cell.innerHTML = '<span style="font-size:9px;color:#ef4444;">ERR</span>';
+    });
+    console.error('[CS Intel] IOC enrichment failed:', e.message);
+  }
 }
 
 /* =============================================================================
@@ -38050,7 +38382,7 @@ function applyProductionMode() {
 
     // Table — clear body, show empty
     triagePage.querySelectorAll('table tbody').forEach(function(tbody) {
-      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:80px 24px;">' +
+      tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:80px 24px;">' +
         emptyState('📋', 'No tickets in queue — connect Jira to populate') + '</td></tr>';
     });
 
@@ -38690,7 +39022,7 @@ document.addEventListener('keydown', (e) => {
     eeNodes.forEach(node => {
       const isSelected = eeSelectedEntity === node.id;
       const isConnected = eeSelectedEntity && eeEdgesProcessed.some(e => (e.from.id === eeSelectedEntity && e.to.id === node.id) || (e.to.id === eeSelectedEntity && e.from.id === node.id));
-      const dimmed = eeSelectedEntity && !isSelected && !isConnected && eeSelectedEntity !== node.id;
+      const dimmed = (eeSelectedEntity && !isSelected && !isConnected && eeSelectedEntity !== node.id) || (node.dimmed === true);
       const isHovered = eeHovered === node.id;
       const r = isHovered ? node.size * 1.3 : (isSelected ? node.size * 1.2 : node.size);
 
@@ -38816,6 +39148,7 @@ document.addEventListener('keydown', (e) => {
 
   window._eeSelectEntity = function(id) {
     eeSelectedEntity = (eeSelectedEntity === id) ? null : id;
+    window._eeSelectedEntity = eeSelectedEntity; // expose for HTML onclick handlers
     eeBuildCatalog(eeGetActiveFilter(), document.getElementById('eeSearch')?.value || '');
     eeUpdateDetail(id);
     // Focus on node in graph
@@ -39057,6 +39390,18 @@ document.addEventListener('keydown', (e) => {
     // Click (for select if not dragged)
     eeCanvas.addEventListener('click', (e) => {
       // Handled in mouseup
+    });
+
+    // Right-click: show pivot context menu
+    eeCanvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const rect = eeCanvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const node = eeGetNodeAt(mx, my);
+      if (node && typeof window._eeRightClickNode === 'function') {
+        window._eeRightClickNode(node.id, e.clientX, e.clientY);
+      }
     });
 
     // Zoom
@@ -39509,7 +39854,506 @@ document.addEventListener('keydown', (e) => {
     const container = document.getElementById('eeCanvasContainer');
     if (container) resizeObs.observe(container);
   };
-})();
+
+  // ── Add Adversary type to EE_COLORS ──
+  EE_COLORS.adversary = '#dc2626';
+  EE_COLORS.hash = '#6366f1';
+  EE_EDGE_STYLES.attributed_to = { color: 'rgba(220,38,38,0.5)', dash: [6,3], label: 'Attributed To' };
+  EE_EDGE_STYLES.related_to    = { color: 'rgba(139,92,246,0.4)', dash: [4,4], label: 'Related To' };
+  EE_EDGE_STYLES.pivoted_from  = { color: 'rgba(0,212,255,0.6)', dash: [], label: 'Pivoted From' };
+
+  // ── Pivot History ──
+  let eePivotHistory = [];
+
+  function eeUpdatePivotUI() {
+    var countEl = document.getElementById('eePivotCount');
+    if (countEl) countEl.textContent = eePivotHistory.length;
+    var listEl = document.getElementById('eePivotStepsList');
+    if (!listEl) return;
+    if (eePivotHistory.length === 0) {
+      listEl.innerHTML = '<span style="color:var(--text-muted);">No pivots yet — right-click any node and select \'Pivot on Entity\'</span>';
+      return;
+    }
+    listEl.innerHTML = eePivotHistory.slice().reverse().map(function(step, idx) {
+      var rel = eePivotHistory.length - idx;
+      var statusColor = step.newNodes > 0 ? '#10b981' : 'var(--text-muted)';
+      return '<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0;border-bottom:1px solid var(--border-subtle);">' +
+        '<span style="font-size:8px;color:var(--text-muted);min-width:16px;">' + rel + '</span>' +
+        '<span style="font-family:var(--font-mono);color:var(--cyan);">' + step.entity.substring(0, 28) + (step.entity.length > 28 ? '…' : '') + '</span>' +
+        '<span style="font-size:9px;color:var(--text-muted);">→</span>' +
+        '<span style="font-size:9px;color:' + statusColor + ';font-weight:600;">' + step.newNodes + ' new nodes</span>' +
+        '<span style="font-size:8px;color:var(--text-muted);margin-left:auto;">' + step.source + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  window._eeTogglePivotPanel = function() {
+    var panel = document.getElementById('eePivotPanel');
+    if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
+  };
+
+  window._eeClearPivotHistory = function() {
+    eePivotHistory = [];
+    eeUpdatePivotUI();
+  };
+
+  // ── Multi-hop Pivot Engine ──
+  window._eePivotNode = async function(nodeId) {
+    if (!nodeId) return;
+    var pivotMenuEl = document.getElementById('eePivotMenu');
+    if (pivotMenuEl) pivotMenuEl.style.display = 'none';
+
+    showToast('Pivoting on ' + nodeId.substring(0, 30) + '…', 'info');
+    var newNodes = 0;
+    var pivotSource = 'CS+TIP';
+
+    try {
+      // ── CrowdStrike: get related indicators for this IOC ──
+      var csRelated = [];
+      try {
+        var csResp = await fetch('/api/crowdstrike', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'search_indicators', filter: 'indicator:"' + nodeId + '"', limit: 20 })
+        });
+        if (csResp.ok) {
+          var csData = await csResp.json();
+          csRelated = csData.resources || [];
+        }
+      } catch(e) { console.warn('[EE Pivot] CS lookup failed:', e); }
+
+      // ── Enrich the pivoted node itself ──
+      var csEnrichResp = null;
+      try {
+        var enrResp = await fetch('/api/crowdstrike', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'enrich_iocs', indicators: [nodeId] })
+        });
+        if (enrResp.ok) csEnrichResp = await enrResp.json();
+      } catch(e) {}
+
+      // ── Add related indicator nodes ──
+      var entityEdgeSet = new Set(EE_EDGES.map(function(e) { return [e.from, e.to].sort().join('|'); }));
+
+      csRelated.forEach(function(rel) {
+        var relId = rel.indicator;
+        if (!relId || relId === nodeId) return;
+        if (!EE_ENTITIES.find(function(e) { return e.id === relId; })) {
+          var type = 'ip';
+          var icon = '🌐';
+          if (/[a-f0-9]{32,}/i.test(relId)) { type = 'hash'; icon = '#'; }
+          else if (relId.indexOf('.') !== -1 && !relId.match(/^\d+\.\d+\.\d+\.\d+$/)) { type = 'domain'; icon = '🌍'; }
+          var conf = rel.malicious_confidence || 'unverified';
+          var riskScore = { high: 90, medium: 60, low: 30, unverified: 10 }[conf] || 10;
+          EE_ENTITIES.push({
+            id: relId, type: type, icon: icon,
+            label: conf === 'high' ? 'CS HIGH' : (conf === 'medium' ? 'CS MED' : ''),
+            sub: (rel.malware_families || []).slice(0,2).join(', ') || '',
+            risk: riskScore,
+            malicious: conf === 'high',
+            alerts: 0, alertList: [],
+            lastSeen: rel.last_updated ? new Date(rel.last_updated).toLocaleDateString() : 'recent',
+            pivoted: true
+          });
+          newNodes++;
+        }
+        var ek = [nodeId, relId].sort().join('|');
+        if (!entityEdgeSet.has(ek)) {
+          entityEdgeSet.add(ek);
+          EE_EDGES.push({ from: nodeId, to: relId, type: 'pivoted_from' });
+        }
+      });
+
+      // ── Add adversary actor nodes from CS enrichment ──
+      var actorsAdded = [];
+      if (csEnrichResp && csEnrichResp.lookup && csEnrichResp.lookup[nodeId]) {
+        var iocData = csEnrichResp.lookup[nodeId];
+        (iocData.actors || []).forEach(function(actor) {
+          var actorId = 'ACTOR:' + actor;
+          if (!EE_ENTITIES.find(function(e) { return e.id === actorId; })) {
+            EE_ENTITIES.push({
+              id: actorId, type: 'adversary', icon: '💀',
+              label: actor,
+              sub: 'CrowdStrike Adversary',
+              risk: 95, malicious: true,
+              alerts: 0, alertList: [],
+              lastSeen: 'active', pivoted: true
+            });
+            newNodes++;
+            actorsAdded.push(actor);
+          }
+          var ak = [nodeId, actorId].sort().join('|');
+          if (!entityEdgeSet.has(ak)) {
+            entityEdgeSet.add(ak);
+            EE_EDGES.push({ from: nodeId, to: actorId, type: 'attributed_to' });
+          }
+        });
+        // Show CS intel in detail panel
+        window._eeShowCSIntelForNode(nodeId, iocData);
+      }
+
+      // Record pivot step
+      eePivotHistory.push({
+        entity: nodeId,
+        newNodes: newNodes,
+        actors: actorsAdded,
+        source: pivotSource,
+        timestamp: new Date().toISOString()
+      });
+      eeUpdatePivotUI();
+
+      // Rebuild graph with new entities
+      if (typeof eeInitNodes === 'function') eeInitNodes();
+      eeBuildCatalog(eeGetActiveFilter(), document.getElementById('eeSearch') ? document.getElementById('eeSearch').value : '');
+
+      var msg = newNodes > 0
+        ? 'Pivot complete: ' + newNodes + ' new node(s) added' + (actorsAdded.length > 0 ? ' — actors: ' + actorsAdded.slice(0,2).join(', ') : '')
+        : 'Pivot complete: no new related indicators found in CrowdStrike';
+      showToast(msg, newNodes > 0 ? 'success' : 'info');
+
+    } catch(err) {
+      console.error('[EE Pivot] Error:', err);
+      showToast('Pivot failed: ' + err.message, 'error');
+    }
+  };
+
+  // ── Show CS Intel in detail panel ──
+  window._eeShowCSIntelForNode = function(nodeId, iocData) {
+    var csSection = document.getElementById('eeDetailCSIntel');
+    var csContent = document.getElementById('eeDetailCSContent');
+    if (!csSection || !csContent) return;
+    if (!iocData) { csSection.style.display = 'none'; return; }
+    var conf = iocData.malicious_confidence || 'unverified';
+    var confColor = conf === 'high' ? '#ef4444' : conf === 'medium' ? '#f59e0b' : conf === 'low' ? '#10b981' : 'var(--text-muted)';
+    var html = '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">' +
+      '<span style="font-size:9px;padding:2px 8px;border-radius:8px;background:' + confColor + '20;color:' + confColor + ';border:1px solid ' + confColor + '40;font-weight:700;text-transform:uppercase;">' + conf + '</span>' +
+      '<span style="font-size:9px;color:var(--text-muted);">confidence</span></div>';
+    if (iocData.actors && iocData.actors.length > 0) {
+      html += '<div style="margin-bottom:4px;font-size:9px;color:var(--amber);">👤 ' + iocData.actors.slice(0,4).join(', ') + '</div>';
+    }
+    if (iocData.malware_families && iocData.malware_families.length > 0) {
+      html += '<div style="font-size:9px;color:var(--red-bright);">🦠 ' + iocData.malware_families.slice(0,3).join(', ') + '</div>';
+    }
+    if (iocData.labels && iocData.labels.length > 0) {
+      html += '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:4px;">';
+      iocData.labels.slice(0,5).forEach(function(l) {
+        html += '<span style="font-size:7px;padding:1px 5px;border-radius:6px;background:rgba(239,68,68,0.06);color:var(--red-bright);border:1px solid rgba(239,68,68,0.15);">' + l + '</span>';
+      });
+      html += '</div>';
+    }
+    csContent.innerHTML = html;
+    csSection.style.display = '';
+  };
+
+  // ── Right-click context menu ──
+  var _eeContextNodeId = null;
+
+  window._eeShowContextMenu = function(nodeId, x, y) {
+    _eeContextNodeId = nodeId;
+    var menu = document.getElementById('eePivotMenu');
+    var title = document.getElementById('eePivotMenuTitle');
+    if (!menu) return;
+    if (title) title.textContent = nodeId.length > 30 ? nodeId.substring(0, 30) + '…' : nodeId;
+    menu.style.display = '';
+    // Position safely within viewport
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var mw = 190, mh = 220;
+    menu.style.left = (x + mw > vw ? vw - mw - 8 : x) + 'px';
+    menu.style.top  = (y + mh > vh ? vh - mh - 8 : y) + 'px';
+    // Close on outside click
+    setTimeout(function() {
+      document.addEventListener('click', function closeMenu() {
+        menu.style.display = 'none';
+        document.removeEventListener('click', closeMenu);
+      }, { once: true });
+    }, 50);
+  };
+
+  window._eeContextAction = function(action) {
+    var nodeId = _eeContextNodeId;
+    var menu = document.getElementById('eePivotMenu');
+    if (menu) menu.style.display = 'none';
+    if (!nodeId) return;
+    if (action === 'pivot') {
+      window._eePivotNode(nodeId);
+    } else if (action === 'investigate') {
+      window._eeActInvestigate(nodeId);
+    } else if (action === 'pin') {
+      var node = eeNodes.find(function(n) { return n.id === nodeId; });
+      if (node) { node.pinned = !node.pinned; showToast(node.pinned ? 'Node pinned' : 'Node unpinned', 'info'); }
+    } else if (action === 'focus') {
+      var focusNode = eeNodes.find(function(n) { return n.id === nodeId; });
+      if (focusNode) {
+        var cont = document.getElementById('eeCanvasContainer');
+        if (cont) {
+          eeCamera.x = cont.clientWidth / 2 - focusNode.x;
+          eeCamera.y = cont.clientHeight / 2 - focusNode.y;
+          eeCamera.zoom = 1.8;
+        }
+      }
+    } else if (action === 'copy') {
+      try { navigator.clipboard.writeText(nodeId); showToast('Copied: ' + nodeId, 'info'); } catch(e) { showToast('Copy failed', 'error'); }
+    } else if (action === 'remove') {
+      var idx = EE_ENTITIES.findIndex(function(e) { return e.id === nodeId; });
+      if (idx !== -1) {
+        EE_ENTITIES.splice(idx, 1);
+        EE_EDGES = EE_EDGES.filter(function(e) { return e.from !== nodeId && e.to !== nodeId; });
+        if (typeof eeInitNodes === 'function') eeInitNodes();
+        eeBuildCatalog(eeGetActiveFilter(), '');
+        showToast('Node removed from graph', 'info');
+      }
+    }
+  };
+
+  window._eeActInvestigate = function(nodeId) {
+    var id = nodeId || (typeof eeSelectedEntity !== 'undefined' ? eeSelectedEntity : null);
+    if (!id) return;
+    navigate('investigation');
+    setTimeout(function() {
+      if (typeof window._eeDynamicAddEntity === 'function') window._eeDynamicAddEntity(id);
+      if (typeof window._eeSelectEntity === 'function') window._eeSelectEntity(id);
+    }, 300);
+  };
+
+  // Hook right-click into existing canvas event setup via window exposure
+  window._eeRightClickNode = window._eeShowContextMenu;
+
+  // ── Timeline Scrubber ──
+  var _eeTimelineMin = 0;  // epoch ms
+  var _eeTimelineMax = 0;
+  var _eeTimelineActive = false;
+
+  function eeInitTimeline() {
+    // Compute min/max epoch from entity lastSeen
+    var now = Date.now();
+    var times = EE_ENTITIES.map(function(e) {
+      if (!e.lastSeen || e.lastSeen === 'recent') return now;
+      var t = new Date(e.lastSeen).getTime();
+      return isNaN(t) ? now : t;
+    });
+    _eeTimelineMin = times.length > 0 ? Math.min.apply(null, times) : now - 7 * 86400000;
+    _eeTimelineMax = now;
+    var fromEl = document.getElementById('eeTimelineFrom');
+    var toEl = document.getElementById('eeTimelineTo');
+    var fromLbl = document.getElementById('eeTimelineFromLabel');
+    var toLbl = document.getElementById('eeTimelineToLabel');
+    if (fromEl) { fromEl.value = 0; }
+    if (toEl) { toEl.value = 100; }
+    if (fromLbl) fromLbl.textContent = new Date(_eeTimelineMin).toLocaleDateString('en-SG', {day:'2-digit', month:'short'});
+    if (toLbl) toLbl.textContent = 'Now';
+    _eeTimelineActive = false;
+    var statusEl = document.getElementById('eeTimelineStatus');
+    if (statusEl) statusEl.textContent = '';
+  }
+
+  window._eeApplyTimeline = function() {
+    var fromEl = document.getElementById('eeTimelineFrom');
+    var toEl = document.getElementById('eeTimelineTo');
+    if (!fromEl || !toEl) return;
+    var fromPct = parseInt(fromEl.value) / 100;
+    var toPct   = parseInt(toEl.value) / 100;
+    var range = _eeTimelineMax - _eeTimelineMin;
+    var tFrom = _eeTimelineMin + fromPct * range;
+    var tTo   = _eeTimelineMin + toPct   * range;
+    _eeTimelineActive = true;
+
+    var fromLbl = document.getElementById('eeTimelineFromLabel');
+    var toLbl = document.getElementById('eeTimelineToLabel');
+    if (fromLbl) fromLbl.textContent = new Date(tFrom).toLocaleDateString('en-SG', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+    if (toLbl) toLbl.textContent = toPct >= 0.99 ? 'Now' : new Date(tTo).toLocaleDateString('en-SG', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+
+    // Dim nodes outside the window
+    eeNodes.forEach(function(node) {
+      var ent = EE_ENTITIES.find(function(e) { return e.id === node.id; });
+      if (!ent) return;
+      var t = ent.lastSeen && ent.lastSeen !== 'recent' ? new Date(ent.lastSeen).getTime() : _eeTimelineMax;
+      node.dimmed = isNaN(t) ? false : (t < tFrom || t > tTo);
+    });
+
+    var active = eeNodes.filter(function(n) { return !n.dimmed; }).length;
+    var statusEl = document.getElementById('eeTimelineStatus');
+    if (statusEl) statusEl.textContent = active + '/' + eeNodes.length + ' nodes active';
+  };
+
+  window._eeResetTimeline = function() {
+    _eeTimelineActive = false;
+    eeNodes.forEach(function(n) { n.dimmed = false; });
+    var fromEl = document.getElementById('eeTimelineFrom');
+    var toEl   = document.getElementById('eeTimelineTo');
+    if (fromEl) fromEl.value = 0;
+    if (toEl)   toEl.value   = 100;
+    var statusEl = document.getElementById('eeTimelineStatus');
+    if (statusEl) statusEl.textContent = '';
+    eeInitTimeline();
+  };
+
+  // ── Session persistence (Supabase entity_graph_sessions) ──
+  window._eeSaveSessionPrompt = function() {
+    var name = prompt('Enter a name for this graph session:', 'Graph ' + new Date().toLocaleDateString('en-SG'));
+    if (!name) return;
+    window._eeSaveSession(name);
+  };
+
+  window._eeSaveSession = async function(name) {
+    if (!window._dactaSupabase) { showToast('Supabase not connected', 'error'); return; }
+    var ticketKey = _currentTicketKey || '';
+    var analystEmail = (window._currentAnalystJira && window._currentAnalystJira.emailAddress) || 'analyst';
+    var viewport = JSON.parse(JSON.stringify(eeCamera));
+    var payload = {
+      created_by: analystEmail,
+      name: name,
+      ticket_key: ticketKey || null,
+      org_id: null,
+      nodes: EE_ENTITIES.map(function(e) { var n = eeNodes.find(function(nd) { return nd.id === e.id; }); return Object.assign({}, e, { x: n ? n.x : 0, y: n ? n.y : 0 }); }),
+      edges: EE_EDGES,
+      viewport: viewport,
+      pivot_history: eePivotHistory,
+      adversary_nodes: EE_ENTITIES.filter(function(e) { return e.type === 'adversary'; }).map(function(e) { return e.id; }),
+      metadata: { savedAt: new Date().toISOString(), nodeCount: EE_ENTITIES.length, edgeCount: EE_EDGES.length }
+    };
+    try {
+      var { error } = await window._dactaSupabase.from('entity_graph_sessions').insert(payload);
+      if (error) throw new Error(error.message);
+      showToast('Graph session "' + name + '" saved', 'success');
+      window._eeLoadSessionsList(); // Refresh dropdown
+    } catch(e) {
+      showToast('Failed to save session: ' + e.message, 'error');
+    }
+  };
+
+  window._eeLoadSessionsList = async function() {
+    var listEl = document.getElementById('eeSessionsList');
+    if (!listEl) return;
+    if (!window._dactaSupabase) { listEl.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--text-muted);">Supabase not connected</div>'; return; }
+    listEl.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--text-muted);">Loading...</div>';
+    try {
+      var { data, error } = await window._dactaSupabase
+        .from('entity_graph_sessions')
+        .select('id, name, created_at, ticket_key, metadata')
+        .order('updated_at', { ascending: false })
+        .limit(20);
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) {
+        listEl.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--text-muted);">No saved sessions</div>';
+        return;
+      }
+      listEl.innerHTML = data.map(function(s) {
+        var ts = new Date(s.created_at).toLocaleDateString('en-SG', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+        var nodes = (s.metadata && s.metadata.nodeCount) || '?';
+        return '<div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:2px;" ' +
+          'onmouseover="this.style.background=\'rgba(0,212,255,0.06)\'" onmouseout="this.style.background=\'\'" ' +
+          'onclick="window._eeRestoreSession(\'' + s.id + '\')">' +
+          '<div style="font-size:11px;font-weight:600;color:var(--text-primary);">' + s.name + '</div>' +
+          '<div style="font-size:9px;color:var(--text-muted);">' + ts + ' · ' + nodes + ' nodes' + (s.ticket_key ? ' · ' + s.ticket_key : '') + '</div>' +
+          '</div>';
+      }).join('');
+    } catch(e) {
+      listEl.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--red-bright);">Error: ' + e.message + '</div>';
+    }
+  };
+
+  window._eeToggleSessionsDropdown = function() {
+    var dd = document.getElementById('eeSessionsDropdown');
+    if (!dd) return;
+    if (dd.style.display === 'none') {
+      dd.style.display = '';
+      window._eeLoadSessionsList();
+    } else {
+      dd.style.display = 'none';
+    }
+  };
+
+  window._eeRestoreSession = async function(sessionId) {
+    var dd = document.getElementById('eeSessionsDropdown');
+    if (dd) dd.style.display = 'none';
+    if (!window._dactaSupabase) { showToast('Supabase not connected', 'error'); return; }
+    try {
+      var { data, error } = await window._dactaSupabase
+        .from('entity_graph_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
+      if (error) throw new Error(error.message);
+      // Restore entities and edges
+      EE_ENTITIES.length = 0;
+      EE_EDGES.length = 0;
+      (data.nodes || []).forEach(function(n) { EE_ENTITIES.push(n); });
+      (data.edges || []).forEach(function(e) { EE_EDGES.push(e); });
+      eePivotHistory = data.pivot_history || [];
+      // Restore camera
+      if (data.viewport) Object.assign(eeCamera, data.viewport);
+      // Rebuild
+      eeInitNodes();
+      eeBuildCatalog(eeGetActiveFilter(), '');
+      eeInitTimeline();
+      eeUpdatePivotUI();
+      showToast('Session "' + data.name + '" restored — ' + EE_ENTITIES.length + ' entities', 'success');
+    } catch(e) {
+      showToast('Failed to restore session: ' + e.message, 'error');
+    }
+  };
+
+  // ── AI Copilot "Analyse Cluster" integration ──
+  window._eeAnalyseWithCopilot = function() {
+    var nodeCount = EE_ENTITIES.length;
+    if (nodeCount === 0) { showToast('No entities in graph to analyse', 'info'); return; }
+
+    // Build a structured text summary of the current graph
+    var maliciousEntities = EE_ENTITIES.filter(function(e) { return e.malicious; });
+    var adversaryEntities = EE_ENTITIES.filter(function(e) { return e.type === 'adversary'; });
+    var highRiskEntities  = EE_ENTITIES.filter(function(e) { return e.risk >= 70 && !e.malicious; });
+
+    var graphSummary = 'ENTITY GRAPH CLUSTER ANALYSIS REQUEST\n\n' +
+      'Graph contains ' + nodeCount + ' entities and ' + EE_EDGES.length + ' relationships.\n\n' +
+      '--- MALICIOUS ENTITIES (' + maliciousEntities.length + ') ---\n';
+    maliciousEntities.forEach(function(e) {
+      graphSummary += '- [' + e.type.toUpperCase() + '] ' + e.id + (e.label ? ' (' + e.label + ')' : '') + (e.sub ? ' | ' + e.sub : '') + '\n';
+    });
+
+    if (adversaryEntities.length > 0) {
+      graphSummary += '\n--- ADVERSARY ATTRIBUTION (' + adversaryEntities.length + ') ---\n';
+      adversaryEntities.forEach(function(e) {
+        graphSummary += '- ' + e.label + ' (CrowdStrike actor)\n';
+      });
+    }
+
+    if (highRiskEntities.length > 0) {
+      graphSummary += '\n--- HIGH RISK ENTITIES ---\n';
+      highRiskEntities.slice(0, 10).forEach(function(e) {
+        graphSummary += '- [' + e.type.toUpperCase() + '] ' + e.id + ' (risk: ' + e.risk + ')' + (e.sub ? ' | ' + e.sub : '') + '\n';
+      });
+    }
+
+    graphSummary += '\n--- PIVOT TRAIL (' + eePivotHistory.length + ' pivots) ---\n';
+    eePivotHistory.forEach(function(p) {
+      graphSummary += '- Pivoted from ' + p.entity + ' → ' + p.newNodes + ' new nodes via ' + p.source + '\n';
+    });
+
+    graphSummary += '\nPlease analyse this entity cluster and: (1) identify the likely attack pattern or threat actor campaign, (2) suggest the next pivot entities to investigate, (3) assign a threat severity rating, (4) recommend immediate containment actions.';
+
+    // Navigate to Copilot and pre-fill
+    navigate('copilot');
+    setTimeout(function() {
+      var copilotInput = document.getElementById('copilotInput');
+      if (copilotInput) {
+        copilotInput.value = graphSummary;
+        copilotInput.focus();
+        copilotInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }, 400);
+    showToast('Graph cluster sent to AI Copilot', 'info');
+  };
+
+  // Init timeline once live data loads — patch loadLiveEntityData completion
+  var _origLoadLive = loadLiveEntityData;
+  loadLiveEntityData = async function() {
+    await _origLoadLive();
+    eeInitTimeline();
+    eeUpdatePivotUI();
+  };
+
+})(); // end Entity Explorer IIFE
 
 // ============================================================
 //  COMMAND CENTER VISUALIZATION
@@ -44315,7 +45159,7 @@ async function populateLiveTriage(pageOrAppend) {
   // Show loading in table
   var tbody = triagePage.querySelector('table tbody');
   if (tbody) {
-    tbody.innerHTML = '<tr><td colspan="11">' + jiraProgressBarHTML() + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12">' + jiraProgressBarHTML() + '</td></tr>';
   }
 
   try {
@@ -44354,6 +45198,7 @@ async function populateLiveTriage(pageOrAppend) {
           '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
           '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
           '<td data-ai-status="' + t.key + '">' + getTriageAIBadge(t.key) + '</td>' +
+          '<td data-cs-status="' + t.key + '">' + getCSBadge(t.key) + '</td>' +
           '<td style="font-size:11px;">' + t.org + '</td>' +
           '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
           '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
@@ -44368,8 +45213,13 @@ async function populateLiveTriage(pageOrAppend) {
 
       tbody.innerHTML = rowsHTML;
 
+      // Kick off CrowdStrike pre-enrichment in the background (non-blocking)
+      if (_triageCurrentIssues.length > 0) {
+        setTimeout(function() { enrichTriageWithCrowdStrike(_triageCurrentIssues); }, 600);
+      }
+
       if (_triageCurrentIssues.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;">' +
+        tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:60px;">' +
           '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;">' +
           '<div style="font-size:24px;opacity:0.5;">📋</div>' +
           '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div>' +
@@ -44418,7 +45268,7 @@ async function populateLiveTriage(pageOrAppend) {
   } catch (err) {
     console.error('[DactaJira] Triage error:', err);
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="11">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="12">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
     }
   } finally {
     _triageLoading = false;
@@ -44736,6 +45586,7 @@ function rerenderTriageTable() {
       '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
       '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
       '<td data-ai-status="' + t.key + '">' + getTriageAIBadge(t.key) + '</td>' +
+      '<td data-cs-status="' + t.key + '">' + getCSBadge(t.key) + '</td>' +
       '<td style="font-size:11px;">' + t.org + '</td>' +
       '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
       '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
@@ -44747,7 +45598,7 @@ function rerenderTriageTable() {
   tbody.innerHTML = rowsHTML;
   if (filtered.length === 0) {
     var emptyMsg = _triageClientSearch ? 'No tickets match "' + _triageClientSearch.replace(/</g,'&lt;') + '"' : 'No tickets match the current filters';
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">' + emptyMsg + '</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;">📋</div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">' + emptyMsg + '</div></td></tr>';
   }
   var tqSum = triagePage.querySelector('.tq-summary');
   if (tqSum) {
@@ -46354,6 +47205,144 @@ function refreshTriageAIColumn() {
   });
 }
 
+// ── CrowdStrike pre-enrichment badge system ──
+
+// Cache: ticketKey → { status: 'loading'|'done'|'error', high: 0, medium: 0, low: 0, actors: [], error: null }
+var _csBadgeCache = {};
+
+/**
+ * Returns inline HTML badge for a ticket's CrowdStrike pre-enrichment status.
+ * Shows a spinner while loading, then HIGH/MEDIUM/CLEAN verdict chips.
+ */
+function getCSBadge(ticketKey) {
+  var c = _csBadgeCache[ticketKey];
+  if (!c) {
+    return '<span style="font-size:8px;color:var(--text-muted);font-family:var(--font-mono);">—</span>';
+  }
+  if (c.status === 'loading') {
+    return '<span style="font-size:8px;color:var(--text-muted);display:inline-flex;align-items:center;gap:3px;"><span class="jira-spinner" style="width:7px;height:7px;"></span>scanning</span>';
+  }
+  if (c.status === 'error') {
+    return '<span style="font-size:8px;color:var(--text-muted);" title="CS API error">—</span>';
+  }
+  // done
+  if (c.high > 0) {
+    var tip = 'HIGH confidence malicious IOC(s)' + (c.actors.length > 0 ? ' — ' + c.actors.slice(0,2).join(', ') : '');
+    return '<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);font-weight:700;cursor:default;white-space:nowrap;" title="' + tip + '">\uD83D\uDED1 HIGH ' + c.high + '</span>';
+  }
+  if (c.medium > 0) {
+    return '<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-weight:600;cursor:default;white-space:nowrap;" title="Medium confidence suspicious IOC(s)">\u26A0 MED ' + c.medium + '</span>';
+  }
+  if (c.queried > 0) {
+    return '<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:rgba(16,185,129,0.08);color:#10b981;border:1px solid rgba(16,185,129,0.2);cursor:default;white-space:nowrap;" title="All IOCs clean in CrowdStrike">\u2713 CLEAN</span>';
+  }
+  return '<span style="font-size:8px;color:var(--text-muted);" title="No IOCs in this ticket">—</span>';
+}
+
+/** Targeted refresh of just the CS Intel column cells */
+function refreshCSBadgeColumn() {
+  document.querySelectorAll('[data-cs-status]').forEach(function(cell) {
+    var key = cell.getAttribute('data-cs-status');
+    if (key) cell.innerHTML = getCSBadge(key);
+  });
+}
+
+/**
+ * Batch-enrich all triage tickets with CrowdStrike.
+ * Extracts IOCs from ticket summaries, calls /api/crowdstrike, updates _csBadgeCache,
+ * then re-renders the CS Intel column without touching the rest of the table.
+ */
+async function enrichTriageWithCrowdStrike(issues) {
+  if (!issues || !issues.length) return;
+
+  // Mark all as loading and render spinners
+  issues.forEach(function(t) {
+    if (!_csBadgeCache[t.key]) {
+      _csBadgeCache[t.key] = { status: 'loading', high: 0, medium: 0, low: 0, queried: 0, actors: [], error: null };
+    }
+  });
+  refreshCSBadgeColumn();
+
+  // Collect IOCs per ticket from summary text
+  var ticketIOCMap = {}; // ticketKey → [ioc, ioc, ...]
+  var allIOCs = []; // flat deduplicated list to batch-query
+  var iocToTickets = {}; // ioc → [ticketKey, ...]
+
+  issues.forEach(function(t) {
+    var iocs = extractIOCs(t.summary || '');
+    var ticketList = [].concat(iocs.ips || [], iocs.domains || [], iocs.hashes || []).filter(Boolean).slice(0, 10);
+    ticketIOCMap[t.key] = ticketList;
+    ticketList.forEach(function(ioc) {
+      if (!iocToTickets[ioc]) { iocToTickets[ioc] = []; allIOCs.push(ioc); }
+      if (iocToTickets[ioc].indexOf(t.key) === -1) iocToTickets[ioc].push(t.key);
+    });
+  });
+
+  // Deduplicate allIOCs (summaries often share IPs)
+  allIOCs = allIOCs.filter(function(v, i, a) { return a.indexOf(v) === i; }).slice(0, 200);
+
+  // Tickets with no IOCs → mark as done/no-iocs
+  issues.forEach(function(t) {
+    if (!ticketIOCMap[t.key] || ticketIOCMap[t.key].length === 0) {
+      _csBadgeCache[t.key] = { status: 'done', high: 0, medium: 0, low: 0, queried: 0, actors: [], error: null };
+    }
+  });
+
+  if (allIOCs.length === 0) {
+    refreshCSBadgeColumn();
+    return;
+  }
+
+  console.log('[CS Triage] Enriching ' + allIOCs.length + ' unique IOCs from ' + issues.length + ' tickets...');
+
+  try {
+    var resp = await fetch('/api/crowdstrike', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'enrich_iocs', indicators: allIOCs })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var lookup = data.lookup || {};
+
+    console.log('[CS Triage] Got ' + data.total + ' matches from CrowdStrike for ' + allIOCs.length + ' queried IOCs');
+
+    // Reset all ticket caches that had IOCs
+    issues.forEach(function(t) {
+      if (ticketIOCMap[t.key] && ticketIOCMap[t.key].length > 0) {
+        _csBadgeCache[t.key] = { status: 'done', high: 0, medium: 0, low: 0, queried: ticketIOCMap[t.key].length, actors: [], error: null };
+      }
+    });
+
+    // Map results back to per-ticket counts
+    Object.entries(lookup).forEach(function(entry) {
+      var ioc = entry[0], result = entry[1];
+      var tickets = iocToTickets[ioc] || [];
+      tickets.forEach(function(key) {
+        var cache = _csBadgeCache[key];
+        if (!cache) return;
+        var conf = result.malicious_confidence;
+        if (conf === 'high') cache.high++;
+        else if (conf === 'medium') cache.medium++;
+        else if (conf === 'low') cache.low++;
+        // Collect actors
+        (result.actors || []).forEach(function(a) { if (cache.actors.indexOf(a) === -1) cache.actors.push(a); });
+      });
+    });
+
+  } catch (err) {
+    console.warn('[CS Triage] Enrichment failed:', err.message);
+    // Mark all pending as error
+    issues.forEach(function(t) {
+      if (_csBadgeCache[t.key] && _csBadgeCache[t.key].status === 'loading') {
+        _csBadgeCache[t.key] = { status: 'error', high: 0, medium: 0, low: 0, queried: 0, actors: [], error: err.message };
+      }
+    });
+  }
+
+  refreshCSBadgeColumn();
+}
+
 // ── Cached investigation renderer ──
 function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueData) {
   // Build cache banner
@@ -47842,18 +48831,74 @@ async function runAIInvestigation(ticketKey, issueData) {
   var iocs = extractIOCs(fullText);
   var techniques = detectTechniques(fullText);
   var cmdCtx = analyzeCommandContext(fullText);
-  // Real Elastic SIEM + DACTA TIP lookup (async)
-  console.log('[AI Investigation] Starting real Elastic SIEM + DACTA TIP queries...');
+
+  // ── CrowdStrike Falcon Intel enrichment (parallel with Elastic) ──
+  var csEnrichment = { lookup: {}, total: 0, queried: 0, actors: [], error: null };
+  var csAllIOCs = [].concat(
+    iocs.ips || [], iocs.domains || [], iocs.hashes || [], iocs.urls || []
+  ).filter(Boolean).slice(0, 100); // CS limit guard
+
+  var csEnrichPromise = (csAllIOCs.length > 0)
+    ? fetch('/api/crowdstrike', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'enrich_iocs', indicators: csAllIOCs })
+      })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
+      .then(function(data) {
+        csEnrichment = Object.assign(csEnrichment, data);
+        // Collect unique adversary actors attributed across all IOCs
+        var actorSet = {};
+        Object.values(csEnrichment.lookup || {}).forEach(function(ioc) {
+          (ioc.actors || []).forEach(function(a) { actorSet[a] = true; });
+        });
+        csEnrichment.actors = Object.keys(actorSet);
+        console.log('[CS Intel] Enriched ' + csEnrichment.total + '/' + csAllIOCs.length + ' IOCs. Actors: ' + (csEnrichment.actors.join(', ') || 'none'));
+      })
+      .catch(function(e) { csEnrichment.error = e; console.warn('[CS Intel] Enrichment failed:', e); })
+    : Promise.resolve();
+
+  // Real Elastic SIEM + DACTA TIP lookup (async, parallel with CrowdStrike)
+  console.log('[AI Investigation] Starting real Elastic SIEM + DACTA TIP + CrowdStrike queries in parallel...');
   var elasticLogs;
-  try {
-    elasticLogs = await realElasticLookup(ticketKey, iocs, techniques, issueData);
-    console.log('[AI Investigation] Elastic lookup complete: ' + elasticLogs.queriesRun + ' queries, connected=' + elasticLogs.elasticConnected);
-  } catch (elErr) {
+  var [, elasticResult] = await Promise.allSettled([csEnrichPromise, realElasticLookup(ticketKey, iocs, techniques, issueData).catch(function(elErr) {
     console.error('[AI Investigation] Elastic lookup failed, falling back to simulation:', elErr);
-    elasticLogs = simulateElasticLookup(summary, cleanDesc, iocs, techniques);
-  }
+    return simulateElasticLookup(summary, cleanDesc, iocs, techniques);
+  })]);
+  elasticLogs = elasticResult.value || simulateElasticLookup(summary, cleanDesc, iocs, techniques);
+  console.log('[AI Investigation] Elastic lookup complete: ' + elasticLogs.queriesRun + ' queries, connected=' + elasticLogs.elasticConnected);
+
+  // ── Boost inculpatory weight if CrowdStrike confirms HIGH/MEDIUM malicious IOCs ──
+  var csHighConfirmCount = 0, csMediumConfirmCount = 0;
+  Object.values(csEnrichment.lookup || {}).forEach(function(ioc) {
+    if (ioc.malicious_confidence === 'high') csHighConfirmCount++;
+    else if (ioc.malicious_confidence === 'medium') csMediumConfirmCount++;
+  });
+
   var inculpatory = generateInculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx);
   var exculpatory = generateExculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs);
+
+  // Inject CrowdStrike confirmed IOC evidence into inculpatory chain
+  if (csHighConfirmCount > 0) {
+    var csActorStr = csEnrichment.actors.length > 0 ? ' — attributed to: ' + csEnrichment.actors.slice(0,3).join(', ') : '';
+    inculpatory.unshift({
+      title: 'CrowdStrike Intel: ' + csHighConfirmCount + ' IOC(s) confirmed MALICIOUS (HIGH confidence)',
+      severity: 'critical',
+      detail: csHighConfirmCount + ' indicator(s) in this ticket were positively identified as malicious by CrowdStrike Falcon Intelligence' + csActorStr + '. CrowdStrike high-confidence verdicts are based on multi-source validation across their global sensor network.'
+    });
+  } else if (csMediumConfirmCount > 0) {
+    inculpatory.push({
+      title: 'CrowdStrike Intel: ' + csMediumConfirmCount + ' IOC(s) flagged SUSPICIOUS (MEDIUM confidence)',
+      severity: 'high',
+      detail: csMediumConfirmCount + ' indicator(s) have a medium-confidence malicious verdict from CrowdStrike Falcon Intelligence. Recommend treating as malicious pending further analysis.'
+    });
+  } else if (csAllIOCs.length > 0 && csEnrichment.total === 0 && !csEnrichment.error) {
+    exculpatory.push({
+      title: 'CrowdStrike Intel: All ' + csAllIOCs.length + ' IOC(s) returned UNVERIFIED/CLEAN',
+      severity: 'moderate',
+      detail: 'No IOCs in this ticket were identified as malicious by CrowdStrike Falcon Intelligence. This is a moderate indicator of false positive or novel threat not yet in the intelligence database.'
+    });
+  }
 
   // ── Compute balanced verdict ──
   var tpWeight = 0, fpWeight = 0;
@@ -47868,6 +48913,10 @@ async function runAIInvestigation(ticketKey, issueData) {
   // Priority weight
   if (pShort === 'P1') tpWeight += 15;
   else if (pShort === 'P2') tpWeight += 10;
+  // ── CrowdStrike verdict weight boost ──
+  if (csHighConfirmCount > 0) tpWeight += csHighConfirmCount * 35; // High CS confidence = very strong TP signal
+  if (csMediumConfirmCount > 0) tpWeight += csMediumConfirmCount * 18;
+  if (csEnrichment.actors.length > 0) tpWeight += 15; // Named adversary attribution = significant TP signal
 
   var verdict, confidence, verdictIcon, verdictColor, verdictBg, verdictBorder, actionLabel;
   var tpRatio = tpWeight / Math.max(tpWeight + fpWeight, 1);
@@ -48016,7 +49065,7 @@ async function runAIInvestigation(ticketKey, issueData) {
     console.log('[AI Investigation] Round ' + rnd + ' generating content...');
     var roundHTML = '';
     try {
-    if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority);
+    if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment);
     else if (rnd === 2) roundHTML = buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs);
     else if (rnd === 3) roundHTML = buildRound3HTML(inculpatory, exculpatory, techniques, iocs, elasticLogs, cmdCtx, verdict, confidence, fullText);
     console.log('[AI Investigation] Round ' + rnd + ' HTML generated, length=' + roundHTML.length);
@@ -48140,6 +49189,34 @@ async function runAIInvestigation(ticketKey, issueData) {
       eHTML += '<div style="margin-top:8px;display:flex;align-items:center;gap:6px;"><div style="width:6px;height:6px;border-radius:50%;background:#10b981;"></div><span style="font-size:10px;color:#10b981;font-weight:600;">Elastic SIEM CONNECTED</span></div>' +
         '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">' + elasticLogs.queriesRun + ' queries executed</div>';
     }
+    // ── CrowdStrike Falcon Intel summary in enrichment sidebar ──
+    var csEn = csEnrichment || {};
+    var csEnLookup = csEn.lookup || {};
+    var csEnKeys = Object.keys(csEnLookup);
+    var csEnHighCount = csEnKeys.filter(function(k) { return csEnLookup[k].malicious_confidence === 'high'; }).length;
+    var csEnMedCount  = csEnKeys.filter(function(k) { return csEnLookup[k].malicious_confidence === 'medium'; }).length;
+    eHTML += '<div style="margin-top:8px;">';
+    eHTML += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><div style="width:6px;height:6px;border-radius:50%;background:' + (!csEn.error ? '#ea580c' : '#6b7280') + ';"></div>' +
+      '<span style="font-size:10px;color:' + (!csEn.error ? '#ea580c' : 'var(--text-muted)') + ';font-weight:600;">\uD83E\uDD85 CROWDSTRIKE FALCON INTEL' + (!csEn.error && csEn.total !== undefined ? ' LIVE' : csEn.error ? ' \u2014 ERROR' : '') + '</span></div>';
+    if (csEn.error) {
+      eHTML += '<div style="font-size:9px;color:var(--text-muted);">API error: ' + csEn.error + '</div>';
+    } else if (csEnKeys.length === 0) {
+      eHTML += '<div style="font-size:9px;color:var(--text-muted);">' + (csEn.queried > 0 ? csEn.queried + ' IOC(s) returned clean — no threat intel matches' : 'No IOCs to enrich') + '</div>';
+    } else {
+      if (csEnHighCount > 0) {
+        eHTML += '<div style="padding:5px 8px;background:rgba(239,68,68,0.06);border-radius:4px;border-left:3px solid #ef4444;margin-bottom:4px;">' +
+          '<div style="font-size:10px;font-weight:600;color:#ef4444;">' + csEnHighCount + ' IOC(s) \u2014 HIGH CONFIDENCE MALICIOUS</div>';
+        if (csEn.actors && csEn.actors.length > 0) eHTML += '<div style="font-size:9px;color:var(--amber);margin-top:2px;">\uD83C\uDFAF ' + csEn.actors.slice(0,3).join(', ') + '</div>';
+        eHTML += '</div>';
+      }
+      if (csEnMedCount > 0) {
+        eHTML += '<div style="padding:5px 8px;background:rgba(245,158,11,0.06);border-radius:4px;border-left:3px solid #f59e0b;margin-bottom:4px;">' +
+          '<div style="font-size:10px;font-weight:600;color:#f59e0b;">' + csEnMedCount + ' IOC(s) \u2014 MEDIUM CONFIDENCE SUSPICIOUS</div></div>';
+      }
+      var csEnClean = csEnKeys.length - csEnHighCount - csEnMedCount;
+      if (csEnClean > 0) eHTML += '<div style="font-size:9px;color:var(--text-muted);">' + csEnClean + ' other indicator(s) \u2014 low/unverified</div>';
+    }
+    eHTML += '</div>';
     var enrichBody = enrichCard.querySelector('.inv-collapsible-body');
     if (enrichBody) { enrichBody.innerHTML = eHTML; enrichBody.style.display = ''; }
     else { enrichCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + eHTML + '</div>'; }
@@ -48369,8 +49446,8 @@ async function runAIInvestigation(ticketKey, issueData) {
     }
   }
 
-  // Generate client escalation draft
-  generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, f);
+  // Generate client escalation draft (pass CrowdStrike enrichment for actor-attributed email)
+  generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, f, csEnrichment);
 
   } catch (aiErr) {
     console.error('[AI Investigation] Error:', aiErr);
@@ -48539,7 +49616,7 @@ function buildAttackPathHTML(ticketKey, techniques, summary) {
 // Global store for current escalation draft data (used by modal)
 var _currentEscalationDraft = {};
 
-async function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData) {
+async function generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, ticketData, csEnrichment) {
   var card = document.getElementById('clientEscalationCard');
   if (!card) return;
   var content = document.getElementById('escalationDraftContent');
@@ -48722,7 +49799,13 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
     actionsTaken.push('1. Alert triaged and escalated by Dacta SG SOC');
     if (iocs.hosts && iocs.hosts.length > 0) actionsTaken.push('2. Affected host(s) flagged for isolation review');
     if (iocs.users && iocs.users.length > 0) actionsTaken.push('3. Affected user account(s) flagged for review');
-    actionsTaken.push((actionsTaken.length + 1) + '. IOC enrichment via DACTA TIP and threat intelligence feeds completed');
+    var csActionNote = 'IOC enrichment via DACTA TIP and CrowdStrike Falcon Intelligence completed';
+    if (csEnrichment && !csEnrichment.error) {
+      var csActN = csEnrichment.actors && csEnrichment.actors.length > 0;
+      var csHN = Object.values(csEnrichment.lookup || {}).filter(function(i) { return i.malicious_confidence === 'high'; }).length;
+      if (csHN > 0) csActionNote = csHN + ' IOC(s) confirmed MALICIOUS by CrowdStrike Falcon Intelligence' + (csActN ? ' — attributed to: ' + csEnrichment.actors.slice(0,3).join(', ') : '');
+    }
+    actionsTaken.push((actionsTaken.length + 1) + '. ' + csActionNote);
   } else {
     actionsTaken.push('1. Alert triaged by Dacta SG SOC');
     actionsTaken.push('2. AI investigation completed — ' + verdict.split('\u2014')[0].trim());
@@ -48768,6 +49851,33 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
     'INDICATORS OF COMPROMISE (IOCs)\n' +
     '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
     iocText + '\n\n' +
+    (function() {
+      if (!csEnrichment || csEnrichment.error) return '';
+      var csLk = csEnrichment.lookup || {};
+      var csHighItems = Object.entries(csLk).filter(function(e) { return e[1].malicious_confidence === 'high'; });
+      var csMedItems  = Object.entries(csLk).filter(function(e) { return e[1].malicious_confidence === 'medium'; });
+      if (csHighItems.length === 0 && csMedItems.length === 0) return '';
+      var csSection = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
+        'CROWDSTRIKE FALCON INTEL VERDICT\n' +
+        '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n';
+      if (csHighItems.length > 0) {
+        csSection += '[HIGH CONFIDENCE MALICIOUS]\n';
+        csHighItems.slice(0, 5).forEach(function(e) {
+          var ioc = e[1];
+          csSection += '- ' + e[0];
+          if (ioc.malware_families && ioc.malware_families.length > 0) csSection += ' | Malware: ' + ioc.malware_families.slice(0,2).join(', ');
+          csSection += '\n';
+        });
+      }
+      if (csMedItems.length > 0) {
+        csSection += '[MEDIUM CONFIDENCE SUSPICIOUS]\n';
+        csMedItems.slice(0, 3).forEach(function(e) { csSection += '- ' + e[0] + '\n'; });
+      }
+      if (csEnrichment.actors && csEnrichment.actors.length > 0) {
+        csSection += 'Adversary Attribution: ' + csEnrichment.actors.slice(0, 4).join(', ') + '\n';
+      }
+      return csSection + '\n';
+    })() +
     '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
     'ACTIONS TAKEN BY DACTA SOC\n' +
     '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
@@ -48982,7 +50092,7 @@ async function submitEscalationToJira(ticketKey) {
 }
 
 // ── Round 1 HTML: Classification + Elastic Log Query ──
-function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, priority) {
+function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment) {
   var html = '';
 
   // Classification grid
@@ -49133,6 +50243,75 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
   });
 
   html += '</div>'; // end elastic section
+
+  // ── CrowdStrike Falcon Intel (Round 1 enrichment) ──
+  if (csEnrichment) {
+    var csLookup = csEnrichment.lookup || {};
+    var csKeys = Object.keys(csLookup);
+    var csHighIOCs = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'high'; });
+    var csMedIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'medium'; });
+    var csLowIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'low'; });
+    var csUnvIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'unverified'; });
+    var csConnected = !csEnrichment.error && (csEnrichment.total !== undefined);
+    html += '<div style="margin-top:8px;padding:10px 12px;background:rgba(234,88,12,0.03);border:1px solid rgba(234,88,12,0.18);border-radius:6px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#ea580c;margin-bottom:8px;">' +
+        '\uD83E\uDD85 CROWDSTRIKE FALCON INTEL' + (csEnrichment.error ? ' \u2014 ERROR' : (csConnected ? ' (LIVE)' : ' \u2014 OFFLINE')) + '</div>';
+    if (csEnrichment.error) {
+      html += '<div style="font-size:9px;color:var(--text-muted);">Could not reach CrowdStrike API: ' + csEnrichment.error + '</div>';
+    } else if (csKeys.length === 0 && csEnrichment.queried === 0) {
+      html += '<div style="font-size:9px;color:var(--text-muted);">No IOCs extracted from ticket to enrich.</div>';
+    } else {
+      // Summary confidence badges
+      html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">';
+      if (csHighIOCs.length > 0) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);font-weight:700;">\u25CF HIGH: ' + csHighIOCs.length + '</span>';
+      if (csMedIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-weight:700;">\u25CF MEDIUM: ' + csMedIOCs.length + '</span>';
+      if (csLowIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">LOW: ' + csLowIOCs.length + '</span>';
+      if (csUnvIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">UNVERIFIED: ' + csUnvIOCs.length + '</span>';
+      if (csKeys.length === 0 && csEnrichment.queried > 0) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">\u2705 All ' + csEnrichment.queried + ' IOC(s) Clean</span>';
+      html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">' + csEnrichment.queried + ' QUERIED \u00B7 ' + csEnrichment.total + ' MATCHED</span>';
+      html += '</div>';
+      // Per-IOC rows (top 8)
+      csKeys.slice(0, 8).forEach(function(indicator) {
+        var ioc = csLookup[indicator];
+        var conf = ioc.malicious_confidence;
+        var confColor = conf === 'high' ? '#ef4444' : conf === 'medium' ? '#f59e0b' : conf === 'low' ? '#10b981' : 'var(--text-muted)';
+        var confBg    = conf === 'high' ? 'rgba(239,68,68,0.05)' : conf === 'medium' ? 'rgba(245,158,11,0.05)' : 'var(--surface-1)';
+        html += '<div style="margin-bottom:5px;padding:5px 8px;background:' + confBg + ';border-radius:4px;border-left:3px solid ' + confColor + ';">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<span style="font-size:9px;font-family:var(--font-mono);color:var(--text-primary);">' + indicator.substring(0, 36) + (indicator.length > 36 ? '\u2026' : '') + '</span>' +
+            '<span style="font-size:8px;font-weight:700;color:' + confColor + ';text-transform:uppercase;min-width:60px;text-align:right;">' + (conf || 'unverified') + '</span>' +
+          '</div>';
+        if (ioc.actors && ioc.actors.length > 0) {
+          html += '<div style="margin-top:2px;font-size:8px;color:var(--amber);">\uD83D\uDC64 ' + ioc.actors.slice(0, 3).join(', ') + '</div>';
+        }
+        if (ioc.malware_families && ioc.malware_families.length > 0) {
+          html += '<div style="margin-top:1px;font-size:8px;color:var(--red-bright);">Malware: ' + ioc.malware_families.slice(0, 2).join(', ') + '</div>';
+        }
+        if (ioc.labels && ioc.labels.length > 0) {
+          html += '<div style="margin-top:2px;display:flex;gap:2px;flex-wrap:wrap;">';
+          ioc.labels.slice(0, 3).forEach(function(l) {
+            html += '<span style="font-size:7px;padding:1px 4px;border-radius:6px;background:rgba(239,68,68,0.06);color:var(--red-bright);border:1px solid rgba(239,68,68,0.15);">' + l + '</span>';
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      });
+      if (csKeys.length > 8) {
+        html += '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:4px 0;">+ ' + (csKeys.length - 8) + ' more indicators</div>';
+      }
+      // Adversary attribution block
+      if (csEnrichment.actors && csEnrichment.actors.length > 0) {
+        html += '<div style="margin-top:8px;padding:6px 8px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:4px;">' +
+          '<div style="font-size:9px;font-weight:700;color:var(--amber);margin-bottom:4px;">\uD83C\uDFAF ADVERSARY ATTRIBUTION</div>' +
+          '<div style="display:flex;gap:4px;flex-wrap:wrap;">';
+        csEnrichment.actors.slice(0, 6).forEach(function(actor) {
+          html += '<span style="font-size:8px;padding:2px 8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:10px;color:var(--amber);font-weight:600;">' + actor + '</span>';
+        });
+        html += '</div></div>';
+      }
+    }
+    html += '</div>';
+  }
 
   // ── DACTA TIP Results ──
   if (elasticLogs.openctiResults && elasticLogs.openctiResults.length > 0) {
