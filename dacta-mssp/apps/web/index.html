@@ -39983,6 +39983,295 @@ document.addEventListener('keydown', (e) => {
     return active ? active.dataset.type : 'all';
   }
 
+  // ── Live entity enrichment: fires when entity is selected from live search ──
+  async function eeEnrichEntityLive(entityId) {
+    var entity = EE_ENTITIES.find(function(e) { return e.id === entityId; });
+    if (!entity || entity._enriching || entity._enriched) return;
+    entity._enriching = true;
+
+    // Get current namespace
+    var ns = window._activeOrgNamespace || window._currentNamespace ||
+      (typeof getCurrentNamespace === 'function' ? getCurrentNamespace() : '') || '';
+    var isIP = /^\d{1,3}(\.\d{1,3}){3}$/.test(entityId);
+    var isRFC1918 = /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(entityId);
+
+    var enrichEl = document.getElementById('eeDetailEnrichment');
+    var alertsEl = document.getElementById('eeDetailAlerts');
+    var profileEl = document.getElementById('eeDetailProfile');
+
+    // Show loading states immediately
+    if (enrichEl) enrichEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">' + dIcon('loading',12) + ' Querying SIEM, Jira &amp; DACTA TIP...</div>';
+    if (alertsEl) alertsEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);">Loading...</div>';
+
+    var jiraTickets = [];
+    var siemEvents = [];
+    var fwEvents = [];
+    var tipData = null;
+    var peerIPs = new Set();
+    var peerHosts = new Set();
+    var lastSeen = entity._lastSeen || entity.lastSeen || null;
+
+    // ── 1. Jira search ──
+    try {
+      var orgCode = ns ? ns.substring(0, 2).toUpperCase() : '';
+      var jql = 'text ~ "' + entityId + '" ORDER BY created DESC';
+      var jr = await fetch('/api/jira', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'search', jql: jql, maxResults: 8,
+          fields: ['summary','status','priority','assignee','created','customfield_10072'] }) });
+      var jd = jr.ok ? await jr.json() : null;
+      if (jd && jd.issues && jd.issues.length > 0) {
+        jiraTickets = jd.issues.map(function(i) {
+          return {
+            key: i.key,
+            summary: (i.fields.summary || '').substring(0, 80),
+            priority: (i.fields.priority || {}).name || 'P3',
+            status: (i.fields.status || {}).name || '',
+            useCase: i.fields.customfield_10072 || ''
+          };
+        });
+      }
+    } catch(e) { console.warn('[EE Enrich] Jira error:', e.message); }
+
+    // ── 2. Elastic: recent SIEM events ──
+    try {
+      var siemIdx = ns ? (ns + '-*') : 'logs-*';
+      var siemQuery = isIP
+        ? { bool: { should: [
+              { term: { 'source.ip': entityId } }, { term: { 'destination.ip': entityId } },
+              { term: { 'network.forwarded_ip': entityId } }
+            ], minimum_should_match: 1 } }
+        : { bool: { should: [
+              { wildcard: { 'host.name': { value: '*' + entityId.toLowerCase() + '*' } } },
+              { wildcard: { 'host.hostname': { value: '*' + entityId.toLowerCase() + '*' } } }
+            ], minimum_should_match: 1 } };
+      var sr = await fetch('/api/elastic', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'search', index: siemIdx, body: {
+          size: 10, query: { bool: { must: [siemQuery, { range: { '@timestamp': { gte: 'now-30d' } } }] } },
+          sort: [{ '@timestamp': 'desc' }],
+          aggs: {
+            event_types: { terms: { field: 'event.action', size: 8 } },
+            datasets: { terms: { field: 'event.dataset', size: 5 } },
+            dst_ips: { terms: { field: 'destination.ip', size: 10 } },
+            src_ips: { terms: { field: 'source.ip', size: 10 } },
+            dst_ports: { terms: { field: 'destination.port', size: 8 } },
+            dst_countries: { terms: { field: 'destination.geo.country_name', size: 5 } }
+          }
+        }}) });
+      var sd = sr.ok ? await sr.json() : null;
+      if (sd && sd.hits && sd.hits.hits.length > 0) {
+        siemEvents = sd.hits.hits.map(function(h) {
+          var s = h._source || {};
+          return {
+            ts: s['@timestamp'] || '',
+            action: s['event.action'] || s.action || '',
+            dataset: s['event.dataset'] || s['event.module'] || '',
+            srcIp: s['source.ip'] || '',
+            dstIp: s['destination.ip'] || '',
+            dstPort: s['destination.port'] || '',
+            dstCountry: s['destination.geo.country_name'] || '',
+            hostname: s['host.name'] || s['host.hostname'] || ''
+          };
+        });
+        if (siemEvents.length > 0 && siemEvents[0].ts) lastSeen = siemEvents[0].ts;
+        // Collect peer IPs for relationship edges
+        if (sd.aggregations) {
+          var agg = sd.aggregations;
+          ((agg.dst_ips || {}).buckets || []).forEach(function(b) {
+            if (b.key !== entityId && !b.key.startsWith('127.') && !b.key.startsWith('0.')) peerIPs.add(b.key);
+          });
+          ((agg.src_ips || {}).buckets || []).forEach(function(b) {
+            if (b.key !== entityId && !b.key.startsWith('127.') && !b.key.startsWith('0.')) peerIPs.add(b.key);
+          });
+        }
+      }
+    } catch(e) { console.warn('[EE Enrich] SIEM error:', e.message); }
+
+    // ── 3. Elastic: Firewall events ──
+    try {
+      var fwIdx = ns
+        ? 'logs-panw.panos-' + ns + '-*,logs-fortinet_fortigate.log-' + ns + '-*'
+        : 'logs-panw.panos-*,logs-fortinet_fortigate.log-*';
+      if (isIP) {
+        var fr = await fetch('/api/elastic', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ action:'search', index: fwIdx, body: {
+            size: 0,
+            query: { bool: { must: [
+              { bool: { should: [{ term: { 'source.ip': entityId } }, { term: { 'destination.ip': entityId } }], minimum_should_match: 1 } },
+              { range: { '@timestamp': { gte: 'now-30d' } } }
+            ] } },
+            aggs: {
+              fw_actions: { terms: { field: 'event.action', size: 8 } },
+              fw_dst_ports: { terms: { field: 'destination.port', size: 6 } },
+              fw_dst_countries: { terms: { field: 'destination.geo.country_name', size: 5 } },
+              fw_apps: { terms: { field: 'network.application', size: 5 } },
+              fw_bytes_out: { sum: { field: 'destination.bytes' } },
+              fw_bytes_in: { sum: { field: 'source.bytes' } }
+            }
+          }}) });
+        var fd = fr.ok ? await fr.json() : null;
+        if (fd && fd.aggregations) {
+          var fa = fd.aggregations;
+          var actions = ((fa.fw_actions || {}).buckets || []).map(function(b) { return b.key + ' (' + b.doc_count + ')'; });
+          var ports = ((fa.fw_dst_ports || {}).buckets || []).map(function(b) { return b.key; });
+          var countries = ((fa.fw_dst_countries || {}).buckets || []).map(function(b) { return b.key; });
+          var apps = ((fa.fw_apps || {}).buckets || []).map(function(b) { return b.key; });
+          var bytesOut = ((fa.fw_bytes_out || {}).value || 0);
+          var bytesIn = ((fa.fw_bytes_in || {}).value || 0);
+          if (actions.length > 0) {
+            fwEvents = [{ actions: actions, ports: ports, countries: countries, apps: apps, bytesOut: bytesOut, bytesIn: bytesIn }];
+            // Mark as firewall blocked if any deny/drop/block actions
+            if (actions.some(function(a) { return /deny|drop|block|reset/.test(a.toLowerCase()); })) {
+              entity.firewallBlocked = true;
+            }
+          }
+        }
+      }
+    } catch(e) { console.warn('[EE Enrich] Firewall error:', e.message); }
+
+    // ── 4. DACTA TIP (OpenCTI) — external IPs only ──
+    if (isIP && !isRFC1918) {
+      try {
+        var tipR = await fetch('/api/opencti', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ query: '{ indicators(filters:{key:"value",values:["' + entityId + '"]}) { edges { node { name, confidence, created, description, objectLabel { edges { node { value } } } } } } }' }) });
+        var tipD = tipR.ok ? await tipR.json() : null;
+        var tipEdges = tipD && tipD.data && tipD.data.indicators && tipD.data.indicators.edges;
+        if (tipEdges && tipEdges.length > 0) {
+          var ti = tipEdges[0].node;
+          tipData = {
+            name: ti.name || entityId,
+            confidence: ti.confidence || 0,
+            description: (ti.description || '').substring(0, 120),
+            labels: ((ti.objectLabel || {}).edges || []).map(function(l) { return l.node.value; })
+          };
+        }
+      } catch(e) { console.warn('[EE Enrich] TIP error:', e.message); }
+    }
+
+    // ── Update entity object ──
+    entity._enriched = true;
+    entity._enriching = false;
+    entity.jiraTickets = jiraTickets;
+    entity._liveConnections = jiraTickets.length + peerIPs.size;
+    if (lastSeen) { entity._lastSeen = lastSeen; entity.lastSeen = lastSeen.substring(0, 19).replace('T', ' '); }
+
+    // Build alert list from Jira P1/P2 tickets
+    entity.alertList = jiraTickets.filter(function(t) { return t.priority === 'P1' || t.priority === 'P2' || t.priority === 'Highest' || t.priority === 'High'; }).map(function(t) {
+      return { name: t.summary, sev: (t.priority === 'P1' || t.priority === 'Highest') ? 'critical' : 'high', time: t.key };
+    });
+
+    // Add peer relationship edges to EE_ENTITIES + EE_EDGES
+    peerIPs.forEach(function(peerIp) {
+      if (!EE_ENTITIES.find(function(e) { return e.id === peerIp; })) {
+        EE_ENTITIES.push({ id: peerIp, type: 'ip', label: peerIp, sub: 'Peer of ' + entityId, ip: peerIp, risk: 15, malicious: false, firewallBlocked: false });
+      }
+      if (!EE_EDGES.find(function(e) { return (e.from === entityId && e.to === peerIp) || (e.from === peerIp && e.to === entityId); })) {
+        EE_EDGES.push({ from: entityId, to: peerIp, label: 'communicates' });
+      }
+    });
+    // Refresh canvas with new peers
+    if (peerIPs.size > 0) {
+      var searchEl = document.getElementById('eeSearch');
+      var currentSearch = searchEl ? searchEl.value : entityId;
+      eeFilterCanvasToEntities([entityId].concat(Array.from(peerIPs)));
+    }
+
+    // ── Render: Threat Enrichment ──
+    var enrichHTML = '';
+    if (siemEvents.length > 0) {
+      var totalEvents = siemEvents.length;
+      var actions = [...new Set(siemEvents.map(function(e) { return e.action; }).filter(Boolean))].slice(0, 4);
+      var datasets = [...new Set(siemEvents.map(function(e) { return e.dataset; }).filter(Boolean))].slice(0, 3);
+      enrichHTML += '<div style="margin-bottom:10px;">' +
+        '<div style="font-size:9px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px;">' + dIcon('monitor',10) + ' SIEM Activity (30d)</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px;">' +
+        actions.map(function(a) { return '<span style="font-size:9px;padding:1px 6px;background:rgba(0,212,255,0.1);border-radius:10px;color:var(--cyan);">' + escapeHtml(a) + '</span>'; }).join('') +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);">' + datasets.join(' · ') + '</div>' +
+        '</div>';
+    }
+    if (fwEvents.length > 0) {
+      var fw = fwEvents[0];
+      var hasBlock = fw.actions.some(function(a) { return /deny|drop|block|reset/.test(a.toLowerCase()); });
+      enrichHTML += '<div style="margin-bottom:10px;padding:6px 8px;background:' + (hasBlock ? 'rgba(245,158,11,0.08)' : 'rgba(16,185,129,0.06)') + ';border-left:2px solid ' + (hasBlock ? 'var(--amber)' : 'var(--green)') + ';border-radius:0 4px 4px 0;">' +
+        '<div style="font-size:9px;font-weight:700;color:' + (hasBlock ? 'var(--amber)' : 'var(--green)') + ';text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">' + dIcon('shield',10) + ' Firewall ' + (hasBlock ? '— BLOCK/DENY detected' : '— Allowed') + '</div>' +
+        '<div style="font-size:9px;color:var(--text-secondary);">' + fw.actions.slice(0, 3).join(' · ') + '</div>' +
+        (fw.countries.length > 0 ? '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">' + dIcon('globe',8) + ' Countries: ' + fw.countries.slice(0, 3).join(', ') + '</div>' : '') +
+        (fw.ports.length > 0 ? '<div style="font-size:9px;color:var(--text-muted);">Ports: ' + fw.ports.slice(0, 5).join(', ') + '</div>' : '') +
+        (fw.apps.length > 0 ? '<div style="font-size:9px;color:var(--text-muted);">Apps: ' + fw.apps.slice(0, 3).join(', ') + '</div>' : '') +
+        (fw.bytesOut > 0 ? '<div style="font-size:9px;color:var(--text-muted);">Out: ' + (fw.bytesOut/1024).toFixed(1) + 'KB · In: ' + (fw.bytesIn/1024).toFixed(1) + 'KB</div>' : '') +
+        '</div>';
+    }
+    if (tipData) {
+      enrichHTML += '<div style="margin-bottom:10px;padding:6px 8px;background:rgba(239,68,68,0.08);border-left:2px solid #ef4444;border-radius:0 4px 4px 0;">' +
+        '<div style="font-size:9px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">' + dIcon('warning',10) + ' DACTA TIP — Known Indicator</div>' +
+        (tipData.description ? '<div style="font-size:9px;color:var(--text-secondary);">' + escapeHtml(tipData.description) + '</div>' : '') +
+        (tipData.labels.length > 0 ? '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;">' + tipData.labels.map(function(l) { return '<span style="font-size:8px;padding:1px 5px;background:rgba(239,68,68,0.15);border-radius:8px;color:#f87171;">' + escapeHtml(l) + '</span>'; }).join('') + '</div>' : '') +
+        '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Confidence: ' + tipData.confidence + '%</div>' +
+        '</div>';
+    }
+    if (peerIPs.size > 0) {
+      enrichHTML += '<div style="margin-bottom:10px;">' +
+        '<div style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">' + dIcon('link',10) + ' Peer IPs (' + peerIPs.size + ')</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:3px;">' +
+        Array.from(peerIPs).slice(0, 8).map(function(p) {
+          return '<span style="font-size:9px;padding:1px 5px;background:rgba(100,116,139,0.15);border-radius:8px;color:var(--text-secondary);cursor:pointer;" onclick="window._eeSelectEntity(\'' + p + '\')">' + p + '</span>';
+        }).join('') +
+        (peerIPs.size > 8 ? '<span style="font-size:9px;color:var(--text-muted);">+' + (peerIPs.size - 8) + ' more</span>' : '') +
+        '</div></div>';
+    }
+    if (!enrichHTML) {
+      enrichHTML = '<div style="font-size:10px;color:var(--text-muted);">No enrichment data found in SIEM or TIP for this entity</div>';
+    }
+    if (enrichEl && eeSelectedEntity === entityId) enrichEl.innerHTML = enrichHTML;
+
+    // ── Render: Jira tickets & alerts ──
+    if (alertsEl && eeSelectedEntity === entityId) {
+      var alertsHTML = '';
+      if (entity.alertList && entity.alertList.length > 0) {
+        alertsHTML += entity.alertList.map(function(a) {
+          var sevColor = a.sev === 'critical' ? 'var(--red)' : 'var(--orange)';
+          return '<div class="ee-alert-row"><div class="ee-alert-sev" style="background:' + sevColor + ';"></div><span class="ee-alert-name">' + escapeHtml(a.name) + '</span><span class="ee-alert-time">' + escapeHtml(a.time) + '</span></div>';
+        }).join('');
+      }
+      if (jiraTickets.length > 0) {
+        alertsHTML += '<div style="margin-top:' + (alertsHTML ? '8px' : '0') + ';padding-top:' + (alertsHTML ? '6px;border-top:1px solid var(--border-subtle)' : '0') + ';">' +
+          '<div style="font-size:9px;font-weight:700;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;">Jira Tickets (' + jiraTickets.length + ')</div>' +
+          jiraTickets.map(function(t) {
+            var pColor = t.priority === 'P1' || t.priority === 'Highest' ? '#ef4444' : t.priority === 'P2' || t.priority === 'High' ? '#f59e0b' : 'var(--text-muted)';
+            return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);">' +
+              '<span style="font-size:9px;font-weight:700;color:var(--cyan);cursor:pointer;flex-shrink:0;" onclick="navigate(\'ticket-' + escapeHtml(t.key) + '\')">' + escapeHtml(t.key) + '</span>' +
+              '<span style="font-size:9px;color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(t.summary) + '</span>' +
+              '<span style="font-size:8px;padding:1px 4px;border-radius:3px;color:' + pColor + ';background:rgba(255,255,255,0.04);">' + escapeHtml(t.priority) + '</span>' +
+              '<span style="font-size:8px;color:var(--text-muted);">' + escapeHtml(t.status) + '</span>' +
+              '</div>';
+          }).join('') +
+          '</div>';
+      }
+      if (!alertsHTML) {
+        alertsHTML = '<div style="font-size:11px;color:var(--text-muted);">No alerts or tickets found mentioning this entity</div>';
+      }
+      alertsEl.innerHTML = alertsHTML;
+    }
+
+    // ── Update profile grid with live lastSeen + connections ──
+    if (profileEl && eeSelectedEntity === entityId) {
+      var profileItems2 = [
+        ['Entity', entity.id],
+        ['Type', entity.type],
+        ['Risk Score', entity.risk],
+        ['Connections', eeGetConnections(entity.id) || entity._liveConnections || 0],
+      ];
+      if (entity.os) profileItems2.push(['OS', entity.os]);
+      if (entity.dept) profileItems2.push(['Dept', entity.dept]);
+      profileItems2.push(['Last Seen', entity.lastSeen || entity._lastSeen || '—']);
+      profileItems2.push(['Jira Tickets', jiraTickets.length]);
+      profileItems2.push(['SIEM Events', siemEvents.length + (siemEvents.length >= 10 ? '+' : '')]);
+      profileEl.innerHTML = profileItems2.map(function(item) {
+        return '<div class="ee-profile-item"><div class="ee-profile-label">' + item[0] + '</div><div class="ee-profile-value">' + item[1] + '</div></div>';
+      }).join('');
+    }
+  }
+
   // -- Update Detail Panel --
   function eeUpdateDetail(id) {
     const panel = document.getElementById('eeDetailPanel');
@@ -40024,12 +40313,12 @@ document.addEventListener('keydown', (e) => {
       ['Entity', entity.id],
       ['Type', entity.type],
       ['Risk Score', entity.risk],
-      ['Connections', eeGetConnections(entity.id)],
+      ['Connections', eeGetConnections(entity.id) || (entity._liveConnections || 0)],
     ];
     if (entity.os) profileItems.push(['OS', entity.os]);
     if (entity.dept) profileItems.push(['Department', entity.dept]);
     if (entity.firstSeen) profileItems.push(['First Seen', entity.firstSeen]);
-    profileItems.push(['Last Seen', entity.lastSeen]);
+    profileItems.push(['Last Seen', entity.lastSeen || entity._lastSeen || '—']);
     profileEl.innerHTML = profileItems.map(([k, v]) => `<div class="ee-profile-item"><div class="ee-profile-label">${k}</div><div class="ee-profile-value">${v}</div></div>`).join('');
 
     // Alerts — now from entity.alertList (populated by Jira IOC extraction)
@@ -40060,6 +40349,11 @@ document.addEventListener('keydown', (e) => {
 
     // Sparkline
     eeDrawSparkline(entity.risk);
+
+    // Trigger async enrichment for live-found entities or any entity lacking enrichment
+    if (!entity._enriched) {
+      eeEnrichEntityLive(id);
+    }
   }
 
   function eeDrawSparkline(risk) {
