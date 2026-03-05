@@ -41387,7 +41387,7 @@ function initCommandCenter() {
     ctx.stroke();
     ctx.restore();
     // Shield icon (simple)
-    drawText(dIcon('lightning',14) + '', AUTO_END_X - 36, AUTO_END_Y, 13, '#00d4ff', 'center', '400 13px sans-serif');
+    drawText('\u26A1', AUTO_END_X - 36, AUTO_END_Y, 13, '#00d4ff', 'center', '400 13px sans-serif');
     drawText(String(_ccLive.automated), AUTO_END_X - 5, AUTO_END_Y - 6, 20, '#fff', 'center', '800 20px Sora, sans-serif');
     drawText('AUTOMATED', AUTO_END_X - 5, AUTO_END_Y + 12, 8, '#00d4ff', 'center', '600 8px "IBM Plex Sans", sans-serif');
 
@@ -46519,9 +46519,9 @@ function agDraw() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     if (n.type === 'alert') {
-      ctx.fillText(dIcon('warning',14) + '', n.x, n.y);
+      ctx.fillText('\u26A0', n.x, n.y);
     } else {
-      var icon = { host: dIcon('monitor',14) + '', ip: dIcon('globe',14) + '', user: dIcon('user',14) + '', domain: dIcon('link',14) + '', file: dIcon('document',14) + '', hash: '#', port: ':', path: dIcon('folderOpen',14) + '' };
+      var icon = { host: '\uD83D\uDDA5', ip: '\uD83C\uDF10', user: '\uD83D\uDC64', domain: '\uD83D\uDD17', file: '\uD83D\uDCC4', hash: '#', port: ':', path: '\uD83D\uDCC2' };
       ctx.fillText(icon[n.type] || '?', n.x, n.y);
     }
 
