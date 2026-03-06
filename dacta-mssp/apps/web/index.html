@@ -46878,6 +46878,94 @@ var _triagePageTokens = { 1: null }; // page number -> nextPageToken for that pa
 var _triageIsLastPage = false;
 var _triageClientSearch = ''; // client-side search term for instant filtering
 
+// ── Background Auto-Investigation Queue ──
+window._autoInvQueue = window._autoInvQueue || [];
+window._autoInvActive = false;
+
+async function _bgRunInvestigation(ticketKey) {
+  if (_investigationCache && _investigationCache[ticketKey]) return;
+  if (window._currentInvestigationKey === ticketKey) return;
+
+  // Create a hidden shadow environment for runAIInvestigation
+  var shadow = document.createElement('div');
+  shadow.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;';
+  var innerHTML = '<div class="prod-investigation-live">' +
+    '<div id="aiRoundsContainer"></div>' +
+    '<div id="invMainContent"></div>' +
+    '<div id="invLoadingSpinner" style="display:none;"></div>' +
+    '<div id="invSpinnerLabel"></div><div id="invSpinnerSub"></div>' +
+    '<div id="invProgressFill"></div>' +
+    '<div id="invPipeStep1"></div><div id="invPipeStep2"></div><div id="invPipeStep3"></div>' +
+    '<div id="invSnapshotResults"></div><div id="invSnapshotBadge"></div>' +
+    '<div id="invSnapshotMetrics"></div><div id="invSnapshotEntities"></div>' +
+    '<div id="alertGraphCard"></div><div id="snapshotPipelineWrap"></div>' +
+    '<div id="invVerdictArea"></div><div id="enrichmentSummaryCard"></div>' +
+    '<div id="correlatedAlertsCard"></div><div id="recommendedActionsCard"></div>' +
+    '<div id="clientEscalationCard"></div><div id="escalationDraftContent"></div>' +
+    '<div id="invSLAPanel"></div><div id="invSLAContent"></div>' +
+    '<div id="invReInvestigateBar"></div><div id="rRootCause"></div>' +
+    '</div>';
+  shadow.innerHTML = innerHTML;
+
+  // Swap page-investigation ID temporarily so runAIInvestigation finds the shadow
+  var realPage = document.getElementById('page-investigation');
+  if (realPage) realPage.setAttribute('id', '_real_inv_page_bg');
+  shadow.setAttribute('id', 'page-investigation');
+  document.body.appendChild(shadow);
+
+  try {
+    var issueData = await DactaJira.fetchIssue(ticketKey);
+    _currentInvestigationKey = ticketKey;
+    await runAIInvestigation(ticketKey, issueData);
+    _currentInvestigationKey = null;
+    // Update triage badge
+    var aiStatusEl = document.querySelector('[data-ai-status="' + ticketKey + '"]');
+    if (aiStatusEl) {
+      var cached = _investigationCache && _investigationCache[ticketKey];
+      var verd = cached ? (cached.verdict || '') : '';
+      var isTP = verd.includes('TRUE POSITIVE');
+      var isFP = verd.includes('FALSE POSITIVE');
+      var bgColor = isTP ? 'rgba(239,68,68,0.15)' : isFP ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)';
+      var textColor = isTP ? '#EF4444' : isFP ? '#10B981' : '#F59E0B';
+      var label = isTP ? '⚠ TP' : isFP ? '✓ FP' : '◑ TBD';
+      aiStatusEl.innerHTML = '<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:4px;background:' + bgColor + ';border:1px solid ' + textColor + '40;color:' + textColor + ';">' + label + '</span>';
+    }
+  } catch(e) {
+    console.warn('[AutoInv]', ticketKey, e.message);
+  } finally {
+    shadow.removeAttribute('id');
+    if (realPage) realPage.setAttribute('id', 'page-investigation');
+    shadow.remove();
+  }
+}
+
+async function _processAutoInvQueue() {
+  if (window._autoInvActive) return;
+  window._autoInvActive = true;
+  while (window._autoInvQueue.length > 0) {
+    var key = window._autoInvQueue.shift();
+    if (!key) continue;
+    if (_investigationCache && _investigationCache[key]) continue;
+    if (window._currentInvestigationKey) { window._autoInvQueue.unshift(key); break; } // pause if analyst opened investigation
+    try { await _bgRunInvestigation(key); } catch(e) { /* skip */ }
+    await new Promise(function(r) { setTimeout(r, 3500); }); // 3.5s between investigations
+  }
+  window._autoInvActive = false;
+}
+
+function _queueAutoInvestigation(tickets) {
+  if (window._dactaMode !== 'production') return;
+  (tickets || []).forEach(function(t) {
+    var pri = ((t.priority||{}).name || t.priorityRaw || '').toUpperCase();
+    var isHighPri = pri.includes('P1') || pri.includes('P2') || pri.includes('CRITICAL') || pri.includes('HIGH');
+    if (isHighPri && !(_investigationCache && _investigationCache[t.key]) && window._autoInvQueue.indexOf(t.key) < 0) {
+      window._autoInvQueue.push(t.key);
+    }
+  });
+  // Delay start so triage UI renders first
+  setTimeout(_processAutoInvQueue, 2000);
+}
+
 async function populateLiveTriage(pageOrAppend) {
   if (window._dactaMode !== 'production') return;
   if (_triageLoading) return;
@@ -46938,6 +47026,8 @@ async function populateLiveTriage(pageOrAppend) {
     var issues = data.issues || [];
     _triageNextPageToken = data.nextPageToken || null;
     _triageIsLastPage = !!data.isLast;
+    // Queue background AI investigations for uncached high-priority tickets
+    _queueAutoInvestigation(issues);
     _triagePageNum = targetPage;
 
     // Store the token needed to fetch the NEXT page
@@ -48580,10 +48670,10 @@ async function openInvestigation(ticketKey) {
     ];
     function _rTaskHtml(tasks) {
       return tasks.map(function(task) {
-        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #F3F4F6;">' +
-          '<div style="width:18px;height:18px;border-radius:50%;border:1.5px solid #D1D5DB;flex-shrink:0;margin-top:2px;"></div>' +
-          '<div><div style="font-size:12px;font-weight:500;color:#111827;">' + escapeHtml(task.t) + '</div>' +
-          '<div style="font-size:11px;color:#6B7280;margin-top:1px;">' + escapeHtml(task.d) + '</div></div></div>';
+        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<div style="width:18px;height:18px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.15);flex-shrink:0;margin-top:2px;"></div>' +
+          '<div><div style="font-size:12px;font-weight:500;color:#CBD5E1;">' + escapeHtml(task.t) + '</div>' +
+          '<div style="font-size:11px;color:#64748B;margin-top:1px;">' + escapeHtml(task.d) + '</div></div></div>';
       }).join('');
     }
     var _rDescShort = (description||f.summary||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
@@ -48650,19 +48740,19 @@ async function openInvestigation(ticketKey) {
       '<div class="r-ws">' +
 
         // ─── WHITE HEADER ───
-        '<div style="background:#FFFFFF;border-bottom:1px solid #E5E7EB;border-radius:8px 8px 0 0;">' +
+        '<div style="background:#0D1526;border-bottom:1px solid rgba(255,255,255,0.08);border-radius:8px 8px 0 0;">' +
 
           // Breadcrumb bar
-          '<div style="padding:8px 20px;border-bottom:1px solid #F3F4F6;display:flex;align-items:center;gap:6px;font-size:12px;">' +
-            '<span style="color:#9CA3AF;cursor:pointer;" onclick="if(window.closeTicketPanel)window.closeTicketPanel()">&#9776;</span>' +
-            '<span style="color:#D1D5DB;">&#8250;</span>' +
-            '<span style="color:#9CA3AF;">Incidents</span>' +
-            '<span style="color:#D1D5DB;">&#8250;</span>' +
-            '<span style="color:#374151;font-weight:500;">' + escapeHtml(ticketKey) + '</span>' +
+          '<div style="padding:8px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:6px;font-size:12px;">' +
+            '<span style="color:#64748B;cursor:pointer;" onclick="if(window.closeTicketPanel)window.closeTicketPanel()">&#9776;</span>' +
+            '<span style="color:#334155;">&#8250;</span>' +
+            '<span style="color:#64748B;">Incidents</span>' +
+            '<span style="color:#334155;">&#8250;</span>' +
+            '<span style="color:#CBD5E1;font-weight:500;">' + escapeHtml(ticketKey) + '</span>' +
           '</div>' +
 
           // Title + badges area
-          '<div style="padding:16px 20px 12px;">' +
+          '<div style="padding:16px 20px 12px;background:#0D1526;">' +
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' +
               '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:#DCFCE7;color:#15803D;border:1px solid #BBF7D0;">' +
                 '<span style="width:6px;height:6px;border-radius:50%;background:#16A34A;display:inline-block;"></span>LIVE' +
@@ -48670,32 +48760,33 @@ async function openInvestigation(ticketKey) {
               (_alertCat ? '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;text-transform:uppercase;letter-spacing:0.03em;">' + escapeHtml(_alertCat) + '</span>' : '') +
               '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:' + _rPriBg + ';color:' + _rPriColor + ';border:1px solid ' + _rPriColor + '55;">' + escapeHtml(priority.split(' - ')[0]) + '</span>' +
             '</div>' +
-            '<div style="font-size:18px;font-weight:700;color:#111827;line-height:1.35;margin-bottom:10px;">' + escapeHtml(f.summary || ticketKey) + '</div>' +
-            '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12px;color:#6B7280;">' +
-              '<span>Ticket: <strong style="color:#4F46E5;">' + escapeHtml(ticketKey) + '</strong></span>' +
-              '<span>Reported: <strong style="color:#374151;">' + jiraFormatDT(f.created) + '</strong></span>' +
-              '<span>Status: <strong style="color:#374151;">' + escapeHtml(status) + '</strong></span>' +
-              '<span>Assignee: <strong style="color:' + (assignee==='Unassigned'?'#9CA3AF':'#4F46E5') + ';">' + escapeHtml(assignee) + '</strong></span>' +
-              (orgs.length>0?'<span>Org: <strong style="color:#374151;">' + escapeHtml(orgs.join(', ')) + '</strong></span>':'') +
-              '<div style="margin-left:auto;display:flex;gap:8px;">' +
-                '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:#F3F4F6;border:1px solid #E5E7EB;color:#374151;border-radius:6px;" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-investigate</button>' +
-                '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:#F3F4F6;border:1px solid #E5E7EB;color:#374151;border-radius:6px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\',\'_blank\')">Open in Jira \u2197</button>' +
+            '<div style="font-size:18px;font-weight:700;color:#E2E8F0;line-height:1.35;margin-bottom:10px;">' + escapeHtml(f.summary || ticketKey) + '</div>' +
+            '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12px;color:#64748B;">' +
+              '<span>Ticket: <strong style="color:#6366F1;">' + escapeHtml(ticketKey) + '</strong></span>' +
+              '<span>Reported: <strong style="color:#CBD5E1;">' + jiraFormatDT(f.created) + '</strong></span>' +
+              '<span>Status: <strong style="color:#CBD5E1;">' + escapeHtml(status) + '</strong></span>' +
+              '<span>Assignee: <strong style="color:' + (assignee==='Unassigned'?'#64748B':'#6366F1') + ';">' + escapeHtml(assignee) + '</strong></span>' +
+              (orgs.length>0?'<span>Org: <strong style="color:#CBD5E1;">' + escapeHtml(orgs.join(', ')) + '</strong></span>':'') +
+              '<div style="margin-left:auto;display:flex;gap:8px;align-items:center;">' +
+                '<button onclick="var w=document.querySelector(\'.r-ws\');if(w){w.classList.toggle(\'r-light\');this.textContent=w.classList.contains(\'r-light\')?\'☼ Dark\':\'☾ Light\';}" style="font-size:10px;padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#94A3B8;border-radius:6px;cursor:pointer;">☾ Light</button>' +
+                '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#CBD5E1;border-radius:6px;" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-investigate</button>' +
+                '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#CBD5E1;border-radius:6px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\',\'_blank\')">Open in Jira \u2197</button>' +
               '</div>' +
             '</div>' +
           '</div>' +
 
           // Entity metric boxes
-          '<div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #F3F4F6;">' +
-            [['Identities','rMetaIdent','#EF4444'],['Devices','rMetaDev','#6B7280'],['Applications','rMetaApp','#6B7280'],['Data Objects','rMetaData','#6B7280']].map(function(m,i) {
-              return '<div style="padding:12px 16px;' + (i<3?'border-right:1px solid #F3F4F6;':'') + '">' +
-                '<div style="font-size:11px;color:#9CA3AF;margin-bottom:4px;">' + m[0] + '</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid rgba(255,255,255,0.06);background:#0D1526;">' +
+            [['Identities','rMetaIdent','#EF4444'],['Devices','rMetaDev','#94A3B8'],['Applications','rMetaApp','#94A3B8'],['Data Objects','rMetaData','#94A3B8']].map(function(m,i) {
+              return '<div style="padding:12px 16px;' + (i<3?'border-right:1px solid rgba(255,255,255,0.06);':'') + '">' +
+                '<div style="font-size:11px;color:#64748B;margin-bottom:4px;">' + m[0] + '</div>' +
                 '<div style="font-size:22px;font-weight:700;color:' + m[2] + ';" id="' + m[1] + '">\u2014</div>' +
               '</div>';
             }).join('') +
           '</div>' +
 
           // Tab bar
-          '<div style="display:flex;align-items:center;padding:0 4px;border-top:1px solid #F3F4F6;overflow-x:auto;">' +
+          '<div style="display:flex;align-items:center;padding:0 4px;border-top:1px solid rgba(255,255,255,0.06);background:#0D1526;overflow-x:auto;">' +
             [['overview','Summary'],['triage','Triage'],['investigation','Investigation findings'],['containment','Containment'],['timeline','Timeline']].map(function(t,i) {
               return '<button class="r-tab' + (i===0?' active':'') + '" data-tab="' + t[0] + '" onclick="window.invSwitchTab(\'' + t[0] + '\')">' + t[1] + '</button>';
             }).join('') +
@@ -48707,18 +48798,18 @@ async function openInvestigation(ticketKey) {
         '<div style="display:grid;grid-template-columns:1fr 340px;min-height:500px;">' +
 
           // LEFT column — tab panes
-          '<div style="padding:24px;background:#F8F9FA;border-right:1px solid #E5E7EB;overflow-y:auto;">' +
+          '<div style="padding:24px;background:#0D1526;border-right:1px solid rgba(255,255,255,0.06);overflow-y:auto;">' +
 
             // ══ SUMMARY / OVERVIEW TAB ══
             '<div id="invTab-overview" class="inv-radiant-tab-content" style="display:block;">' +
               '<div id="invVerdictArea" style="display:none;margin-bottom:16px;"></div>' +
-              '<h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 10px;">What happened?</h3>' +
-              '<p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 8px;">' + escapeHtml(_rDescShort || 'No description available.') + '</p>' +
-              '<p style="font-size:13px;margin:0 0 22px;"><a style="color:#4F46E5;text-decoration:none;cursor:pointer;" onclick="window.invSwitchTab(\'triage\')">For further details, please review the incident triage. \u2192</a></p>' +
-              '<h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 10px;">Root cause analysis</h3>' +
-              '<p id="rRootCause" style="font-size:14px;color:#9CA3AF;line-height:1.6;margin:0 0 22px;font-style:italic;">Investigation in progress \u2014 root cause analysis will appear after AI investigation completes.</p>' +
-              '<h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 12px;">Impact</h3>' +
-              '<div style="background:white;border:1px solid #E5E7EB;border-radius:8px;padding:16px;margin-bottom:16px;">' + _rImpSVG + '</div>' +
+              '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 10px;">What happened?</h3>' +
+              '<p style="font-size:14px;color:#CBD5E1;line-height:1.6;margin:0 0 8px;">' + escapeHtml(_rWhatHappened || 'No description available.') + '</p>' +
+              '<p style="font-size:13px;margin:0 0 22px;"><a style="color:#6366F1;text-decoration:none;cursor:pointer;" onclick="window.invSwitchTab(\'triage\')">For further details, please review the incident triage. \u2192</a></p>' +
+              '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 10px;">Root cause analysis</h3>' +
+              '<p id="rRootCause" style="font-size:14px;color:#64748B;line-height:1.6;margin:0 0 22px;font-style:italic;">Investigation in progress \u2014 root cause analysis will appear after AI investigation completes.</p>' +
+              '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 12px;">Impact</h3>' +
+              '<div style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:16px;margin-bottom:16px;">' + _rAttackGraph + '</div>' +
               // Hidden compat IDs for existing JS
               '<div id="alertGraphCard" style="display:none;"></div>' +
               '<div id="invSnapshotBadge" style="display:none;"></div>' +
@@ -48891,24 +48982,24 @@ async function openInvestigation(ticketKey) {
           '</div>' + // end left column
 
           // RIGHT column — always-visible status sidebar
-          '<div style="background:white;padding:20px;overflow-y:auto;">' +
-            '<div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:18px;">Status</div>' +
+          '<div style="background:#111827;padding:20px;overflow-y:auto;border-radius:0 0 8px 0;">' +
+            '<div style="font-size:14px;font-weight:700;color:#E2E8F0;margin-bottom:18px;">Status</div>' +
             [['Triage','#16A34A'],['Investigation','#6366F1'],['Containment','#F97316'],['Remediation','#EC4899']].map(function(stage,i) {
               var done = i < _invStageIdx, active = i === _invStageIdx;
               var pct = done ? 100 : active ? 55 : 0;
               return '<div style="margin-bottom:14px;">' +
                 '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
-                  '<span style="font-size:12px;font-weight:' + (active?'600':'500') + ';color:' + (done||active?'#111827':'#9CA3AF') + ';">' + stage[0] + '</span>' +
+                  '<span style="font-size:12px;font-weight:' + (active?'600':'500') + ';color:' + (done||active?'#E2E8F0':'#64748B') + ';">' + stage[0] + '</span>' +
                   '<span style="font-size:11px;font-weight:600;color:' + (done?'#16A34A':active?stage[1]:'#9CA3AF') + ';">' + (done?'Complete':active?'In Progress':'Pending') + '</span>' +
                 '</div>' +
                 '<div class="r-stage-bar"><div class="r-stage-bar-fill" style="width:' + pct + '%;background:' + (done?'#16A34A':stage[1]) + ';"></div></div>' +
               '</div>';
             }).join('') +
-            '<div style="height:1px;background:#F3F4F6;margin:18px 0;"></div>' +
-            '<div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:12px;">Containment</div>' +
+            '<div style="height:1px;background:rgba(255,255,255,0.06);margin:18px 0;"></div>' +
+            '<div style="font-size:14px;font-weight:700;color:#E2E8F0;margin-bottom:12px;">Containment</div>' +
             '<div style="margin-bottom:4px;">' + _rTaskHtml(_rContainTasks) + '</div>' +
-            '<div style="height:1px;background:#F3F4F6;margin:18px 0;"></div>' +
-            '<div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:12px;">Remediation</div>' +
+            '<div style="height:1px;background:rgba(255,255,255,0.06);margin:18px 0;"></div>' +
+            '<div style="font-size:14px;font-weight:700;color:#E2E8F0;margin-bottom:12px;">Remediation</div>' +
             '<div>' + _rTaskHtml(_rRemedTasks) + '</div>' +
           '</div>' + // end right sidebar
 
@@ -49130,6 +49221,35 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
         '<button class="btn btn-xs" onclick="reInvestigate(_currentInvestigationKey||_currentTicketKey||\'\')" style="margin-left:auto;font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);">↻ Re-run</button>' +
       '</div>';
     vArea.style.display = '';
+  }
+
+  // ── Update Root Cause Analysis in overview tab ──
+  var rcaEl = document.getElementById('rRootCause');
+  if (rcaEl && verdict) {
+    var isTP = verdict.includes('TRUE POSITIVE');
+    var isFP = verdict.includes('FALSE POSITIVE');
+    var rcaColor = isTP ? '#EF4444' : isFP ? '#10B981' : '#F59E0B';
+    var rcaParts = [];
+    if (isTP) {
+      rcaParts.push('AI investigation confirmed this as a True Positive with ' + confidence + '% confidence.');
+      if (netHits > 0) rcaParts.push('Suspicious network connections detected across ' + netHits + ' event' + (netHits > 1 ? 's' : '') + '.');
+      if (fileHits > 0) rcaParts.push('Malicious file events identified.');
+      if (tipHits > 0) rcaParts.push(tipHits + ' threat intelligence IOC match' + (tipHits > 1 ? 'es' : '') + ' confirmed the attack pattern.');
+      if (procHits > 0) rcaParts.push('Suspicious child processes were spawned during the incident.');
+      rcaParts.push('Immediate containment and client escalation is recommended.');
+    } else if (isFP) {
+      rcaParts.push('AI investigation determined this to be a False Positive with ' + confidence + '% confidence.');
+      rcaParts.push('SIEM queries and threat intelligence found no malicious indicators.');
+      rcaParts.push('The alert appears to have been triggered by benign or expected activity. No action required.');
+    } else {
+      rcaParts.push('AI investigation is inconclusive (' + confidence + '% confidence).');
+      rcaParts.push('Some suspicious indicators were detected but could not be definitively attributed to malicious activity.');
+      rcaParts.push('Further manual analysis is recommended before taking containment action.');
+    }
+    rcaEl.textContent = rcaParts.join(' ');
+    rcaEl.style.color = rcaColor;
+    rcaEl.style.fontStyle = 'normal';
+    rcaEl.style.fontWeight = '400';
   }
 }
 
