@@ -14743,7 +14743,6 @@ function dIcon(name, size, color) {
               <option>Failed</option>
             </select>
             <div style="flex:1;"></div>
-            <button class="btn btn-primary btn-sm" onclick="openLpWizard()">+ New Parser</button>
           </div>
 
           <div class="table-wrap">
@@ -24757,17 +24756,14 @@ Analyst: K. Rasmussen | 2026-02-28
           <div class="card-header" style="margin-bottom:16px;">
             <div>
               <span class="card-title">Client Environment Connectors</span>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Per-tenant log source &amp; security tool integrations</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Per-tenant tech stack connectors &amp; API integrations</div>
 
-              <!-- TC-SET-004: Log Sources Table -->
+              <!-- Log Sources moved to Log Source Catalog page -->
               <div style="margin-top:16px;">
-                <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:10px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M4.9 19.1A10 10 0 0 1 12 2a10 10 0 0 1 7.1 17.1"/><path d="M8.1 15.9A6 6 0 0 1 12 6a6 6 0 0 1 3.9 9.9"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="14" x2="12" y2="22"/></svg> Log Sources per Client</div>
-                <table class="data-table" style="width:100%;font-size:11px;" id="settingsLogSourcesTable">
-                  <thead><tr><th>Client</th><th>Namespace</th><th>Log Source</th><th>Index Pattern</th><th>Status</th></tr></thead>
-                  <tbody id="settingsLogSourcesBody"></tbody>
-                </table>
+                <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:10px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M4.9 19.1A10 10 0 0 1 12 2a10 10 0 0 1 7.1 17.1"/><path d="M8.1 15.9A6 6 0 0 1 12 6a6 6 0 0 1 3.9 9.9"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="14" x2="12" y2="22"/></svg> Connector Registry</div>
+                <div style="font-size:11px;color:var(--text-muted);padding:12px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.1);border-radius:8px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Log source index patterns are managed in the <a href="#" onclick="navigateTo('logsources');return false;" style="color:var(--cyan);text-decoration:underline;">Log Source Catalog</a>. This page manages tech stack connectors for data ingestion and response actions.</div>
               </div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"> — loaded from ORG_CONNECTORS registry</div>
+              <div style="margin-top:12px;font-size:11px;color:var(--text-muted);"> — loaded from SIEMLess DB</div>
             </div>
             <div style="display:flex;align-items:center;gap:10px;">
               <span style="font-size:11px;color:var(--text-muted);">Client:</span>
@@ -29815,7 +29811,7 @@ async function tipLoadCrowdStrikeIntel(page, iocFeedBody) {
         if (!row.querySelector('.cs-ioc-cell')) {
           var td = document.createElement('td');
           td.className = 'cs-ioc-cell';
-          td.innerHTML = '<span style="font-size:9px;color:#374151;">—</span>';
+          td.innerHTML = '<span style="font-size:9px;color:var(--rws-text-secondary);">—</span>';
           var tds = row.querySelectorAll('td');
           if (tds.length > 0) row.insertBefore(td, tds[tds.length - 1]);
           else row.appendChild(td);
@@ -29892,19 +29888,19 @@ async function tipCSEnrichIOCFeed() {
       var cell = row.querySelector('.cs-ioc-cell');
       if (!cell) return;
       var tds = row.querySelectorAll('td');
-      if (tds.length < 2) { cell.innerHTML = '<span style="color:#374151;font-size:9px;">—</span>'; return; }
+      if (tds.length < 2) { cell.innerHTML = '<span style="color:var(--rws-text-secondary);font-size:9px;">—</span>'; return; }
       var raw = tds[1].textContent.trim();
       var m = raw.match(/['"]([^'"]+)['"]/);
       var key = m ? m[1] : raw;
       var result = lookup[key];
-      if (!result) { cell.innerHTML = '<span style="font-size:9px;color:#374151;">—</span>'; return; }
+      if (!result) { cell.innerHTML = '<span style="font-size:9px;color:var(--rws-text-secondary);">—</span>'; return; }
       var conf = result.malicious_confidence || 'unverified';
       var badge = {
         high:       '<span style="font-size:9px;font-weight:700;padding:1px 6px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:3px;color:#ef4444;white-space:nowrap;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> HIGH</span>',
         medium:     '<span style="font-size:9px;font-weight:700;padding:1px 6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:3px;color:#f59e0b;white-space:nowrap;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> MED</span>',
         low:        '<span style="font-size:9px;padding:1px 6px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:3px;color:#10b981;white-space:nowrap;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg> LOW</span>',
         unverified: '<span style="font-size:9px;color:#64748b;white-space:nowrap;">? UNV</span>'
-      }[conf] || '<span style="font-size:9px;color:#374151;">—</span>';
+      }[conf] || '<span style="font-size:9px;color:var(--rws-text-secondary);">—</span>';
       cell.innerHTML = badge;
     });
 
@@ -34376,24 +34372,46 @@ async function persistConnectorConfig(orgId, org) {
       console.warn('[Settings] No DB ref — using localStorage only');
       return;
     }
-    var payload = {
-      org_id: orgId,
-      org_name: org.name,
-      org_code: org.code,
-      org_type: org.type,
-      connectors: JSON.stringify(org.connectors),
-      updated_at: new Date().toISOString()
-    };
-    var { data, error } = await window._supabaseRef.from('org_connectors').upsert(payload, { onConflict: 'org_id' }).select();
-    if (error) {
-      console.warn('[Settings] SIEMLess DB save failed:', error.message, error.details);
-      showToast('Saved locally. SIEMLess DB sync: ' + (error.message || 'failed'), 'warn');
-    } else {
-      console.log('[Settings] Saved to SIEMLess DB:', orgId, data);
+    // Upsert each connector individually to org_connectors table
+    var sb = window._supabaseRef;
+    for (var i = 0; i < org.connectors.length; i++) {
+      var c = org.connectors[i];
+      var payload = {
+        org_id: orgId,
+        connector_type: c.connector_type,
+        vendor: c.vendor || '',
+        display_name: c.display_name || '',
+        is_enabled: !!c.is_enabled,
+        health_status: c.health_status || 'unknown',
+        metadata: c.metadata || {},
+        updated_at: new Date().toISOString()
+      };
+      // If connector has a DB id, update by id; otherwise upsert by org_id + connector_type
+      if (c.id) {
+        payload.id = c.id;
+        var { error } = await sb.from('org_connectors').update(payload).eq('id', c.id);
+        if (error) console.warn('[Settings] DB update error for', c.connector_type, ':', error.message);
+      } else {
+        // Find existing by org_id + connector_type to avoid duplicates
+        var existing = await sb.from('org_connectors')
+          .select('id')
+          .eq('org_id', orgId)
+          .eq('connector_type', c.connector_type)
+          .maybeSingle();
+        if (existing.data && existing.data.id) {
+          payload.id = existing.data.id;
+          var { error } = await sb.from('org_connectors').update(payload).eq('id', existing.data.id);
+          if (error) console.warn('[Settings] DB update error:', error.message);
+        } else {
+          var { error } = await sb.from('org_connectors').insert(payload);
+          if (error) console.warn('[Settings] DB insert error:', error.message);
+        }
+      }
     }
+    console.log('[Settings] Saved ' + org.connectors.length + ' connectors to DB for', org.name);
   } catch(e) {
     console.warn('[Settings] Persist error:', e.message);
-    showToast('Saved locally. SIEMLess DB error: ' + e.message, 'warn');
+    showToast('Saved locally. DB error: ' + e.message, 'warn');
   }
 }
 
@@ -34505,17 +34523,25 @@ async function loadSSOSettingsUI() {
 // Load persisted connector configs on startup
 async function loadPersistedConnectors() {
   try {
-    // Try SIEMLess DB first
+    // DB loading is now handled by loadOrgConnectorsFromDB() at boot time
+    // This function serves as a fallback for when DB loading hasn't completed yet
+    if (_orgConnectorsLoadedFromDB) return; // Already loaded from DB
+    
+    // Try SIEMLess DB — individual connector rows
     if (window._supabaseRef) {
       var { data, error } = await window._supabaseRef.from('org_connectors').select('*');
       if (!error && data && data.length > 0) {
+        // Group connectors by org_id
+        var byOrg = {};
         data.forEach(function(row) {
-          if (ORG_CONNECTORS[row.org_id]) {
-            try {
-              var connectors = JSON.parse(row.connectors);
-              ORG_CONNECTORS[row.org_id].connectors = connectors;
-              console.log('[Settings] Loaded persisted config for', row.org_name);
-            } catch(e) {}
+          if (!byOrg[row.org_id]) byOrg[row.org_id] = [];
+          byOrg[row.org_id].push(row);
+        });
+        // Merge into ORG_CONNECTORS
+        Object.keys(byOrg).forEach(function(orgId) {
+          if (ORG_CONNECTORS[orgId]) {
+            ORG_CONNECTORS[orgId].connectors = byOrg[orgId];
+            console.log('[Settings] Loaded ' + byOrg[orgId].length + ' connectors for', ORG_CONNECTORS[orgId].name);
           }
         });
         return;
@@ -37873,6 +37899,119 @@ function getOrgConnectors(ns, connType) {
   return org.connectors.filter(function(c) { return c.connector_type === connType && c.is_enabled !== false; });
 }
 
+// ── DB-backed ORG_CONNECTORS loader ──
+// Loads connectors from org_connectors DB table and merges with client_log_sources
+// This replaces the hardcoded ORG_CONNECTORS with live DB data while maintaining the same shape
+var _orgConnectorsLoadedFromDB = false;
+
+async function loadOrgConnectorsFromDB() {
+  try {
+    if (!window._supabaseRef) return;
+    var sb = window._supabaseRef;
+    
+    // Fetch organizations, connectors, and log sources in parallel
+    var [orgsRes, connRes, lsRes] = await Promise.all([
+      sb.from('organizations').select('*'),
+      sb.from('org_connectors').select('*'),
+      sb.from('client_log_sources').select('*')
+    ]);
+    
+    var orgs = (orgsRes.data || []);
+    var connectors = (connRes.data || []);
+    var logSources = (lsRes.data || []);
+    
+    if (orgs.length === 0 || connectors.length === 0) {
+      console.log('[OrgConn] DB empty, keeping hardcoded ORG_CONNECTORS');
+      return;
+    }
+    
+    // Map namespace to org_id
+    var NAMESPACE_MAP = {
+      'dacta': '9ce7a126-4e9d-434e-b952-f4c4fce56fa1',
+      'nagaworld': '3a57db8a-7787-414c-9e28-1c14de388d31',
+      'spmt': 'b8672c8b-3907-48b0-8c58-b61aa38fbf4b',
+      'foxwood': 'f6463102-adc3-4bdc-a014-ba197d0fada6',
+      'silverkey': '93281f08-dbad-4d0d-8656-ab7618f373a4',
+      'advpartners': 'bb0db674-d91f-4a21-9c71-984c10749feb',
+      'dactatraining': '3a6e0c3a-0bf7-4614-9299-bb9c02b0507d'
+    };
+    var ID_TO_NAMESPACE = {};
+    Object.keys(NAMESPACE_MAP).forEach(function(ns) { ID_TO_NAMESPACE[NAMESPACE_MAP[ns]] = ns; });
+    
+    var result = {};
+    orgs.forEach(function(org) {
+      var orgConns = connectors.filter(function(c) { return c.org_id === org.id; });
+      var orgLogSrcs = logSources.filter(function(ls) { return ls.org_id === org.id; });
+      
+      // Merge index_patterns from client_log_sources into connector metadata
+      orgConns.forEach(function(c) {
+        var matchingLS = orgLogSrcs.find(function(ls) { return ls.source_type === c.connector_type; });
+        if (matchingLS) {
+          c.metadata = c.metadata || {};
+          c.metadata.index_pattern = matchingLS.index_pattern;
+          if (matchingLS.source_type === 'edr') {
+            var ns = ID_TO_NAMESPACE[org.id] || '';
+            c.metadata.host_index = '.ds-logs-crowdstrike.host-' + ns + '-*';
+          }
+          c.metadata.namespace = ID_TO_NAMESPACE[org.id] || '';
+        }
+      });
+      
+      var ns = ID_TO_NAMESPACE[org.id] || org.short_name.toLowerCase();
+      result[org.id] = {
+        code: org.short_name,
+        name: org.name,
+        type: (org.service_model || 'socaas').toLowerCase(),
+        namespace: ns,
+        connectors: orgConns
+      };
+    });
+    
+    // Replace the global ORG_CONNECTORS with DB-backed data
+    window.ORG_CONNECTORS = result;
+    _orgConnectorsLoadedFromDB = true;
+    console.log('[OrgConn] Loaded ' + Object.keys(result).length + ' orgs with ' + connectors.length + ' connectors from DB');
+  } catch(e) {
+    console.warn('[OrgConn] DB load failed, keeping hardcoded data:', e.message);
+  }
+}
+
+// ── DB-backed client_log_sources cache ──
+var _clientLogSourcesCache = null;
+var _clientLogSourcesCacheTime = 0;
+
+async function loadClientLogSources() {
+  if (_clientLogSourcesCache && (Date.now() - _clientLogSourcesCacheTime < 300000)) {
+    return _clientLogSourcesCache;
+  }
+  try {
+    if (!window._supabaseRef) return [];
+    var resp = await window._supabaseRef.from('client_log_sources').select('*');
+    _clientLogSourcesCache = resp.data || [];
+    _clientLogSourcesCacheTime = Date.now();
+    return _clientLogSourcesCache;
+  } catch(e) {
+    console.warn('[LogSrc] Cache load failed:', e.message);
+    return _clientLogSourcesCache || [];
+  }
+}
+
+async function getClientLogSourceIndex(orgId, sourceType, vendor) {
+  var sources = await loadClientLogSources();
+  var match = sources.find(function(s) {
+    return s.org_id === orgId && s.source_type === sourceType && (!vendor || (s.vendor || '').toLowerCase() === vendor.toLowerCase());
+  });
+  return match ? match.index_pattern : null;
+}
+
+async function getClientLogSourceIndices(orgId, sourceType) {
+  var sources = await loadClientLogSources();
+  return sources
+    .filter(function(s) { return s.org_id === orgId && s.source_type === sourceType; })
+    .map(function(s) { return s.index_pattern; })
+    .join(',');
+}
+
 // ═══════════════════════════════════════════════════════════════
 // CLIENT ONBOARDING — Jira is single source of truth
 // ═══════════════════════════════════════════════════════════════
@@ -38708,6 +38847,16 @@ async function loadOrgsFromSupabase() {
       // Auto-link Jira account in background (non-blocking)
       if (typeof _autoLinkJiraAccount === 'function') {
         _autoLinkJiraAccount(user).catch(function(e) { console.warn('[JiraLink]', e.message); });
+      }
+
+      // Load ORG_CONNECTORS from DB (replaces hardcoded data with live DB data)
+      if (window._dactaMode === 'production' && typeof loadOrgConnectorsFromDB === 'function') {
+        loadOrgConnectorsFromDB().catch(function(e) { console.warn('[Boot] OrgConn DB load failed:', e.message); });
+      }
+
+      // Auto-investigate ALL open tickets on boot (regardless of which page user lands on)
+      if (window._dactaMode === 'production' && typeof _startAutoInvestigationLoop === 'function') {
+        _startAutoInvestigationLoop();
       }
       
       safeInit();
@@ -46955,15 +47104,48 @@ async function _processAutoInvQueue() {
 
 function _queueAutoInvestigation(tickets) {
   if (window._dactaMode !== 'production') return;
-  (tickets || []).forEach(function(t) {
-    var pri = ((t.priority||{}).name || t.priorityRaw || '').toUpperCase();
-    var isHighPri = pri.includes('P1') || pri.includes('P2') || pri.includes('CRITICAL') || pri.includes('HIGH');
-    if (isHighPri && !(_investigationCache && _investigationCache[t.key]) && window._autoInvQueue.indexOf(t.key) < 0) {
+  // Sort tickets by priority: P1/Critical first, then P2/High, then P3, then P4/Low
+  var priOrder = { 'P1': 0, 'CRITICAL': 0, 'P2': 1, 'HIGH': 1, 'P3': 2, 'MEDIUM': 2, 'P4': 3, 'LOW': 3 };
+  var sorted = (tickets || []).slice().sort(function(a, b) {
+    var pa = ((a.priority||{}).name || a.priorityRaw || 'P3').toUpperCase();
+    var pb = ((b.priority||{}).name || b.priorityRaw || 'P3').toUpperCase();
+    var sa = 3, sb = 3;
+    Object.keys(priOrder).forEach(function(k) { if (pa.includes(k)) sa = priOrder[k]; });
+    Object.keys(priOrder).forEach(function(k) { if (pb.includes(k)) sb = priOrder[k]; });
+    return sa - sb;
+  });
+  sorted.forEach(function(t) {
+    if (!(_investigationCache && _investigationCache[t.key]) && window._autoInvQueue.indexOf(t.key) < 0) {
       window._autoInvQueue.push(t.key);
     }
   });
   // Delay start so triage UI renders first
   setTimeout(_processAutoInvQueue, 2000);
+}
+
+// ── Boot Auto-Investigation: runs on app load regardless of page ──
+var _bootAutoInvTimer = null;
+async function _bootAutoInvestigation() {
+  if (window._dactaMode !== 'production') return;
+  try {
+    console.log('[AutoInv] Boot sweep: fetching all open tickets...');
+    var data = await DactaJira.fetchTriage({ maxResults: 200 });
+    var issues = data.issues || [];
+    console.log('[AutoInv] Boot sweep: found ' + issues.length + ' tickets, queuing uncached for investigation');
+    _queueAutoInvestigation(issues);
+  } catch(e) {
+    console.warn('[AutoInv] Boot sweep failed:', e.message);
+  }
+}
+
+function _startAutoInvestigationLoop() {
+  if (window._dactaMode !== 'production') return;
+  // Initial boot sweep after 3s (let UI settle)
+  setTimeout(_bootAutoInvestigation, 3000);
+  // Re-check every 5 minutes for new tickets
+  if (_bootAutoInvTimer) clearInterval(_bootAutoInvTimer);
+  _bootAutoInvTimer = setInterval(_bootAutoInvestigation, 300000);
+  console.log('[AutoInv] Background auto-investigation loop started (5min interval)');
 }
 
 async function populateLiveTriage(pageOrAppend) {
@@ -48599,6 +48781,13 @@ async function openInvestigation(ticketKey) {
       document.querySelectorAll('.r-tab').forEach(function(b) {
         b.classList.toggle('active', b.getAttribute('data-tab') === tabId);
       });
+      // ── Contextual right panel — show different sidebar content per tab ──
+      var sideStatus = document.getElementById('invSideStatus');
+      var sideEnrichment = document.getElementById('invSideEnrichment');
+      var sideContainment = document.getElementById('invSideContainment');
+      if (sideStatus) sideStatus.style.display = (tabId === 'overview' || tabId === 'timeline') ? 'block' : 'none';
+      if (sideEnrichment) sideEnrichment.style.display = (tabId === 'triage' || tabId === 'investigation') ? 'block' : 'none';
+      if (sideContainment) sideContainment.style.display = (tabId === 'containment') ? 'block' : 'none';
     };
 
     // ── Stage detection from Jira status ──
@@ -48673,7 +48862,7 @@ async function openInvestigation(ticketKey) {
         return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);">' +
           '<div style="width:18px;height:18px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.15);flex-shrink:0;margin-top:2px;"></div>' +
           '<div><div style="font-size:12px;font-weight:500;color:#CBD5E1;">' + escapeHtml(task.t) + '</div>' +
-          '<div style="font-size:11px;color:#64748B;margin-top:1px;">' + escapeHtml(task.d) + '</div></div></div>';
+          '<div style="font-size:11px;color:var(--rws-text-muted);margin-top:1px;">' + escapeHtml(task.d) + '</div></div></div>';
       }).join('');
     }
     var _rDescShort = (description||f.summary||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
@@ -48721,20 +48910,31 @@ async function openInvestigation(ticketKey) {
 
     livePanel.innerHTML =
       '<style id="r-ws-css">' +
-        '.r-ws{font-family:"Inter","IBM Plex Sans",system-ui,sans-serif;background:#F8F9FA;color:#111827;' +
-          '--bg-base:#F8F9FA;--bg-surface:#F3F4F6;--bg-card:#FFFFFF;--border-subtle:rgba(0,0,0,0.06);' +
-          '--border-card:#E5E7EB;--text-primary:#111827;--text-secondary:#374151;--text-muted:#9CA3AF;' +
-          '--cyan:#4F46E5;--cyan-dim:rgba(79,70,229,0.08);--surface-1:#F3F4F6;--red:#EF4444;}' +
-        '.r-ws .card{background:#FFFFFF!important;border:1px solid #E5E7EB!important;box-shadow:0 1px 3px rgba(0,0,0,0.05);}' +
-        '.r-ws .card-header{border-bottom-color:#F3F4F6!important;}' +
-        '.r-ws .card-title{color:#111827!important;}' +
-        '.r-ws .inv-collapsible-header{background:#FFFFFF!important;}' +
-        '.r-ws .inv-collapsible-header:hover{background:#F9FAFB!important;}' +
-        '.r-tab{padding:12px 18px;font-size:13px;font-weight:500;color:#6B7280;background:none;border:none;' +
+        '.r-ws{font-family:"Inter","IBM Plex Sans",system-ui,sans-serif;' +
+          'background:var(--rws-bg);color:var(--rws-text-primary);' +
+          '--rws-bg:#0F172A;--rws-card:#1E293B;--rws-card-alt:#162032;' +
+          '--rws-border:rgba(255,255,255,0.08);--rws-border-card:rgba(255,255,255,0.1);' +
+          '--rws-text-primary:#E2E8F0;--rws-text-secondary:#CBD5E1;--rws-text-muted:#64748B;' +
+          '--rws-accent:#6366F1;--rws-accent-dim:rgba(99,102,241,0.12);' +
+          '--rws-surface:rgba(255,255,255,0.03);--rws-surface-hover:rgba(255,255,255,0.06);' +
+          '--rws-red:#EF4444;--rws-green:#10B981;--rws-amber:#F59E0B;}' +
+        '.r-ws.r-light{' +
+          '--rws-bg:#F8F9FA;--rws-card:#FFFFFF;--rws-card-alt:#F9FAFB;' +
+          '--rws-border:#E5E7EB;--rws-border-card:#E5E7EB;' +
+          '--rws-text-primary:#111827;--rws-text-secondary:#374151;--rws-text-muted:#9CA3AF;' +
+          '--rws-accent:#4F46E5;--rws-accent-dim:rgba(79,70,229,0.08);' +
+          '--rws-surface:#F3F4F6;--rws-surface-hover:#F9FAFB;' +
+          '--rws-red:#EF4444;--rws-green:#10B981;--rws-amber:#F59E0B;}' +
+        '.r-ws .card{background:var(--rws-card)!important;border:1px solid var(--rws-border-card)!important;box-shadow:0 1px 3px rgba(0,0,0,0.1);}' +
+        '.r-ws .card-header{border-bottom-color:var(--rws-border)!important;}' +
+        '.r-ws .card-title{color:var(--rws-text-primary)!important;}' +
+        '.r-ws .inv-collapsible-header{background:var(--rws-card)!important;}' +
+        '.r-ws .inv-collapsible-header:hover{background:var(--rws-surface-hover)!important;}' +
+        '.r-tab{padding:12px 18px;font-size:13px;font-weight:500;color:var(--rws-text-muted);background:none;border:none;' +
           'border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;transition:all 0.15s;}' +
-        '.r-tab.active{color:#111827;font-weight:600;border-bottom-color:#111827;}' +
-        '.r-tab:hover:not(.active){color:#374151;background:#F9FAFB;}' +
-        '.r-stage-bar{height:4px;border-radius:2px;background:#E5E7EB;overflow:hidden;margin-top:6px;}' +
+        '.r-tab.active{color:var(--rws-text-primary);font-weight:600;border-bottom-color:var(--rws-accent);}' +
+        '.r-tab:hover:not(.active){color:var(--rws-text-secondary);background:var(--rws-surface);}' +
+        '.r-stage-bar{height:4px;border-radius:2px;background:var(--rws-border);overflow:hidden;margin-top:6px;}' +
         '.r-stage-bar-fill{height:100%;border-radius:2px;transition:width 0.8s ease;}' +
         '@keyframes spin{to{transform:rotate(360deg)}}' +
         '@keyframes invProgressBar{0%{width:0%}60%{width:70%}90%{width:88%}100%{width:92%}}' +
@@ -48746,9 +48946,9 @@ async function openInvestigation(ticketKey) {
 
           // Breadcrumb bar
           '<div style="padding:8px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:6px;font-size:12px;">' +
-            '<span style="color:#64748B;cursor:pointer;" onclick="if(window.closeTicketPanel)window.closeTicketPanel()">&#9776;</span>' +
+            '<span style="color:var(--rws-text-muted);cursor:pointer;" onclick="if(window.closeTicketPanel)window.closeTicketPanel()">&#9776;</span>' +
             '<span style="color:#334155;">&#8250;</span>' +
-            '<span style="color:#64748B;">Incidents</span>' +
+            '<span style="color:var(--rws-text-muted);">Incidents</span>' +
             '<span style="color:#334155;">&#8250;</span>' +
             '<span style="color:#CBD5E1;font-weight:500;">' + escapeHtml(ticketKey) + '</span>' +
           '</div>' +
@@ -48763,7 +48963,7 @@ async function openInvestigation(ticketKey) {
               '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:' + _rPriBg + ';color:' + _rPriColor + ';border:1px solid ' + _rPriColor + '55;">' + escapeHtml(priority.split(' - ')[0]) + '</span>' +
             '</div>' +
             '<div style="font-size:18px;font-weight:700;color:#E2E8F0;line-height:1.35;margin-bottom:10px;">' + escapeHtml(f.summary || ticketKey) + '</div>' +
-            '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12px;color:#64748B;">' +
+            '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--rws-text-muted);">' +
               '<span>Ticket: <strong style="color:#6366F1;">' + escapeHtml(ticketKey) + '</strong></span>' +
               '<span>Reported: <strong style="color:#CBD5E1;">' + jiraFormatDT(f.created) + '</strong></span>' +
               '<span>Status: <strong style="color:#CBD5E1;">' + escapeHtml(status) + '</strong></span>' +
@@ -48781,7 +48981,7 @@ async function openInvestigation(ticketKey) {
           '<div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid rgba(255,255,255,0.06);background:#0D1526;">' +
             [['Identities','rMetaIdent','#EF4444'],['Devices','rMetaDev','#94A3B8'],['Applications','rMetaApp','#94A3B8'],['Data Objects','rMetaData','#94A3B8']].map(function(m,i) {
               return '<div style="padding:12px 16px;' + (i<3?'border-right:1px solid rgba(255,255,255,0.06);':'') + '">' +
-                '<div style="font-size:11px;color:#64748B;margin-bottom:4px;">' + m[0] + '</div>' +
+                '<div style="font-size:11px;color:var(--rws-text-muted);margin-bottom:4px;">' + m[0] + '</div>' +
                 '<div style="font-size:22px;font-weight:700;color:' + m[2] + ';" id="' + m[1] + '">\u2014</div>' +
               '</div>';
             }).join('') +
@@ -48808,8 +49008,8 @@ async function openInvestigation(ticketKey) {
               '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 10px;">What happened?</h3>' +
               '<p style="font-size:14px;color:#CBD5E1;line-height:1.6;margin:0 0 8px;">' + escapeHtml(_rWhatHappened || 'No description available.') + '</p>' +
               '<p style="font-size:13px;margin:0 0 22px;"><a style="color:#6366F1;text-decoration:none;cursor:pointer;" onclick="window.invSwitchTab(\'triage\')">For further details, please review the incident triage. \u2192</a></p>' +
-              '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 10px;">Root cause analysis</h3>' +
-              '<p id="rRootCause" style="font-size:14px;color:#64748B;line-height:1.6;margin:0 0 22px;font-style:italic;">Investigation in progress \u2014 root cause analysis will appear after AI investigation completes.</p>' +
+              '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 10px;">AI Verdict</h3>' +
+              '<p id="rRootCause" style="font-size:14px;color:var(--rws-text-muted);line-height:1.6;margin:0 0 22px;font-style:italic;">Investigation in progress \u2014 AI verdict will appear after AI investigation completes.</p>' +
               '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 12px;">Impact</h3>' +
               '<div style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:16px;margin-bottom:16px;">' + _rAttackGraph + '</div>' +
               // Hidden compat IDs for existing JS
@@ -48824,55 +49024,55 @@ async function openInvestigation(ticketKey) {
             '<div id="invTab-triage" class="inv-radiant-tab-content" style="display:none;">' +
               '<div style="display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start;">' +
                 '<div>' +
-                  '<div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Alerts</div>' +
+                  '<div style="font-size:10px;font-weight:700;color:var(--rws-text-muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Alerts</div>' +
                   '<div class="card" style="padding:0;overflow:hidden;cursor:pointer;border-color:#FECACA!important;">' +
                     '<div style="padding:12px 14px;border-left:3px solid #EF4444;">' +
                       '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
                         '<span style="font-size:9px;font-weight:700;color:#EF4444;text-transform:uppercase;letter-spacing:0.05em;">Escalated</span>' +
-                        '<span style="font-size:9px;color:#9CA3AF;">' + escapeHtml(ticketKey) + '</span>' +
+                        '<span style="font-size:9px;color:var(--rws-text-muted);">' + escapeHtml(ticketKey) + '</span>' +
                       '</div>' +
-                      '<div style="font-size:11px;color:#374151;line-height:1.4;">' + escapeHtml((f.summary||'').substring(0,65)) + ((f.summary||'').length>65?'\u2026':'') + '</div>' +
-                      '<div style="font-size:10px;color:#9CA3AF;margin-top:5px;">' + jiraFormatDT(f.created) + '</div>' +
+                      '<div style="font-size:11px;color:var(--rws-text-secondary);line-height:1.4;">' + escapeHtml((f.summary||'').substring(0,65)) + ((f.summary||'').length>65?'\u2026':'') + '</div>' +
+                      '<div style="font-size:10px;color:var(--rws-text-muted);margin-top:5px;">' + jiraFormatDT(f.created) + '</div>' +
                     '</div>' +
                   '</div>' +
-                  (orgs.length>0?'<div style="margin-top:10px;padding:10px 12px;background:#F9FAFB;border-radius:6px;border:1px solid #E5E7EB;font-size:11px;"><span style="color:#9CA3AF;">Org:</span> <span style="color:#4F46E5;font-weight:600;">' + escapeHtml(orgs.join(', ')) + '</span></div>':'') +
+                  (orgs.length>0?'<div style="margin-top:10px;padding:10px 12px;background:var(--rws-surface-hover);border-radius:6px;border:1px solid var(--rws-border-card);font-size:11px;"><span style="color:var(--rws-text-muted);">Org:</span> <span style="color:#4F46E5;font-weight:600;">' + escapeHtml(orgs.join(', ')) + '</span></div>':'') +
                   (labels.length>0?'<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">' + labels.map(function(l){return '<span style="font-size:10px;padding:3px 9px;background:#EEF2FF;border:1px solid #C7D2FE;border-radius:10px;color:#4338CA;">' + escapeHtml(l) + '</span>';}).join('') + '</div>':'') +
                 '</div>' +
                 '<div style="display:flex;flex-direction:column;gap:14px;">' +
                   '<div class="card" style="padding:16px;">' +
-                    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #F3F4F6;">' +
+                    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--rws-border);">' +
                       '<div style="display:flex;align-items:center;gap:8px;">' +
                         '<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#EF4444;background:#FEF2F2;border:1px solid #FECACA;padding:3px 8px;border-radius:5px;">Escalated Alert</span>' +
-                        '<span style="font-size:10px;color:#9CA3AF;">' + escapeHtml(ticketKey) + '</span>' +
+                        '<span style="font-size:10px;color:var(--rws-text-muted);">' + escapeHtml(ticketKey) + '</span>' +
                       '</div>' +
-                      '<div style="display:flex;align-items:center;gap:10px;font-size:11px;color:#9CA3AF;">' +
+                      '<div style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--rws-text-muted);">' +
                         'Priority <span style="font-weight:600;color:' + _rPriColor + ';background:' + _rPriBg + ';padding:2px 8px;border-radius:4px;font-size:10px;">' + escapeHtml(priority.split(' - ')[0]) + '</span>' +
-                        '<span>Detected <strong style="color:#374151;">' + jiraFormatDT(f.created) + '</strong></span>' +
+                        '<span>Detected <strong style="color:var(--rws-text-secondary);">' + jiraFormatDT(f.created) + '</strong></span>' +
                       '</div>' +
                     '</div>' +
-                    '<div style="font-size:14px;font-weight:600;color:#111827;line-height:1.4;margin-bottom:14px;">' + escapeHtml(f.summary||'') + '</div>' +
+                    '<div style="font-size:14px;font-weight:600;color:var(--rws-text-primary);line-height:1.4;margin-bottom:14px;">' + escapeHtml(f.summary||'') + '</div>' +
                     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;font-size:11px;">' +
-                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Recipient</div><div style="color:#111827;font-weight:500;">' + escapeHtml(reporter) + '</div></div>' +
-                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Received at</div><div style="color:#374151;">' + jiraFormatDT(f.created) + '</div></div>' +
-                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Reporter</div><div style="color:#111827;">' + escapeHtml(reporter) + '</div></div>' +
-                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Assignee</div><div style="color:#4F46E5;font-weight:500;">' + escapeHtml(assignee) + '</div></div>' +
-                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Organisation</div><div style="color:#111827;">' + escapeHtml(orgs.join(', ')||'\u2014') + '</div></div>' +
-                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Use Case</div><div style="color:#4F46E5;font-weight:500;">' + escapeHtml(useCase||workCatStr||'\u2014') + '</div></div>' +
+                      '<div><div style="color:var(--rws-text-muted);margin-bottom:3px;font-size:10px;">Recipient</div><div style="color:var(--rws-text-primary);font-weight:500;">' + escapeHtml(reporter) + '</div></div>' +
+                      '<div><div style="color:var(--rws-text-muted);margin-bottom:3px;font-size:10px;">Received at</div><div style="color:var(--rws-text-secondary);">' + jiraFormatDT(f.created) + '</div></div>' +
+                      '<div><div style="color:var(--rws-text-muted);margin-bottom:3px;font-size:10px;">Reporter</div><div style="color:var(--rws-text-primary);">' + escapeHtml(reporter) + '</div></div>' +
+                      '<div><div style="color:var(--rws-text-muted);margin-bottom:3px;font-size:10px;">Assignee</div><div style="color:#4F46E5;font-weight:500;">' + escapeHtml(assignee) + '</div></div>' +
+                      '<div><div style="color:var(--rws-text-muted);margin-bottom:3px;font-size:10px;">Organisation</div><div style="color:var(--rws-text-primary);">' + escapeHtml(orgs.join(', ')||'\u2014') + '</div></div>' +
+                      '<div><div style="color:var(--rws-text-muted);margin-bottom:3px;font-size:10px;">Use Case</div><div style="color:#4F46E5;font-weight:500;">' + escapeHtml(useCase||workCatStr||'\u2014') + '</div></div>' +
                     '</div>' +
                   '</div>' +
                   '<div class="card" style="padding:16px;">' +
-                    '<div style="font-size:15px;font-weight:600;color:#111827;margin-bottom:4px;">Why was this alert escalated?</div>' +
-                    '<div style="font-size:11px;color:#9CA3AF;margin-bottom:12px;">This alert failed the following triage step or contained these escalation details:</div>' +
-                    '<div style="font-size:12px;color:#374151;line-height:1.6;max-height:260px;overflow-y:auto;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;padding:12px;word-break:break-word;">' +
-                      (description ? highlightEntities(description) : '<span style="color:#9CA3AF;font-style:italic;">No escalation details provided in this ticket.</span>') +
+                    '<div style="font-size:15px;font-weight:600;color:var(--rws-text-primary);margin-bottom:4px;">Why was this alert escalated?</div>' +
+                    '<div style="font-size:11px;color:var(--rws-text-muted);margin-bottom:12px;">This alert failed the following triage step or contained these escalation details:</div>' +
+                    '<div style="font-size:12px;color:var(--rws-text-secondary);line-height:1.6;max-height:260px;overflow-y:auto;background:var(--rws-surface-hover);border:1px solid var(--rws-border-card);border-radius:6px;padding:12px;word-break:break-word;">' +
+                      (description ? highlightEntities(description) : '<span style="color:var(--rws-text-muted);font-style:italic;">No escalation details provided in this ticket.</span>') +
                     '</div>' +
                   '</div>' +
                   '<div class="card" style="padding:16px;border-color:#C7D2FE!important;" id="playbookActionsCard">' +
                     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">' +
-                      '<div style="font-size:15px;font-weight:600;color:#111827;">Playbook Triage Steps</div>' +
+                      '<div style="font-size:15px;font-weight:600;color:var(--rws-text-primary);">Playbook Triage Steps</div>' +
                       '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;">Detection Rules</span>' +
                     '</div>' +
-                    '<div style="font-size:11px;color:#9CA3AF;font-style:italic;" id="playbookActionsContent">Triage steps will populate after investigation runs...</div>' +
+                    '<div style="font-size:11px;color:var(--rws-text-muted);font-style:italic;" id="playbookActionsContent">Triage steps will populate after investigation runs...</div>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
@@ -48881,29 +49081,29 @@ async function openInvestigation(ticketKey) {
             // ══ INVESTIGATION TAB ══
             '<div id="invTab-investigation" class="inv-radiant-tab-content" style="display:none;">' +
               '<div style="display:flex;flex-direction:column;gap:12px;">' +
-                '<div id="invReInvestigateBar" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:white;border:1px solid #E5E7EB;border-radius:8px;">' +
+                '<div id="invReInvestigateBar" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--rws-card);border:1px solid var(--rws-border-card);border-radius:8px;">' +
                   '<div style="flex:1;">' +
-                    '<div style="font-size:12px;font-weight:600;color:#374151;">AI Investigation</div>' +
-                    '<div style="font-size:11px;color:#9CA3AF;">Uses SIEM, Threat Intel, and AI to analyse this ticket end-to-end</div>' +
+                    '<div style="font-size:12px;font-weight:600;color:var(--rws-text-secondary);">AI Investigation</div>' +
+                    '<div style="font-size:11px;color:var(--rws-text-muted);">Uses SIEM, Threat Intel, and AI to analyse this ticket end-to-end</div>' +
                   '</div>' +
                   '<button class="btn btn-sm" style="font-size:11px;background:#EEF2FF;color:#4F46E5;border:1px solid #C7D2FE;border-radius:6px;white-space:nowrap;padding:5px 12px;" onclick="if(window.invSwitchTab)window.invSwitchTab(\'investigation\');reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-run</button>' +
                 '</div>' +
-                '<div id="invLoadingSpinner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;gap:12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;">' +
+                '<div id="invLoadingSpinner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;gap:12px;background:var(--rws-surface-hover);border:1px solid var(--rws-border-card);border-radius:10px;">' +
                   '<div style="position:relative;width:44px;height:44px;">' +
                     '<div style="position:absolute;inset:0;border:2px solid rgba(79,70,229,0.15);border-top-color:#4F46E5;border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
                     '<div style="position:absolute;inset:7px;border:2px solid rgba(99,102,241,0.1);border-bottom-color:#6366F1;border-radius:50%;animation:spin 1.2s linear infinite reverse;"></div>' +
                   '</div>' +
                   '<div style="text-align:center;">' +
                     '<div style="font-size:13px;color:#4F46E5;font-weight:600;margin-bottom:3px;" id="invSpinnerLabel">Initializing AI Investigation</div>' +
-                    '<div style="font-size:11px;color:#9CA3AF;" id="invSpinnerSub">Setting up analysis pipeline...</div>' +
+                    '<div style="font-size:11px;color:var(--rws-text-muted);" id="invSpinnerSub">Setting up analysis pipeline...</div>' +
                   '</div>' +
-                  '<div style="width:220px;height:3px;background:#E5E7EB;border-radius:2px;overflow:hidden;">' +
+                  '<div style="width:220px;height:3px;background:var(--rws-border-card);border-radius:2px;overflow:hidden;">' +
                     '<div style="height:100%;width:0%;background:linear-gradient(90deg,#4F46E5,#6366F1);border-radius:2px;animation:invProgressBar 8s ease-in-out forwards;" id="invProgressFill"></div>' +
                   '</div>' +
                   '<div style="display:flex;gap:14px;">' +
-                    '<span style="font-size:10px;color:#9CA3AF;display:flex;align-items:center;gap:3px;" id="invPipeStep1"><span style="width:6px;height:6px;border-radius:50%;border:1.5px solid #C7D2FE;display:inline-block;"></span>SIEM</span>' +
-                    '<span style="font-size:10px;color:#9CA3AF;display:flex;align-items:center;gap:3px;" id="invPipeStep2"><span style="width:6px;height:6px;border-radius:50%;border:1.5px solid #C7D2FE;display:inline-block;"></span>Threat Intel</span>' +
-                    '<span style="font-size:10px;color:#9CA3AF;display:flex;align-items:center;gap:3px;" id="invPipeStep3"><span style="width:6px;height:6px;border-radius:50%;border:1.5px solid #C7D2FE;display:inline-block;"></span>AI Analysis</span>' +
+                    '<span style="font-size:10px;color:var(--rws-text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep1"><span style="width:6px;height:6px;border-radius:50%;border:1.5px solid #C7D2FE;display:inline-block;"></span>SIEM</span>' +
+                    '<span style="font-size:10px;color:var(--rws-text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep2"><span style="width:6px;height:6px;border-radius:50%;border:1.5px solid #C7D2FE;display:inline-block;"></span>Threat Intel</span>' +
+                    '<span style="font-size:10px;color:var(--rws-text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep3"><span style="width:6px;height:6px;border-radius:50%;border:1.5px solid #C7D2FE;display:inline-block;"></span>AI Analysis</span>' +
                   '</div>' +
                 '</div>' +
                 '<div id="invMainContent" style="display:flex;flex-direction:column;gap:10px;">' +
@@ -48911,19 +49111,19 @@ async function openInvestigation(ticketKey) {
                     '<div class="card-header inv-collapsible-header" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid transparent;">' +
                       '<span style="width:6px;height:6px;border-radius:50%;background:#F59E0B;flex-shrink:0;"></span>' +
                       '<span class="card-title" style="font-size:11px;">Entity Enrichment</span>' +
-                      '<span style="font-size:10px;color:#9CA3AF;margin-left:2px;">\u2014 IOC reputation, WHOIS, and passive DNS</span>' +
-                      '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:11px;color:#9CA3AF;transition:transform 0.3s;">\u25BC</span>' +
+                      '<span style="font-size:10px;color:var(--rws-text-muted);margin-left:2px;">\u2014 IOC reputation, WHOIS, and passive DNS</span>' +
+                      '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:11px;color:var(--rws-text-muted);transition:transform 0.3s;">\u25BC</span>' +
                     '</div>' +
-                    '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:11px;color:#9CA3AF;font-style:italic;">Enrichment data will appear after investigation runs...</div>' +
+                    '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:11px;color:var(--rws-text-muted);font-style:italic;">Enrichment data will appear after investigation runs...</div>' +
                   '</div>' +
                   '<div class="card" style="padding:0;" id="correlatedAlertsCard">' +
                     '<div class="card-header inv-collapsible-header" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid transparent;">' +
                       '<span style="width:6px;height:6px;border-radius:50%;background:#8B5CF6;flex-shrink:0;"></span>' +
                       '<span class="card-title" style="font-size:11px;">Correlated Alerts</span>' +
-                      '<span style="font-size:10px;color:#9CA3AF;margin-left:2px;">\u2014 Related tickets across the same tenant</span>' +
-                      '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:11px;color:#9CA3AF;transition:transform 0.3s;">\u25BC</span>' +
+                      '<span style="font-size:10px;color:var(--rws-text-muted);margin-left:2px;">\u2014 Related tickets across the same tenant</span>' +
+                      '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:11px;color:var(--rws-text-muted);transition:transform 0.3s;">\u25BC</span>' +
                     '</div>' +
-                    '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:11px;color:#9CA3AF;font-style:italic;">Alert correlation data will appear after investigation runs...</div>' +
+                    '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:11px;color:var(--rws-text-muted);font-style:italic;">Alert correlation data will appear after investigation runs...</div>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
@@ -48935,17 +49135,17 @@ async function openInvestigation(ticketKey) {
                 '<div class="card" style="padding:14px;" id="recommendedActionsCard">' +
                   '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;display:flex;align-items:center;">' +
                     '<span class="card-title" style="font-size:14px;">AI Recommended Actions</span>' +
-                    '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:#9CA3AF;transition:transform 0.3s;">\u25BC</span>' +
+                    '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--rws-text-muted);transition:transform 0.3s;">\u25BC</span>' +
                   '</div>' +
-                  '<div class="inv-collapsible-body" style="display:none;font-size:11px;color:#9CA3AF;font-style:italic;">Actions will appear after investigation...</div>' +
+                  '<div class="inv-collapsible-body" style="display:none;font-size:11px;color:var(--rws-text-muted);font-style:italic;">Actions will appear after investigation...</div>' +
                 '</div>' +
                 '<div class="card" style="padding:14px;border-color:#C7D2FE!important;" id="clientEscalationCard">' +
                   '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:8px;">' +
                     '<span class="card-title" style="font-size:14px;">Client Escalation Draft</span>' +
                     '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;">AI Generated</span>' +
-                    '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:#9CA3AF;transition:transform 0.3s;">\u25BC</span>' +
+                    '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--rws-text-muted);transition:transform 0.3s;">\u25BC</span>' +
                   '</div>' +
-                  '<div id="escalationDraftContent" style="font-size:11px;color:#9CA3AF;">Draft will be generated after investigation...</div>' +
+                  '<div id="escalationDraftContent" style="font-size:11px;color:var(--rws-text-muted);">Draft will be generated after investigation...</div>' +
                 '</div>' +
               '</div>' +
             '</div>' + // end containment tab
@@ -48955,26 +49155,26 @@ async function openInvestigation(ticketKey) {
               '<div style="display:flex;flex-direction:column;gap:14px;">' +
                 '<div id="invSLAPanel" class="card" style="padding:14px;border-color:#FDE68A!important;">' +
                   '<div class="card-header" style="margin-bottom:10px;display:flex;align-items:center;"><span class="card-title" style="font-size:14px;">\u23F1 SLA Details</span><span style="font-size:9px;padding:2px 7px;border-radius:8px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;margin-left:6px;">Jira</span></div>' +
-                  '<div id="invSLAContent" style="font-size:11px;color:#9CA3AF;">Loading SLA data from Jira...</div>' +
+                  '<div id="invSLAContent" style="font-size:11px;color:var(--rws-text-muted);">Loading SLA data from Jira...</div>' +
                 '</div>' +
                 '<div class="card" style="padding:14px;">' +
-                  '<div class="card-header" style="margin-bottom:12px;display:flex;align-items:center;"><span class="card-title" style="font-size:14px;">Activity Timeline</span><span style="font-size:11px;color:#9CA3AF;margin-left:6px;">' + timelineItems.length + ' events</span></div>' +
+                  '<div class="card-header" style="margin-bottom:12px;display:flex;align-items:center;"><span class="card-title" style="font-size:14px;">Activity Timeline</span><span style="font-size:11px;color:var(--rws-text-muted);margin-left:6px;">' + timelineItems.length + ' events</span></div>' +
                   '<div style="display:flex;flex-direction:column;">' + (timelineItems.length===0
-                    ? '<div style="text-align:center;padding:24px;font-size:12px;color:#9CA3AF;">No activity recorded</div>'
+                    ? '<div style="text-align:center;padding:24px;font-size:12px;color:var(--rws-text-muted);">No activity recorded</div>'
                     : timelineItems.slice(0,20).map(function(item) {
                         if (item.type==='comment') {
                           return '<div style="padding:10px 14px;border-left:2px solid #C7D2FE;margin-left:8px;margin-bottom:8px;">' +
                             '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
                               '<span style="font-size:11px;font-weight:600;color:#4F46E5;">' + escapeHtml(item.author) + '</span>' +
-                              '<span style="font-size:10px;color:#9CA3AF;">' + jiraTimeAgo(item.time) + '</span>' +
+                              '<span style="font-size:10px;color:var(--rws-text-muted);">' + jiraTimeAgo(item.time) + '</span>' +
                             '</div>' +
-                            '<div style="font-size:11px;color:#374151;line-height:1.4;max-height:100px;overflow:hidden;">' + (item.body||'') + '</div></div>';
+                            '<div style="font-size:11px;color:var(--rws-text-secondary);line-height:1.4;max-height:100px;overflow:hidden;">' + (item.body||'') + '</div></div>';
                         } else {
-                          return '<div style="padding:4px 14px;border-left:1px solid #E5E7EB;margin-left:8px;margin-bottom:2px;">' +
-                            '<div style="font-size:10px;color:#9CA3AF;">' + escapeHtml(item.author) + ' \u00b7 ' + jiraTimeAgo(item.time) + '</div>' +
-                            '<div style="font-size:10px;color:#374151;margin-top:1px;">' + escapeHtml(item.field||'') + ': ' +
+                          return '<div style="padding:4px 14px;border-left:1px solid var(--rws-border-card);margin-left:8px;margin-bottom:2px;">' +
+                            '<div style="font-size:10px;color:var(--rws-text-muted);">' + escapeHtml(item.author) + ' \u00b7 ' + jiraTimeAgo(item.time) + '</div>' +
+                            '<div style="font-size:10px;color:var(--rws-text-secondary);margin-top:1px;">' + escapeHtml(item.field||'') + ': ' +
                               (item.from?'<span style="text-decoration:line-through;opacity:0.4;">' + escapeHtml(item.from) + '</span> \u2192 ':'') +
-                              '<span style="color:#111827;">' + escapeHtml(item.to||'') + '</span></div></div>';
+                              '<span style="color:var(--rws-text-primary);">' + escapeHtml(item.to||'') + '</span></div></div>';
                         }
                       }).join('')) + '</div>' +
                 '</div>' +
@@ -48983,26 +49183,49 @@ async function openInvestigation(ticketKey) {
 
           '</div>' + // end left column
 
-          // RIGHT column — always-visible status sidebar
-          '<div style="background:#111827;padding:20px;overflow-y:auto;border-radius:0 0 8px 0;">' +
-            '<div style="font-size:14px;font-weight:700;color:#E2E8F0;margin-bottom:18px;">Status</div>' +
-            [['Triage','#16A34A'],['Investigation','#6366F1'],['Containment','#F97316'],['Remediation','#EC4899']].map(function(stage,i) {
-              var done = i < _invStageIdx, active = i === _invStageIdx;
-              var pct = done ? 100 : active ? 55 : 0;
-              return '<div style="margin-bottom:14px;">' +
-                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
-                  '<span style="font-size:12px;font-weight:' + (active?'600':'500') + ';color:' + (done||active?'#E2E8F0':'#64748B') + ';">' + stage[0] + '</span>' +
-                  '<span style="font-size:11px;font-weight:600;color:' + (done?'#16A34A':active?stage[1]:'#9CA3AF') + ';">' + (done?'Complete':active?'In Progress':'Pending') + '</span>' +
-                '</div>' +
-                '<div class="r-stage-bar"><div class="r-stage-bar-fill" style="width:' + pct + '%;background:' + (done?'#16A34A':stage[1]) + ';"></div></div>' +
-              '</div>';
-            }).join('') +
-            '<div style="height:1px;background:rgba(255,255,255,0.06);margin:18px 0;"></div>' +
-            '<div style="font-size:14px;font-weight:700;color:#E2E8F0;margin-bottom:12px;">Containment</div>' +
-            '<div style="margin-bottom:4px;">' + _rTaskHtml(_rContainTasks) + '</div>' +
-            '<div style="height:1px;background:rgba(255,255,255,0.06);margin:18px 0;"></div>' +
-            '<div style="font-size:14px;font-weight:700;color:#E2E8F0;margin-bottom:12px;">Remediation</div>' +
-            '<div>' + _rTaskHtml(_rRemedTasks) + '</div>' +
+          // RIGHT column — contextual sidebar (content changes per tab)
+          '<div style="background:var(--rws-card);padding:20px;overflow-y:auto;border-radius:0 0 8px 0;">' +
+            // Status section (visible on overview + timeline tabs)
+            '<div id="invSideStatus">' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:18px;">Status</div>' +
+              [['Triage','#16A34A'],['Investigation','#6366F1'],['Containment','#F97316'],['Remediation','#EC4899']].map(function(stage,i) {
+                var done = i < _invStageIdx, active = i === _invStageIdx;
+                var pct = done ? 100 : active ? 55 : 0;
+                return '<div style="margin-bottom:14px;">' +
+                  '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+                    '<span style="font-size:12px;font-weight:' + (active?'600':'500') + ';color:' + (done||active?'var(--rws-text-primary)':'var(--rws-text-muted)') + ';">' + stage[0] + '</span>' +
+                    '<span style="font-size:11px;font-weight:600;color:' + (done?'#16A34A':active?stage[1]:'var(--rws-text-muted)') + ';">' + (done?'Complete':active?'In Progress':'Pending') + '</span>' +
+                  '</div>' +
+                  '<div class="r-stage-bar"><div class="r-stage-bar-fill" style="width:' + pct + '%;background:' + (done?'#16A34A':stage[1]) + ';"></div></div>' +
+                '</div>';
+              }).join('') +
+            '</div>' +
+            // Enrichment section (visible on triage + investigation tabs)
+            '<div id="invSideEnrichment" style="display:none;">' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">Entity Enrichment</div>' +
+              '<div id="invSideEnrichmentContent" style="font-size:11px;color:var(--rws-text-muted);font-style:italic;">Run AI investigation to see enrichment results here...</div>' +
+              '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">Correlated Alerts</div>' +
+              '<div id="invSideCorrelatedContent" style="font-size:11px;color:var(--rws-text-muted);font-style:italic;">Correlations will appear after investigation...</div>' +
+              '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">Feedback</div>' +
+              '<div style="display:flex;gap:6px;margin-bottom:8px;">' +
+                '<button class="btn btn-sm" style="padding:4px 10px;font-size:10px;border-radius:6px;background:rgba(16,185,129,0.08);color:#10B981;border:1px solid rgba(16,185,129,0.2);" onclick="submitInvFeedback(\'good\')">Θ Good</button>' +
+                '<button class="btn btn-sm" style="padding:4px 10px;font-size:10px;border-radius:6px;background:rgba(239,68,68,0.08);color:#EF4444;border:1px solid rgba(239,68,68,0.2);" onclick="submitInvFeedback(\'bad\')">Θ Bad</button>' +
+              '</div>' +
+            '</div>' +
+            // Containment section (visible on containment tab)
+            '<div id="invSideContainment" style="display:none;">' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">Quick Actions</div>' +
+              '<div style="display:flex;flex-direction:column;gap:6px;">' +
+                '<button class="btn btn-sm" style="width:100%;text-align:left;padding:8px 12px;font-size:11px;background:rgba(239,68,68,0.06);color:#EF4444;border:1px solid rgba(239,68,68,0.15);border-radius:6px;" onclick="showToast(\'Isolate endpoint action queued\',\'success\')"><span style="margin-right:6px;">&#9632;</span> Isolate Endpoint</button>' +
+                '<button class="btn btn-sm" style="width:100%;text-align:left;padding:8px 12px;font-size:11px;background:rgba(245,158,11,0.06);color:#F59E0B;border:1px solid rgba(245,158,11,0.15);border-radius:6px;" onclick="showToast(\'Block hash action queued\',\'success\')"><span style="margin-right:6px;">&#128683;</span> Block Hash</button>' +
+                '<button class="btn btn-sm" style="width:100%;text-align:left;padding:8px 12px;font-size:11px;background:rgba(99,102,241,0.06);color:#6366F1;border:1px solid rgba(99,102,241,0.15);border-radius:6px;" onclick="showToast(\'Disable account action queued\',\'success\')"><span style="margin-right:6px;">&#128274;</span> Disable Account</button>' +
+              '</div>' +
+              '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">AI Recommended</div>' +
+              '<div id="invSideRecommendedContent" style="font-size:11px;color:var(--rws-text-muted);font-style:italic;">Recommendations appear after investigation...</div>' +
+            '</div>' +
           '</div>' + // end right sidebar
 
         '</div>' + // end two-column body
@@ -49059,6 +49282,16 @@ function initInvestigationSnapshot(ticketKey, ticketData) {
 
   var totalEntities = (iocs.hosts||[]).length + (iocs.ips||[]).length + (iocs.users||[]).length + (iocs.files||[]).length + (iocs.hashes||[]).length;
   var priorityColor = (priority||'').includes('P1') ? '#ef4444' : (priority||'').includes('P2') ? '#f97316' : (priority||'').includes('P3') ? '#f59e0b' : 'var(--cyan)';
+
+  // ── Populate Investigation Workspace entity counts (Summary tab) ──
+  var _el;
+  _el = document.getElementById('rMetaIdent'); if(_el) _el.textContent = (iocs.users||[]).length || '0';
+  _el = document.getElementById('rMetaDev');   if(_el) _el.textContent = (iocs.hosts||[]).length || '0';
+  _el = document.getElementById('rMetaApp');   if(_el) _el.textContent = ((iocs.files||[]).filter(function(f){ return f.match(/\.(exe|dll|ps1|sh|bat|py|jar|msi)$/i); }).length) || '0';
+  _el = document.getElementById('rMetaData');  if(_el) _el.textContent = ((iocs.files||[]).length + (iocs.hashes||[]).length) || '0';
+  // Also update the SVG impact diagram
+  _el = document.getElementById('rImpIdent'); if(_el) _el.textContent = (iocs.users||[]).length || '0';
+  _el = document.getElementById('rImpDev');   if(_el) _el.textContent = (iocs.hosts||[]).length || '0';
 
   // ── Top stat strip ──
   var statItems = [
@@ -50543,7 +50776,18 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         for (var ni = 0; ni < alertIPs.length; ni++) {
           var ip = alertIPs[ni];
           var isPrivate = ip.startsWith('10.') || ip.startsWith('172.') || ip.startsWith('192.168.') || ip.startsWith('127.');
-          var netIndex = 'logs-fortinet_fortigate.log-' + namespace + '-*,logs-panw.panos-' + namespace + '-*';
+          // Connector-aware firewall index resolution
+          var netIndex;
+          if (_allFwConnectors.length > 0) {
+            netIndex = _allFwConnectors.map(function(fc) {
+              var m = fc.metadata || {};
+              if (m.index_pattern) return m.index_pattern;
+              if (fc.vendor && fc.vendor.toLowerCase().includes('fortinet')) return 'logs-fortinet_fortigate.log-' + namespace + '-*';
+              return 'logs-panw.panos-' + namespace + '-*';
+            }).join(',');
+          } else {
+            netIndex = 'logs-fortinet_fortigate.log-' + namespace + '-*,logs-panw.panos-' + namespace + '-*';
+          }
           var netQ = { size: 5, query: { bool: { must: [{ range: { '@timestamp': { gte: timeFrom, lte: timeTo } } }], should: [{ match: { 'destination.ip': ip } }, { match: { 'source.ip': ip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
           var qD3 = { name: 'Network: ' + ip, index: 'Firewall logs', query: 'dst.ip:"' + ip + '" ±5min', status: 'running' };
           logs.queryDetails.push(qD3); logs.queriesRun++;
