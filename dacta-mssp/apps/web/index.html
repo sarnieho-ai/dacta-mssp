@@ -48506,11 +48506,8 @@ async function openInvestigation(ticketKey) {
       document.querySelectorAll('.inv-radiant-tab-content').forEach(function(t) { t.style.display = 'none'; });
       var target = document.getElementById('invTab-' + tabId);
       if (target) target.style.display = 'block';
-      document.querySelectorAll('.inv-tab-btn').forEach(function(b) {
-        var isActive = b.getAttribute('data-tab') === tabId;
-        b.style.color = isActive ? 'var(--text-primary)' : 'var(--text-muted)';
-        b.style.fontWeight = isActive ? '600' : '500';
-        b.style.borderBottom = isActive ? '2px solid var(--cyan)' : '2px solid transparent';
+      document.querySelectorAll('.r-tab').forEach(function(b) {
+        b.classList.toggle('active', b.getAttribute('data-tab') === tabId);
       });
     };
 
@@ -48543,255 +48540,381 @@ async function openInvestigation(ticketKey) {
           }
         }).join('');
 
+    // ── Radiant Security theme variables ──
+    var _rPriColor = priority.includes('P1')?'#DC2626':priority.includes('P2')?'#EA580C':priority.includes('P3')?'#CA8A04':'#6B7280';
+    var _rPriBg    = priority.includes('P1')?'#FEF2F2':priority.includes('P2')?'#FFF7ED':priority.includes('P3')?'#FEFCE8':'#F3F4F6';
+    var _rCatLow   = (_alertCat||'').toLowerCase();
+    var _rContainTasks = _rCatLow.includes('phish') ? [
+      {t:'Reset user password',d:'Force password reset for all affected accounts'},
+      {t:'Block sender domain / URL',d:'Add attacker domain and URLs to email and proxy blocklist'},
+      {t:'Quarantine phishing emails',d:'Remove all similar emails from affected mailboxes'}
+    ] : _rCatLow.includes('malware')||_rCatLow.includes('ransom') ? [
+      {t:'Isolate compromised device',d:'Remove device from network immediately to prevent spread'},
+      {t:'Block file hash',d:'Add malware hash to EDR / AV blocklist'},
+      {t:'Disable affected accounts',d:'Suspend compromised credentials to prevent lateral movement'}
+    ] : _rCatLow.includes('brute')||_rCatLow.includes('credential') ? [
+      {t:'Reset compromised account',d:'Force password reset on targeted accounts'},
+      {t:'Block attacking IPs',d:'Add source IP addresses to firewall blocklist'},
+      {t:'Enable MFA',d:'Enforce multi-factor authentication on affected accounts'}
+    ] : [
+      {t:'Isolate affected systems',d:'Remove impacted systems from the network'},
+      {t:'Block malicious indicators',d:'Update firewall and DNS blocklists with IOCs'},
+      {t:'Disable compromised accounts',d:'Temporarily suspend affected user accounts'}
+    ];
+    var _rRemedTasks = _rCatLow.includes('phish') ? [
+      {t:'Notify affected users',d:'Inform impacted users about the phishing attempt'},
+      {t:'Review email gateway rules',d:'Update filtering rules to prevent similar emails'},
+      {t:'User awareness training',d:'Enrol affected users in phishing simulation training'}
+    ] : _rCatLow.includes('malware')||_rCatLow.includes('ransom') ? [
+      {t:'Full EDR scan',d:'Run complete scan on all potentially affected endpoints'},
+      {t:'Collect forensic artifacts',d:'Capture memory dump and disk image for analysis'},
+      {t:'Patch vulnerability',d:'Identify and remediate the initial infection vector'}
+    ] : _rCatLow.includes('brute')||_rCatLow.includes('credential') ? [
+      {t:'Audit access logs',d:'Review all login attempts from attacker IPs'},
+      {t:'Update password policies',d:'Enforce stronger password complexity requirements'},
+      {t:'Enable account lockout',d:'Configure lockout after failed authentication attempts'}
+    ] : [
+      {t:'Collect and analyse logs',d:'Gather relevant logs for forensic analysis'},
+      {t:'Patch affected systems',d:'Apply security patches to vulnerable systems'},
+      {t:'Strengthen monitoring',d:'Enhance detection rules based on attack patterns'}
+    ];
+    function _rTaskHtml(tasks) {
+      return tasks.map(function(task) {
+        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #F3F4F6;">' +
+          '<div style="width:18px;height:18px;border-radius:50%;border:1.5px solid #D1D5DB;flex-shrink:0;margin-top:2px;"></div>' +
+          '<div><div style="font-size:12px;font-weight:500;color:#111827;">' + escapeHtml(task.t) + '</div>' +
+          '<div style="font-size:11px;color:#6B7280;margin-top:1px;">' + escapeHtml(task.d) + '</div></div></div>';
+      }).join('');
+    }
+    var _rDescShort = (description||f.summary||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+    if (_rDescShort.length > 420) _rDescShort = _rDescShort.substring(0,420) + '\u2026';
+    var _rImpSVG =
+      '<svg viewBox="0 0 320 260" width="100%" style="max-width:320px;display:block;margin:0 auto;">' +
+      '<circle cx="160" cy="130" r="100" fill="rgba(239,68,68,0.03)" stroke="rgba(239,68,68,0.08)" stroke-width="1"/>' +
+      '<circle cx="160" cy="130" r="76" fill="rgba(239,68,68,0.04)" stroke="rgba(239,68,68,0.1)" stroke-width="1"/>' +
+      '<circle cx="160" cy="130" r="54" fill="rgba(239,68,68,0.05)" stroke="rgba(239,68,68,0.12)" stroke-width="1"/>' +
+      '<circle cx="160" cy="130" r="34" fill="rgba(239,68,68,0.08)" stroke="rgba(239,68,68,0.18)" stroke-width="1.5"/>' +
+      '<line x1="78" y1="72" x2="138" y2="116" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>' +
+      '<line x1="242" y1="72" x2="182" y2="116" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>' +
+      '<line x1="68" y1="200" x2="138" y2="146" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>' +
+      '<line x1="252" y1="200" x2="182" y2="146" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>' +
+      '<circle cx="160" cy="130" r="22" fill="white" stroke="#E5E7EB" stroke-width="1.5"/>' +
+      '<text x="160" y="136" text-anchor="middle" font-size="16" fill="#9CA3AF">&#9888;</text>' +
+      '<circle cx="78" cy="66" r="24" fill="#FEF2F2" stroke="#FECACA" stroke-width="1.5"/>' +
+      '<circle cx="78" cy="59" r="6" fill="#EF4444"/>' +
+      '<path d="M63,84 Q63,74 78,74 Q93,74 93,84" fill="#EF4444"/>' +
+      '<text x="78" y="104" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Identities</text>' +
+      '<text x="78" y="118" text-anchor="middle" font-size="11" font-weight="700" fill="#EF4444" id="rImpIdent">\u2014</text>' +
+      '<circle cx="242" cy="66" r="24" fill="white" stroke="#E5E7EB" stroke-width="1.5"/>' +
+      '<rect x="232" y="56" width="8" height="10" rx="1" fill="#9CA3AF"/>' +
+      '<rect x="234" y="58" width="4" height="1" fill="white"/>' +
+      '<rect x="234" y="61" width="4" height="1" fill="white"/>' +
+      '<rect x="234" y="64" width="3" height="1" fill="white"/>' +
+      '<text x="242" y="104" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Data Objects</text>' +
+      '<text x="242" y="118" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280">\u2014</text>' +
+      '<circle cx="68" cy="200" r="24" fill="white" stroke="#E5E7EB" stroke-width="1.5"/>' +
+      '<rect x="57" y="191" width="22" height="14" rx="2" fill="none" stroke="#9CA3AF" stroke-width="1.5"/>' +
+      '<rect x="64" y="205" width="8" height="2" rx="1" fill="#9CA3AF"/>' +
+      '<rect x="60" y="207" width="16" height="1.5" rx="1" fill="#9CA3AF"/>' +
+      '<text x="68" y="238" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Devices</text>' +
+      '<text x="68" y="252" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280" id="rImpDev">\u2014</text>' +
+      '<circle cx="252" cy="200" r="24" fill="white" stroke="#E5E7EB" stroke-width="1.5"/>' +
+      '<rect x="244" y="192" width="6" height="6" rx="1" fill="#9CA3AF"/>' +
+      '<rect x="252" y="192" width="6" height="6" rx="1" fill="#9CA3AF"/>' +
+      '<rect x="244" y="200" width="6" height="6" rx="1" fill="#9CA3AF"/>' +
+      '<rect x="252" y="200" width="6" height="6" rx="1" fill="#9CA3AF"/>' +
+      '<text x="252" y="238" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Applications</text>' +
+      '<text x="252" y="252" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280">\u2014</text>' +
+      '</svg>';
+
     livePanel.innerHTML =
-      // ══════════════════════════════════════════════════════
-      //  RADIANT-STYLE INCIDENT HEADER
-      // ══════════════════════════════════════════════════════
-      '<div style="background:#0d1526;border:1px solid rgba(255,255,255,0.08);border-radius:12px;margin-bottom:16px;overflow:hidden;">' +
+      '<style id="r-ws-css">' +
+        '.r-ws{font-family:"Inter","IBM Plex Sans",system-ui,sans-serif;background:#F8F9FA;color:#111827;' +
+          '--bg-base:#F8F9FA;--bg-surface:#F3F4F6;--bg-card:#FFFFFF;--border-subtle:rgba(0,0,0,0.06);' +
+          '--border-card:#E5E7EB;--text-primary:#111827;--text-secondary:#374151;--text-muted:#9CA3AF;' +
+          '--cyan:#4F46E5;--cyan-dim:rgba(79,70,229,0.08);--surface-1:#F3F4F6;--red:#EF4444;}' +
+        '.r-ws .card{background:#FFFFFF!important;border:1px solid #E5E7EB!important;box-shadow:0 1px 3px rgba(0,0,0,0.05);}' +
+        '.r-ws .card-header{border-bottom-color:#F3F4F6!important;}' +
+        '.r-ws .card-title{color:#111827!important;}' +
+        '.r-ws .inv-collapsible-header{background:#FFFFFF!important;}' +
+        '.r-ws .inv-collapsible-header:hover{background:#F9FAFB!important;}' +
+        '.r-tab{padding:12px 18px;font-size:13px;font-weight:500;color:#6B7280;background:none;border:none;' +
+          'border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;transition:all 0.15s;}' +
+        '.r-tab.active{color:#111827;font-weight:600;border-bottom-color:#111827;}' +
+        '.r-tab:hover:not(.active){color:#374151;background:#F9FAFB;}' +
+        '.r-stage-bar{height:4px;border-radius:2px;background:#E5E7EB;overflow:hidden;margin-top:6px;}' +
+        '.r-stage-bar-fill{height:100%;border-radius:2px;transition:width 0.8s ease;}' +
+        '@keyframes spin{to{transform:rotate(360deg)}}' +
+        '@keyframes invProgressBar{0%{width:0%}60%{width:70%}90%{width:88%}100%{width:92%}}' +
+      '</style>' +
+      '<div class="r-ws">' +
 
-        // ── Top row: badges + title + action buttons ──
-        '<div style="padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">' +
-          '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">' +
-            (_alertCat ? '<div style="padding-top:3px;flex-shrink:0;"><span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);text-transform:uppercase;letter-spacing:0.04em;">' + escapeHtml(_alertCat) + '</span></div>' : '') +
-            '<div style="flex:1;font-size:15px;font-weight:600;color:var(--text-primary);line-height:1.4;">' + escapeHtml(f.summary || ticketKey) + '</div>' +
-            '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
-              '<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:4px 12px;" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',12) + ' Re-investigate</button>' +
-              '<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:4px 12px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\',\'_blank\')">Open in Jira \u2197</button>' +
+        // ─── WHITE HEADER ───
+        '<div style="background:#FFFFFF;border-bottom:1px solid #E5E7EB;border-radius:8px 8px 0 0;">' +
+
+          // Breadcrumb bar
+          '<div style="padding:8px 20px;border-bottom:1px solid #F3F4F6;display:flex;align-items:center;gap:6px;font-size:12px;">' +
+            '<span style="color:#9CA3AF;cursor:pointer;" onclick="if(window.closeTicketPanel)window.closeTicketPanel()">&#9776;</span>' +
+            '<span style="color:#D1D5DB;">&#8250;</span>' +
+            '<span style="color:#9CA3AF;">Incidents</span>' +
+            '<span style="color:#D1D5DB;">&#8250;</span>' +
+            '<span style="color:#374151;font-weight:500;">' + escapeHtml(ticketKey) + '</span>' +
+          '</div>' +
+
+          // Title + badges area
+          '<div style="padding:16px 20px 12px;">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' +
+              '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:#DCFCE7;color:#15803D;border:1px solid #BBF7D0;">' +
+                '<span style="width:6px;height:6px;border-radius:50%;background:#16A34A;display:inline-block;"></span>LIVE' +
+              '</span>' +
+              (_alertCat ? '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;text-transform:uppercase;letter-spacing:0.03em;">' + escapeHtml(_alertCat) + '</span>' : '') +
+              '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:' + _rPriBg + ';color:' + _rPriColor + ';border:1px solid ' + _rPriColor + '55;">' + escapeHtml(priority.split(' - ')[0]) + '</span>' +
+            '</div>' +
+            '<div style="font-size:18px;font-weight:700;color:#111827;line-height:1.35;margin-bottom:10px;">' + escapeHtml(f.summary || ticketKey) + '</div>' +
+            '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12px;color:#6B7280;">' +
+              '<span>Ticket: <strong style="color:#4F46E5;">' + escapeHtml(ticketKey) + '</strong></span>' +
+              '<span>Reported: <strong style="color:#374151;">' + jiraFormatDT(f.created) + '</strong></span>' +
+              '<span>Status: <strong style="color:#374151;">' + escapeHtml(status) + '</strong></span>' +
+              '<span>Assignee: <strong style="color:' + (assignee==='Unassigned'?'#9CA3AF':'#4F46E5') + ';">' + escapeHtml(assignee) + '</strong></span>' +
+              (orgs.length>0?'<span>Org: <strong style="color:#374151;">' + escapeHtml(orgs.join(', ')) + '</strong></span>':'') +
+              '<div style="margin-left:auto;display:flex;gap:8px;">' +
+                '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:#F3F4F6;border:1px solid #E5E7EB;color:#374151;border-radius:6px;" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-investigate</button>' +
+                '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:#F3F4F6;border:1px solid #E5E7EB;color:#374151;border-radius:6px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\',\'_blank\')">Open in Jira \u2197</button>' +
+              '</div>' +
             '</div>' +
           '</div>' +
-          // Metadata strip
-          '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;font-size:10px;">' +
-            '<span style="color:var(--text-muted);">Incident <span style="color:var(--cyan);font-family:var(--font-mono);font-weight:700;margin-left:3px;">' + escapeHtml(ticketKey) + '</span></span>' +
-            '<span style="color:var(--text-muted);">Reported <span style="color:var(--text-secondary);margin-left:3px;">' + jiraFormatDT(f.created) + '</span></span>' +
-            '<span style="color:var(--text-muted);">Status <span class="badge ' + jiraStatusBadge(status) + '" style="font-size:9px;margin-left:3px;">' + escapeHtml(status) + '</span></span>' +
-            '<span style="color:var(--text-muted);">Priority <span class="badge ' + jiraPriorityBadge(priority) + '" style="font-size:9px;margin-left:3px;">' + escapeHtml(priority.split(' - ')[0]) + '</span></span>' +
-            '<span style="color:var(--text-muted);">Assigned to <span style="color:' + (assignee === 'Unassigned' ? 'var(--text-muted)' : 'var(--cyan)') + ';font-weight:500;margin-left:3px;">' + escapeHtml(assignee) + '</span></span>' +
-          '</div>' +
-        '</div>' +
 
-        // ── Stage progress bar ──
-        '<div style="display:flex;align-items:stretch;">' +
-          _invStages.map(function(stage, i) {
-            var done = i < _invStageIdx, active = i === _invStageIdx;
-            return '<div style="flex:1;padding:9px 16px;font-size:11px;font-weight:' + (active?'700':'500') + ';color:' + (active?'var(--text-primary)':done?'#10b981':'var(--text-muted)') + ';border-right:' + (i<3?'1px solid rgba(255,255,255,0.05)':'none') + ';position:relative;transition:color 0.2s;">' +
-              (done?'<span style="color:#10b981;margin-right:5px;">\u2713</span>':'') +
-              (active?'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);margin-right:5px;vertical-align:middle;box-shadow:0 0 6px var(--cyan);"></span>':'') +
-              stage +
-              (active?'<div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--cyan),#8b5cf6);"></div>':'') +
-              (done?'<div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:rgba(16,185,129,0.4);"></div>':'') +
-            '</div>';
-          }).join('') +
-        '</div>' +
-
-        // ── Tab navigation ──
-        '<div style="display:flex;align-items:center;padding:0 8px;background:rgba(0,0,0,0.15);border-top:1px solid rgba(255,255,255,0.05);">' +
-          [['overview','Overview'],['triage','Triage'],['investigation','Investigation'],['containment','Containment'],['timeline','Timeline']].map(function(t, i) {
-            var first = i === 0;
-            return '<button class="inv-tab-btn" data-tab="' + t[0] + '" onclick="window.invSwitchTab(\'' + t[0] + '\')" style="padding:10px 16px;font-size:11px;font-weight:' + (first?'600':'500') + ';color:' + (first?'var(--text-primary)':'var(--text-muted)') + ';background:none;border:none;border-bottom:2px solid ' + (first?'var(--cyan)':'transparent') + ';cursor:pointer;white-space:nowrap;transition:all 0.15s;">' + t[1] + '</button>';
-          }).join('') +
-        '</div>' +
-
-      '</div>' + // end radiant header
-
-      // ══════════════════════════════════════════════════════
-      //  OVERVIEW TAB
-      // ══════════════════════════════════════════════════════
-      '<div id="invTab-overview" class="inv-radiant-tab-content" style="display:block;">' +
-        // Verdict bar — subtle inline strip, shown after investigation runs
-        '<div id="invVerdictArea" style="display:none;margin-bottom:12px;"></div>' +
-        // Quick info strip
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">' +
-          '<div class="card" style="padding:12px 14px;">' +
-            '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:5px;">Organisation</div>' +
-            '<div style="font-size:13px;font-weight:600;color:var(--text-primary);">' + escapeHtml(orgs.join(', ') || '\u2014') + '</div>' +
+          // Entity metric boxes
+          '<div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #F3F4F6;">' +
+            [['Identities','rMetaIdent','#EF4444'],['Devices','rMetaDev','#6B7280'],['Applications','rMetaApp','#6B7280'],['Data Objects','rMetaData','#6B7280']].map(function(m,i) {
+              return '<div style="padding:12px 16px;' + (i<3?'border-right:1px solid #F3F4F6;':'') + '">' +
+                '<div style="font-size:11px;color:#9CA3AF;margin-bottom:4px;">' + m[0] + '</div>' +
+                '<div style="font-size:22px;font-weight:700;color:' + m[2] + ';" id="' + m[1] + '">\u2014</div>' +
+              '</div>';
+            }).join('') +
           '</div>' +
-          '<div class="card" style="padding:12px 14px;">' +
-            '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:5px;">Reporter</div>' +
-            '<div style="font-size:13px;font-weight:600;color:var(--text-primary);">' + escapeHtml(reporter) + '</div>' +
-          '</div>' +
-          '<div class="card" style="padding:12px 14px;">' +
-            '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:5px;">Use Case / Category</div>' +
-            '<div style="font-size:13px;font-weight:600;color:#a78bfa;">' + escapeHtml(useCase || workCatStr || '\u2014') + '</div>' +
-          '</div>' +
-        '</div>' +
-        // Investigation Snapshot card
-        '<div class="card" style="padding:16px;border-color:rgba(0,212,255,0.15);" id="alertGraphCard">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
-            '<span class="card-title">Investigation Snapshot</span>' +
-            '<span class="badge" id="invSnapshotBadge" style="font-size:8px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);">Pre-scan</span>' +
-          '</div>' +
-          '<div id="alertGraphBody">' +
-            '<div id="invSnapshotMetrics" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;"></div>' +
-            '<div id="invSnapshotEntities" style="margin-bottom:10px;"></div>' +
-            '<div id="invSnapshotResults" style="font-size:9px;color:var(--text-muted);text-align:center;padding:12px 0;font-style:italic;">SIEM analysis results will appear here after investigation runs...</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' + // end overview tab
 
-      // ══════════════════════════════════════════════════════
-      //  TRIAGE TAB
-      // ══════════════════════════════════════════════════════
-      '<div id="invTab-triage" class="inv-radiant-tab-content" style="display:none;">' +
-        '<div style="display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start;">' +
+          // Tab bar
+          '<div style="display:flex;align-items:center;padding:0 4px;border-top:1px solid #F3F4F6;overflow-x:auto;">' +
+            [['overview','Summary'],['triage','Triage'],['investigation','Investigation findings'],['containment','Containment'],['timeline','Timeline']].map(function(t,i) {
+              return '<button class="r-tab' + (i===0?' active':'') + '" data-tab="' + t[0] + '" onclick="window.invSwitchTab(\'' + t[0] + '\')">' + t[1] + '</button>';
+            }).join('') +
+          '</div>' +
 
-          // Left — Alert list
-          '<div>' +
-            '<div style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Alerts</div>' +
-            '<div class="card" style="padding:0;overflow:hidden;cursor:pointer;border-color:rgba(239,68,68,0.25);">' +
-              '<div style="padding:12px 14px;border-left:3px solid var(--red);">' +
-                '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
-                  '<span style="font-size:8px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.05em;">Escalated</span>' +
-                  '<span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">' + escapeHtml(ticketKey) + '</span>' +
+        '</div>' + // end header
+
+        // ─── TWO COLUMN BODY ───
+        '<div style="display:grid;grid-template-columns:1fr 340px;min-height:500px;">' +
+
+          // LEFT column — tab panes
+          '<div style="padding:24px;background:#F8F9FA;border-right:1px solid #E5E7EB;overflow-y:auto;">' +
+
+            // ══ SUMMARY / OVERVIEW TAB ══
+            '<div id="invTab-overview" class="inv-radiant-tab-content" style="display:block;">' +
+              '<div id="invVerdictArea" style="display:none;margin-bottom:16px;"></div>' +
+              '<h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 10px;">What happened?</h3>' +
+              '<p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 8px;">' + escapeHtml(_rDescShort || 'No description available.') + '</p>' +
+              '<p style="font-size:13px;margin:0 0 22px;"><a style="color:#4F46E5;text-decoration:none;cursor:pointer;" onclick="window.invSwitchTab(\'triage\')">For further details, please review the incident triage. \u2192</a></p>' +
+              '<h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 10px;">Root cause analysis</h3>' +
+              '<p id="rRootCause" style="font-size:14px;color:#9CA3AF;line-height:1.6;margin:0 0 22px;font-style:italic;">Investigation in progress \u2014 root cause analysis will appear after AI investigation completes.</p>' +
+              '<h3 style="font-size:16px;font-weight:700;color:#111827;margin:0 0 12px;">Impact</h3>' +
+              '<div style="background:white;border:1px solid #E5E7EB;border-radius:8px;padding:16px;margin-bottom:16px;">' + _rImpSVG + '</div>' +
+              // Hidden compat IDs for existing JS
+              '<div id="alertGraphCard" style="display:none;"></div>' +
+              '<div id="invSnapshotBadge" style="display:none;"></div>' +
+              '<div id="invSnapshotMetrics" style="display:none;"></div>' +
+              '<div id="invSnapshotEntities" style="display:none;"></div>' +
+              '<div id="invSnapshotResults" style="display:none;">SIEM analysis results will appear here after investigation runs...</div>' +
+            '</div>' + // end overview tab
+
+            // ══ TRIAGE TAB ══
+            '<div id="invTab-triage" class="inv-radiant-tab-content" style="display:none;">' +
+              '<div style="display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start;">' +
+                '<div>' +
+                  '<div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Alerts</div>' +
+                  '<div class="card" style="padding:0;overflow:hidden;cursor:pointer;border-color:#FECACA!important;">' +
+                    '<div style="padding:12px 14px;border-left:3px solid #EF4444;">' +
+                      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+                        '<span style="font-size:9px;font-weight:700;color:#EF4444;text-transform:uppercase;letter-spacing:0.05em;">Escalated</span>' +
+                        '<span style="font-size:9px;color:#9CA3AF;">' + escapeHtml(ticketKey) + '</span>' +
+                      '</div>' +
+                      '<div style="font-size:11px;color:#374151;line-height:1.4;">' + escapeHtml((f.summary||'').substring(0,65)) + ((f.summary||'').length>65?'\u2026':'') + '</div>' +
+                      '<div style="font-size:10px;color:#9CA3AF;margin-top:5px;">' + jiraFormatDT(f.created) + '</div>' +
+                    '</div>' +
+                  '</div>' +
+                  (orgs.length>0?'<div style="margin-top:10px;padding:10px 12px;background:#F9FAFB;border-radius:6px;border:1px solid #E5E7EB;font-size:11px;"><span style="color:#9CA3AF;">Org:</span> <span style="color:#4F46E5;font-weight:600;">' + escapeHtml(orgs.join(', ')) + '</span></div>':'') +
+                  (labels.length>0?'<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">' + labels.map(function(l){return '<span style="font-size:10px;padding:3px 9px;background:#EEF2FF;border:1px solid #C7D2FE;border-radius:10px;color:#4338CA;">' + escapeHtml(l) + '</span>';}).join('') + '</div>':'') +
                 '</div>' +
-                '<div style="font-size:11px;color:var(--text-secondary);line-height:1.4;">' + escapeHtml((f.summary || '').substring(0, 65)) + ((f.summary||'').length>65?'\u2026':'') + '</div>' +
-                '<div style="font-size:9px;color:var(--text-muted);margin-top:5px;">' + jiraFormatDT(f.created) + '</div>' +
-              '</div>' +
-            '</div>' +
-            (orgs.length > 0 ? '<div style="margin-top:10px;padding:10px 12px;background:var(--surface-1);border-radius:6px;border:1px solid var(--border-subtle);font-size:10px;"><span style="color:var(--text-muted);">Org:</span> <span style="color:var(--cyan);font-weight:600;">' + escapeHtml(orgs.join(', ')) + '</span></div>' : '') +
-            (labels.length>0 ? '<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">' + labels.map(function(l){return '<span style="font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:10px;color:var(--cyan);">' + escapeHtml(l) + '</span>';}).join('') + '</div>' : '') +
-          '</div>' +
-
-          // Right — Alert detail + escalation reason + playbook
-          '<div style="display:flex;flex-direction:column;gap:14px;">' +
-
-            // Alert detail card
-            '<div class="card" style="padding:16px;">' +
-              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.06);">' +
-                '<div style="display:flex;align-items:center;gap:8px;">' +
-                  '<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:#ef4444;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);padding:3px 8px;border-radius:5px;">Escalated Alert</span>' +
-                  '<span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">' + escapeHtml(ticketKey) + '</span>' +
+                '<div style="display:flex;flex-direction:column;gap:14px;">' +
+                  '<div class="card" style="padding:16px;">' +
+                    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #F3F4F6;">' +
+                      '<div style="display:flex;align-items:center;gap:8px;">' +
+                        '<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#EF4444;background:#FEF2F2;border:1px solid #FECACA;padding:3px 8px;border-radius:5px;">Escalated Alert</span>' +
+                        '<span style="font-size:10px;color:#9CA3AF;">' + escapeHtml(ticketKey) + '</span>' +
+                      '</div>' +
+                      '<div style="display:flex;align-items:center;gap:10px;font-size:11px;color:#9CA3AF;">' +
+                        'Priority <span style="font-weight:600;color:' + _rPriColor + ';background:' + _rPriBg + ';padding:2px 8px;border-radius:4px;font-size:10px;">' + escapeHtml(priority.split(' - ')[0]) + '</span>' +
+                        '<span>Detected <strong style="color:#374151;">' + jiraFormatDT(f.created) + '</strong></span>' +
+                      '</div>' +
+                    '</div>' +
+                    '<div style="font-size:14px;font-weight:600;color:#111827;line-height:1.4;margin-bottom:14px;">' + escapeHtml(f.summary||'') + '</div>' +
+                    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;font-size:11px;">' +
+                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Recipient</div><div style="color:#111827;font-weight:500;">' + escapeHtml(reporter) + '</div></div>' +
+                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Received at</div><div style="color:#374151;">' + jiraFormatDT(f.created) + '</div></div>' +
+                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Reporter</div><div style="color:#111827;">' + escapeHtml(reporter) + '</div></div>' +
+                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Assignee</div><div style="color:#4F46E5;font-weight:500;">' + escapeHtml(assignee) + '</div></div>' +
+                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Organisation</div><div style="color:#111827;">' + escapeHtml(orgs.join(', ')||'\u2014') + '</div></div>' +
+                      '<div><div style="color:#9CA3AF;margin-bottom:3px;font-size:10px;">Use Case</div><div style="color:#4F46E5;font-weight:500;">' + escapeHtml(useCase||workCatStr||'\u2014') + '</div></div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="card" style="padding:16px;">' +
+                    '<div style="font-size:15px;font-weight:600;color:#111827;margin-bottom:4px;">Why was this alert escalated?</div>' +
+                    '<div style="font-size:11px;color:#9CA3AF;margin-bottom:12px;">This alert failed the following triage step or contained these escalation details:</div>' +
+                    '<div style="font-size:12px;color:#374151;line-height:1.6;max-height:260px;overflow-y:auto;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;padding:12px;word-break:break-word;">' +
+                      (description ? highlightEntities(description) : '<span style="color:#9CA3AF;font-style:italic;">No escalation details provided in this ticket.</span>') +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="card" style="padding:16px;border-color:#C7D2FE!important;" id="playbookActionsCard">' +
+                    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">' +
+                      '<div style="font-size:15px;font-weight:600;color:#111827;">Playbook Triage Steps</div>' +
+                      '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;">Detection Rules</span>' +
+                    '</div>' +
+                    '<div style="font-size:11px;color:#9CA3AF;font-style:italic;" id="playbookActionsContent">Triage steps will populate after investigation runs...</div>' +
+                  '</div>' +
                 '</div>' +
-                '<div style="display:flex;align-items:center;gap:12px;font-size:9px;color:var(--text-muted);">' +
-                  'Priority <span class="badge ' + jiraPriorityBadge(priority) + '" style="font-size:9px;">' + escapeHtml(priority.split(' - ')[0]) + '</span>' +
-                  '<span style="color:var(--text-muted);">Detected <span style="color:var(--text-secondary);">' + jiraFormatDT(f.created) + '</span></span>' +
+              '</div>' +
+            '</div>' + // end triage tab
+
+            // ══ INVESTIGATION TAB ══
+            '<div id="invTab-investigation" class="inv-radiant-tab-content" style="display:none;">' +
+              '<div style="display:flex;flex-direction:column;gap:12px;">' +
+                '<div id="invReInvestigateBar" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:white;border:1px solid #E5E7EB;border-radius:8px;">' +
+                  '<div style="flex:1;">' +
+                    '<div style="font-size:12px;font-weight:600;color:#374151;">AI Investigation</div>' +
+                    '<div style="font-size:11px;color:#9CA3AF;">Uses SIEM, Threat Intel, and AI to analyse this ticket end-to-end</div>' +
+                  '</div>' +
+                  '<button class="btn btn-sm" style="font-size:11px;background:#EEF2FF;color:#4F46E5;border:1px solid #C7D2FE;border-radius:6px;white-space:nowrap;padding:5px 12px;" onclick="if(window.invSwitchTab)window.invSwitchTab(\'investigation\');reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-run</button>' +
+                '</div>' +
+                '<div id="invLoadingSpinner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;gap:12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;">' +
+                  '<div style="position:relative;width:44px;height:44px;">' +
+                    '<div style="position:absolute;inset:0;border:2px solid rgba(79,70,229,0.15);border-top-color:#4F46E5;border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
+                    '<div style="position:absolute;inset:7px;border:2px solid rgba(99,102,241,0.1);border-bottom-color:#6366F1;border-radius:50%;animation:spin 1.2s linear infinite reverse;"></div>' +
+                  '</div>' +
+                  '<div style="text-align:center;">' +
+                    '<div style="font-size:13px;color:#4F46E5;font-weight:600;margin-bottom:3px;" id="invSpinnerLabel">Initializing AI Investigation</div>' +
+                    '<div style="font-size:11px;color:#9CA3AF;" id="invSpinnerSub">Setting up analysis pipeline...</div>' +
+                  '</div>' +
+                  '<div style="width:220px;height:3px;background:#E5E7EB;border-radius:2px;overflow:hidden;">' +
+                    '<div style="height:100%;width:0%;background:linear-gradient(90deg,#4F46E5,#6366F1);border-radius:2px;animation:invProgressBar 8s ease-in-out forwards;" id="invProgressFill"></div>' +
+                  '</div>' +
+                  '<div style="display:flex;gap:14px;">' +
+                    '<span style="font-size:10px;color:#9CA3AF;display:flex;align-items:center;gap:3px;" id="invPipeStep1"><span style="width:6px;height:6px;border-radius:50%;border:1.5px solid #C7D2FE;display:inline-block;"></span>SIEM</span>' +
+                    '<span style="font-size:10px;color:#9CA3AF;display:flex;align-items:center;gap:3px;" id="invPipeStep2"><span style="width:6px;height:6px;border-radius:50%;border:1.5px solid #C7D2FE;display:inline-block;"></span>Threat Intel</span>' +
+                    '<span style="font-size:10px;color:#9CA3AF;display:flex;align-items:center;gap:3px;" id="invPipeStep3"><span style="width:6px;height:6px;border-radius:50%;border:1.5px solid #C7D2FE;display:inline-block;"></span>AI Analysis</span>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="invMainContent" style="display:flex;flex-direction:column;gap:10px;">' +
+                  '<div class="card" style="padding:0;" id="enrichmentSummaryCard">' +
+                    '<div class="card-header inv-collapsible-header" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid transparent;">' +
+                      '<span style="width:6px;height:6px;border-radius:50%;background:#F59E0B;flex-shrink:0;"></span>' +
+                      '<span class="card-title" style="font-size:11px;">Entity Enrichment</span>' +
+                      '<span style="font-size:10px;color:#9CA3AF;margin-left:2px;">\u2014 IOC reputation, WHOIS, and passive DNS</span>' +
+                      '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:11px;color:#9CA3AF;transition:transform 0.3s;">\u25BC</span>' +
+                    '</div>' +
+                    '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:11px;color:#9CA3AF;font-style:italic;">Enrichment data will appear after investigation runs...</div>' +
+                  '</div>' +
+                  '<div class="card" style="padding:0;" id="correlatedAlertsCard">' +
+                    '<div class="card-header inv-collapsible-header" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid transparent;">' +
+                      '<span style="width:6px;height:6px;border-radius:50%;background:#8B5CF6;flex-shrink:0;"></span>' +
+                      '<span class="card-title" style="font-size:11px;">Correlated Alerts</span>' +
+                      '<span style="font-size:10px;color:#9CA3AF;margin-left:2px;">\u2014 Related tickets across the same tenant</span>' +
+                      '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:11px;color:#9CA3AF;transition:transform 0.3s;">\u25BC</span>' +
+                    '</div>' +
+                    '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:11px;color:#9CA3AF;font-style:italic;">Alert correlation data will appear after investigation runs...</div>' +
+                  '</div>' +
                 '</div>' +
               '</div>' +
-              '<div style="font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.4;margin-bottom:14px;">' + escapeHtml(f.summary || '') + '</div>' +
-              '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;font-size:10px;">' +
-                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Recipient</div><div style="color:var(--text-primary);font-weight:500;">' + escapeHtml(reporter) + '</div></div>' +
-                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Received at</div><div style="color:var(--text-secondary);">' + jiraFormatDT(f.created) + '</div></div>' +
-                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Reporter</div><div style="color:var(--text-primary);">' + escapeHtml(reporter) + '</div></div>' +
-                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Assignee</div><div style="color:var(--cyan);font-weight:500;">' + escapeHtml(assignee) + '</div></div>' +
-                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Organisation</div><div style="color:var(--text-primary);">' + escapeHtml(orgs.join(', ')||'\u2014') + '</div></div>' +
-                '<div><div style="color:var(--text-muted);margin-bottom:3px;font-size:9px;">Use Case</div><div style="color:#a78bfa;">' + escapeHtml(useCase||workCatStr||'\u2014') + '</div></div>' +
+            '</div>' + // end investigation tab
+
+            // ══ CONTAINMENT TAB ══
+            '<div id="invTab-containment" class="inv-radiant-tab-content" style="display:none;">' +
+              '<div style="display:flex;flex-direction:column;gap:14px;">' +
+                '<div class="card" style="padding:14px;" id="recommendedActionsCard">' +
+                  '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;display:flex;align-items:center;">' +
+                    '<span class="card-title" style="font-size:14px;">AI Recommended Actions</span>' +
+                    '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:#9CA3AF;transition:transform 0.3s;">\u25BC</span>' +
+                  '</div>' +
+                  '<div class="inv-collapsible-body" style="display:none;font-size:11px;color:#9CA3AF;font-style:italic;">Actions will appear after investigation...</div>' +
+                '</div>' +
+                '<div class="card" style="padding:14px;border-color:#C7D2FE!important;" id="clientEscalationCard">' +
+                  '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:8px;">' +
+                    '<span class="card-title" style="font-size:14px;">Client Escalation Draft</span>' +
+                    '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;">AI Generated</span>' +
+                    '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:#9CA3AF;transition:transform 0.3s;">\u25BC</span>' +
+                  '</div>' +
+                  '<div id="escalationDraftContent" style="font-size:11px;color:#9CA3AF;">Draft will be generated after investigation...</div>' +
+                '</div>' +
               '</div>' +
-            '</div>' +
+            '</div>' + // end containment tab
 
-            // Why escalated
-            '<div class="card" style="padding:16px;">' +
-              '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Why was this alert escalated?</div>' +
-              '<div style="font-size:10px;color:var(--text-muted);margin-bottom:12px;">This alert failed the following triage step or contained these escalation details:</div>' +
-              '<div style="font-size:11px;color:var(--text-secondary);line-height:1.6;max-height:260px;overflow-y:auto;background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:12px;word-break:break-word;">' +
-                (description ? highlightEntities(description) : '<span style="color:var(--text-muted);font-style:italic;">No escalation details provided in this ticket.</span>') +
+            // ══ TIMELINE TAB ══
+            '<div id="invTab-timeline" class="inv-radiant-tab-content" style="display:none;">' +
+              '<div style="display:flex;flex-direction:column;gap:14px;">' +
+                '<div id="invSLAPanel" class="card" style="padding:14px;border-color:#FDE68A!important;">' +
+                  '<div class="card-header" style="margin-bottom:10px;display:flex;align-items:center;"><span class="card-title" style="font-size:14px;">\u23F1 SLA Details</span><span style="font-size:9px;padding:2px 7px;border-radius:8px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;margin-left:6px;">Jira</span></div>' +
+                  '<div id="invSLAContent" style="font-size:11px;color:#9CA3AF;">Loading SLA data from Jira...</div>' +
+                '</div>' +
+                '<div class="card" style="padding:14px;">' +
+                  '<div class="card-header" style="margin-bottom:12px;display:flex;align-items:center;"><span class="card-title" style="font-size:14px;">Activity Timeline</span><span style="font-size:11px;color:#9CA3AF;margin-left:6px;">' + timelineItems.length + ' events</span></div>' +
+                  '<div style="display:flex;flex-direction:column;">' + (timelineItems.length===0
+                    ? '<div style="text-align:center;padding:24px;font-size:12px;color:#9CA3AF;">No activity recorded</div>'
+                    : timelineItems.slice(0,20).map(function(item) {
+                        if (item.type==='comment') {
+                          return '<div style="padding:10px 14px;border-left:2px solid #C7D2FE;margin-left:8px;margin-bottom:8px;">' +
+                            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+                              '<span style="font-size:11px;font-weight:600;color:#4F46E5;">' + escapeHtml(item.author) + '</span>' +
+                              '<span style="font-size:10px;color:#9CA3AF;">' + jiraTimeAgo(item.time) + '</span>' +
+                            '</div>' +
+                            '<div style="font-size:11px;color:#374151;line-height:1.4;max-height:100px;overflow:hidden;">' + (item.body||'') + '</div></div>';
+                        } else {
+                          return '<div style="padding:4px 14px;border-left:1px solid #E5E7EB;margin-left:8px;margin-bottom:2px;">' +
+                            '<div style="font-size:10px;color:#9CA3AF;">' + escapeHtml(item.author) + ' \u00b7 ' + jiraTimeAgo(item.time) + '</div>' +
+                            '<div style="font-size:10px;color:#374151;margin-top:1px;">' + escapeHtml(item.field||'') + ': ' +
+                              (item.from?'<span style="text-decoration:line-through;opacity:0.4;">' + escapeHtml(item.from) + '</span> \u2192 ':'') +
+                              '<span style="color:#111827;">' + escapeHtml(item.to||'') + '</span></div></div>';
+                        }
+                      }).join('')) + '</div>' +
+                '</div>' +
               '</div>' +
-            '</div>' +
+            '</div>' + // end timeline tab
 
-            // Playbook triage steps
-            '<div class="card" style="padding:16px;border-color:rgba(139,92,246,0.2);" id="playbookActionsCard">' +
-              '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">' +
-                '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">Playbook Triage Steps</div>' +
-                '<span style="font-size:8px;padding:2px 7px;border-radius:8px;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);">Detection Rules</span>' +
-              '</div>' +
-              '<div style="font-size:10px;color:var(--text-muted);font-style:italic;" id="playbookActionsContent">Triage steps will populate after investigation runs...</div>' +
-            '</div>' +
+          '</div>' + // end left column
 
-          '</div>' + // end triage right
-        '</div>' + // end triage grid
-      '</div>' + // end triage tab
+          // RIGHT column — always-visible status sidebar
+          '<div style="background:white;padding:20px;overflow-y:auto;">' +
+            '<div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:18px;">Status</div>' +
+            [['Triage','#16A34A'],['Investigation','#6366F1'],['Containment','#F97316'],['Remediation','#EC4899']].map(function(stage,i) {
+              var done = i < _invStageIdx, active = i === _invStageIdx;
+              var pct = done ? 100 : active ? 55 : 0;
+              return '<div style="margin-bottom:14px;">' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+                  '<span style="font-size:12px;font-weight:' + (active?'600':'500') + ';color:' + (done||active?'#111827':'#9CA3AF') + ';">' + stage[0] + '</span>' +
+                  '<span style="font-size:11px;font-weight:600;color:' + (done?'#16A34A':active?stage[1]:'#9CA3AF') + ';">' + (done?'Complete':active?'In Progress':'Pending') + '</span>' +
+                '</div>' +
+                '<div class="r-stage-bar"><div class="r-stage-bar-fill" style="width:' + pct + '%;background:' + (done?'#16A34A':stage[1]) + ';"></div></div>' +
+              '</div>';
+            }).join('') +
+            '<div style="height:1px;background:#F3F4F6;margin:18px 0;"></div>' +
+            '<div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:12px;">Containment</div>' +
+            '<div style="margin-bottom:4px;">' + _rTaskHtml(_rContainTasks) + '</div>' +
+            '<div style="height:1px;background:#F3F4F6;margin:18px 0;"></div>' +
+            '<div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:12px;">Remediation</div>' +
+            '<div>' + _rTaskHtml(_rRemedTasks) + '</div>' +
+          '</div>' + // end right sidebar
 
-      // ══════════════════════════════════════════════════════
-      //  INVESTIGATION TAB
-      // ══════════════════════════════════════════════════════
-      '<div id="invTab-investigation" class="inv-radiant-tab-content" style="display:none;">' +
-        '<div style="display:flex;flex-direction:column;gap:12px;">' +
+        '</div>' + // end two-column body
 
-        // ── Re-investigate bar (slim, borderless) ──
-        '<div id="invReInvestigateBar" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface-1);border:1px solid var(--border-subtle);border-radius:8px;">' +
-          '<div style="flex:1;">' +
-            '<div style="font-size:10px;font-weight:600;color:var(--text-secondary);">AI Investigation</div>' +
-            '<div style="font-size:9px;color:var(--text-muted);">Uses SIEM, Threat Intel, and AI to analyse this ticket end-to-end</div>' +
-          '</div>' +
-          '<button class="btn btn-sm" style="font-size:10px;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.25);white-space:nowrap;" onclick="if(window.invSwitchTab)window.invSwitchTab(\'investigation\');reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-run</button>' +
-        '</div>' +
-
-        // ── Loading spinner (hidden until investigation starts) ──
-        '<div id="invLoadingSpinner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;gap:12px;background:var(--surface-1);border:1px solid rgba(0,212,255,0.1);border-radius:10px;">' +
-          '<div style="position:relative;width:44px;height:44px;">' +
-            '<div style="position:absolute;inset:0;border:2px solid rgba(0,212,255,0.1);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
-            '<div style="position:absolute;inset:7px;border:2px solid rgba(139,92,246,0.1);border-bottom-color:#8b5cf6;border-radius:50%;animation:spin 1.2s linear infinite reverse;"></div>' +
-          '</div>' +
-          '<div style="text-align:center;">' +
-            '<div style="font-size:12px;color:var(--cyan);font-family:var(--font-mono);font-weight:600;margin-bottom:3px;" id="invSpinnerLabel">Initializing AI Investigation</div>' +
-            '<div style="font-size:9px;color:var(--text-muted);" id="invSpinnerSub">Setting up analysis pipeline...</div>' +
-          '</div>' +
-          '<div style="width:220px;height:3px;background:rgba(0,212,255,0.08);border-radius:2px;overflow:hidden;">' +
-            '<div style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#8b5cf6);border-radius:2px;animation:invProgressBar 8s ease-in-out forwards;" id="invProgressFill"></div>' +
-          '</div>' +
-          '<div style="display:flex;gap:14px;">' +
-            '<span style="font-size:8px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep1"><span style="width:5px;height:5px;border-radius:50%;border:1px solid rgba(0,212,255,0.4);display:inline-block;"></span>SIEM</span>' +
-            '<span style="font-size:8px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep2"><span style="width:5px;height:5px;border-radius:50%;border:1px solid rgba(139,92,246,0.4);display:inline-block;"></span>Threat Intel</span>' +
-            '<span style="font-size:8px;color:var(--text-muted);display:flex;align-items:center;gap:3px;" id="invPipeStep3"><span style="width:5px;height:5px;border-radius:50%;border:1px solid rgba(16,185,129,0.4);display:inline-block;"></span>AI Analysis</span>' +
-          '</div>' +
-        '</div>' +
-
-        // ── Main AI findings + data cards ──
-        '<div id="invMainContent" style="display:flex;flex-direction:column;gap:10px;">' +
-          // Enrichment card — shown collapsed by default, opened after investigation
-          '<div class="card" style="padding:0;" id="enrichmentSummaryCard">' +
-            '<div class="card-header inv-collapsible-header" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid transparent;">' +
-              '<span style="width:6px;height:6px;border-radius:50%;background:#f59e0b;flex-shrink:0;"></span>' +
-              '<span class="card-title" style="font-size:10px;">Entity Enrichment</span>' +
-              '<span style="font-size:9px;color:var(--text-muted);margin-left:2px;">— IOC reputation, WHOIS, and passive DNS</span>' +
-              '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:10px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span>' +
-            '</div>' +
-            '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:10px;color:var(--text-muted);font-style:italic;">Enrichment data will appear after investigation runs...</div>' +
-          '</div>' +
-          // Correlated alerts card
-          '<div class="card" style="padding:0;" id="correlatedAlertsCard">' +
-            '<div class="card-header inv-collapsible-header" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid transparent;">' +
-              '<span style="width:6px;height:6px;border-radius:50%;background:#8b5cf6;flex-shrink:0;"></span>' +
-              '<span class="card-title" style="font-size:10px;">Correlated Alerts</span>' +
-              '<span style="font-size:9px;color:var(--text-muted);margin-left:2px;">— Related tickets across the same tenant</span>' +
-              '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:10px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span>' +
-            '</div>' +
-            '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:10px;color:var(--text-muted);font-style:italic;">Alert correlation data will appear after investigation runs...</div>' +
-          '</div>' +
-        '</div>' +
-
-        '</div>' +
-      '</div>' + // end investigation tab
-
-      // ══════════════════════════════════════════════════════
-      //  CONTAINMENT TAB
-      // ══════════════════════════════════════════════════════
-      '<div id="invTab-containment" class="inv-radiant-tab-content" style="display:none;">' +
-        '<div style="display:flex;flex-direction:column;gap:14px;">' +
-        '<div class="card" style="padding:14px;" id="recommendedActionsCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">AI Recommended Actions</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" style="display:none;font-size:10px;color:var(--text-muted);font-style:italic;">Actions will appear after investigation...</div>' +
-        '</div>' +
-        '<div class="card" style="padding:14px;border-color:rgba(0,212,255,0.2);" id="clientEscalationCard">' +
-          '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Client Escalation Draft</span><span class="badge badge-cyan" style="font-size:9px;">AI Generated</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);transition:transform 0.3s;">\u25BC</span></div>' +
-          '<div class="inv-collapsible-body" id="escalationDraftContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Draft will be generated after investigation...</div>' +
-        '</div>' +
-      '</div>' + // end inner flex wrapper
-      '</div>' + // end containment tab
-
-      // ══════════════════════════════════════════════════════
-      //  TIMELINE TAB
-      // ══════════════════════════════════════════════════════
-      '<div id="invTab-timeline" class="inv-radiant-tab-content" style="display:none;">' +
-        '<div style="display:flex;flex-direction:column;gap:14px;">' +
-        '<div id="invSLAPanel" class="card" style="padding:14px;border-color:rgba(245,158,11,0.2);">' +
-          '<div class="card-header" style="margin-bottom:10px;"><span class="card-title">\u23F1 SLA Details</span><span class="badge" style="font-size:8px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);margin-left:6px;">Jira</span></div>' +
-          '<div id="invSLAContent" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">Loading SLA data from Jira...</div>' +
-        '</div>' +
-        '<div class="card" style="padding:14px;">' +
-          '<div class="card-header" style="margin-bottom:12px;"><span class="card-title">Activity Timeline</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + timelineItems.length + ' events</span></div>' +
-          _tlHTML +
-        '</div>' +
-        '</div>' + // end inner flex wrapper
-      '</div>';  // end timeline tab
+      '</div>';  // end .r-ws
 
     // ── Initialize collapsible panels ──
     initCollapsiblePanels();
