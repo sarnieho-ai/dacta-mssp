@@ -49561,23 +49561,27 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
   // Apply collapsible behavior to round cards in cached content
   setTimeout(function() {
     applyCollapsibleSections(invMainContent);
-    // Hide the verbose verdict-banner from the investigation tab body
-    // (verdict is now shown as a subtle bar in the overview tab)
-    var vBanner = container.querySelector('.verdict-banner');
-    if (vBanner) vBanner.style.display = 'none';
   }, 200);
 
-  // Update snapshot panel with cached verdict data — this also populates invVerdictArea subtly
-  try {
-    if (cacheEntry.verdict || cacheEntry.confidence) {
-      updateInvestigationSnapshot(
-        cacheEntry.elasticLogs || {},
-        cacheEntry.iocs || {},
-        cacheEntry.verdict || '',
-        cacheEntry.confidence || 0
-      );
-    }
-  } catch(e) { console.warn('[Snapshot cache]', e.message); }
+  // Hide the verbose verdict-banner from the investigation tab body immediately
+  // (verdict is now shown as a subtle bar in the overview tab via invVerdictArea)
+  var vBanner = container.querySelector('.verdict-banner');
+  if (vBanner) vBanner.style.display = 'none';
+
+  // Update snapshot panel with cached verdict data — delay to 400ms so that
+  // initInvestigationSnapshot (runs at 300ms) has already created snapshotPipelineWrap
+  setTimeout(function() {
+    try {
+      if (cacheEntry.verdict || cacheEntry.confidence) {
+        updateInvestigationSnapshot(
+          cacheEntry.elasticLogs || {},
+          cacheEntry.iocs || {},
+          cacheEntry.verdict || '',
+          cacheEntry.confidence || 0
+        );
+      }
+    } catch(e) { console.warn('[Snapshot cache]', e.message); }
+  }, 400);
 
   // Restore sidebar panels from cache
   var sp = cacheEntry.sidebarPanels || {};
