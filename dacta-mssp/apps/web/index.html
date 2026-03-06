@@ -49128,7 +49128,6 @@ async function openInvestigation(ticketKey) {
       '<text x="252" y="238" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Applications</text>' +
       '<text x="252" y="252" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280">\u2014</text>' +
       '</svg>';
-    var _rAttackGraph = _rImpSVG;
 
     livePanel.innerHTML =
       '<style id="r-ws-css">' +
@@ -49233,7 +49232,10 @@ async function openInvestigation(ticketKey) {
               '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 10px;">AI Verdict</h3>' +
               '<p id="rRootCause" style="font-size:14px;color:var(--rws-text-muted);line-height:1.6;margin:0 0 22px;font-style:italic;">Investigation in progress \u2014 AI verdict will appear after AI investigation completes.</p>' +
               '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 12px;">Impact</h3>' +
-              '<div style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:16px;margin-bottom:16px;">' + _rAttackGraph + '</div>' +
+              '<div id="summaryImpactContainer" style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:16px;margin-bottom:16px;">' +
+                '<div id="summaryAttackGraph" style="display:none;"></div>' +
+                '<div id="summaryImpactFallback">' + _rImpSVG + '</div>' +
+              '</div>' +
               // Hidden compat IDs for existing JS
               '<div id="alertGraphCard" style="display:none;"></div>' +
               '<div id="invSnapshotBadge" style="display:none;"></div>' +
@@ -49309,6 +49311,30 @@ async function openInvestigation(ticketKey) {
                     '<div style="font-size:11px;color:var(--rws-text-muted);">Uses SIEM, Threat Intel, and AI to analyse this ticket end-to-end</div>' +
                   '</div>' +
                   '<button class="btn btn-sm" style="font-size:11px;background:#EEF2FF;color:#4F46E5;border:1px solid #C7D2FE;border-radius:6px;white-space:nowrap;padding:5px 12px;" onclick="if(window.invSwitchTab)window.invSwitchTab(\'investigation\');reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-run</button>' +
+                '</div>' +
+                // ── AI PIPELINE EXECUTION STAGES ──
+                '<div id="invPipelinePanel" style="background:var(--rws-card);border:1px solid var(--rws-border-card);border-radius:8px;padding:14px 16px;">' +
+                  '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+                    '<div style="display:flex;align-items:center;gap:8px;">' +
+                      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366F1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' +
+                      '<span style="font-size:12px;font-weight:600;color:var(--rws-text-primary);">AI Investigation Pipeline</span>' +
+                    '</div>' +
+                    '<span id="invPipelineStatus" style="font-size:10px;font-weight:600;padding:3px 10px;border-radius:10px;background:rgba(99,102,241,0.1);color:#6366F1;border:1px solid rgba(99,102,241,0.2);">IDLE</span>' +
+                  '</div>' +
+                  '<div style="display:flex;gap:4px;align-items:center;">' +
+                    [['tokenize','Tokenize','Extract IOCs, parse alert fields, normalize data'],
+                     ['classify','Classifier','Categorize alert type and map MITRE techniques'],
+                     ['round1','Round 1: SIEM','Query SIEM logs for correlated events'],
+                     ['round2','Round 2: TI','Enrich IOCs with threat intelligence feeds'],
+                     ['round3','Round 3: AI','AI reasoning, verdict generation, confidence scoring'],
+                     ['detokenize','Detokenize','Reconstruct findings, build escalation draft']].map(function(s, i) {
+                      return (i > 0 ? '<div style="width:12px;height:1px;background:var(--rws-border);flex-shrink:0;"></div>' : '') +
+                        '<div id="invPipe_' + s[0] + '" class="inv-pipe-stage" style="flex:1;padding:8px 6px;border-radius:6px;border:1px solid var(--rws-border);background:var(--rws-surface);text-align:center;cursor:default;transition:all 0.3s;position:relative;" title="' + s[2] + '">' +
+                          '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--rws-text-muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + s[1] + '</div>' +
+                          '<div class="inv-pipe-stage-status" style="font-size:8px;color:var(--rws-text-muted);">&bull; Pending</div>' +
+                        '</div>';
+                    }).join('') +
+                  '</div>' +
                 '</div>' +
                 '<div id="invLoadingSpinner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;gap:12px;background:var(--rws-surface-hover);border:1px solid var(--rws-border-card);border-radius:10px;">' +
                   '<div style="position:relative;width:44px;height:44px;">' +
@@ -49594,6 +49620,52 @@ function initInvestigationSnapshot(ticketKey, ticketData) {
 }
 
 // Called from runAIInvestigation after investigation to fill the snapshot results panel
+// ── Pipeline Stage Controller ──
+function updateInvPipelineStage(stageId, status) {
+  // status: 'running', 'complete', 'error'
+  var el = document.getElementById('invPipe_' + stageId);
+  if (!el) return;
+  var statusEl = el.querySelector('.inv-pipe-stage-status');
+  if (status === 'running') {
+    el.style.borderColor = '#6366F1';
+    el.style.background = 'rgba(99,102,241,0.08)';
+    el.style.boxShadow = '0 0 12px rgba(99,102,241,0.15)';
+    if (statusEl) { statusEl.innerHTML = '<span style="color:#6366F1;">&#9679; Running</span>'; statusEl.style.color = '#6366F1'; }
+  } else if (status === 'complete') {
+    el.style.borderColor = '#10B981';
+    el.style.background = 'rgba(16,185,129,0.06)';
+    el.style.boxShadow = 'none';
+    if (statusEl) { statusEl.innerHTML = '<span style="color:#10B981;">&#10003; Done</span>'; statusEl.style.color = '#10B981'; }
+  } else if (status === 'error') {
+    el.style.borderColor = '#EF4444';
+    el.style.background = 'rgba(239,68,68,0.06)';
+    el.style.boxShadow = 'none';
+    if (statusEl) { statusEl.innerHTML = '<span style="color:#EF4444;">&#10007; Error</span>'; statusEl.style.color = '#EF4444'; }
+  }
+}
+function updateInvPipelineStatus(text, color) {
+  var el = document.getElementById('invPipelineStatus');
+  if (!el) return;
+  el.textContent = text;
+  if (color === 'green') { el.style.background = 'rgba(16,185,129,0.1)'; el.style.color = '#10B981'; el.style.borderColor = 'rgba(16,185,129,0.2)'; }
+  else if (color === 'red') { el.style.background = 'rgba(239,68,68,0.1)'; el.style.color = '#EF4444'; el.style.borderColor = 'rgba(239,68,68,0.2)'; }
+  else if (color === 'amber') { el.style.background = 'rgba(245,158,11,0.1)'; el.style.color = '#F59E0B'; el.style.borderColor = 'rgba(245,158,11,0.2)'; }
+  else { el.style.background = 'rgba(99,102,241,0.1)'; el.style.color = '#6366F1'; el.style.borderColor = 'rgba(99,102,241,0.2)'; }
+}
+
+// ── Populate Attack Graph in Summary Tab Impact section ──
+function populateSummaryAttackGraph(ticketKey, techniques, summary) {
+  var graphContainer = document.getElementById('summaryAttackGraph');
+  var fallback = document.getElementById('summaryImpactFallback');
+  if (!graphContainer) return;
+  var html = buildAttackPathHTML(ticketKey, techniques, summary);
+  if (html) {
+    graphContainer.innerHTML = html;
+    graphContainer.style.display = 'block';
+    if (fallback) fallback.style.display = 'none';
+  }
+}
+
 function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
   var resultsEl = document.getElementById('invSnapshotResults');
   if (!resultsEl || !elasticLogs) return;
@@ -50303,6 +50375,22 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
       var pbBody = document.querySelector('#playbookActionsCard .inv-collapsible-body');
       if (pbBody) { pbBody.innerHTML = sp.playbook; pbBody.style.display = ''; }
     }
+    // Populate Summary tab attack graph even when sidebar data is cached
+    if (issueData) {
+      var _f = issueData.fields || {};
+      var _aTitle = _f.summary || '';
+      var _desc = '';
+      if (_f.description && _f.description.content) _desc = extractADFText(_f.description);
+      else if (typeof _f.description === 'string') _desc = _f.description;
+      if (issueData.renderedFields && issueData.renderedFields.description) _desc = issueData.renderedFields.description;
+      var _fullT = _aTitle + ' ' + _desc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000);
+      var _techs = detectTechniques(_fullT);
+      populateSummaryAttackGraph(ticketKey, _techs, _aTitle);
+    }
+    updateInvPipelineStatus('CACHED', 'green');
+    ['tokenize','classify','round1','round2','round3','detokenize'].forEach(function(s) {
+      updateInvPipelineStage(s, 'complete');
+    });
   } else if (issueData) {
     // No cached sidebar data — auto-regenerate from issueData instead of showing placeholder
     console.log('[CachedInv] No sidebar cache found, regenerating from issueData for ' + ticketKey);
@@ -50317,6 +50405,15 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
     var cleanDesc = description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000);
     var fullText = alertTitle + ' ' + cleanDesc;
     var techniques = detectTechniques(fullText);
+
+    // Populate Summary tab Impact section with attack graph from cached data
+    populateSummaryAttackGraph(ticketKey, techniques, alertTitle);
+
+    // Set compact pipeline to COMPLETE (since cached investigation is already done)
+    updateInvPipelineStatus('CACHED', 'green');
+    ['tokenize','classify','round1','round2','round3','detokenize'].forEach(function(s) {
+      updateInvPipelineStage(s, 'complete');
+    });
 
     // 1. Enrichment Summary — requires live Elastic/TIP data, show informative note
     var enrichBody = document.querySelector('#enrichmentSummaryCard .inv-collapsible-body');
@@ -52278,6 +52375,10 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   aiPanel.innerHTML = pipelineHTML;
 
+  // ── Update compact pipeline panel (Investigation tab header) ──
+  updateInvPipelineStatus('RUNNING', 'default');
+  updateInvPipelineStage('tokenize', 'running');
+
   var roundsContainer = document.getElementById('aiRoundsContainer');
   if (!roundsContainer) return;
 
@@ -52286,10 +52387,13 @@ async function runAIInvestigation(ticketKey, issueData) {
   // ═══════════════════════════════════════════════
   var classifierStatusEl = document.getElementById('pipeClassifierStatus');
   if (classifierStatusEl) classifierStatusEl.innerHTML = '<div class="jira-spinner" style="width:10px;height:10px;display:inline-block;"></div> Classifying';
+  updateInvPipelineStage('tokenize', 'complete');
+  updateInvPipelineStage('classify', 'running');
   var progStatus0 = document.getElementById('invProgressStatus');
   if (progStatus0) progStatus0.textContent = 'Classifier (Haiku) routing alert to domain handlers...';
   await sleep(1200);
   if (classifierStatusEl) classifierStatusEl.innerHTML = dIcon('check',14) + ' Complete';
+  updateInvPipelineStage('classify', 'complete');
   var classifierEl = document.getElementById('pipeClassifier');
   if (classifierEl) {
     var classMetric = classifierEl.querySelector('.inv-pipeline-stage-metric');
@@ -52310,6 +52414,9 @@ async function runAIInvestigation(ticketKey, issueData) {
     var stageEl = document.getElementById('pipeStage' + rnd);
     if (stageEl) stageEl.style.borderLeftColor = stageColors[(rnd-1) % 3];
     var statusEl = document.getElementById('pipeStageStatus' + rnd);
+    // Update compact pipeline: map round to stage
+    var compactStageMap = {1:'round1', 2:'round2', 3:'round3'};
+    updateInvPipelineStage(compactStageMap[rnd], 'running');
     if (statusEl) statusEl.innerHTML = '<div class="jira-spinner" style="width:10px;height:10px;display:inline-block;"></div> Processing';
     var subEl = document.getElementById('pipeStageSub' + rnd);
     if (subEl) subEl.textContent = roundSubtitles[rnd-1];
@@ -52458,6 +52565,8 @@ async function runAIInvestigation(ticketKey, issueData) {
     if (statusEl) statusEl.innerHTML = dIcon('check',14) + ' Complete';
     var metricEl = document.getElementById('pipeStageMetric' + rnd);
     if (metricEl) metricEl.textContent = (roundTimings[rnd-1] / 1000).toFixed(1) + 's \u00B7 ' + models[(rnd-1) % 3];
+    // Mark compact pipeline round complete
+    updateInvPipelineStage(compactStageMap[rnd], 'complete');
 
     // For P4/P3 early exit
     if (totalRounds === 1 && rnd === 1) break;
@@ -52465,10 +52574,13 @@ async function runAIInvestigation(ticketKey, issueData) {
   }
 
   // Update detokenize stage
+  updateInvPipelineStage('detokenize', 'running');
   var detokStatus = document.getElementById('pipeDetokStatus');
   if (detokStatus) detokStatus.innerHTML = dIcon('check',14) + ' Complete';
   var detokMetric = document.getElementById('pipeDetokMetric');
   if (detokMetric) detokMetric.textContent = '15ms \u00B7 Audit logged';
+  updateInvPipelineStage('detokenize', 'complete');
+  updateInvPipelineStatus('COMPLETE', 'green');
 
   // Show pipeline summary
   var summaryEl = document.getElementById('pipeSummary');
@@ -52865,6 +52977,8 @@ async function runAIInvestigation(ticketKey, issueData) {
         invMainContentAP.appendChild(attackPathEl.firstChild);
       }
     }
+    // Also populate the Summary tab Impact section with the attack graph
+    populateSummaryAttackGraph(ticketKey, techniques, summary);
   }
 
   // Update investigation snapshot panel with live SIEM results + verdict
@@ -52875,6 +52989,7 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   } catch (aiErr) {
     console.error('[AI Investigation] Error:', aiErr);
+    updateInvPipelineStatus('ERROR', 'red');
     markInvestigationCompleted(ticketKey);
     refreshTriageAIColumn();
     var errPanel = document.getElementById('aiInvestigationPanel');
