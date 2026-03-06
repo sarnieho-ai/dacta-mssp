@@ -52137,11 +52137,16 @@ async function runAIInvestigation(ticketKey, issueData) {
     if (attackPathHTML) {
       var attackPathEl = document.createElement('div');
       attackPathEl.innerHTML = attackPathHTML;
-      // Insert before escalation draft card
+      // Insert before escalation draft card — use the actual parent to avoid insertBefore errors
       var escCard = document.getElementById('clientEscalationCard');
-      if (escCard) {
-        invMainContentAP.insertBefore(attackPathEl.firstChild, escCard);
-      } else {
+      try {
+        if (escCard && escCard.parentNode) {
+          escCard.parentNode.insertBefore(attackPathEl.firstChild, escCard);
+        } else {
+          invMainContentAP.appendChild(attackPathEl.firstChild);
+        }
+      } catch(apErr) {
+        // Fallback: just append
         invMainContentAP.appendChild(attackPathEl.firstChild);
       }
     }
