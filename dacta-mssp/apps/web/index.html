@@ -15352,9 +15352,78 @@ function dIcon(name, size, color) {
             btn.textContent = 'Deploying...';
             btn.disabled = true;
             btn.style.opacity = '0.6';
-            setTimeout(function() {
-              var isCatcher = lpWiz.path === 'catcher';
-              var isDraft = lpWiz.path === 'interview';
+
+            var isCatcher = lpWiz.path === 'catcher';
+            var isDraft = lpWiz.path === 'interview';
+
+            // Async wrapper so we can await the DB insert
+            (async function() {
+              try {
+                // Step 1: Resolve org_id from client name
+                var orgId = null;
+                var clientName = (lpWiz.meta.client || '').toLowerCase();
+                // Try to find in ORG_CONNECTORS first (fast, in-memory)
+                var matchedOrg = Object.values(ORG_CONNECTORS).find(function(o) {
+                  return (o.name || '').toLowerCase() === clientName ||
+                         (o.name || '').toLowerCase().indexOf(clientName) === 0 ||
+                         clientName.indexOf((o.name || '').toLowerCase()) === 0;
+                });
+
+                // Step 2: Derive index_pattern from vendor and namespace
+                var vendor = (lpWiz.meta.vendor || '').toLowerCase();
+                var namespace = matchedOrg ? (matchedOrg.namespace || 'default') : 'default';
+                var srcType = (lpWiz.meta.type || '').toLowerCase();
+                var indexPattern = '';
+                if (vendor.indexOf('crowdstrike') !== -1) {
+                  indexPattern = '.ds-logs-crowdstrike.alert-' + namespace + '-*';
+                } else if (vendor.indexOf('elastic') !== -1 || srcType === 'siem') {
+                  indexPattern = 'logs-' + namespace + '-*';
+                } else if (vendor.indexOf('palo') !== -1 || srcType === 'firewall') {
+                  indexPattern = 'logs-' + (vendor.replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'') || 'firewall') + '.' + namespace + '-*';
+                } else if (vendor.indexOf('sentinel') !== -1 || vendor.indexOf('microsoft') !== -1) {
+                  indexPattern = 'logs-windows.' + srcType + '-' + namespace + '-*';
+                } else {
+                  indexPattern = 'logs-' + (vendor.replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'') || srcType || 'custom') + '-' + namespace + '-*';
+                }
+
+                // Step 3: Look up org UUID from DB if we have supabase
+                var sb = window._supabaseRef || window._dactaSupabase;
+                if (sb) {
+                  try {
+                    if (matchedOrg) {
+                      // Try matching by name
+                      var orgRes = await sb.from('organizations').select('id').ilike('name', '%' + (matchedOrg.name || clientName) + '%').limit(1).single();
+                      if (orgRes.data) orgId = orgRes.data.id;
+                    }
+                    if (!orgId && clientName) {
+                      var orgRes2 = await sb.from('organizations').select('id').ilike('name', '%' + clientName + '%').limit(1).single();
+                      if (orgRes2.data) orgId = orgRes2.data.id;
+                    }
+                  } catch(orgErr) { console.warn('[LP Deploy] Could not resolve org ID:', orgErr); }
+
+                  // Step 4: Insert into client_log_sources
+                  var insertData = {
+                    org_id: orgId || null,
+                    source_name: lpWiz.meta.name || lpWiz.meta.vendor || 'Unknown Source',
+                    source_type: (lpWiz.meta.type || 'unknown').toLowerCase(),
+                    vendor: lpWiz.meta.vendor || null,
+                    index_pattern: indexPattern,
+                    is_monitored: !isCatcher,
+                    monitoring_status: isCatcher ? 'catcher' : (isDraft ? 'draft' : 'active'),
+                    events_per_second: lpWiz.meta.volume ? parseFloat(lpWiz.meta.volume) || null : null,
+                    protocol: (lpWiz.meta.transport || 'unknown').toLowerCase(),
+                    notes: isDraft ? 'Deployed as draft — pending validation' : (isCatcher ? 'Novelty Catcher only — no parser deployed' : null)
+                  };
+                  var insertRes = await sb.from('client_log_sources').insert(insertData);
+                  if (insertRes.error) throw insertRes.error;
+                  console.log('[LP Deploy] Inserted into client_log_sources:', insertData);
+                }
+              } catch(e) {
+                console.error('[LP Deploy] DB insert failed:', e);
+                showToast('Warning: Could not save to SIEMLess DB — ' + (e.message || 'unknown error'), 'warning');
+              }
+
+              // Step 5: Show success animation (always, even if DB failed)
               var h = '<div style="text-align:center;padding:30px;">';
               h += '<div style="font-size:48px;margin-bottom:16px;">' + dIcon('checkCircle',16) + '</div>';
               h += '<div style="color:#22c55e;font-size:18px;font-weight:700;margin-bottom:8px;">' + (isCatcher ? 'Monitoring Activated' : isDraft ? 'Draft Parser Deployed' : 'Parser Deployed Successfully') + '</div>';
@@ -15368,7 +15437,7 @@ function dIcon(name, size, color) {
               h += '<button class="btn btn-secondary btn-sm" onclick="switchLpTab(\'' + 'library' + '\');closeLpWizard();">View in Active Parsers Library</button>';
               h += '</div></div>';
               document.getElementById('lpDeployContent').innerHTML = h;
-            }, 2000);
+            })();
           }
 
           function lpWizNext() {
@@ -28589,7 +28658,7 @@ function renderMitreIcs() {
 }
 
 function renderLogSources() {
-  if (window._dactaMode === 'production') { lscInit(); return; }
+  lscInit();
 }
 
 // ── Log Source Catalog (Per-Client) ──────────────────────────────────────────
@@ -34224,7 +34293,8 @@ function renderSettingsConnectors() {
       '</div>';
     });
 
-    html += '<div class="stg-conn-card" id="stg-card-' + cid + '" style="border-color:' + borderColor + ';' + (!enabled ? 'opacity:0.7;' : '') + '">' +
+    html += '<div class="stg-conn-card" id="stg-card-' + cid + '" style="position:relative;border-color:' + borderColor + ';' + (!enabled ? 'opacity:0.7;' : '') + '">' +
+      '<button onclick="removeConnector(\'' + orgId + '\', ' + idx + ')" title="Remove connector" style="position:absolute;top:6px;right:6px;z-index:2;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:4px;color:#ef4444;font-size:10px;line-height:1;padding:2px 5px;cursor:pointer;">&times;</button>' +
       '<div class="stg-conn-top">' +
         '<div class="stg-conn-icon"' + (!enabled ? ' style="background:rgba(239,68,68,0.08);"' : '') + '>' + icon + '</div>' +
         '<div class="stg-conn-meta">' +
@@ -34261,6 +34331,18 @@ function renderSettingsConnectors() {
     '</div>';
   });
   grid.innerHTML = html;
+
+  // ── Add Connector button (appended after grid) ──
+  var addBtnRow = document.getElementById('stgAddConnectorRow');
+  if (!addBtnRow) {
+    addBtnRow = document.createElement('div');
+    addBtnRow.id = 'stgAddConnectorRow';
+    addBtnRow.style.cssText = 'margin-top:10px;display:flex;justify-content:flex-end;';
+    grid.parentNode.insertBefore(addBtnRow, grid.nextSibling);
+  }
+  addBtnRow.innerHTML = '<button class="btn btn-sm" style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);color:var(--cyan);font-size:11px;padding:5px 14px;cursor:pointer;" onclick="addNewConnector(\'' + orgId + '\')">' +
+    '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+    'Add Connector</button>';
 
   // Meta row
   var enabledCount = org.connectors.filter(function(c) { return c.is_enabled; }).length;
@@ -34333,6 +34415,146 @@ function addConnectorMeta(cid) {
   };
   nameInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('addFieldConfirm').click(); if (e.key === 'Escape') cleanup(); });
   valueInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('addFieldConfirm').click(); if (e.key === 'Escape') cleanup(); });
+}
+
+async function addNewConnector(orgId) {
+  var org = ORG_CONNECTORS[orgId];
+  if (!org) { showToast('Organization not found', 'error'); return; }
+
+  // Build modal overlay
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  overlay.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-card);border-radius:12px;padding:24px;width:460px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:4px;">Add Connector</div>' +
+    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px;">Register a new integration connector for <strong>' + (org.name || orgId) + '</strong>.</div>' +
+    '<div style="margin-bottom:12px;">' +
+      '<label style="font-size:10px;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Connector Type</label>' +
+      '<select id="newConnType" style="width:100%;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:6px;color:var(--text-primary);font-size:12px;">' +
+        '<option value="siem">SIEM</option>' +
+        '<option value="edr">EDR</option>' +
+        '<option value="firewall">Firewall</option>' +
+        '<option value="threat_intel">Threat Intel</option>' +
+        '<option value="ticketing">Ticketing</option>' +
+        '<option value="identity">Identity</option>' +
+        '<option value="knowledge_base">Knowledge Base</option>' +
+      '</select>' +
+    '</div>' +
+    '<div style="margin-bottom:12px;">' +
+      '<label style="font-size:10px;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Vendor</label>' +
+      '<input id="newConnVendor" type="text" placeholder="e.g. Elastic, CrowdStrike, Palo Alto" style="width:100%;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:6px;color:var(--text-primary);font-size:12px;" autocomplete="off">' +
+    '</div>' +
+    '<div style="margin-bottom:12px;">' +
+      '<label style="font-size:10px;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Display Name</label>' +
+      '<input id="newConnDisplayName" type="text" placeholder="e.g. Client SIEM, Endpoint Protection" style="width:100%;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:6px;color:var(--text-primary);font-size:12px;" autocomplete="off">' +
+    '</div>' +
+    '<div style="margin-bottom:16px;display:flex;align-items:center;gap:8px;">' +
+      '<input id="newConnEnabled" type="checkbox" checked style="accent-color:var(--cyan);width:14px;height:14px;cursor:pointer;">' +
+      '<label for="newConnEnabled" style="font-size:11px;color:var(--text-secondary);cursor:pointer;">Enable connector immediately</label>' +
+    '</div>' +
+    '<div id="newConnError" style="font-size:11px;color:#ef4444;margin-bottom:8px;display:none;"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button id="newConnCancel" class="btn btn-secondary btn-sm" style="font-size:11px;padding:6px 16px;">Cancel</button>' +
+      '<button id="newConnSave" class="btn btn-primary btn-sm" style="font-size:11px;padding:6px 16px;">Save Connector</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(overlay);
+
+  var typeEl = document.getElementById('newConnType');
+  var vendorEl = document.getElementById('newConnVendor');
+  var nameEl = document.getElementById('newConnDisplayName');
+  var enabledEl = document.getElementById('newConnEnabled');
+  var errorEl = document.getElementById('newConnError');
+  vendorEl.focus();
+
+  function cleanup() { overlay.remove(); }
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) cleanup(); });
+  document.getElementById('newConnCancel').onclick = cleanup;
+
+  document.getElementById('newConnSave').onclick = async function() {
+    var connType = typeEl.value;
+    var vendor = vendorEl.value.trim();
+    var displayName = nameEl.value.trim();
+    var isEnabled = enabledEl.checked;
+    if (!vendor) { vendorEl.style.borderColor = 'var(--red)'; vendorEl.focus(); return; }
+    var saveBtn = document.getElementById('newConnSave');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    errorEl.style.display = 'none';
+
+    // Build the new connector object
+    var newConn = {
+      connector_type: connType,
+      vendor: vendor,
+      display_name: displayName || vendor,
+      is_enabled: isEnabled,
+      health_status: isEnabled ? 'healthy' : 'not_configured',
+      metadata: {}
+    };
+
+    try {
+      // Insert into org_connectors DB table
+      var sb = window._supabaseRef || window._dactaSupabase;
+      if (sb) {
+        // Look up org uuid from organizations table by name/code
+        var orgUuid = null;
+        try {
+          var orgRes = await sb.from('organizations').select('id').or('name.eq.' + (org.name || '') + ',code.eq.' + (org.code || '')).limit(1).single();
+          if (orgRes.data) orgUuid = orgRes.data.id;
+        } catch(e2) { console.warn('[AddConnector] Could not resolve org UUID:', e2); }
+
+        var insertData = {
+          org_id: orgUuid,
+          connector_type: connType,
+          vendor: vendor,
+          display_name: displayName || vendor,
+          is_enabled: isEnabled,
+          health_status: isEnabled ? 'healthy' : 'not_configured',
+          metadata: {}
+        };
+        var res = await sb.from('org_connectors').insert(insertData).select('id').single();
+        if (res.error) throw res.error;
+        if (res.data && res.data.id) newConn.id = res.data.id;
+      }
+    } catch(e) {
+      console.warn('[AddConnector] DB insert failed, adding in-memory only:', e);
+    }
+
+    // Add to in-memory store
+    if (!org.connectors) org.connectors = [];
+    org.connectors.push(newConn);
+    cleanup();
+    renderSettingsConnectors();
+    showToast('Connector added: ' + (displayName || vendor), 'success');
+  };
+}
+
+async function removeConnector(orgId, connIdx) {
+  var org = ORG_CONNECTORS[orgId];
+  if (!org) return;
+  var c = org.connectors[connIdx];
+  if (!c) return;
+
+  var label = c.display_name || c.vendor || c.connector_type || 'connector';
+  if (!confirm('Remove this connector?\n\n' + label + '\n\nThis action cannot be undone.')) return;
+
+  // Delete from DB if it has an id
+  if (c.id) {
+    try {
+      var sb = window._supabaseRef || window._dactaSupabase;
+      if (sb) {
+        var res = await sb.from('org_connectors').delete().eq('id', c.id);
+        if (res.error) throw res.error;
+      }
+    } catch(e) {
+      console.warn('[RemoveConnector] DB delete failed:', e);
+      showToast('Warning: Could not remove from SIEMLess DB (' + (e.message || 'unknown error') + ')', 'warning');
+    }
+  }
+
+  // Remove from in-memory array
+  org.connectors.splice(connIdx, 1);
+  renderSettingsConnectors();
+  showToast('Connector removed: ' + label, 'success');
 }
 
 function saveConnectorChanges(orgId) {
@@ -53168,7 +53390,7 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
         '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="showToast(\'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Artifact attached\', \'info\')">' + dIcon('link',14) + ' Attach Artifacts</button>' +
         '<div style="flex:1;"></div>' +
         '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="showEscModal(\'' + ticketKey + '\')">' + dIcon('edit',14) + ' Edit Draft</button>' +
-        '<button class="btn btn-sm" style="font-size:10px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(139,92,246,0.15));color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="submitEscalationToJira(\'' + ticketKey + '\')">' + dIcon('upload',14) + ' Send Escalation</button>' +
+        '<button class="btn btn-sm" id="sendEscBtn-' + ticketKey + '" style="font-size:10px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(139,92,246,0.15));color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="showEscModal(\'' + ticketKey + '\')">' + dIcon('upload',14) + ' Send Escalation</button>' +
       '</div>' +
     '</div>';
 
@@ -53236,22 +53458,79 @@ function copyEscalationDraft(ticketKey) {
 async function submitEscalationToJira(ticketKey) {
   if (!ticketKey) return;
   var submitBtn = event && event.target ? event.target : null;
+  // Also try to find the send button by ID if event target is the modal's send button
+  var escBtn = document.getElementById('sendEscBtn-' + ticketKey);
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '\u23F3 Sending...'; }
+  if (escBtn && escBtn !== submitBtn) { escBtn.disabled = true; escBtn.textContent = '\u23F3 Sending...'; }
   try {
     var contentEl = document.getElementById('escalationDraftContent');
     var draftText = contentEl ? (contentEl.innerText || contentEl.textContent) : '';
-    
-    // Step 1: Send as "Reply to customer" (public JSM comment visible to client)
-    var replySuccess = false;
+
+    // Read TO/CC/Subject from _currentEscalationDraft if available
+    var draft = _currentEscalationDraft || {};
+    var toEmail = draft.to || '';
+    var ccEmail = draft.cc || 'soc-lead@dacta.global';
+    var subject = draft.subject || ('[Security Escalation] ' + ticketKey);
+    var bodyEl = document.getElementById('escalationBodyPreview');
+    var emailBody = bodyEl ? (bodyEl.innerText || bodyEl.textContent || draftText) : draftText;
+
+    var sentViaEmail = false;
+    var sentViaJira = false;
+
+    // Step 1: Try to POST to /api/email endpoint
     try {
-      await DactaJira.replyToCustomer(ticketKey, draftText, true);
-      replySuccess = true;
-    } catch(replyErr) {
-      console.warn('[Escalation] JSM reply failed, using internal comment:', replyErr.message);
-      await DactaJira.addComment(ticketKey, dIcon('email',14) + ' *Client Escalation*\n\n' + draftText);
+      var emailResp = await fetch('/api/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: toEmail, cc: ccEmail, subject: subject, body: emailBody })
+      });
+      if (emailResp.ok) {
+        sentViaEmail = true;
+        console.log('[Escalation] Sent via /api/email');
+      } else {
+        console.warn('[Escalation] /api/email returned', emailResp.status);
+      }
+    } catch(emailErr) {
+      console.warn('[Escalation] /api/email not available:', emailErr.message);
     }
-    
-    // Step 2: Transition ticket to "Escalated"
+
+    // Step 2: If email failed, try Jira (Reply to customer)
+    var replySuccess = false;
+    if (!sentViaEmail) {
+      try {
+        await DactaJira.replyToCustomer(ticketKey, draftText, true);
+        replySuccess = true;
+        sentViaJira = true;
+      } catch(replyErr) {
+        console.warn('[Escalation] JSM reply failed, using internal comment:', replyErr.message);
+        try {
+          await DactaJira.addComment(ticketKey, dIcon('email',14) + ' *Client Escalation*\n\n' + draftText);
+          sentViaJira = true;
+        } catch(commentErr) {
+          console.warn('[Escalation] Jira comment also failed:', commentErr.message);
+        }
+      }
+    }
+
+    // Step 3: If both failed, copy to clipboard
+    if (!sentViaEmail && !sentViaJira) {
+      var clipboardText = 'TO: ' + toEmail + '\nCC: ' + ccEmail + '\nSUBJECT: ' + subject + '\n\n' + emailBody;
+      try {
+        await navigator.clipboard.writeText(clipboardText);
+        showToast('Escalation draft copied to clipboard', 'info');
+      } catch(clipErr) {
+        // Fallback for browsers without clipboard API
+        var ta = document.createElement('textarea');
+        ta.value = clipboardText;
+        ta.style.cssText = 'position:fixed;top:-999px;left:-999px;opacity:0;';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); showToast('Escalation draft copied to clipboard', 'info'); } catch(e2) {}
+        ta.remove();
+      }
+    }
+
+    // Step 4: Transition ticket to "Escalated" (Jira)
     var transitioned = false;
     try {
       var transitions = await DactaJira.fetchTransitions(ticketKey);
@@ -53273,23 +53552,29 @@ async function submitEscalationToJira(ticketKey) {
     } catch(trErr) {
       console.warn('[Escalation] Transition failed:', trErr.message);
     }
-    
-    var msg = replySuccess ? 'Escalation sent to client via Jira' : 'Escalation posted as comment on ' + ticketKey;
+
+    var msg = sentViaEmail ? 'Escalation email sent' : (sentViaJira ? (replySuccess ? 'Escalation sent to client via Jira' : 'Escalation posted as comment on ' + ticketKey) : 'Escalation draft copied to clipboard');
     if (transitioned) msg += ' (ticket transitioned to Escalated)';
     showToast(msg, 'success');
-    if (submitBtn) { submitBtn.innerHTML = dIcon('checkCircle',14) + ' Sent'; }
-    
+
+    // Update buttons to "Sent" state
+    var sentHTML = dIcon('checkCircle',14) + ' Sent \u2713';
+    var sentStyle = 'font-size:10px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);';
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = sentHTML; submitBtn.style.cssText += sentStyle; }
+    if (escBtn && escBtn !== submitBtn) { escBtn.disabled = false; escBtn.innerHTML = sentHTML; escBtn.style.cssText = sentStyle; }
+
     // Log to audit
     logToSupabase('audit_log', {
       user_email: _getCurrentUserEmail() || 'admin',
       action: 'client_escalation_submitted',
       resource_type: 'investigation',
       resource_id: ticketKey,
-      details: { draft_length: draftText.length, jsm_reply: replySuccess, transitioned: transitioned }
+      details: { draft_length: draftText.length, via_email: sentViaEmail, jsm_reply: replySuccess, transitioned: transitioned }
     });
   } catch(e) {
     showToast('Failed to submit escalation: ' + e.message, 'error');
     if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = dIcon('upload',14) + ' Send Escalation'; }
+    if (escBtn && escBtn !== submitBtn) { escBtn.disabled = false; escBtn.innerHTML = dIcon('upload',14) + ' Send Escalation'; }
   }
 }
 
