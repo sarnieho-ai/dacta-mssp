@@ -53170,8 +53170,8 @@ async function runAIInvestigation(ticketKey, issueData) {
     actionLabel = 'Manual investigation recommended \u2014 evidence is mixed';
   }
 
-  // Model names per round
-  var models = ['Claude Sonnet 4 (Investigator)', 'Claude Sonnet 4 (Synthesizer)', 'Claude Sonnet 4 (Adversarial)'];
+  // Model names per round — multi-model architecture
+  var models = ['Claude Sonnet 4 (Investigator)', 'GPT-4o (Synthesizer)', 'Claude Sonnet 4 (Adversarial)'];
   var modelIcons = [dIcon('search',14), dIcon('brain',14) + '', dIcon('warning',14)];
   var stageColors = ['#3b82f6', '#8b5cf6', '#f59e0b'];
 
@@ -53344,7 +53344,13 @@ async function runAIInvestigation(ticketKey, issueData) {
 
           var _llmResp = await callInvestigateAPI(ticketKey, _llmAlertContext, _llmNamespace, _llmPhase, _llmPrevious);
           _llmPhaseResults[_llmPhase] = _llmResp.result;
-          console.log('[LLM Investigation] Phase ' + rnd + ' complete: iterations=' + (_llmResp.iterations || 0) + ', latency=' + (_llmResp.latency_ms || 0) + 'ms');
+          var _usedModel = _llmResp.model || models[(rnd-1) % 3];
+          var _wasFallback = _llmResp.fallback_used || false;
+          console.log('[LLM Investigation] Phase ' + rnd + ' complete: model=' + _usedModel + (_wasFallback ? ' (FALLBACK)' : '') + ', iterations=' + (_llmResp.iterations || 0) + ', latency=' + (_llmResp.latency_ms || 0) + 'ms');
+
+          // Update pipeline stage metric with actual model used
+          var _metricEl = document.getElementById('pipeStageMetric' + rnd);
+          if (_metricEl) _metricEl.textContent = ((_llmResp.latency_ms || 0) / 1000).toFixed(1) + 's \u00B7 ' + _usedModel + (_wasFallback ? ' (fallback)' : '');
 
           if (rnd === 1) roundHTML = buildLLMRound1HTML(_llmResp.result, _llmResp.tool_calls);
           else if (rnd === 2) roundHTML = buildLLMRound2HTML(_llmResp.result);
@@ -53522,6 +53528,13 @@ async function runAIInvestigation(ticketKey, issueData) {
   var summaryEl = document.getElementById('pipeSummary');
   if (summaryEl) {
     var totalTime = 0; for (var ti = 0; ti < totalRounds; ti++) totalTime += roundTimings[ti];
+    // Derive evidence counts from LLM data if available, else fallback to hardcoded
+    var _summIncul = inculpatory.length, _summExcul = exculpatory.length;
+    if (_llmModeActive && _llmPhaseResults.phase2 && _llmPhaseResults.phase2.evidence_summary) {
+      var _es = _llmPhaseResults.phase2.evidence_summary;
+      _summIncul = (_es.supporting_threat || []).length;
+      _summExcul = (_es.supporting_benign || []).length;
+    }
     summaryEl.style.display = '';
     summaryEl.innerHTML = '<span>Pipeline time: <span class="inv-pipeline-summary-highlight">' + (totalTime / 1000).toFixed(1) + 's</span></span>' +
       '<span class="inv-pipeline-summary-sep">\u00B7</span>' +
@@ -53529,7 +53542,7 @@ async function runAIInvestigation(ticketKey, issueData) {
       '<span class="inv-pipeline-summary-sep">\u00B7</span>' +
       '<span>Verdict: <span class="inv-pipeline-summary-consensus" style="color:' + verdictColor + ';">' + verdict.split('\u2014')[0].trim() + '</span></span>' +
       '<span class="inv-pipeline-summary-sep">\u00B7</span>' +
-      '<span>Evidence: <span class="inv-pipeline-summary-highlight">' + inculpatory.length + ' inculpatory / ' + exculpatory.length + ' exculpatory</span></span>';
+      '<span>Evidence: <span class="inv-pipeline-summary-highlight">' + _summIncul + ' inculpatory / ' + _summExcul + ' exculpatory</span></span>';
   }
 
   // ═══════════════════════════════════════════════
@@ -53548,9 +53561,9 @@ async function runAIInvestigation(ticketKey, issueData) {
   });
   verdictBannerHTML += '</div></div>' +
     '<div style="margin-top:8px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">' +
-      '<span>' + dIcon('dot',14) + ' Inculpatory: ' + inculpatory.length + ' finding' + (inculpatory.length !== 1 ? 's' : '') + '</span>' +
-      '<span>' + dIcon('dot',14) + ' Exculpatory: ' + exculpatory.length + ' finding' + (exculpatory.length !== 1 ? 's' : '') + '</span>' +
-      '<span>' + dIcon('barChart',14) + ' TP weight: ' + tpWeight + ' / FP weight: ' + fpWeight + '</span>' +
+      '<span>' + dIcon('dot',14) + ' Inculpatory: ' + _summIncul + ' finding' + (_summIncul !== 1 ? 's' : '') + '</span>' +
+      '<span>' + dIcon('dot',14) + ' Exculpatory: ' + _summExcul + ' finding' + (_summExcul !== 1 ? 's' : '') + '</span>' +
+      (_llmModeActive ? '' : '<span>' + dIcon('barChart',14) + ' TP weight: ' + tpWeight + ' / FP weight: ' + fpWeight + '</span>') +
       '<span>' + actionLabel + '</span></div></div>';
 
   roundsContainer.innerHTML += verdictBannerHTML;
@@ -55296,17 +55309,25 @@ function buildLLMRound1HTML(phase1Result, toolCalls) {
     html += '</div>';
   }
 
-  // Tool call log
+  // Tool call log with drill-down
   if (toolCalls && toolCalls.length > 0) {
     html += '<details style="margin-top:10px;"><summary style="font-size:9px;color:var(--text-muted);cursor:pointer;">\u25B6 Tool Execution Log (' + toolCalls.length + ' calls)</summary>' +
       '<div style="margin-top:4px;">';
     toolCalls.forEach(function(tc, i) {
       var sc = tc.connected !== false ? '#10b981' : '#ef4444';
-      html += '<div style="font-size:9px;padding:2px 0;display:flex;gap:6px;border-bottom:1px solid var(--border-subtle);">' +
+      var detailId = 'toolDetail_p1_' + i;
+      html += '<div style="cursor:pointer;" onclick="var el=document.getElementById(\'' + detailId + '\');if(el)el.style.display=el.style.display===\'none\'?\'block\':\'none\';">' +
+        '<div style="font-size:9px;padding:3px 0;display:flex;gap:6px;border-bottom:1px solid var(--border-subtle);align-items:center;">' +
         '<span style="color:var(--text-muted);min-width:16px;">' + (i + 1) + '</span>' +
         '<span style="color:var(--cyan);font-family:var(--font-mono);min-width:120px;">' + escapeHtml(tc.tool) + '</span>' +
         '<span style="color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(tc.result_summary || '') + '</span>' +
-        '<span style="color:' + sc + ';font-size:8px;font-weight:600;">\u25CF</span></div>';
+        '<span style="color:' + sc + ';font-size:8px;font-weight:600;">\u25CF</span>' +
+        '<span style="color:var(--text-muted);font-size:8px;margin-left:4px;">\u25BC</span></div></div>';
+      // Drill-down: show actual query
+      var queryJson = tc.input ? JSON.stringify(tc.input, null, 2) : (tc.input_summary || 'N/A');
+      html += '<div id="' + detailId + '" style="display:none;margin:2px 0 6px 22px;padding:8px;background:var(--surface-0);border:1px solid var(--border-subtle);border-radius:4px;border-left:3px solid var(--cyan);">' +
+        '<div style="font-size:8px;font-weight:600;color:var(--cyan);text-transform:uppercase;margin-bottom:4px;">ACTUAL QUERY SENT</div>' +
+        '<pre style="font-size:9px;color:var(--text-secondary);font-family:var(--font-mono);margin:0;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;">' + escapeHtml(queryJson) + '</pre></div>';
     });
     html += '</div></details>';
   }
@@ -55321,13 +55342,17 @@ function buildLLMRound2HTML(phase2Result) {
   }
   var html = '';
 
-  // Phase badge
+  // Phase badge with model indicator
   html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">';
   html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);">SYNTHESIS — PHASE 2</span>';
-  var kes = phase2Result.key_evidence_count || {};
-  if (kes.threat) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.25);font-weight:700;">' + kes.threat + ' THREAT</span>';
-  if (kes.benign) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);font-weight:700;">' + kes.benign + ' BENIGN</span>';
-  if (kes.inconclusive) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.25);">' + kes.inconclusive + ' INCONCLUSIVE</span>';
+  // Derive evidence counts from the actual evidence arrays (not the summary field)
+  var _evSummary = phase2Result.evidence_summary || {};
+  var _incCount = (_evSummary.supporting_threat || []).length;
+  var _excCount = (_evSummary.supporting_benign || []).length;
+  var _inconCount = (_evSummary.inconclusive || []).length;
+  if (_incCount) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.25);font-weight:700;" title="Derived from ' + _incCount + ' supporting_threat evidence items below">' + _incCount + ' INCULPATORY</span>';
+  if (_excCount) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);font-weight:700;" title="Derived from ' + _excCount + ' supporting_benign evidence items below">' + _excCount + ' EXCULPATORY</span>';
+  if (_inconCount) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.25);" title="' + _inconCount + ' pieces of evidence that do not clearly support either direction">' + _inconCount + ' INCONCLUSIVE</span>';
   html += '</div>';
 
   // Narrative
@@ -55348,7 +55373,7 @@ function buildLLMRound2HTML(phase2Result) {
   if (threatEv.length > 0) {
     html += '<div style="margin-bottom:10px;">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
-        '<span style="font-size:10px;font-weight:600;color:var(--text-primary);">Evidence Supporting Threat</span>' +
+        '<span style="font-size:10px;font-weight:600;color:var(--text-primary);">Inculpatory Evidence (Supporting Threat)</span>' +
         '<span class="badge badge-red" style="font-size:9px;">' + threatEv.length + '</span></div>';
     threatEv.forEach(function(ev, i) {
       var wColor = ev.weight === 'critical' ? 'var(--red-bright)' : (ev.weight === 'high' ? '#f97316' : 'var(--amber)');
@@ -55367,7 +55392,7 @@ function buildLLMRound2HTML(phase2Result) {
   if (benignEv.length > 0) {
     html += '<div style="margin-bottom:10px;">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
-        '<span style="font-size:10px;font-weight:600;color:var(--text-primary);">Evidence Supporting Benign</span>' +
+        '<span style="font-size:10px;font-weight:600;color:var(--text-primary);">Exculpatory Evidence (Supporting Benign)</span>' +
         '<span class="badge badge-green" style="font-size:9px;">' + benignEv.length + '</span></div>';
     benignEv.forEach(function(ev) {
       var wColor = ev.weight === 'strong' ? 'var(--green)' : (ev.weight === 'moderate' ? 'var(--amber)' : 'var(--cyan)');
@@ -55509,15 +55534,25 @@ function buildLLMRound3HTML(phase3Result, toolCalls) {
     html += '</div>';
   }
 
-  // Tool call log for Phase 3
+  // Tool call log for Phase 3 with drill-down
   if (toolCalls && toolCalls.length > 0) {
     html += '<details style="margin-top:10px;"><summary style="font-size:9px;color:var(--text-muted);cursor:pointer;">\u25B6 Adversarial Tool Calls (' + toolCalls.length + ')</summary>' +
       '<div style="margin-top:4px;">';
     toolCalls.forEach(function(tc, i) {
-      html += '<div style="font-size:9px;padding:2px 0;display:flex;gap:6px;border-bottom:1px solid var(--border-subtle);">' +
-        '<span style="color:var(--text-muted);">' + (i + 1) + '</span>' +
-        '<span style="color:var(--cyan);font-family:var(--font-mono);">' + escapeHtml(tc.tool) + '</span>' +
-        '<span style="color:var(--text-secondary);flex:1;">' + escapeHtml(tc.result_summary || '') + '</span></div>';
+      var sc = tc.connected !== false ? '#10b981' : '#ef4444';
+      var detailId = 'toolDetail_p3_' + i;
+      html += '<div style="cursor:pointer;" onclick="var el=document.getElementById(\'' + detailId + '\');if(el)el.style.display=el.style.display===\'none\'?\'block\':\'none\';">' +
+        '<div style="font-size:9px;padding:3px 0;display:flex;gap:6px;border-bottom:1px solid var(--border-subtle);align-items:center;">' +
+        '<span style="color:var(--text-muted);min-width:16px;">' + (i + 1) + '</span>' +
+        '<span style="color:var(--cyan);font-family:var(--font-mono);min-width:120px;">' + escapeHtml(tc.tool) + '</span>' +
+        '<span style="color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(tc.result_summary || '') + '</span>' +
+        '<span style="color:' + sc + ';font-size:8px;font-weight:600;">\u25CF</span>' +
+        '<span style="color:var(--text-muted);font-size:8px;margin-left:4px;">\u25BC</span></div></div>';
+      // Drill-down: show actual query
+      var queryJson = tc.input ? JSON.stringify(tc.input, null, 2) : (tc.input_summary || 'N/A');
+      html += '<div id="' + detailId + '" style="display:none;margin:2px 0 6px 22px;padding:8px;background:var(--surface-0);border:1px solid var(--border-subtle);border-radius:4px;border-left:3px solid var(--amber);">' +
+        '<div style="font-size:8px;font-weight:600;color:var(--amber);text-transform:uppercase;margin-bottom:4px;">ACTUAL QUERY SENT</div>' +
+        '<pre style="font-size:9px;color:var(--text-secondary);font-family:var(--font-mono);margin:0;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;">' + escapeHtml(queryJson) + '</pre></div>';
     });
     html += '</div></details>';
   }

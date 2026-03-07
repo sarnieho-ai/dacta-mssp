@@ -7,6 +7,7 @@ const { PiiVault } = require('./lib/pii-vault.js');
 const https = require('https');
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const ELASTIC_URL = process.env.ELASTIC_URL || '';
 const ELASTIC_API_KEY = process.env.ELASTIC_API_KEY || '';
 
@@ -357,9 +358,20 @@ async function executeTool(name, input) {
 }
 
 // ═══════════════════════════════════════════════
-// Claude API Call with retry
+// Multi-Model LLM API Layer
+// Primary: Claude (Phases 1,3), GPT-4o (Phase 2)
+// Cross-fallback: If primary fails, try alternate
 // ═══════════════════════════════════════════════
+
+// Model routing: which model is primary/fallback per phase
+const MODEL_ROUTING = {
+  phase1: { primary: 'claude', fallback: 'openai' },
+  phase2: { primary: 'openai', fallback: 'claude' },
+  phase3: { primary: 'claude', fallback: 'openai' }
+};
+
 async function callClaude(body, retries = 2) {
+  if (!ANTHROPIC_API_KEY) throw new Error('Anthropic API key not configured');
   for (let attempt = 0; attempt <= retries; attempt++) {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -372,7 +384,7 @@ async function callClaude(body, retries = 2) {
     });
     if (resp.status === 429 && attempt < retries) {
       const waitSec = 8 + (attempt * 5);
-      console.log(`[Investigate] Rate limited, waiting ${waitSec}s (attempt ${attempt + 1})`);
+      console.log(`[Investigate] Claude rate limited, waiting ${waitSec}s (attempt ${attempt + 1})`);
       await new Promise(r => setTimeout(r, waitSec * 1000));
       continue;
     }
@@ -385,13 +397,100 @@ async function callClaude(body, retries = 2) {
   }
 }
 
+async function callOpenAI(body, retries = 2) {
+  if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (resp.status === 429 && attempt < retries) {
+      const waitSec = 8 + (attempt * 5);
+      console.log(`[Investigate] OpenAI rate limited, waiting ${waitSec}s (attempt ${attempt + 1})`);
+      await new Promise(r => setTimeout(r, waitSec * 1000));
+      continue;
+    }
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error('[Investigate] OpenAI API error:', resp.status, errText);
+      throw new Error(`OpenAI API error: ${resp.status}`);
+    }
+    return await resp.json();
+  }
+}
+
+// Convert Claude tool format → OpenAI function format
+function claudeToolsToOpenAI(tools) {
+  return tools.map(t => ({
+    type: 'function',
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.input_schema
+    }
+  }));
+}
+
+// Normalize OpenAI response → Claude-like format for uniform processing
+function normalizeOpenAIResponse(oaiResp) {
+  const choice = oaiResp.choices?.[0];
+  if (!choice) return { content: [{ type: 'text', text: '{}' }], stop_reason: 'end_turn', usage: { input_tokens: 0, output_tokens: 0 } };
+
+  const msg = choice.message;
+  const content = [];
+
+  // Handle tool calls
+  if (msg.tool_calls && msg.tool_calls.length > 0) {
+    // Include any text content first
+    if (msg.content) content.push({ type: 'text', text: msg.content });
+    msg.tool_calls.forEach(tc => {
+      let parsedArgs;
+      try { parsedArgs = JSON.parse(tc.function.arguments); } catch { parsedArgs = {}; }
+      content.push({
+        type: 'tool_use',
+        id: tc.id,
+        name: tc.function.name,
+        input: parsedArgs
+      });
+    });
+    return {
+      content,
+      stop_reason: 'tool_use',
+      usage: {
+        input_tokens: oaiResp.usage?.prompt_tokens || 0,
+        output_tokens: oaiResp.usage?.completion_tokens || 0
+      }
+    };
+  }
+
+  // Text response
+  content.push({ type: 'text', text: msg.content || '{}' });
+  return {
+    content,
+    stop_reason: choice.finish_reason === 'stop' ? 'end_turn' : choice.finish_reason,
+    usage: {
+      input_tokens: oaiResp.usage?.prompt_tokens || 0,
+      output_tokens: oaiResp.usage?.completion_tokens || 0
+    }
+  };
+}
+
 // ═══════════════════════════════════════════════
 // Agentic Tool-Use Loop
 // Runs LLM with tools, loops until text response
 // ═══════════════════════════════════════════════
-async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds = 6) {
-  const MODEL = 'claude-sonnet-4-20250514';
-  let messages = [{ role: 'user', content: userMessage }];
+// Unified agentic phase runner — works with both Claude and OpenAI
+async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds = 6, provider = 'claude') {
+  const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+  const OPENAI_MODEL = 'gpt-4o';
+  const useClaude = provider === 'claude';
+  let messages = useClaude
+    ? [{ role: 'user', content: userMessage }]
+    : [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMessage }];
   let toolLog = [];
   let iteration = 0;
   let totalUsage = { input_tokens: 0, output_tokens: 0 };
@@ -407,17 +506,38 @@ async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds =
       });
     }
 
-    const callBody = {
-      model: MODEL,
-      max_tokens: isLast ? 4096 : 2048,
-      system: isLast
-        ? systemPrompt + '\n\n[FINAL] All tool calls done. Produce your complete JSON response NOW.'
-        : systemPrompt,
-      messages
-    };
-    if (!isLast) callBody.tools = INVESTIGATION_TOOLS;
+    let result;
+    if (useClaude) {
+      const callBody = {
+        model: CLAUDE_MODEL,
+        max_tokens: isLast ? 4096 : 2048,
+        system: isLast
+          ? systemPrompt + '\n\n[FINAL] All tool calls done. Produce your complete JSON response NOW.'
+          : systemPrompt,
+        messages
+      };
+      if (!isLast) callBody.tools = INVESTIGATION_TOOLS;
+      result = await callClaude(callBody);
+    } else {
+      // OpenAI path
+      const oaiBody = {
+        model: OPENAI_MODEL,
+        max_tokens: isLast ? 4096 : 2048,
+        messages
+      };
+      if (!isLast) oaiBody.tools = claudeToolsToOpenAI(INVESTIGATION_TOOLS);
+      if (isLast) {
+        // Update system prompt for final call
+        oaiBody.messages = oaiBody.messages.map(m =>
+          m.role === 'system'
+            ? { ...m, content: m.content + '\n\n[FINAL] All tool calls done. Produce your complete JSON response NOW.' }
+            : m
+        );
+      }
+      const oaiResp = await callOpenAI(oaiBody);
+      result = normalizeOpenAIResponse(oaiResp);
+    }
 
-    const result = await callClaude(callBody);
     if (result.usage) {
       totalUsage.input_tokens += result.usage.input_tokens || 0;
       totalUsage.output_tokens += result.usage.output_tokens || 0;
@@ -425,7 +545,23 @@ async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds =
 
     if (result.stop_reason === 'tool_use' && !isLast) {
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
-      messages.push({ role: 'assistant', content: result.content });
+
+      if (useClaude) {
+        messages.push({ role: 'assistant', content: result.content });
+      } else {
+        // OpenAI: reconstruct assistant message with tool_calls
+        const assistantMsg = { role: 'assistant', content: null, tool_calls: [] };
+        const textParts = result.content.filter(b => b.type === 'text');
+        if (textParts.length > 0) assistantMsg.content = textParts.map(t => t.text).join('');
+        toolBlocks.forEach(tb => {
+          assistantMsg.tool_calls.push({
+            id: tb.id,
+            type: 'function',
+            function: { name: tb.name, arguments: JSON.stringify(tb.input) }
+          });
+        });
+        messages.push(assistantMsg);
+      }
 
       const toolResults = await Promise.all(toolBlocks.map(async (tb) => {
         const realInput = vault.detokenizeDeep(tb.input);
@@ -433,24 +569,56 @@ async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds =
         const tokenizedResult = vault.tokenizeDeep(toolResult);
         toolLog.push({
           tool: tb.name,
+          input: tb.input,  // Full input for drill-down
           input_summary: JSON.stringify(tb.input).substring(0, 200),
           result_summary: toolResult.error || `${toolResult.total !== undefined ? toolResult.total + ' hits' : (toolResult.found ? 'FOUND' : 'not found')}`,
           connected: toolResult.connected !== false
         });
-        return { type: 'tool_result', tool_use_id: tb.id, content: JSON.stringify(tokenizedResult) };
+        if (useClaude) {
+          return { type: 'tool_result', tool_use_id: tb.id, content: JSON.stringify(tokenizedResult) };
+        } else {
+          return { role: 'tool', tool_call_id: tb.id, content: JSON.stringify(tokenizedResult) };
+        }
       }));
 
-      messages.push({ role: 'user', content: toolResults });
+      if (useClaude) {
+        messages.push({ role: 'user', content: toolResults });
+      } else {
+        toolResults.forEach(tr => messages.push(tr));
+      }
       continue;
     }
 
     // Got text response
     const text = result.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
     const detokenized = vault.detokenize(text);
-    return { text: detokenized, toolLog, usage: totalUsage, iterations: iteration };
+    return { text: detokenized, toolLog, usage: totalUsage, iterations: iteration, provider };
   }
 
-  return { text: '{}', toolLog, usage: totalUsage, iterations: iteration };
+  return { text: '{}', toolLog, usage: totalUsage, iterations: iteration, provider };
+}
+
+// Run a phase with the assigned primary model, falling back to alternate on failure
+async function runPhaseWithFallback(phase, systemPrompt, userMessage, vault, maxToolRounds) {
+  const routing = MODEL_ROUTING[phase] || { primary: 'claude', fallback: 'openai' };
+  let provider = routing.primary;
+  let fallbackUsed = false;
+
+  try {
+    const result = await runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds, provider);
+    return { ...result, model: provider === 'claude' ? 'claude-sonnet-4' : 'gpt-4o', fallback_used: false };
+  } catch (primaryErr) {
+    console.warn(`[Investigate] ${phase} primary (${provider}) failed: ${primaryErr.message}. Falling back to ${routing.fallback}`);
+    provider = routing.fallback;
+    fallbackUsed = true;
+    try {
+      const result = await runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds, provider);
+      return { ...result, model: provider === 'claude' ? 'claude-sonnet-4' : 'gpt-4o', fallback_used: true };
+    } catch (fallbackErr) {
+      console.error(`[Investigate] ${phase} fallback (${provider}) also failed: ${fallbackErr.message}`);
+      throw new Error(`Both ${routing.primary} and ${routing.fallback} failed for ${phase}`);
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -480,8 +648,9 @@ function parsePhaseJSON(text) {
 // ═══════════════════════════════════════════════
 // Server-Side Usage Logging
 // ═══════════════════════════════════════════════
-async function logInvestigationUsage({ ticketKey, phase, model, usage, toolCallLog, latencyMs }) {
+async function logInvestigationUsage({ ticketKey, phase, model, usage, toolCallLog, latencyMs, fallbackUsed }) {
   if (!SUPABASE_SERVICE_KEY) return;
+  const provider = (model || '').includes('gpt') ? 'openai' : 'anthropic';
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/llm_usage_log`, {
       method: 'POST',
@@ -493,12 +662,12 @@ async function logInvestigationUsage({ ticketKey, phase, model, usage, toolCallL
       body: JSON.stringify({
         task_type: `investigation_${phase}`,
         model: model,
-        provider: 'anthropic',
+        provider: provider,
         input_tokens: usage?.input_tokens || 0,
         output_tokens: usage?.output_tokens || 0,
         latency_ms: latencyMs || 0,
         estimated_cost_usd: 0,
-        fallback_used: false,
+        fallback_used: fallbackUsed || false,
         related_entity_type: 'investigation',
         related_entity_id: ticketKey || null
       })
@@ -528,7 +697,7 @@ export default async function handler(req, res) {
 
   const requestStart = Date.now();
 
-  if (!ANTHROPIC_API_KEY) {
+  if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
     return res.status(500).json({ error: 'AI engine not configured. Contact administrator.' });
   }
 
@@ -578,9 +747,10 @@ ${namespace ? `IMPORTANT: Scope ALL Elastic queries to namespace "${namespace}".
     const runPhase = phase || 'phase1';
 
     if (runPhase === 'phase1') {
-      // ── PHASE 1: Investigation ──
+      // ── PHASE 1: Investigation (Primary: Claude, Fallback: GPT-4o) ──
       console.log(`[Investigate] Phase 1 starting for ${ticket_key}`);
-      const phaseResult = await runAgenticPhase(
+      const phaseResult = await runPhaseWithFallback(
+        'phase1',
         vault.tokenize(INVESTIGATOR_PROMPT),
         tokenizedBrief,
         vault,
@@ -589,11 +759,13 @@ ${namespace ? `IMPORTANT: Scope ALL Elastic queries to namespace "${namespace}".
 
       const parsed = parsePhaseJSON(phaseResult.text);
       const latency = Date.now() - requestStart;
-      logInvestigationUsage({ ticketKey: ticket_key, phase: 'phase1', model: 'claude-sonnet-4', usage: phaseResult.usage, toolCallLog: phaseResult.toolLog, latencyMs: latency });
+      logInvestigationUsage({ ticketKey: ticket_key, phase: 'phase1', model: phaseResult.model, usage: phaseResult.usage, toolCallLog: phaseResult.toolLog, latencyMs: latency });
 
       return res.status(200).json({
         phase: 'phase1',
         ticket_key,
+        model: phaseResult.model,
+        fallback_used: phaseResult.fallback_used,
         result: parsed || { error: 'Failed to parse investigation output', raw: phaseResult.text.substring(0, 2000) },
         tool_calls: phaseResult.toolLog,
         usage: phaseResult.usage,
@@ -603,37 +775,96 @@ ${namespace ? `IMPORTANT: Scope ALL Elastic queries to namespace "${namespace}".
     }
 
     if (runPhase === 'phase2') {
-      // ── PHASE 2: Synthesis ──
+      // ── PHASE 2: Synthesis (Primary: GPT-4o, Fallback: Claude) ──
       const phase1Data = previous_phases?.phase1;
       if (!phase1Data) return res.status(400).json({ error: 'phase2 requires previous_phases.phase1' });
 
       console.log(`[Investigate] Phase 2 starting for ${ticket_key}`);
       const synthesisInput = `${tokenizedBrief}\n\n## Phase 1 Investigation Findings\n${vault.tokenize(JSON.stringify(phase1Data, null, 2))}`;
+      const tokenizedSynthPrompt = vault.tokenize(SYNTHESIZER_PROMPT);
 
-      // Phase 2 doesn't need tools — it's pure synthesis
-      const callBody = {
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        system: vault.tokenize(SYNTHESIZER_PROMPT),
-        messages: [{ role: 'user', content: synthesisInput }]
-      };
-      const claudeResult = await callClaude(callBody);
-      const text = claudeResult.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-      const parsed = parsePhaseJSON(vault.detokenize(text));
+      // Phase 2: pure synthesis, no tools — try primary (GPT-4o) then fallback
+      const routing = MODEL_ROUTING.phase2;
+      let phase2Model = routing.primary;
+      let fallbackUsed = false;
+      let parsedResult, usageResult;
+
+      try {
+        if (phase2Model === 'openai') {
+          const oaiBody = {
+            model: 'gpt-4o',
+            max_tokens: 4096,
+            messages: [
+              { role: 'system', content: tokenizedSynthPrompt },
+              { role: 'user', content: synthesisInput }
+            ]
+          };
+          const oaiResp = await callOpenAI(oaiBody);
+          const normalized = normalizeOpenAIResponse(oaiResp);
+          const text = normalized.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+          parsedResult = parsePhaseJSON(vault.detokenize(text));
+          usageResult = normalized.usage;
+        } else {
+          const callBody = {
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 4096,
+            system: tokenizedSynthPrompt,
+            messages: [{ role: 'user', content: synthesisInput }]
+          };
+          const claudeResult = await callClaude(callBody);
+          const text = claudeResult.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+          parsedResult = parsePhaseJSON(vault.detokenize(text));
+          usageResult = claudeResult.usage;
+        }
+      } catch (primaryErr) {
+        console.warn(`[Investigate] Phase 2 primary (${phase2Model}) failed: ${primaryErr.message}. Falling back...`);
+        phase2Model = routing.fallback;
+        fallbackUsed = true;
+        if (phase2Model === 'claude') {
+          const callBody = {
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 4096,
+            system: tokenizedSynthPrompt,
+            messages: [{ role: 'user', content: synthesisInput }]
+          };
+          const claudeResult = await callClaude(callBody);
+          const text = claudeResult.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+          parsedResult = parsePhaseJSON(vault.detokenize(text));
+          usageResult = claudeResult.usage;
+        } else {
+          const oaiBody = {
+            model: 'gpt-4o',
+            max_tokens: 4096,
+            messages: [
+              { role: 'system', content: tokenizedSynthPrompt },
+              { role: 'user', content: synthesisInput }
+            ]
+          };
+          const oaiResp = await callOpenAI(oaiBody);
+          const normalized = normalizeOpenAIResponse(oaiResp);
+          const text = normalized.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+          parsedResult = parsePhaseJSON(vault.detokenize(text));
+          usageResult = normalized.usage;
+        }
+      }
+
+      const modelName = phase2Model === 'openai' ? 'gpt-4o' : 'claude-sonnet-4';
       const latency = Date.now() - requestStart;
-      logInvestigationUsage({ ticketKey: ticket_key, phase: 'phase2', model: 'claude-sonnet-4', usage: claudeResult.usage, latencyMs: latency });
+      logInvestigationUsage({ ticketKey: ticket_key, phase: 'phase2', model: modelName, usage: usageResult, latencyMs: latency });
 
       return res.status(200).json({
         phase: 'phase2',
         ticket_key,
-        result: parsed || { error: 'Failed to parse synthesis output', raw: vault.detokenize(text).substring(0, 2000) },
-        usage: claudeResult.usage,
+        model: modelName,
+        fallback_used: fallbackUsed,
+        result: parsedResult || { error: 'Failed to parse synthesis output' },
+        usage: usageResult,
         latency_ms: latency
       });
     }
 
     if (runPhase === 'phase3') {
-      // ── PHASE 3: Adversarial Challenge ──
+      // ── PHASE 3: Adversarial Challenge (Primary: Claude, Fallback: GPT-4o) ──
       const phase1Data = previous_phases?.phase1;
       const phase2Data = previous_phases?.phase2;
       if (!phase1Data || !phase2Data) return res.status(400).json({ error: 'phase3 requires previous_phases.phase1 and phase2' });
@@ -642,7 +873,8 @@ ${namespace ? `IMPORTANT: Scope ALL Elastic queries to namespace "${namespace}".
       const adversarialInput = `${tokenizedBrief}\n\n## Phase 1 Investigation Findings\n${vault.tokenize(JSON.stringify(phase1Data, null, 2))}\n\n## Phase 2 Synthesis & Preliminary Verdict\n${vault.tokenize(JSON.stringify(phase2Data, null, 2))}`;
 
       // Phase 3 gets tools to search for counter-evidence
-      const phaseResult = await runAgenticPhase(
+      const phaseResult = await runPhaseWithFallback(
+        'phase3',
         vault.tokenize(ADVERSARIAL_PROMPT),
         adversarialInput,
         vault,
@@ -651,11 +883,13 @@ ${namespace ? `IMPORTANT: Scope ALL Elastic queries to namespace "${namespace}".
 
       const parsed = parsePhaseJSON(phaseResult.text);
       const latency = Date.now() - requestStart;
-      logInvestigationUsage({ ticketKey: ticket_key, phase: 'phase3', model: 'claude-sonnet-4', usage: phaseResult.usage, toolCallLog: phaseResult.toolLog, latencyMs: latency });
+      logInvestigationUsage({ ticketKey: ticket_key, phase: 'phase3', model: phaseResult.model, usage: phaseResult.usage, toolCallLog: phaseResult.toolLog, latencyMs: latency });
 
       return res.status(200).json({
         phase: 'phase3',
         ticket_key,
+        model: phaseResult.model,
+        fallback_used: phaseResult.fallback_used,
         result: parsed || { error: 'Failed to parse adversarial output', raw: phaseResult.text.substring(0, 2000) },
         tool_calls: phaseResult.toolLog,
         usage: phaseResult.usage,
