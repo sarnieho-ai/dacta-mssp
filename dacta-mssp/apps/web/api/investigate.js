@@ -681,7 +681,7 @@ async function logInvestigationUsage({ ticketKey, phase, model, usage, toolCallL
 // Vercel Config
 // ═══════════════════════════════════════════════
 export const config = {
-  maxDuration: 120
+  maxDuration: 60
 };
 
 // ═══════════════════════════════════════════════

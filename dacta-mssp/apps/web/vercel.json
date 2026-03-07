@@ -46,9 +46,6 @@
   "functions": {
     "api/*.js": {
       "maxDuration": 60
-    },
-    "api/investigate.js": {
-      "maxDuration": 120
     }
   }
 }
