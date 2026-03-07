@@ -49215,7 +49215,7 @@ async function openInvestigation(ticketKey) {
     var _statusLow = status.toLowerCase();
     var _invStageIdx = _statusLow.includes('triage') || _statusLow === 'open' ? 0
                      : _statusLow.includes('invest') || _statusLow.includes('progress') ? 1
-                     : _statusLow.includes('contain') ? 2
+                     : _statusLow.includes('contain') || _statusLow.includes('escalat') ? 2
                      : (_statusLow.includes('remed') || _statusLow.includes('clos') || _statusLow.includes('resolv')) ? 3 : 0;
     var _invStages = ['Triage', 'Investigation', 'Containment', 'Remediation'];
     var _alertCat = workCatStr || useCase || (labels.length > 0 ? labels[0] : '');
@@ -49294,44 +49294,52 @@ async function openInvestigation(ticketKey) {
     var _rTechniques = detectTechniques(_rFullText);
     var _rIOCs = extractIOCs(_rFullText);
     var _rAlertSummary = buildAlertSummaryHTML(f.summary||'', description||'', _rTechniques, _rIOCs, _alertCat, useCase);
-    var _rImpSVG =
-      '<svg viewBox="0 0 320 260" width="100%" style="max-width:320px;display:block;margin:0 auto;">' +
-      '<circle cx="160" cy="130" r="100" fill="rgba(239,68,68,0.03)" stroke="rgba(239,68,68,0.08)" stroke-width="1"/>' +
-      '<circle cx="160" cy="130" r="76" fill="rgba(239,68,68,0.04)" stroke="rgba(239,68,68,0.1)" stroke-width="1"/>' +
-      '<circle cx="160" cy="130" r="54" fill="rgba(239,68,68,0.05)" stroke="rgba(239,68,68,0.12)" stroke-width="1"/>' +
-      '<circle cx="160" cy="130" r="34" fill="rgba(239,68,68,0.08)" stroke="rgba(239,68,68,0.18)" stroke-width="1.5"/>' +
-      '<line x1="78" y1="72" x2="138" y2="116" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>' +
-      '<line x1="242" y1="72" x2="182" y2="116" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>' +
-      '<line x1="68" y1="200" x2="138" y2="146" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>' +
-      '<line x1="252" y1="200" x2="182" y2="146" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>' +
-      '<circle cx="160" cy="130" r="22" fill="white" stroke="#E5E7EB" stroke-width="1.5"/>' +
-      '<text x="160" y="136" text-anchor="middle" font-size="16" fill="#9CA3AF">&#9888;</text>' +
-      '<circle cx="78" cy="66" r="24" fill="#FEF2F2" stroke="#FECACA" stroke-width="1.5"/>' +
-      '<circle cx="78" cy="59" r="6" fill="#EF4444"/>' +
-      '<path d="M63,84 Q63,74 78,74 Q93,74 93,84" fill="#EF4444"/>' +
-      '<text x="78" y="104" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Identities</text>' +
-      '<text x="78" y="118" text-anchor="middle" font-size="11" font-weight="700" fill="#EF4444" id="rImpIdent">\u2014</text>' +
-      '<circle cx="242" cy="66" r="24" fill="white" stroke="#E5E7EB" stroke-width="1.5"/>' +
-      '<rect x="232" y="56" width="8" height="10" rx="1" fill="#9CA3AF"/>' +
-      '<rect x="234" y="58" width="4" height="1" fill="white"/>' +
-      '<rect x="234" y="61" width="4" height="1" fill="white"/>' +
-      '<rect x="234" y="64" width="3" height="1" fill="white"/>' +
-      '<text x="242" y="104" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Data Objects</text>' +
-      '<text x="242" y="118" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280">\u2014</text>' +
-      '<circle cx="68" cy="200" r="24" fill="white" stroke="#E5E7EB" stroke-width="1.5"/>' +
-      '<rect x="57" y="191" width="22" height="14" rx="2" fill="none" stroke="#9CA3AF" stroke-width="1.5"/>' +
-      '<rect x="64" y="205" width="8" height="2" rx="1" fill="#9CA3AF"/>' +
-      '<rect x="60" y="207" width="16" height="1.5" rx="1" fill="#9CA3AF"/>' +
-      '<text x="68" y="238" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Devices</text>' +
-      '<text x="68" y="252" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280" id="rImpDev">\u2014</text>' +
-      '<circle cx="252" cy="200" r="24" fill="white" stroke="#E5E7EB" stroke-width="1.5"/>' +
-      '<rect x="244" y="192" width="6" height="6" rx="1" fill="#9CA3AF"/>' +
-      '<rect x="252" y="192" width="6" height="6" rx="1" fill="#9CA3AF"/>' +
-      '<rect x="244" y="200" width="6" height="6" rx="1" fill="#9CA3AF"/>' +
-      '<rect x="252" y="200" width="6" height="6" rx="1" fill="#9CA3AF"/>' +
-      '<text x="252" y="238" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Applications</text>' +
-      '<text x="252" y="252" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280">\u2014</text>' +
-      '</svg>';
+    // ── Extract live entities from ticket data for Impact section ──
+    var _impFullText = (f.summary || '') + ' ' + (description || '').replace(/<[^>]+>/g, ' ');
+    var _impUserMatch = _impFullText.match(/User\s*Involved:?\s*([\w.@-]+)/i);
+    var _impDeviceMatches = [];
+    var _impDevRx = /(?:Firewall\s*Device|Device|Hostname|Host):?\s*([\w.-]+)/gi;
+    var _impDevM;
+    while ((_impDevM = _impDevRx.exec(_impFullText)) !== null) { if (_impDevM[1].length > 2) _impDeviceMatches.push(_impDevM[1]); }
+    // Also capture hostnames from IOC extraction
+    (_rIOCs.hosts || []).forEach(function(h) { if (!_impDeviceMatches.includes(h)) _impDeviceMatches.push(h); });
+    _impDeviceMatches = [...new Set(_impDeviceMatches)];
+    var _impUsers = _impUserMatch ? [_impUserMatch[1]] : [];
+    // Also check for email-like users from IOC extraction
+    (_rIOCs.users || []).forEach(function(u) { if (u.includes('@') && !_impUsers.includes(u)) _impUsers.push(u); });
+    // Extract firewall/application names
+    var _impApps = [];
+    var _impAppRx = /(?:Edit|Delete|Add|Modify)\s+([\w.]+)/gi;
+    var _impAppM;
+    while ((_impAppM = _impAppRx.exec(_impFullText)) !== null) { if (_impAppM[1].length > 2) _impApps.push(_impAppM[1]); }
+    _impApps = [...new Set(_impApps)].slice(0, 3);
+    // Data objects: files, paths, policies
+    var _impDataObjs = [];
+    var _impPathM = _impFullText.match(/Path:?\s*([\w.]+)/i);
+    if (_impPathM && _impPathM[1]) _impDataObjs.push(_impPathM[1]);
+    (_rIOCs.files || []).forEach(function(fi) { _impDataObjs.push(fi); });
+    (_rIOCs.paths || []).forEach(function(p) { _impDataObjs.push(p); });
+    _impDataObjs = [...new Set(_impDataObjs)].slice(0, 3);
+
+    function _impCard(icon, label, items, color) {
+      var count = items.length;
+      var countColor = count > 0 ? color : 'rgba(255,255,255,0.25)';
+      var itemsHtml = count > 0
+        ? items.slice(0,3).map(function(v) { return '<div style="font-size:10px;color:var(--rws-text-secondary);padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;" title="' + escapeHtml(v) + '">' + escapeHtml(v) + '</div>'; }).join('')
+        : '<div style="font-size:10px;color:var(--rws-text-muted);font-style:italic;">None detected</div>';
+      return '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px;text-align:center;min-width:0;">'
+        + '<div style="font-size:20px;margin-bottom:4px;">' + icon + '</div>'
+        + '<div style="font-size:10px;font-weight:600;color:var(--rws-text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">' + label + '</div>'
+        + '<div style="font-size:18px;font-weight:700;color:' + countColor + ';margin-bottom:6px;">' + count + '</div>'
+        + itemsHtml
+        + '</div>';
+    }
+    var _rImpHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'
+      + _impCard('&#128100;', 'Identities', _impUsers, '#EF4444')
+      + _impCard('&#128187;', 'Devices', _impDeviceMatches, '#3B82F6')
+      + _impCard('&#128196;', 'Data Objects', _impDataObjs, '#F59E0B')
+      + _impCard('&#9881;', 'Applications', _impApps, '#10B981')
+      + '</div>';
 
     // Build ticket phases HTML for the Timeline right panel
     var _phasesHTML = _invStages.map(function(stage, i) {
@@ -49454,7 +49462,7 @@ async function openInvestigation(ticketKey) {
               '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 12px;">Impact</h3>' +
               '<div id="summaryImpactContainer" style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:16px;margin-bottom:16px;">' +
                 '<div id="summaryAttackGraph" style="display:none;"></div>' +
-                '<div id="summaryImpactFallback">' + _rImpSVG + '</div>' +
+                '<div id="summaryImpactFallback">' + _rImpHTML + '</div>' +
                 '<div id="summaryTopFindings" style="margin-top:14px;">' +
                   '<div style="font-size:13px;font-weight:600;color:var(--rws-text-primary);margin-bottom:8px;">Top Findings</div>' +
                   '<div id="summaryTopFindingsContent" style="font-size:12px;color:var(--rws-text-muted);font-style:italic;">Findings will appear after AI investigation completes...</div>' +
@@ -49736,10 +49744,12 @@ async function openInvestigation(ticketKey) {
       }
       // Also try to populate top findings from cached investigation
       var cachedEntry = _investigationCache[ticketKey];
-      if (cachedEntry && cachedEntry.metadata) {
-        var meta = cachedEntry.metadata;
-        if (meta.inculpatory || meta.exculpatory) {
-          populateTopFindings(meta.inculpatory || [], meta.exculpatory || []);
+      if (cachedEntry) {
+        // Check multiple possible cache structures
+        var incEvidence = cachedEntry.inculpatoryEvidence || (cachedEntry.metadata && cachedEntry.metadata.inculpatory) || [];
+        var excEvidence = cachedEntry.exculpatoryEvidence || (cachedEntry.metadata && cachedEntry.metadata.exculpatory) || [];
+        if (incEvidence.length > 0 || excEvidence.length > 0) {
+          populateTopFindings(incEvidence, excEvidence);
         }
       }
     }, 400);
@@ -49811,9 +49821,18 @@ async function openInvestigation(ticketKey) {
         console.warn('[SLA Panel] Load failed:', e.message);
         var slaEl = document.getElementById('invSideSLAContent');
         if (slaEl) {
+          // Determine SLA type based on current stage (not always Response)
+          // Triage/Investigation = Triage SLA, Containment/Escalated = Containment SLA, Remediation = only if defined in JIRA
+          var _slaStageIdx = _invStageIdx;
+          var _slaType = _slaStageIdx <= 1 ? 'Triage' : 'Containment';
           var slaTargets = { 'P1': 4, 'P2': 8, 'P3': 24, 'P4': 72 };
           var pShort = (priority.split(' - ')[0] || 'P3').toUpperCase();
           var targetHrs = slaTargets[pShort] || 24;
+          // Containment SLA has tighter targets
+          if (_slaType === 'Containment') {
+            var containTargets = { 'P1': 1, 'P2': 4, 'P3': 8, 'P4': 24 };
+            targetHrs = containTargets[pShort] || 8;
+          }
           var createdDate = new Date(f.created);
           var elapsedMs = Date.now() - createdDate.getTime();
           var targetMs = targetHrs * 3600000;
@@ -49824,22 +49843,34 @@ async function openInvestigation(ticketKey) {
           var rH = Math.floor(rem / 3600000); var rM = Math.floor((rem % 3600000) / 60000);
           var r = 28, cx = 32, cy = 32, c = 2 * Math.PI * r;
           var dashOffset = c - (Math.min(pct, 100) / 100) * c;
-          slaEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;">' +
+          var slaHtml = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
             '<svg width="64" height="64" viewBox="0 0 64 64">' +
               '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4"/>' +
               '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + col + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + c + '" stroke-dashoffset="' + dashOffset + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>' +
               '<text x="' + cx + '" y="' + (cy + 1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="' + col + '">' + pct + '%</text>' +
             '</svg>' +
             '<div>' +
-              '<div style="font-size:11px;font-weight:600;color:var(--rws-text-primary);">' + pShort + ' Response SLA</div>' +
+              '<div style="font-size:11px;font-weight:600;color:var(--rws-text-primary);">' + pShort + ' ' + _slaType + ' SLA</div>' +
               '<div style="font-size:10px;color:' + col + ';font-weight:600;">' + (breached ? 'BREACHED' : rH + 'h ' + rM + 'm left') + '</div>' +
               '<div style="font-size:9px;color:var(--rws-text-muted);margin-top:2px;">Target: ' + targetHrs + 'h</div>' +
             '</div></div>';
+          // Remediation SLA: show "Not Available" unless JIRA explicitly provides one
+          slaHtml += '<div style="display:flex;align-items:center;gap:12px;">' +
+            '<svg width="64" height="64" viewBox="0 0 64 64">' +
+              '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4"/>' +
+              '<text x="' + cx + '" y="' + (cy + 1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="rgba(255,255,255,0.2)">—</text>' +
+            '</svg>' +
+            '<div>' +
+              '<div style="font-size:11px;font-weight:600;color:var(--rws-text-primary);">Remediation SLA</div>' +
+              '<div style="font-size:10px;color:var(--rws-text-muted);">Not Available</div>' +
+              '<div style="font-size:9px;color:var(--rws-text-muted);margin-top:2px;">Not defined in contract</div>' +
+            '</div></div>';
+          slaEl.innerHTML = slaHtml;
         }
       }
     })();
 
-    // ── Populate Associated Entities in right panel ──
+    // ── Populate Associated Entities in right panel (investigation-relevant only) ──
     (function populateRightPanelEntities() {
       setTimeout(function() {
         var entContent = document.getElementById('invSideEntitiesContent');
@@ -49848,29 +49879,57 @@ async function openInvestigation(ticketKey) {
         var fullText = (f.summary || '') + ' ' + (description || '').replace(/<[^>]+>/g, ' ');
         var iocs = extractIOCs(fullText);
         var entities = [];
-        // Extract from Jira assignee and reporter fields
-        var _jiraAssignee = f.assignee ? (f.assignee.displayName || f.assignee.emailAddress || '') : '';
-        var _jiraReporter = f.reporter ? (f.reporter.displayName || f.reporter.emailAddress || '') : '';
-        (iocs.hosts || []).forEach(function(h) { entities.push({type:'Device DNS', icon:'&#128187;', value:h}); });
-        (iocs.ips || []).forEach(function(ip) { entities.push({type:'Device IP', icon:'&#127760;', value:ip}); });
-        // Add Jira assignee/reporter as entities if they look like real names
-        if (_jiraReporter && _jiraReporter.length > 3 && _jiraReporter !== 'Automation for Jira' && !_jiraReporter.toLowerCase().includes('automation')) {
-          entities.push({type:'Reporter', icon:'&#128100;', value:_jiraReporter});
+
+        // 1. IDENTITIES — users mentioned in the alert (not Jira reporter/assignee)
+        var _entUserRx = /User\s*Involved:?\s*([\w.@-]+)/gi;
+        var _entUserM;
+        var _entUsersSeen = new Set();
+        while ((_entUserM = _entUserRx.exec(fullText)) !== null) {
+          var _eu = _entUserM[1];
+          if (_eu.length > 3 && !_entUsersSeen.has(_eu.toLowerCase())) {
+            _entUsersSeen.add(_eu.toLowerCase());
+            entities.push({type:'Identity', icon:'&#128100;', value:_eu});
+          }
         }
-        if (_jiraAssignee && _jiraAssignee.length > 3 && _jiraAssignee !== 'Automation for Jira' && !_jiraAssignee.toLowerCase().includes('automation')) {
-          entities.push({type:'Assignee', icon:'&#128100;', value:_jiraAssignee});
-        }
-        // Add extracted usernames (now filtered for generic words)
-        (iocs.users || []).forEach(function(u) { entities.push({type:'Username', icon:'&#128100;', value:u}); });
-        // Extract domain names from text
-        var _domainPattern = /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|co|gov|edu|mil|info|biz|us|uk|de|fr|au|ca|sg|my|jp|cn|ru|br|in)\b/gi;
-        var _domainMatches = fullText.match(_domainPattern) || [];
-        var _uniqueDomains = [...new Set(_domainMatches.map(function(d){return d.toLowerCase();}))].filter(function(d) {
-          return !d.includes('atlassian.') && !d.includes('jira.') && !d.includes('supabase.') && !d.includes('dacta.') && d.length > 5;
+        // Also add extracted usernames with @ (email-like, from ticket body)
+        (iocs.users || []).forEach(function(u) {
+          if (!_entUsersSeen.has(u.toLowerCase())) {
+            _entUsersSeen.add(u.toLowerCase());
+            entities.push({type:'Identity', icon:'&#128100;', value:u});
+          }
         });
-        _uniqueDomains.slice(0,3).forEach(function(d) { entities.push({type:'Domain', icon:'&#127759;', value:d}); });
-        (iocs.hashes || []).forEach(function(h) { entities.push({type:'Hash', icon:'&#128274;', value:h.length > 16 ? h.substring(0,16) + '\u2026' : h}); });
-        (iocs.files || []).forEach(function(fi) { entities.push({type:'File', icon:'&#128196;', value:fi}); });
+
+        // 2. DEVICES — hostnames, firewall devices from ticket
+        var _entDevRx = /(?:Firewall\s*Device|Device|Hostname|Host):?\s*([\w.-]+)/gi;
+        var _entDevM;
+        var _entDevSeen = new Set();
+        while ((_entDevM = _entDevRx.exec(fullText)) !== null) {
+          var _ed = _entDevM[1];
+          if (_ed.length > 2 && !_entDevSeen.has(_ed.toLowerCase())) {
+            _entDevSeen.add(_ed.toLowerCase());
+            entities.push({type:'Device', icon:'&#128187;', value:_ed});
+          }
+        }
+        (iocs.hosts || []).forEach(function(h) {
+          if (!_entDevSeen.has(h.toLowerCase())) {
+            _entDevSeen.add(h.toLowerCase());
+            entities.push({type:'Device', icon:'&#128187;', value:h});
+          }
+        });
+
+        // 3. IPs — source/destination IPs
+        (iocs.ips || []).forEach(function(ip) {
+          entities.push({type:'IP Address', icon:'&#127760;', value:ip});
+        });
+
+        // 4. FILES / HASHES — malware indicators
+        (iocs.files || []).forEach(function(fi) {
+          entities.push({type:'File', icon:'&#128196;', value:fi});
+        });
+        (iocs.hashes || []).forEach(function(h) {
+          entities.push({type:'Hash', icon:'&#128274;', value:h.length > 16 ? h.substring(0,16) + '\u2026' : h});
+        });
+
         if (entCount) entCount.textContent = entities.length;
         if (entities.length > 0) {
           entContent.innerHTML = entities.slice(0, 10).map(function(e) {
@@ -49938,69 +49997,77 @@ async function openInvestigation(ticketKey) {
 // ── Build professional alert summary HTML for the "What happened?" section ──
 function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat, useCase) {
   var cleanDesc = (description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  // Strip out "Hi *client*" preambles and boilerplate from Jira descriptions
-  var cleanedNarrative = cleanDesc
+
+  // ── Strip boilerplate, URLs, and raw diagnostic fields ──
+  var cleaned = cleanDesc
     .replace(/^\s*Hi\s+[A-Za-z0-9 ]+(?:Team|team|Global|global)[,.]?\s*/i, '')
     .replace(/^\s*Dear\s+[A-Za-z0-9 ]+[,.]?\s*/i, '')
     .replace(/^\s*An alert pertaining to the rule\s*[-–—]?\s*/i, '')
     .replace(/has been triggered\.?\s*/i, ' ')
     .replace(/Details of the event\(s\) are as follow(?:s|ed)?:?\s*/i, '')
     .replace(/Details are as follow(?:s|ed)?:?\s*/i, '')
+    // Remove Kibana/SIEM URLs entirely
+    .replace(/Kibana\s*URL:?\s*https?:\/\/[^\s]*/gi, '')
+    .replace(/https?:\/\/[^\s]*kibana[^\s]*/gi, '')
+    .replace(/https?:\/\/[^\s]*elastic[^\s]*/gi, '')
+    .replace(/https?:\/\/[^\s]*splunk[^\s]*/gi, '')
+    // Remove raw field noise: "Time of alert(s):", repeated field dumps
+    .replace(/Time of alert\(?s?\)?:?\s*[^.]*?\.?/gi, '')
+    .replace(/DACTA\s+(?:Firewall Rule Modification|[A-Za-z ]+)\s*\(Non-Admin\)\s*/gi, '')
     .trim();
 
-  // Extract key event details from the raw description
-  var timeMatch = cleanDesc.match(/Time of alert\(?s?\)?:?\s*([^\n]+?)(?=\s*(?:Rule|Message|Object|Source|Dest|$))/i);
-  var msgMatch = cleanDesc.match(/Message:?\s*([^\n]+?)(?=\s*(?:Object|Source|Dest|Rule|Time|$))/i);
-  var objMatch = cleanDesc.match(/Object[- ]?(?:attribute)?[- ]?(?:configured)?:?\s*([^\n]+?)(?=\s*(?:Message|Source|Dest|Rule|Time|$))/i);
-  var ruleDescMatch = cleanDesc.match(/Rule[- ]?Description:?\s*([^\n]+?)(?=\s*(?:Object|Message|Source|Dest|Time|$))/i);
+  // ── Extract structured entities from the raw description ──
+  var userMatch = cleanDesc.match(/User\s*Involved:?\s*([\w.@-]+)/i);
+  var deviceMatch = cleanDesc.match(/(?:Firewall\s*Device|Device|Hostname|Host):?\s*([\w.-]+)/i);
+  var changesMatch = cleanDesc.match(/(?:Total\s*)?(?:configuration\s*)?changes?\s*done:?\s*(\d+)/i);
+  var msgMatch = cleanDesc.match(/Message:?\s*([^\n]+?)(?=\s*(?:Object|Source|Dest|Rule|Time|Path|Kibana|$))/i);
+  var pathMatch = cleanDesc.match(/Path:?\s*([\w.]+)/i);
 
-  // Build a proper conversational summary
-  var narrativeParts = [];
-
-  // Derive the actual detection rule name from the summary (strip SOC Alert Notification prefix)
+  // ── Derive rule name from Jira summary ──
   var _derivedRuleName = (summary || '').replace(/^\s*SOC\s+Alert\s+Notification\s*[-–—:]\s*/i, '').trim();
-  // If the derived rule name is too short or same as category, use the useCase or alertCat
   var ruleName = _derivedRuleName.length > 5 ? _derivedRuleName : (useCase || alertCat || '');
 
-  // Lead: what detection rule triggered and why
-  if (ruleName) {
-    narrativeParts.push('A detection rule <strong style="color:#6366F1;">' + escapeHtml(ruleName) + '</strong> was triggered');
-  } else {
-    narrativeParts.push('An alert was raised');
-  }
-  if (timeMatch && timeMatch[1]) {
-    var _cleanedTime = timeMatch[1].trim().replace(/\s*Rule\s*Description.*$/i, '').replace(/\s*Message.*$/i, '').replace(/\s*Object.*$/i, '').trim();
-    if (_cleanedTime.length > 4) {
-      narrativeParts[narrativeParts.length-1] += ' on <strong>' + escapeHtml(_cleanedTime) + '</strong>';
+  // ── Build verbalizable narrative ──
+  var parts = [];
+
+  // Lead sentence: what rule triggered
+  parts.push('A detection rule <a href="#" onclick="return false;" style="color:#6366F1;text-decoration:none;font-weight:600;">' + escapeHtml(ruleName || 'Alert') + '</a> was triggered.');
+
+  // Who & where
+  var contextParts = [];
+  if (userMatch && userMatch[1]) contextParts.push('User involved: <strong>' + escapeHtml(userMatch[1]) + '</strong>');
+  if (deviceMatch && deviceMatch[1]) contextParts.push('Device: <strong>' + escapeHtml(deviceMatch[1]) + '</strong>');
+  if (changesMatch && changesMatch[1]) contextParts.push(escapeHtml(changesMatch[1]) + ' configuration change(s) observed');
+  if (contextParts.length > 0) parts.push(contextParts.join('. ') + '.');
+
+  // What happened (message)
+  if (msgMatch && msgMatch[1]) {
+    var _msgText = msgMatch[1].trim().replace(/Kibana.*$/i, '').replace(/https?:\/\/[^\s]*/g, '').trim();
+    if (_msgText.length > 3 && _msgText.length < 200) {
+      parts.push('Activity observed: <em>' + escapeHtml(_msgText) + '</em>.');
     }
   }
-  narrativeParts[narrativeParts.length-1] += '.';
-
-  // What action was observed
-  if (ruleDescMatch && ruleDescMatch[1]) {
-    var _rdText = ruleDescMatch[1].trim();
-    if (_rdText.length > 5 && _rdText.length < 200) narrativeParts.push(escapeHtml(_rdText) + '.');
-  }
-  if (msgMatch && msgMatch[1]) {
-    var _msgText = msgMatch[1].trim();
-    if (_msgText.length > 3 && _msgText.length < 200) narrativeParts.push('The observed activity: <em>' + escapeHtml(_msgText) + '</em>.');
-  }
-  if (objMatch && objMatch[1] && objMatch[1].trim().length > 2 && objMatch[1].trim().length < 120) {
-    narrativeParts.push('Object involved: <code style="font-size:11px;padding:1px 6px;background:rgba(255,255,255,0.05);border-radius:3px;color:#60A5FA;">' + escapeHtml(objMatch[1].trim()) + '</code>.');
+  if (pathMatch && pathMatch[1] && pathMatch[1].length > 3) {
+    parts.push('Policy path: <code style="font-size:11px;padding:1px 6px;background:rgba(255,255,255,0.05);border-radius:3px;color:#60A5FA;">' + escapeHtml(pathMatch[1]) + '</code>.');
   }
 
-  // If no structured fields extracted, use the cleaned narrative (but not raw boilerplate)
-  if (narrativeParts.length <= 1 && cleanedNarrative.length > 0) {
-    // Take a meaningful excerpt, stripping redundancy
-    var excerpt = cleanedNarrative.substring(0, 350);
-    if (cleanedNarrative.length > 350) excerpt += '\u2026';
-    narrativeParts.push(escapeHtml(excerpt));
+  // Fallback: if no structured fields found, use cleaned text but keep it short
+  if (parts.length <= 1 && cleaned.length > 0) {
+    // Remove repeated field labels and condense
+    var fallback = cleaned
+      .replace(/User\s*Involved:?\s*[\w.@-]+\s*/gi, '')
+      .replace(/Firewall\s*Device:?\s*[\w.-]+\s*/gi, '')
+      .replace(/Total\s*configuration\s*changes\s*done:?\s*\d+\s*/gi, '')
+      .replace(/Firewall\s*Configuration\s*Changes\s*Observed:?\.?/gi, '')
+      .replace(/\s+/g, ' ').trim();
+    if (fallback.length > 280) fallback = fallback.substring(0, 280) + '\u2026';
+    if (fallback.length > 10) parts.push(escapeHtml(fallback));
   }
 
   var narrativeHTML = '<div style="font-size:13px;color:var(--rws-text-secondary);line-height:1.75;margin-bottom:14px;">' +
-    narrativeParts.join(' ') + '</div>';
+    parts.join(' ') + '</div>';
 
-  // IOC indicators inline
+  // ── IOC indicators (IPs, hosts, hashes, files — no domains or URLs) ──
   var iocItems = [];
   (iocs.ips || []).slice(0, 4).forEach(function(ip) { iocItems.push({type:'IP', val:ip, col:'#A78BFA'}); });
   (iocs.hosts || []).slice(0, 3).forEach(function(h) { iocItems.push({type:'Host', val:h, col:'#60A5FA'}); });
@@ -50017,7 +50084,7 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
     iocHTML += '</div>';
   }
 
-  // MITRE techniques
+  // ── MITRE techniques ──
   var mitreHTML = '';
   if (techniques && techniques.length > 0) {
     mitreHTML = '<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;">' +
