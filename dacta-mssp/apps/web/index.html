@@ -49003,13 +49003,20 @@ async function openInvestigation(ticketKey) {
       document.querySelectorAll('.r-tab').forEach(function(b) {
         b.classList.toggle('active', b.getAttribute('data-tab') === tabId);
       });
-      // ── Contextual right panel — show different sidebar content per tab ──
-      var sideStatus = document.getElementById('invSideStatus');
-      var sideEnrichment = document.getElementById('invSideEnrichment');
-      var sideContainment = document.getElementById('invSideContainment');
-      if (sideStatus) sideStatus.style.display = (tabId === 'overview' || tabId === 'timeline') ? 'block' : 'none';
-      if (sideEnrichment) sideEnrichment.style.display = (tabId === 'triage' || tabId === 'investigation') ? 'block' : 'none';
-      if (sideContainment) sideContainment.style.display = (tabId === 'containment') ? 'block' : 'none';
+      // ── Contextual right panel — show different sidebar sections per tab ──
+      var sections = {
+        'invSideConclusion': tabId === 'overview',
+        'invSideEntities':   tabId === 'overview',
+        'invSideJiraStatus': tabId === 'overview' || tabId === 'triage',
+        'invSideSLA':        tabId === 'overview' || tabId === 'triage' || tabId === 'timeline',
+        'invSideEnrichment': tabId === 'investigation',
+        'invSideContainment':tabId === 'containment',
+        'invSidePhases':     tabId === 'timeline'
+      };
+      Object.keys(sections).forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = sections[id] ? 'block' : 'none';
+      });
     };
 
     // ── Stage detection from Jira status ──
@@ -49090,6 +49097,11 @@ async function openInvestigation(ticketKey) {
     var _rDescShort = (description||f.summary||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
     if (_rDescShort.length > 420) _rDescShort = _rDescShort.substring(0,420) + '\u2026';
     var _rWhatHappened = _rDescShort;
+    // Build smart alert summary for the "What happened?" section
+    var _rFullText = (f.summary||'') + ' ' + _rDescShort;
+    var _rTechniques = detectTechniques(_rFullText);
+    var _rIOCs = extractIOCs(_rFullText);
+    var _rAlertSummary = buildAlertSummaryHTML(f.summary||'', description||'', _rTechniques, _rIOCs, _alertCat, useCase);
     var _rImpSVG =
       '<svg viewBox="0 0 320 260" width="100%" style="max-width:320px;display:block;margin:0 auto;">' +
       '<circle cx="160" cy="130" r="100" fill="rgba(239,68,68,0.03)" stroke="rgba(239,68,68,0.08)" stroke-width="1"/>' +
@@ -49128,6 +49140,27 @@ async function openInvestigation(ticketKey) {
       '<text x="252" y="238" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Applications</text>' +
       '<text x="252" y="252" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280">\u2014</text>' +
       '</svg>';
+
+    // Build ticket phases HTML for the Timeline right panel
+    var _phasesHTML = _invStages.map(function(stage, i) {
+      var done = i < _invStageIdx;
+      var active = i === _invStageIdx;
+      var dotColor = done ? '#10B981' : active ? '#6366F1' : 'rgba(255,255,255,0.15)';
+      var lineColor = done ? '#10B981' : 'rgba(255,255,255,0.06)';
+      var stageTs = '';
+      timelineItems.forEach(function(item) {
+        if (item.field === 'status' && item.to && item.to.toLowerCase().includes(stage.toLowerCase())) {
+          stageTs = jiraTimeAgo(item.time);
+        }
+      });
+      return '<div style="display:flex;gap:12px;padding:10px 0;' + (i < _invStages.length - 1 ? 'border-left:2px solid ' + lineColor + ';margin-left:7px;padding-left:18px;' : 'margin-left:7px;padding-left:18px;') + '">' +
+        '<div style="position:relative;left:-25px;top:2px;width:14px;height:14px;border-radius:50%;background:' + dotColor + ';flex-shrink:0;' + (active ? 'box-shadow:0 0 8px rgba(99,102,241,0.5);' : '') + '"></div>' +
+        '<div style="margin-left:-14px;">' +
+          '<div style="font-size:12px;font-weight:' + (active ? '700' : '500') + ';color:' + (done || active ? 'var(--rws-text-primary)' : 'var(--rws-text-muted)') + ';">' + stage + (active ? ' \u2190' : '') + '</div>' +
+          (stageTs ? '<div style="font-size:10px;color:var(--rws-text-muted);margin-top:2px;">' + stageTs + '</div>' : '') +
+          (done ? '<div style="font-size:10px;color:#10B981;margin-top:1px;">Completed</div>' : active ? '<div style="font-size:10px;color:#6366F1;margin-top:1px;">In Progress</div>' : '<div style="font-size:10px;color:var(--rws-text-muted);margin-top:1px;">Pending</div>') +
+        '</div></div>';
+    }).join('');
 
     livePanel.innerHTML =
       '<style id="r-ws-css">' +
@@ -49198,14 +49231,9 @@ async function openInvestigation(ticketKey) {
             '</div>' +
           '</div>' +
 
-          // Entity metric boxes
-          '<div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid rgba(255,255,255,0.06);background:#0D1526;">' +
-            [['Identities','rMetaIdent','#EF4444'],['Devices','rMetaDev','#94A3B8'],['Applications','rMetaApp','#94A3B8'],['Data Objects','rMetaData','#94A3B8']].map(function(m,i) {
-              return '<div style="padding:12px 16px;' + (i<3?'border-right:1px solid rgba(255,255,255,0.06);':'') + '">' +
-                '<div style="font-size:11px;color:var(--rws-text-muted);margin-bottom:4px;">' + m[0] + '</div>' +
-                '<div style="font-size:22px;font-weight:700;color:' + m[2] + ';" id="' + m[1] + '">\u2014</div>' +
-              '</div>';
-            }).join('') +
+          // Hidden compat divs for entity metric IDs (entities moved to right panel)
+          '<div style="display:none;">' +
+            '<span id="rMetaIdent"></span><span id="rMetaDev"></span><span id="rMetaApp"></span><span id="rMetaData"></span>' +
           '</div>' +
 
           // Tab bar
@@ -49227,14 +49255,18 @@ async function openInvestigation(ticketKey) {
             '<div id="invTab-overview" class="inv-radiant-tab-content" style="display:block;">' +
               '<div id="invVerdictArea" style="display:none;margin-bottom:16px;"></div>' +
               '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 10px;">What happened?</h3>' +
-              '<p style="font-size:14px;color:#CBD5E1;line-height:1.6;margin:0 0 8px;">' + escapeHtml(_rWhatHappened || 'No description available.') + '</p>' +
+              '<div style="margin-bottom:22px;">' + _rAlertSummary + '</div>' +
               '<p style="font-size:13px;margin:0 0 22px;"><a style="color:#6366F1;text-decoration:none;cursor:pointer;" onclick="window.invSwitchTab(\'triage\')">For further details, please review the incident triage. \u2192</a></p>' +
-              '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 10px;">AI Verdict</h3>' +
-              '<p id="rRootCause" style="font-size:14px;color:var(--rws-text-muted);line-height:1.6;margin:0 0 22px;font-style:italic;">Investigation in progress \u2014 AI verdict will appear after AI investigation completes.</p>' +
+              // Hidden rRootCause for backward compat (verdict moved to right panel)
+              '<div id="rRootCause" style="display:none;"></div>' +
               '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 12px;">Impact</h3>' +
               '<div id="summaryImpactContainer" style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:16px;margin-bottom:16px;">' +
                 '<div id="summaryAttackGraph" style="display:none;"></div>' +
                 '<div id="summaryImpactFallback">' + _rImpSVG + '</div>' +
+                '<div id="summaryTopFindings" style="margin-top:14px;">' +
+                  '<div style="font-size:13px;font-weight:600;color:var(--rws-text-primary);margin-bottom:8px;">Top Findings</div>' +
+                  '<div id="summaryTopFindingsContent" style="font-size:12px;color:var(--rws-text-muted);font-style:italic;">Findings will appear after AI investigation completes...</div>' +
+                '</div>' +
               '</div>' +
               // Hidden compat IDs for existing JS
               '<div id="alertGraphCard" style="display:none;"></div>' +
@@ -49285,8 +49317,8 @@ async function openInvestigation(ticketKey) {
                     '</div>' +
                   '</div>' +
                   '<div class="card" style="padding:16px;">' +
-                    '<div style="font-size:15px;font-weight:600;color:var(--rws-text-primary);margin-bottom:4px;">Why was this alert escalated?</div>' +
-                    '<div style="font-size:11px;color:var(--rws-text-muted);margin-bottom:12px;">This alert failed the following triage step or contained these escalation details:</div>' +
+                    '<div style="font-size:15px;font-weight:600;color:var(--rws-text-primary);margin-bottom:4px;">Why was this event alerted?</div>' +
+                    '<div style="font-size:11px;color:var(--rws-text-muted);margin-bottom:12px;">This event triggered a detection rule and contains the following details:</div>' +
                     '<div style="font-size:12px;color:var(--rws-text-secondary);line-height:1.6;max-height:260px;overflow-y:auto;background:var(--rws-surface-hover);border:1px solid var(--rws-border-card);border-radius:6px;padding:12px;word-break:break-word;">' +
                       (description ? highlightEntities(description) : '<span style="color:var(--rws-text-muted);font-style:italic;">No escalation details provided in this ticket.</span>') +
                     '</div>' +
@@ -49355,24 +49387,10 @@ async function openInvestigation(ticketKey) {
                   '</div>' +
                 '</div>' +
                 '<div id="invMainContent" style="display:flex;flex-direction:column;gap:10px;">' +
-                  '<div class="card" style="padding:0;" id="enrichmentSummaryCard">' +
-                    '<div class="card-header inv-collapsible-header" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid transparent;">' +
-                      '<span style="width:6px;height:6px;border-radius:50%;background:#F59E0B;flex-shrink:0;"></span>' +
-                      '<span class="card-title" style="font-size:11px;">Entity Enrichment</span>' +
-                      '<span style="font-size:10px;color:var(--rws-text-muted);margin-left:2px;">\u2014 IOC reputation, WHOIS, and passive DNS</span>' +
-                      '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:11px;color:var(--rws-text-muted);transition:transform 0.3s;">\u25BC</span>' +
-                    '</div>' +
-                    '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:11px;color:var(--rws-text-muted);font-style:italic;">Enrichment data will appear after investigation runs...</div>' +
-                  '</div>' +
-                  '<div class="card" style="padding:0;" id="correlatedAlertsCard">' +
-                    '<div class="card-header inv-collapsible-header" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid transparent;">' +
-                      '<span style="width:6px;height:6px;border-radius:50%;background:#8B5CF6;flex-shrink:0;"></span>' +
-                      '<span class="card-title" style="font-size:11px;">Correlated Alerts</span>' +
-                      '<span style="font-size:10px;color:var(--rws-text-muted);margin-left:2px;">\u2014 Related tickets across the same tenant</span>' +
-                      '<span class="inv-collapse-arrow" style="margin-left:auto;font-size:11px;color:var(--rws-text-muted);transition:transform 0.3s;">\u25BC</span>' +
-                    '</div>' +
-                    '<div class="inv-collapsible-body" style="display:none;padding:10px 14px 12px;font-size:11px;color:var(--rws-text-muted);font-style:italic;">Alert correlation data will appear after investigation runs...</div>' +
-                  '</div>' +
+                  // Enrichment and Correlated cards moved to right panel (invSideEnrichment)
+                  // Keeping hidden placeholder divs for backward compat with existing JS
+                  '<div id="enrichmentSummaryCard" style="display:none;"></div>' +
+                  '<div id="correlatedAlertsCard" style="display:none;"></div>' +
                 '</div>' +
               '</div>' +
             '</div>' + // end investigation tab
@@ -49433,22 +49451,44 @@ async function openInvestigation(ticketKey) {
 
           // RIGHT column — contextual sidebar (content changes per tab)
           '<div style="background:var(--rws-card);padding:20px;overflow-y:auto;border-radius:0 0 8px 0;">' +
-            // Status section (visible on overview + timeline tabs)
-            '<div id="invSideStatus">' +
-              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:18px;">Status</div>' +
-              [['Triage','#16A34A'],['Investigation','#6366F1'],['Containment','#F97316'],['Remediation','#EC4899']].map(function(stage,i) {
-                var done = i < _invStageIdx, active = i === _invStageIdx;
-                var pct = done ? 100 : active ? 55 : 0;
-                return '<div style="margin-bottom:14px;">' +
-                  '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
-                    '<span style="font-size:12px;font-weight:' + (active?'600':'500') + ';color:' + (done||active?'var(--rws-text-primary)':'var(--rws-text-muted)') + ';">' + stage[0] + '</span>' +
-                    '<span style="font-size:11px;font-weight:600;color:' + (done?'#16A34A':active?stage[1]:'var(--rws-text-muted)') + ';">' + (done?'Complete':active?'In Progress':'Pending') + '</span>' +
-                  '</div>' +
-                  '<div class="r-stage-bar"><div class="r-stage-bar-fill" style="width:' + pct + '%;background:' + (done?'#16A34A':stage[1]) + ';"></div></div>' +
-                '</div>';
-              }).join('') +
+
+            // ── AI Conclusion (Summary tab) ──
+            '<div id="invSideConclusion">' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">AI Conclusion</div>' +
+              '<div id="invSideConclusionContent" style="font-size:12px;color:var(--rws-text-muted);line-height:1.6;font-style:italic;">AI conclusion will appear after investigation completes...</div>' +
+              '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
             '</div>' +
-            // Enrichment section (visible on triage + investigation tabs)
+
+            // ── Associated Entities (Summary tab) ──
+            '<div id="invSideEntities">' +
+              '<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">' +
+                '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);">Associated Entities</div>' +
+                '<span id="invEntityCount" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:rgba(99,102,241,0.1);color:#6366F1;">0</span>' +
+              '</div>' +
+              '<div id="invSideEntitiesContent" style="font-size:11px;color:var(--rws-text-muted);">Extracting entities...</div>' +
+              '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
+            '</div>' +
+
+            // ── Jira Status (Summary + Triage tabs) ──
+            '<div id="invSideJiraStatus">' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">Ticket Status</div>' +
+              '<div id="invSideJiraStatusContent">' +
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+                  '<span style="font-size:11px;font-weight:600;padding:4px 12px;border-radius:6px;background:rgba(99,102,241,0.1);color:#6366F1;border:1px solid rgba(99,102,241,0.2);">' + escapeHtml(status) + '</span>' +
+                  '<span style="font-size:10px;color:var(--rws-text-muted);">Stage: ' + _invStages[_invStageIdx] + '</span>' +
+                '</div>' +
+              '</div>' +
+              '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
+            '</div>' +
+
+            // ── SLA Meter (Summary + Triage + Timeline tabs) ──
+            '<div id="invSideSLA">' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">SLA Status</div>' +
+              '<div id="invSideSLAContent" style="font-size:11px;color:var(--rws-text-muted);font-style:italic;">Loading SLA data...</div>' +
+              '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
+            '</div>' +
+
+            // ── Enrichment section (Investigation tab) ──
             '<div id="invSideEnrichment" style="display:none;">' +
               '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">Entity Enrichment</div>' +
               '<div id="invSideEnrichmentContent" style="font-size:11px;color:var(--rws-text-muted);font-style:italic;">Run AI investigation to see enrichment results here...</div>' +
@@ -49458,11 +49498,15 @@ async function openInvestigation(ticketKey) {
               '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
               '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">Feedback</div>' +
               '<div style="display:flex;gap:6px;margin-bottom:8px;">' +
-                '<button class="btn btn-sm" style="padding:4px 10px;font-size:10px;border-radius:6px;background:rgba(16,185,129,0.08);color:#10B981;border:1px solid rgba(16,185,129,0.2);" onclick="submitInvFeedback(\'good\')">Θ Good</button>' +
-                '<button class="btn btn-sm" style="padding:4px 10px;font-size:10px;border-radius:6px;background:rgba(239,68,68,0.08);color:#EF4444;border:1px solid rgba(239,68,68,0.2);" onclick="submitInvFeedback(\'bad\')">Θ Bad</button>' +
+                '<button class="btn btn-sm" style="padding:4px 10px;font-size:10px;border-radius:6px;background:rgba(16,185,129,0.08);color:#10B981;border:1px solid rgba(16,185,129,0.2);" onclick="submitInvFeedback(\'good\');">&#x1F44D; Good</button>' +
+                '<button class="btn btn-sm" style="padding:4px 10px;font-size:10px;border-radius:6px;background:rgba(239,68,68,0.08);color:#EF4444;border:1px solid rgba(239,68,68,0.2);" onclick="submitInvFeedback(\'bad\');">&#x1F44E; Bad</button>' +
               '</div>' +
+              '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">AI Copilot</div>' +
+              '<button class="btn btn-sm" style="width:100%;padding:8px 12px;font-size:11px;background:rgba(99,102,241,0.08);color:#6366F1;border:1px solid rgba(99,102,241,0.2);border-radius:6px;text-align:left;" onclick="openCopilotForTicket(\'' + ticketKey + '\');"><span style="margin-right:6px;">&#129302;</span> Open in AI Copilot</button>' +
             '</div>' +
-            // Containment section (visible on containment tab)
+
+            // ── Containment section (Containment tab) ──
             '<div id="invSideContainment" style="display:none;">' +
               '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">Quick Actions</div>' +
               '<div style="display:flex;flex-direction:column;gap:6px;">' +
@@ -49474,6 +49518,13 @@ async function openInvestigation(ticketKey) {
               '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">AI Recommended</div>' +
               '<div id="invSideRecommendedContent" style="font-size:11px;color:var(--rws-text-muted);font-style:italic;">Recommendations appear after investigation...</div>' +
             '</div>' +
+
+            // ── Ticket Phases (Timeline tab) ──
+            '<div id="invSidePhases" style="display:none;">' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:14px;">Ticket Workflow</div>' +
+              '<div id="invSidePhasesContent">' + _phasesHTML + '</div>' +
+            '</div>' +
+
           '</div>' + // end right sidebar
 
         '</div>' + // end two-column body
@@ -49486,8 +49537,159 @@ async function openInvestigation(ticketKey) {
     // ── Initialize Investigation Snapshot with ticket IOCs ──
     setTimeout(function() { initInvestigationSnapshot(ticketKey, f); }, 300);
     
-    // ── Fetch and display SLA data from Jira API ──
+    // ── Fetch and display SLA data from Jira API (existing Timeline SLA panel) ──
     fetchAndDisplaySLA(ticketKey, f);
+
+    // ── Populate SLA meter in the right panel ──
+    (async function loadSLAForRightPanel() {
+      try {
+        var slaEl = document.getElementById('invSideSLAContent');
+        if (!slaEl) return;
+        var resp = await fetch('/api/jira?action=sla&issueKey=' + encodeURIComponent(ticketKey));
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var slaData = await resp.json();
+        var slaEntries = [];
+        if (slaData.jsmSLA && slaData.jsmSLA.values) {
+          slaData.jsmSLA.values.forEach(function(sla) {
+            var cycle = sla.ongoingCycle || (sla.completedCycles && sla.completedCycles.length > 0 ? sla.completedCycles[sla.completedCycles.length - 1] : null);
+            if (cycle) {
+              slaEntries.push({
+                name: sla.name,
+                elapsed: cycle.elapsedTime ? cycle.elapsedTime.millis : 0,
+                remaining: cycle.remainingTime ? cycle.remainingTime.millis : 0,
+                breached: cycle.breached || false
+              });
+            }
+          });
+        }
+        if (slaEntries.length === 0 && slaData.fields) {
+          Object.keys(slaData.fields).forEach(function(k) {
+            if (k.startsWith('customfield_') && slaData.fields[k] && slaData.fields[k].ongoingCycle) {
+              var val = slaData.fields[k];
+              var cycle = val.ongoingCycle;
+              slaEntries.push({
+                name: k,
+                elapsed: cycle.elapsedTime ? cycle.elapsedTime.millis : 0,
+                remaining: cycle.remainingTime ? cycle.remainingTime.millis : 0,
+                breached: cycle.breached || false
+              });
+            }
+          });
+        }
+        if (slaEntries.length > 0) {
+          slaEl.innerHTML = slaEntries.map(function(sla) {
+            var total = sla.elapsed + Math.max(sla.remaining, 0);
+            var pct = total > 0 ? Math.round((sla.elapsed / total) * 100) : 0;
+            var col = sla.breached ? '#EF4444' : (pct > 75 ? '#F59E0B' : '#10B981');
+            var rem = Math.max(sla.remaining, 0);
+            var h = Math.floor(rem / 3600000); var m = Math.floor((rem % 3600000) / 60000);
+            var rStr = sla.breached ? 'BREACHED' : (h > 0 ? h + 'h ' + m + 'm left' : m + 'm left');
+            var r = 28, cx = 32, cy = 32, c = 2 * Math.PI * r;
+            var dashOffset = c - (pct / 100) * c;
+            return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">' +
+              '<svg width="64" height="64" viewBox="0 0 64 64">' +
+                '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4"/>' +
+                '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + col + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + c + '" stroke-dashoffset="' + dashOffset + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>' +
+                '<text x="' + cx + '" y="' + (cy + 1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="' + col + '">' + pct + '%</text>' +
+              '</svg>' +
+              '<div>' +
+                '<div style="font-size:11px;font-weight:600;color:var(--rws-text-primary);">' + escapeHtml(sla.name || 'SLA') + '</div>' +
+                '<div style="font-size:10px;color:' + col + ';font-weight:600;">' + rStr + '</div>' +
+              '</div></div>';
+          }).join('');
+        } else {
+          throw new Error('no sla entries');
+        }
+      } catch(e) {
+        console.warn('[SLA Panel] Load failed:', e.message);
+        var slaEl = document.getElementById('invSideSLAContent');
+        if (slaEl) {
+          var slaTargets = { 'P1': 4, 'P2': 8, 'P3': 24, 'P4': 72 };
+          var pShort = (priority.split(' - ')[0] || 'P3').toUpperCase();
+          var targetHrs = slaTargets[pShort] || 24;
+          var createdDate = new Date(f.created);
+          var elapsedMs = Date.now() - createdDate.getTime();
+          var targetMs = targetHrs * 3600000;
+          var pct = Math.min(Math.round((elapsedMs / targetMs) * 100), 100);
+          var breached = elapsedMs > targetMs;
+          var col = breached ? '#EF4444' : (pct > 75 ? '#F59E0B' : '#10B981');
+          var rem = Math.max(targetMs - elapsedMs, 0);
+          var rH = Math.floor(rem / 3600000); var rM = Math.floor((rem % 3600000) / 60000);
+          var r = 28, cx = 32, cy = 32, c = 2 * Math.PI * r;
+          var dashOffset = c - (Math.min(pct, 100) / 100) * c;
+          slaEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;">' +
+            '<svg width="64" height="64" viewBox="0 0 64 64">' +
+              '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4"/>' +
+              '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + col + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + c + '" stroke-dashoffset="' + dashOffset + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>' +
+              '<text x="' + cx + '" y="' + (cy + 1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="' + col + '">' + pct + '%</text>' +
+            '</svg>' +
+            '<div>' +
+              '<div style="font-size:11px;font-weight:600;color:var(--rws-text-primary);">' + pShort + ' Response SLA</div>' +
+              '<div style="font-size:10px;color:' + col + ';font-weight:600;">' + (breached ? 'BREACHED' : rH + 'h ' + rM + 'm left') + '</div>' +
+              '<div style="font-size:9px;color:var(--rws-text-muted);margin-top:2px;">Target: ' + targetHrs + 'h</div>' +
+            '</div></div>';
+        }
+      }
+    })();
+
+    // ── Populate Associated Entities in right panel ──
+    (function populateRightPanelEntities() {
+      setTimeout(function() {
+        var entContent = document.getElementById('invSideEntitiesContent');
+        var entCount = document.getElementById('invEntityCount');
+        if (!entContent) return;
+        var fullText = (f.summary || '') + ' ' + (description || '').replace(/<[^>]+>/g, ' ');
+        var iocs = extractIOCs(fullText);
+        var entities = [];
+        (iocs.hosts || []).forEach(function(h) { entities.push({type:'Device DNS', icon:'&#128187;', value:h}); });
+        (iocs.ips || []).forEach(function(ip) { entities.push({type:'Device IP', icon:'&#127760;', value:ip}); });
+        (iocs.users || []).forEach(function(u) { entities.push({type:'Username', icon:'&#128100;', value:u}); });
+        (iocs.domains || []).forEach(function(d) { entities.push({type:'Domain', icon:'&#127759;', value:d}); });
+        (iocs.hashes || []).forEach(function(h) { entities.push({type:'Hash', icon:'&#128274;', value:h.length > 16 ? h.substring(0,16) + '\u2026' : h}); });
+        (iocs.files || []).forEach(function(fi) { entities.push({type:'File', icon:'&#128196;', value:fi}); });
+        if (entCount) entCount.textContent = entities.length;
+        if (entities.length > 0) {
+          entContent.innerHTML = entities.slice(0, 10).map(function(e) {
+            return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+              '<span style="font-size:13px;width:20px;text-align:center;">' + e.icon + '</span>' +
+              '<div><div style="font-size:9px;color:var(--rws-text-muted);text-transform:uppercase;letter-spacing:0.05em;">' + e.type + '</div>' +
+              '<div style="font-size:11px;color:var(--rws-text-primary);font-family:monospace;background:rgba(255,255,255,0.04);padding:1px 6px;border-radius:3px;margin-top:1px;">' + escapeHtml(e.value) + '</div></div></div>';
+          }).join('');
+        } else {
+          entContent.innerHTML = '<div style="font-size:11px;color:var(--rws-text-muted);">No entities extracted from this ticket.</div>';
+        }
+      }, 500);
+    })();
+
+    // ── Auto-load playbook triage steps from detection rules (SIEMLess DB) ──
+    (async function loadPlaybookForTriage() {
+      try {
+        var pbContent = document.getElementById('playbookActionsContent');
+        if (!pbContent) return;
+        var techniques = detectTechniques((f.summary || '') + ' ' + (description || '').replace(/<[^>]+>/g,' '));
+        var playbooks = await fetchRelevantPlaybooks(techniques, f.summary || '', useCase || '');
+        if (playbooks.length > 0) {
+          var pb = playbooks[0];
+          var steps = pb.triage_steps || [];
+          if (typeof steps === 'string') { try { steps = JSON.parse(steps); } catch(e) { steps = [steps]; } }
+          if (steps.length > 0) {
+            pbContent.innerHTML = '<div style="font-size:11px;color:var(--rws-text-muted);margin-bottom:8px;">Matched: <span style="color:#6366F1;font-weight:600;">' + escapeHtml(pb.playbook_name || pb.rule_name || 'Detection Rule') + '</span></div>' +
+              steps.map(function(step, i) {
+                var txt = typeof step === 'string' ? step : (step.action || step.step || JSON.stringify(step));
+                return '<div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+                  '<span style="font-size:10px;font-weight:700;color:#6366F1;width:16px;flex-shrink:0;">' + (i+1) + '</span>' +
+                  '<span style="font-size:11px;color:var(--rws-text-secondary);line-height:1.4;">' + escapeHtml(txt) + '</span></div>';
+              }).join('');
+          } else {
+            pbContent.innerHTML = '<span style="color:var(--rws-text-muted);font-size:11px;">Playbook matched but no triage steps defined.</span>';
+          }
+        } else {
+          pbContent.innerHTML = '<span style="color:var(--rws-text-muted);font-size:11px;">No matching playbook found for this detection rule.</span>';
+        }
+      } catch(e) {
+        console.warn('[Playbook] Auto-load failed:', e.message);
+      }
+    })();
 
         // ── Check investigation cache before running LLM ──
     var cachedResult = await loadInvestigationCache(ticketKey);
@@ -49507,6 +49709,90 @@ async function openInvestigation(ticketKey) {
     console.error('[DactaJira] Investigation error:', err);
     livePanel.innerHTML = jiraErrorHTML('Failed to load ' + ticketKey + ': ' + err.message, 'openInvestigation(\'' + ticketKey + '\')');
   }
+}
+
+// ── Build professional alert summary HTML for the "What happened?" section ──
+function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat, useCase) {
+  var cleanDesc = (description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  // Lead sentence: the alert title / summary
+  var leadHTML = '<div style="font-size:14px;font-weight:600;color:#E2E8F0;line-height:1.6;margin-bottom:10px;">' + escapeHtml(summary || 'Alert details unavailable.') + '</div>';
+  // Detection rule / use case badge
+  var ruleHTML = '';
+  var ruleName = alertCat || useCase || '';
+  if (ruleName) {
+    ruleHTML = '<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+      '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--rws-text-muted);">Detection Rule</span>' +
+      '<span style="font-size:10px;font-weight:600;padding:2px 9px;border-radius:8px;background:rgba(99,102,241,0.12);color:#6366F1;border:1px solid rgba(99,102,241,0.25);">' + escapeHtml(ruleName) + '</span>' +
+    '</div>';
+  }
+  // MITRE techniques
+  var mitreHTML = '';
+  if (techniques && techniques.length > 0) {
+    mitreHTML = '<div style="margin-bottom:10px;">' +
+      '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--rws-text-muted);margin-right:6px;">MITRE</span>' +
+      techniques.slice(0, 4).map(function(t) {
+        return '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,0.08);color:#F59E0B;border:1px solid rgba(245,158,11,0.2);margin-right:4px;">' + escapeHtml(t) + '</span>';
+      }).join('') +
+    '</div>';
+  }
+  // Inline IOCs section
+  var iocItems = [];
+  (iocs.hosts || []).slice(0, 3).forEach(function(h) { iocItems.push({type:'host', val:h}); });
+  (iocs.ips || []).slice(0, 3).forEach(function(ip) { iocItems.push({type:'ip', val:ip}); });
+  (iocs.users || []).slice(0, 3).forEach(function(u) { iocItems.push({type:'user', val:u}); });
+  var iocHTML = '';
+  if (iocItems.length > 0) {
+    iocHTML = '<div style="font-size:12px;color:var(--rws-text-secondary);line-height:1.7;margin-bottom:10px;">';
+    if (cleanDesc.length > 0) {
+      iocHTML += '<span style="color:var(--rws-text-secondary);">' + escapeHtml(cleanDesc.substring(0, 280)) + (cleanDesc.length > 280 ? '\u2026' : '') + '</span>';
+    }
+    iocHTML += '</div>';
+    iocHTML += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    iocItems.forEach(function(ioc) {
+      var col = ioc.type === 'host' ? '#60A5FA' : ioc.type === 'ip' ? '#A78BFA' : '#34D399';
+      iocHTML += '<code style="font-size:11px;padding:2px 8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:' + col + ';font-family:monospace;">' + escapeHtml(ioc.val) + '</code>';
+    });
+    iocHTML += '</div>';
+  } else if (cleanDesc.length > 0) {
+    iocHTML = '<div style="font-size:12px;color:var(--rws-text-secondary);line-height:1.7;margin-bottom:4px;">' +
+      escapeHtml(cleanDesc.substring(0, 380)) + (cleanDesc.length > 380 ? '\u2026' : '') +
+    '</div>';
+  }
+  return leadHTML + ruleHTML + mitreHTML + iocHTML;
+}
+
+// ── Populate Top Findings in Summary tab (called after AI investigation) ──
+function populateTopFindings(inculpatory, exculpatory) {
+  var el = document.getElementById('summaryTopFindingsContent');
+  if (!el) return;
+  var findings = [];
+  // Take top 3 inculpatory
+  (inculpatory || []).slice(0, 3).forEach(function(e) {
+    findings.push({type: 'inculpatory', text: e.title || e.detail || ''});
+  });
+  // Take top 2 exculpatory
+  (exculpatory || []).slice(0, 2).forEach(function(e) {
+    findings.push({type: 'exculpatory', text: e.title || e.detail || ''});
+  });
+  if (findings.length === 0) return;
+  el.innerHTML = findings.map(function(finding, i) {
+    var dotColor = finding.type === 'inculpatory' ? '#EF4444' : '#10B981';
+    return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+      '<span style="font-size:11px;font-weight:700;color:' + dotColor + ';width:18px;flex-shrink:0;">' + (i + 1) + '</span>' +
+      '<span style="font-size:12px;color:var(--rws-text-secondary);line-height:1.5;">' + highlightEntities(finding.text) + '</span></div>';
+  }).join('');
+}
+
+// ── Open AI Copilot with ticket context pre-filled ──
+function openCopilotForTicket(ticketKey) {
+  navigate('copilot');
+  setTimeout(function() {
+    var copilotInput = document.querySelector('#page-copilot textarea, #page-copilot input[type="text"]');
+    if (copilotInput) {
+      copilotInput.value = 'Investigate ticket ' + ticketKey + ' - provide analysis and recommendations';
+      copilotInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }, 500);
 }
 
 // ── Investigation Snapshot: replaces the alert graph with a useful metrics panel ──
@@ -49779,6 +50065,37 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
     rcaEl.style.color = rcaColor;
     rcaEl.style.fontStyle = 'normal';
     rcaEl.style.fontWeight = '400';
+  }
+
+  // ── Wire AI Conclusion into right panel ──
+  var conclusionEl = document.getElementById('invSideConclusionContent');
+  if (conclusionEl && verdict) {
+    var conclusionIsTP = verdict.includes('TRUE POSITIVE');
+    var conclusionIsFP = verdict.includes('FALSE POSITIVE');
+    var conclusionIcon = conclusionIsTP ? '\u26a0\ufe0f' : conclusionIsFP ? '\u2705' : '\u26a0\ufe0f';
+    var conclusionColor = conclusionIsTP ? '#EF4444' : conclusionIsFP ? '#10B981' : '#F59E0B';
+    var conclusionActionLabel = conclusionIsTP ? 'Immediate action required' : conclusionIsFP ? 'Close as false positive / business justified' : 'Manual investigation recommended';
+    var conclusionParts = [];
+    if (conclusionIsTP) {
+      conclusionParts.push('Confirmed True Positive with ' + confidence + '% confidence.');
+      if (netHits > 0) conclusionParts.push('Suspicious network connections detected.');
+      if (tipHits > 0) conclusionParts.push(tipHits + ' TI IOC match' + (tipHits > 1 ? 'es' : '') + ' confirmed.');
+      if (procHits > 0) conclusionParts.push('Suspicious child processes detected.');
+    } else if (conclusionIsFP) {
+      conclusionParts.push('Determined to be a False Positive with ' + confidence + '% confidence.');
+      conclusionParts.push('No malicious indicators found in SIEM or threat intel.');
+    } else {
+      conclusionParts.push('Inconclusive (' + confidence + '% confidence) — mixed evidence.');
+      conclusionParts.push('Manual analysis recommended.');
+    }
+    conclusionEl.innerHTML =
+      '<div style="font-size:12px;color:var(--rws-text-primary);line-height:1.6;">' +
+        conclusionIcon + ' <span style="font-weight:700;color:' + conclusionColor + ';">' + escapeHtml(verdict) + '</span>' +
+        (confidence ? '<span style="font-size:11px;color:var(--rws-text-muted);margin-left:4px;">(' + confidence + '% confidence)</span>' : '') +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--rws-text-secondary);line-height:1.5;margin-top:8px;">' + escapeHtml(conclusionActionLabel) + '</div>' +
+      '<div style="font-size:11px;color:var(--rws-text-muted);line-height:1.5;margin-top:6px;">' + escapeHtml(conclusionParts.join(' ')) + '</div>';
+    conclusionEl.style.fontStyle = 'normal';
   }
 }
 
@@ -50352,6 +50669,10 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
           cacheEntry.confidence || 0
         );
       }
+      // Populate Top Findings from cached inculpatory/exculpatory data
+      if (cacheEntry.inculpatoryEvidence || cacheEntry.exculpatoryEvidence) {
+        try { populateTopFindings(cacheEntry.inculpatoryEvidence || [], cacheEntry.exculpatoryEvidence || []); } catch(e2) { console.warn('[TopFindings cache]', e2.message); }
+      }
     } catch(e) { console.warn('[Snapshot cache]', e.message); }
   }, 400);
 
@@ -50360,10 +50681,18 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
   var hasSidebarData = sp.enrichment || sp.correlated || sp.actions || sp.playbook;
   if (hasSidebarData) {
     if (sp.enrichment) {
+      // Update right panel enrichment content
+      var enrichPanel = document.getElementById('invSideEnrichmentContent');
+      if (enrichPanel) { enrichPanel.innerHTML = sp.enrichment; enrichPanel.style.fontStyle = 'normal'; }
+      // Backward compat: also update hidden card body if it exists
       var enrichBody = document.querySelector('#enrichmentSummaryCard .inv-collapsible-body');
       if (enrichBody) { enrichBody.innerHTML = sp.enrichment; enrichBody.style.display = ''; }
     }
     if (sp.correlated) {
+      // Update right panel correlated content
+      var corrPanel = document.getElementById('invSideCorrelatedContent');
+      if (corrPanel) { corrPanel.innerHTML = sp.correlated; corrPanel.style.fontStyle = 'normal'; }
+      // Backward compat: also update hidden card body if it exists
       var corrBody = document.querySelector('#correlatedAlertsCard .inv-collapsible-body');
       if (corrBody) { corrBody.innerHTML = sp.correlated; corrBody.style.display = ''; }
     }
@@ -52719,7 +53048,10 @@ async function runAIInvestigation(ticketKey, issueData) {
     eHTML += '</div>';
     var enrichBody = enrichCard.querySelector('.inv-collapsible-body');
     if (enrichBody) { enrichBody.innerHTML = eHTML; enrichBody.style.display = ''; }
-    else { enrichCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Enrichment Summary</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + eHTML + '</div>'; }
+    else { enrichCard.innerHTML = '<div class="inv-collapsible-body">' + eHTML + '</div>'; }
+    // Also populate the right panel enrichment section
+    var enrichPanelEl = document.getElementById('invSideEnrichmentContent');
+    if (enrichPanelEl) { enrichPanelEl.innerHTML = eHTML; enrichPanelEl.style.fontStyle = 'normal'; }
     setTimeout(initCollapsiblePanels, 100);
   }
 
@@ -52774,7 +53106,10 @@ async function runAIInvestigation(ticketKey, issueData) {
     }
     var corrBody = corrCard.querySelector('.inv-collapsible-body');
     if (corrBody) { corrBody.innerHTML = cHTML; corrBody.style.display = ''; }
-    else { corrCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Correlated Alerts</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + cHTML + '</div>'; }
+    else { corrCard.innerHTML = '<div class="inv-collapsible-body">' + cHTML + '</div>'; }
+    // Also populate the right panel correlated alerts section
+    var corrPanelEl = document.getElementById('invSideCorrelatedContent');
+    if (corrPanelEl) { corrPanelEl.innerHTML = cHTML; corrPanelEl.style.fontStyle = 'normal'; }
     setTimeout(initCollapsiblePanels, 100);
   }
 
@@ -52815,7 +53150,10 @@ async function runAIInvestigation(ticketKey, issueData) {
     });
     var actBody = actCard.querySelector('.inv-collapsible-body');
     if (actBody) { actBody.innerHTML = aHTML; actBody.style.display = ''; }
-    else { actCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">AI Recommended Actions</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + aHTML + '</div>'; }
+    else { actCard.innerHTML = '<div class="inv-collapsible-body">' + aHTML + '</div>'; }
+    // Also populate the Containment right panel recommended section
+    var sideRecEl = document.getElementById('invSideRecommendedContent');
+    if (sideRecEl) { sideRecEl.innerHTML = aHTML; sideRecEl.style.fontStyle = 'normal'; }
     setTimeout(initCollapsiblePanels, 100);
   }
 
@@ -52983,6 +53321,9 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   // Update investigation snapshot panel with live SIEM results + verdict
   try { updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence); } catch(e) { console.warn('[Snapshot]', e.message); }
+
+  // Populate Top Findings in Summary tab
+  try { populateTopFindings(inculpatory, exculpatory); } catch(e) { console.warn('[TopFindings]', e.message); }
 
   // Generate client escalation draft (pass CrowdStrike enrichment for actor-attributed email)
   generateEscalationDraft(ticketKey, org, verdict, confidence, summary, priority, f, csEnrichment);
