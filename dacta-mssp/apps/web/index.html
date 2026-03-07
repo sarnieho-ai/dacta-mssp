@@ -49750,10 +49750,10 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   var cleanedNarrative = cleanDesc
     .replace(/^\s*Hi\s+[A-Za-z0-9 ]+(?:Team|team|Global|global)[,.]?\s*/i, '')
     .replace(/^\s*Dear\s+[A-Za-z0-9 ]+[,.]?\s*/i, '')
-    .replace(/^\s*An alert pertaining to the rule\s*[-–—]\s*/i, '')
+    .replace(/^\s*An alert pertaining to the rule\s*[-–—]?\s*/i, '')
     .replace(/has been triggered\.?\s*/i, ' ')
-    .replace(/Details of the event\(s\) are as follows?:?\s*/i, '')
-    .replace(/Details are as follows?:?\s*/i, '')
+    .replace(/Details of the event\(s\) are as follow(?:s|ed)?:?\s*/i, '')
+    .replace(/Details are as follow(?:s|ed)?:?\s*/i, '')
     .trim();
 
   // Extract key event details from the raw description
@@ -49764,7 +49764,11 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
 
   // Build a proper conversational summary
   var narrativeParts = [];
-  var ruleName = alertCat || useCase || '';
+
+  // Derive the actual detection rule name from the summary (strip SOC Alert Notification prefix)
+  var _derivedRuleName = (summary || '').replace(/^\s*SOC\s+Alert\s+Notification\s*[-–—:]\s*/i, '').trim();
+  // If the derived rule name is too short or same as category, use the useCase or alertCat
+  var ruleName = _derivedRuleName.length > 5 ? _derivedRuleName : (useCase || alertCat || '');
 
   // Lead: what detection rule triggered and why
   if (ruleName) {
@@ -49773,18 +49777,23 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
     narrativeParts.push('An alert was raised');
   }
   if (timeMatch && timeMatch[1]) {
-    narrativeParts[narrativeParts.length-1] += ' on <strong>' + escapeHtml(timeMatch[1].trim()) + '</strong>';
+    var _cleanedTime = timeMatch[1].trim().replace(/\s*Rule\s*Description.*$/i, '').replace(/\s*Message.*$/i, '').replace(/\s*Object.*$/i, '').trim();
+    if (_cleanedTime.length > 4) {
+      narrativeParts[narrativeParts.length-1] += ' on <strong>' + escapeHtml(_cleanedTime) + '</strong>';
+    }
   }
   narrativeParts[narrativeParts.length-1] += '.';
 
   // What action was observed
   if (ruleDescMatch && ruleDescMatch[1]) {
-    narrativeParts.push(escapeHtml(ruleDescMatch[1].trim()) + '.');
+    var _rdText = ruleDescMatch[1].trim();
+    if (_rdText.length > 5 && _rdText.length < 200) narrativeParts.push(escapeHtml(_rdText) + '.');
   }
   if (msgMatch && msgMatch[1]) {
-    narrativeParts.push('The observed activity: <em>' + escapeHtml(msgMatch[1].trim()) + '</em>.');
+    var _msgText = msgMatch[1].trim();
+    if (_msgText.length > 3 && _msgText.length < 200) narrativeParts.push('The observed activity: <em>' + escapeHtml(_msgText) + '</em>.');
   }
-  if (objMatch && objMatch[1] && objMatch[1].trim().length > 2) {
+  if (objMatch && objMatch[1] && objMatch[1].trim().length > 2 && objMatch[1].trim().length < 120) {
     narrativeParts.push('Object involved: <code style="font-size:11px;padding:1px 6px;background:rgba(255,255,255,0.05);border-radius:3px;color:#60A5FA;">' + escapeHtml(objMatch[1].trim()) + '</code>.');
   }
 
