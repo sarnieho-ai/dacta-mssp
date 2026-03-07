@@ -49304,14 +49304,30 @@ async function openInvestigation(ticketKey) {
           '<div style="font-size:11px;color:var(--rws-text-muted);margin-top:1px;">' + escapeHtml(task.d) + '</div></div></div>';
       }).join('');
     }
-    var _rDescClean = (description||f.summary||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
-    // Use FULL description for entity extraction (not truncated)
+    // ── Enrich description with first analyst comment when description is empty ──
+    var _enrichedDesc = description || '';
+    var _firstCommentText = '';
+    if (!_enrichedDesc.replace(/<[^>]+>/g,'').trim() && commentsArr.length > 0) {
+      // Description is empty — use earliest comment as the primary data source
+      var _fc = commentsArr[0];
+      if (_fc.renderedBody) {
+        _firstCommentText = _fc.renderedBody.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+      } else if (_fc.body && _fc.body.content) {
+        _firstCommentText = extractADFText(_fc.body).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+      } else if (typeof _fc.body === 'string') {
+        _firstCommentText = _fc.body.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+      }
+      _enrichedDesc = _firstCommentText;
+    }
+    var _rDescClean = (_enrichedDesc||f.summary||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+    // Use FULL text (summary + description/comment) for entity extraction
     var _rFullText = (f.summary||'') + ' ' + _rDescClean;
     var _rTechniques = detectTechniques(_rFullText);
     var _rIOCs = extractIOCs(_rFullText);
-    var _rAlertSummary = buildAlertSummaryHTML(f.summary||'', description||'', _rTechniques, _rIOCs, _alertCat, useCase);
+    var _ticketCreated = f.created || '';
+    var _rAlertSummary = buildAlertSummaryHTML(f.summary||'', _enrichedDesc||'', _rTechniques, _rIOCs, _alertCat, useCase, _ticketCreated);
     // ── Extract live entities from ticket data for Impact section ──
-    var _impFullText = (f.summary || '') + ' ' + (description || '').replace(/<[^>]+>/g, ' ');
+    var _impFullText = (f.summary || '') + ' ' + (_enrichedDesc || '').replace(/<[^>]+>/g, ' ');
     var _impUserMatch = _impFullText.match(/User\s*Involved:?\s*([\w.@-]+)/i);
     var _impDeviceMatches = [];
     var _impDevRx = /(?:Firewall\s*Device|Device|Hostname|Host):?\s*([\w.-]+)/gi;
@@ -50011,7 +50027,9 @@ async function openInvestigation(ticketKey) {
 }
 
 // ── Build professional alert summary HTML for the "What happened?" section ──
-function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat, useCase) {
+// Produces a concise, action-oriented narrative (Gemini-style) from ticket data.
+// Now accepts optional ticketCreated timestamp and uses enriched description (including comment data).
+function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat, useCase, ticketCreated) {
   var cleanDesc = (description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
   // ── Strip boilerplate, URLs, and raw diagnostic fields ──
@@ -50022,61 +50040,173 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
     .replace(/has been triggered\.?\s*/i, ' ')
     .replace(/Details of the event\(s\) are as follow(?:s|ed)?:?\s*/i, '')
     .replace(/Details are as follow(?:s|ed)?:?\s*/i, '')
-    // Remove Kibana/SIEM URLs entirely
     .replace(/Kibana\s*URL:?\s*https?:\/\/[^\s]*/gi, '')
     .replace(/https?:\/\/[^\s]*kibana[^\s]*/gi, '')
     .replace(/https?:\/\/[^\s]*elastic[^\s]*/gi, '')
     .replace(/https?:\/\/[^\s]*splunk[^\s]*/gi, '')
-    // Remove raw field noise: "Time of alert(s):", repeated field dumps
     .replace(/Time of alert\(?s?\)?:?\s*[^.]*?\.?/gi, '')
-    .replace(/DACTA\s+(?:Firewall Rule Modification|[A-Za-z ]+)\s*\(Non-Admin\)\s*/gi, '')
     .trim();
 
-  // ── Extract structured entities from the raw description ──
+  // ── Derive rule name from Jira summary ──
+  var _derivedRuleName = (summary || '').replace(/^\s*SOC\s+Alert\s+Notification\s*[-–—:]\s*/i, '').trim();
+  var ruleName = _derivedRuleName.length > 5 ? _derivedRuleName : (useCase || alertCat || '');
+
+  // ── Extract structured entities for rich narrative ──
   var userMatch = cleanDesc.match(/User\s*Involved:?\s*([\w.@-]+)/i);
   var deviceMatch = cleanDesc.match(/(?:Firewall\s*Device|Device|Hostname|Host):?\s*([\w.-]+)/i);
   var changesMatch = cleanDesc.match(/(?:Total\s*)?(?:configuration\s*)?changes?\s*done:?\s*(\d+)/i);
   var msgMatch = cleanDesc.match(/Message:?\s*([^\n]+?)(?=\s*(?:Object|Source|Dest|Rule|Time|Path|Kibana|$))/i);
   var pathMatch = cleanDesc.match(/Path:?\s*([\w.]+)/i);
 
-  // ── Derive rule name from Jira summary ──
-  var _derivedRuleName = (summary || '').replace(/^\s*SOC\s+Alert\s+Notification\s*[-–—:]\s*/i, '').trim();
-  var ruleName = _derivedRuleName.length > 5 ? _derivedRuleName : (useCase || alertCat || '');
+  // ── Extract rich behavioral data (from analyst comments / descriptions) ──
+  // Source IP
+  var srcIPMatch = cleanDesc.match(/(?:source\s*(?:address|ip|host)?|originating\s*from)[:\s]*\(?([\d.]+)\)?/i);
+  // Connection counts
+  var connCountMatch = cleanDesc.match(/(\d[\d,]+)\s*connection\s*count/i) || cleanDesc.match(/(\d[\d,]+)\s*total\s*connections?/i) || cleanDesc.match(/(\d[\d,]+)\s*connections?\s*(?:of\s*traffic|from|to)/i);
+  // Target / unique IPs
+  var targetCountMatch = cleanDesc.match(/(\d+)\s*unique\s*(?:target|destination|internal)?\s*IPs?/i) || cleanDesc.match(/(?:multiple|several)\s*internal\s*(?:addresses|hosts|IPs)/i);
+  // Ports
+  var portsMatch = cleanDesc.match(/(?:over\s*)?ports?\s+([\d]+(?:\s*\([^)]*\))?(?:[,\s]+(?:and\s+)?\d+(?:\s*\([^)]*\))?)*)/i);
+  // Subnet
+  var subnetMatch = cleanDesc.match(/subnet\s*(?:of)?\s*\(?([\d.X]+(?:\/\d+)?)\)?/i);
+  // Timestamp from comment (e.g. "7 Mar 2026 08:45:40 pm")
+  var alertTimeMatch = cleanDesc.match(/(\d{1,2}\s+[A-Za-z]+\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)/i);
+  // Host/hostname
+  var hostMatch = cleanDesc.match(/(?:related\s*host|hostname|host\s*name)[:\s]*\(?([\w.-]+)\)?/i);
+  // Firewall device / action
+  var fwDeviceMatch = cleanDesc.match(/(?:Fortinet|Palo Alto|Checkpoint|Sophos|Fortigate)\s*(?:device)?\s*(?:action)?/i);
+  var fwActionMatch = cleanDesc.match(/device\s*action[^.]*(?:were|was)\s*(?:either\s*)?["']?([^"'.]+)["']?/i);
+  // Behavioral pattern
+  var behaviorMatch = cleanDesc.match(/(?:fan-?out|lateral\s*movement|beaconing|scanning|brute.?force|reconnaissance|exfiltration|C2|command.and.control)/i);
+  // Related ticket
+  var relatedTicketMatch = cleanDesc.match(/(?:related|previous|same)\s*(?:activity|ticket)\s*(?:has been\s*)?(?:escalated|raised)?\s*(?:on)?\s*(?:ticket)?\s*(DAC-\d+)/i);
+  // Email / O365 user
+  var emailUserMatch = cleanDesc.match(/(?:user|account|mailbox)[:\s]*([\w.+-]+@[\w.-]+)/i);
+  // Geo location
+  var geoMatch = cleanDesc.match(/(?:geolocation|location|from|origin)[:\s]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z]{2})?)/i);
+  // Ruleset / policy
+  var rulesetMatch = cleanDesc.match(/(?:ruleset|rule|policy)[:\s]*["']([^"']+)["']/i);
 
-  // ── Build verbalizable narrative ──
+  // ── Format timestamp nicely ──
+  var alertTimestamp = '';
+  if (alertTimeMatch && alertTimeMatch[1]) {
+    alertTimestamp = alertTimeMatch[1].trim();
+  } else if (ticketCreated) {
+    try {
+      var _d = new Date(ticketCreated);
+      var _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      alertTimestamp = _d.getDate() + ' ' + _months[_d.getMonth()] + ' ' + _d.getFullYear() + ' ' +
+        String(_d.getHours()).padStart(2,'0') + ':' + String(_d.getMinutes()).padStart(2,'0') + ':' + String(_d.getSeconds()).padStart(2,'0');
+    } catch(e) {}
+  }
+
+  // ── Build action-oriented executive summary ──
   var parts = [];
 
-  // Lead sentence: what rule triggered
-  parts.push('A detection rule <a href="#" onclick="return false;" style="color:#6366F1;text-decoration:none;font-weight:600;">' + escapeHtml(ruleName || 'Alert') + '</a> was triggered.');
+  // Determine the primary source entity (IP, user, or host)
+  var primaryEntity = '';
+  if (srcIPMatch && srcIPMatch[1]) {
+    primaryEntity = srcIPMatch[1];
+  } else if (emailUserMatch && emailUserMatch[1]) {
+    primaryEntity = emailUserMatch[1];
+  } else if (userMatch && userMatch[1]) {
+    primaryEntity = userMatch[1];
+  } else if (iocs.ips && iocs.ips.length > 0) {
+    primaryEntity = iocs.ips[0];
+  }
 
-  // Who & where
+  // Lead: Source + rule + timestamp in one crisp sentence
+  if (primaryEntity && alertTimestamp) {
+    var isIP = /^\d+\./.test(primaryEntity);
+    var entityLabel = isIP ? 'Host' : (primaryEntity.includes('@') ? 'Account' : 'User');
+    parts.push(entityLabel + ' <code style="font-size:12px;padding:1px 6px;background:rgba(255,255,255,0.06);border-radius:3px;color:#A78BFA;">' + escapeHtml(primaryEntity) + '</code> triggered an ' +
+      '<a href="#" onclick="return false;" style="color:#6366F1;text-decoration:none;font-weight:600;">' + escapeHtml(ruleName || 'alert') + '</a>' +
+      ' on <strong>' + escapeHtml(alertTimestamp) + '</strong>.');
+  } else if (primaryEntity) {
+    var isIP2 = /^\d+\./.test(primaryEntity);
+    var entityLabel2 = isIP2 ? 'Host' : (primaryEntity.includes('@') ? 'Account' : 'User');
+    parts.push(entityLabel2 + ' <code style="font-size:12px;padding:1px 6px;background:rgba(255,255,255,0.06);border-radius:3px;color:#A78BFA;">' + escapeHtml(primaryEntity) + '</code> triggered an ' +
+      '<a href="#" onclick="return false;" style="color:#6366F1;text-decoration:none;font-weight:600;">' + escapeHtml(ruleName || 'alert') + '</a>.');
+  } else {
+    parts.push('A detection rule <a href="#" onclick="return false;" style="color:#6366F1;text-decoration:none;font-weight:600;">' + escapeHtml(ruleName || 'Alert') + '</a> was triggered' +
+      (alertTimestamp ? ' on <strong>' + escapeHtml(alertTimestamp) + '</strong>' : '') + '.');
+  }
+
+  // Scope & volume: connections, targets, ports
+  var scopeParts = [];
+  if (connCountMatch && connCountMatch[1]) {
+    scopeParts.push('<strong>' + escapeHtml(connCountMatch[1]) + ' connections</strong>');
+  }
+  if (targetCountMatch && targetCountMatch[1]) {
+    scopeParts.push('<strong>' + escapeHtml(targetCountMatch[1]) + ' unique target IPs</strong>');
+  } else if (targetCountMatch) {
+    scopeParts.push('multiple internal hosts');
+  }
+  if (subnetMatch && subnetMatch[1]) {
+    scopeParts.push('within subnet <code style="font-size:11px;padding:1px 6px;background:rgba(255,255,255,0.05);border-radius:3px;color:#60A5FA;">' + escapeHtml(subnetMatch[1]) + '</code>');
+  }
+  if (portsMatch && portsMatch[1]) {
+    scopeParts.push('over ports <strong>' + escapeHtml(portsMatch[1]) + '</strong>');
+  }
+  if (scopeParts.length > 0) {
+    parts.push('The source generated traffic to ' + scopeParts.join(', ') + '.');
+  }
+
+  // Behavioral note
+  if (behaviorMatch) {
+    var _bType = behaviorMatch[0].toLowerCase().replace(/-/g,' ');
+    parts.push('This activity suggests potential <strong>' + escapeHtml(_bType) + '</strong> behavior.');
+  }
+
+  // Who & where (firewall rules, users, devices, hosts)
   var contextParts = [];
-  if (userMatch && userMatch[1]) contextParts.push('User involved: <strong>' + escapeHtml(userMatch[1]) + '</strong>');
-  if (deviceMatch && deviceMatch[1]) contextParts.push('Device: <strong>' + escapeHtml(deviceMatch[1]) + '</strong>');
-  if (changesMatch && changesMatch[1]) contextParts.push(escapeHtml(changesMatch[1]) + ' configuration change(s) observed');
+  if (userMatch && userMatch[1] && userMatch[1] !== primaryEntity) {
+    contextParts.push('User: <strong>' + escapeHtml(userMatch[1]) + '</strong>');
+  }
+  if (deviceMatch && deviceMatch[1]) {
+    contextParts.push('Device: <strong>' + escapeHtml(deviceMatch[1]) + '</strong>');
+  }
+  if (hostMatch && hostMatch[1]) {
+    contextParts.push('Related host: <code style="font-size:11px;padding:1px 6px;background:rgba(255,255,255,0.05);border-radius:3px;color:#60A5FA;">' + escapeHtml(hostMatch[1]) + '</code>');
+  }
+  if (changesMatch && changesMatch[1]) {
+    contextParts.push(escapeHtml(changesMatch[1]) + ' configuration change(s) observed');
+  }
+  if (rulesetMatch && rulesetMatch[1]) {
+    contextParts.push('Firewall ruleset: <em>' + escapeHtml(rulesetMatch[1]) + '</em>');
+  }
   if (contextParts.length > 0) parts.push(contextParts.join('. ') + '.');
 
-  // What happened (message)
+  // Geo location (for O365 suspicious login alerts)
+  if (geoMatch && geoMatch[1]) {
+    parts.push('Login originated from <strong>' + escapeHtml(geoMatch[1]) + '</strong>.');
+  }
+
+  // Message / activity detail
   if (msgMatch && msgMatch[1]) {
     var _msgText = msgMatch[1].trim().replace(/Kibana.*$/i, '').replace(/https?:\/\/[^\s]*/g, '').trim();
     if (_msgText.length > 3 && _msgText.length < 200) {
-      parts.push('Activity observed: <em>' + escapeHtml(_msgText) + '</em>.');
+      parts.push('Activity: <em>' + escapeHtml(_msgText) + '</em>.');
     }
   }
   if (pathMatch && pathMatch[1] && pathMatch[1].length > 3) {
     parts.push('Policy path: <code style="font-size:11px;padding:1px 6px;background:rgba(255,255,255,0.05);border-radius:3px;color:#60A5FA;">' + escapeHtml(pathMatch[1]) + '</code>.');
   }
 
-  // Fallback: if no structured fields found, use cleaned text but keep it short
+  // Related ticket reference
+  if (relatedTicketMatch && relatedTicketMatch[1]) {
+    parts.push('Related activity previously escalated on <strong>' + escapeHtml(relatedTicketMatch[1]) + '</strong>.');
+  }
+
+  // Fallback: if we only got the lead sentence and have cleaned text, use a condensed version
   if (parts.length <= 1 && cleaned.length > 0) {
-    // Remove repeated field labels and condense
     var fallback = cleaned
       .replace(/User\s*Involved:?\s*[\w.@-]+\s*/gi, '')
       .replace(/Firewall\s*Device:?\s*[\w.-]+\s*/gi, '')
       .replace(/Total\s*configuration\s*changes\s*done:?\s*\d+\s*/gi, '')
       .replace(/Firewall\s*Configuration\s*Changes\s*Observed:?\.?/gi, '')
       .replace(/\s+/g, ' ').trim();
-    if (fallback.length > 280) fallback = fallback.substring(0, 280) + '\u2026';
+    if (fallback.length > 400) fallback = fallback.substring(0, 400) + '\u2026';
     if (fallback.length > 10) parts.push(escapeHtml(fallback));
   }
 
