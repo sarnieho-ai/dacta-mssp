@@ -53039,8 +53039,25 @@ async function runAIInvestigation(ticketKey, issueData) {
     else if (ioc.malicious_confidence === 'medium') csMediumConfirmCount++;
   });
 
+  // Legacy evidence generators kept for fallback if LLM API unavailable
   var inculpatory = generateInculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx);
   var exculpatory = generateExculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs);
+
+  // ── LLM Investigation Context ──
+  var _llmAlertContext = {
+    summary: summary,
+    description: cleanDesc,
+    priority: priority,
+    organization: org,
+    status: status,
+    labels: labels,
+    use_case: useCase,
+    iocs: iocs,
+    techniques: techniques.map(function(t) { return { id: t.id, name: t.name, tactic: t.tactic }; })
+  };
+  var _llmNamespace = invNamespace;
+  var _llmPhaseResults = {};  // Stores results from each LLM phase
+  var _llmModeActive = true;  // Will be set to false on API failure (fallback to hardcoded)
 
   // ── Playbook caching for Round 1 & Playbook Card ──
   var _cachedPlaybooks = []; // Will be populated in Round 1, reused in Playbook Card
@@ -53154,8 +53171,8 @@ async function runAIInvestigation(ticketKey, issueData) {
   }
 
   // Model names per round
-  var models = ['Claude Opus', 'GPT 5.2', 'Gemini 3.1 Pro'];
-  var modelIcons = [dIcon('aiRobot',14) + '', dIcon('brain',14) + '', dIcon('sparkle',14)];
+  var models = ['Claude Sonnet 4 (Investigator)', 'Claude Sonnet 4 (Synthesizer)', 'Claude Sonnet 4 (Adversarial)'];
+  var modelIcons = [dIcon('search',14), dIcon('brain',14) + '', dIcon('warning',14)];
   var stageColors = ['#3b82f6', '#8b5cf6', '#f59e0b'];
 
   // ═══════════════════════════════════════════════
@@ -53264,9 +53281,9 @@ async function runAIInvestigation(ticketKey, issueData) {
   // PHASE 2: Animate through rounds
   // ═══════════════════════════════════════════════
 
-  var roundTimings = [3500, 2200, 2500];
-  var roundLabels = ['Initial Classification + Log Query', 'Threat Context & Evidence Gathering', 'Deep Investigation & Balanced Verdict'];
-  var roundSubtitles = [invToolsLabel + ' queries', 'IOC enrichment + exculpatory analysis', 'Attack chain synthesis + final assessment'];
+  var roundTimings = [1500, 1000, 1200]; // Reduced since LLM calls add real latency
+  var roundLabels = ['LLM Investigation + Tool Queries', 'Evidence Synthesis & Narrative', 'Adversarial Challenge & Final Verdict'];
+  var roundSubtitles = ['AI investigator querying ' + invToolsLabel, 'Synthesizing findings into assessment', 'Devil\'s advocate challenging the verdict'];
 
   // Process each round
   for (var rnd = 1; rnd <= totalRounds; rnd++) {
@@ -53314,10 +53331,59 @@ async function runAIInvestigation(ticketKey, issueData) {
     }
 
     try {
-    if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment);
-    else if (rnd === 2) roundHTML = buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs);
-    else if (rnd === 3) roundHTML = buildRound3HTML(inculpatory, exculpatory, techniques, iocs, elasticLogs, cmdCtx, verdict, confidence, fullText);
-    console.log('[AI Investigation] Round ' + rnd + ' HTML generated, length=' + roundHTML.length);
+      // ── Try LLM-driven investigation (Phase 1/2/3) ──
+      if (_llmModeActive) {
+        var _llmPhase = 'phase' + rnd;
+        var _llmPrevious = {};
+        if (rnd >= 2 && _llmPhaseResults.phase1) _llmPrevious.phase1 = _llmPhaseResults.phase1;
+        if (rnd >= 3 && _llmPhaseResults.phase2) _llmPrevious.phase2 = _llmPhaseResults.phase2;
+        try {
+          // Update status to show LLM is running
+          var _llmStatusEl = document.getElementById('invProgressStatus');
+          if (_llmStatusEl) _llmStatusEl.textContent = 'LLM ' + (rnd === 1 ? 'Investigator' : (rnd === 2 ? 'Synthesizer' : 'Adversarial Challenger')) + ' running (this may take 30-60s)...';
+
+          var _llmResp = await callInvestigateAPI(ticketKey, _llmAlertContext, _llmNamespace, _llmPhase, _llmPrevious);
+          _llmPhaseResults[_llmPhase] = _llmResp.result;
+          console.log('[LLM Investigation] Phase ' + rnd + ' complete: iterations=' + (_llmResp.iterations || 0) + ', latency=' + (_llmResp.latency_ms || 0) + 'ms');
+
+          if (rnd === 1) roundHTML = buildLLMRound1HTML(_llmResp.result, _llmResp.tool_calls);
+          else if (rnd === 2) roundHTML = buildLLMRound2HTML(_llmResp.result);
+          else if (rnd === 3) {
+            roundHTML = buildLLMRound3HTML(_llmResp.result, _llmResp.tool_calls);
+            // Extract final verdict from Phase 3 for the verdict banner
+            if (_llmResp.result && _llmResp.result.final_verdict) {
+              var _fv = _llmResp.result.final_verdict;
+              if (_fv === 'TRUE_POSITIVE') {
+                verdict = 'TRUE POSITIVE \u2014 Confirmed Threat';
+                verdictColor = 'var(--red-bright)'; verdictBg = 'rgba(239,68,68,0.05)'; verdictBorder = 'rgba(239,68,68,0.3)';
+                actionLabel = 'Immediate action required';
+              } else if (_fv === 'FALSE_POSITIVE') {
+                verdict = 'FALSE POSITIVE \u2014 Business Justified';
+                verdictColor = 'var(--green)'; verdictBg = 'rgba(16,185,129,0.05)'; verdictBorder = 'rgba(16,185,129,0.3)';
+                actionLabel = 'Close as false positive';
+              } else {
+                verdict = 'SUSPICIOUS \u2014 Requires Analyst Review';
+                verdictColor = 'var(--amber)'; verdictBg = 'rgba(245,158,11,0.05)'; verdictBorder = 'rgba(245,158,11,0.3)';
+                actionLabel = 'Manual investigation recommended';
+              }
+              confidence = _llmResp.result.final_confidence || confidence;
+            }
+          }
+        } catch (_llmErr) {
+          console.warn('[LLM Investigation] Phase ' + rnd + ' failed, falling back to hardcoded:', _llmErr.message);
+          _llmModeActive = false; // Disable LLM for remaining rounds
+          // Fall through to hardcoded
+          if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment);
+          else if (rnd === 2) roundHTML = buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs);
+          else if (rnd === 3) roundHTML = buildRound3HTML(inculpatory, exculpatory, techniques, iocs, elasticLogs, cmdCtx, verdict, confidence, fullText);
+        }
+      } else {
+        // Hardcoded fallback
+        if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment);
+        else if (rnd === 2) roundHTML = buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs);
+        else if (rnd === 3) roundHTML = buildRound3HTML(inculpatory, exculpatory, techniques, iocs, elasticLogs, cmdCtx, verdict, confidence, fullText);
+      }
+    console.log('[AI Investigation] Round ' + rnd + ' HTML generated, length=' + roundHTML.length + ', llmMode=' + _llmModeActive);
     } catch (roundErr) {
       console.error('[AI Investigation] Round ' + rnd + ' ERROR:', roundErr);
       roundHTML = '<div style="color:var(--red-bright);font-size:11px;">Error generating round ' + rnd + ' analysis: ' + roundErr.message + '</div>';
@@ -53361,6 +53427,14 @@ async function runAIInvestigation(ticketKey, issueData) {
           var tipHits = (elasticLogs.openctiResults||[]).filter(function(r){return r.found;});
           if (tipHits.length>0) { outcome='⚠'; outcomeColor='var(--red-bright)'; outcomeBg='rgba(239,68,68,0.07)'; outcomeNote=tipHits.length+' TI match(es)'; }
           else { outcome='✓'; outcomeColor='var(--green)'; outcomeBg='rgba(16,185,129,0.07)'; outcomeNote='No threat intel hits'; }
+        } else if (/firewall|block|deny|drop|fortigate|palo.?alto|perimeter|acl|rule.?hit/i.test(txt)) {
+          var fwBlocks = (elasticLogs.firewallBlocks||[]);
+          if (fwBlocks.length>0) { outcome='⚠'; outcomeColor='var(--red-bright)'; outcomeBg='rgba(239,68,68,0.07)'; outcomeNote=fwBlocks.length+' firewall block(s)'; }
+          else {
+            var fwOffline = (elasticLogs.networkConnections||[]).some(function(nc){return nc.actionType==='FIREWALL_CONNECTOR_OFFLINE';});
+            if (fwOffline) { outcome='?'; outcomeColor='var(--amber)'; outcomeBg='rgba(245,158,11,0.07)'; outcomeNote='Firewall connector offline'; }
+            else { outcome='✓'; outcomeColor='var(--green)'; outcomeBg='rgba(16,185,129,0.07)'; outcomeNote='No firewall blocks detected'; }
+          }
         }
         return '<div style="padding:4px 8px 4px 10px;background:'+outcomeBg+';border-bottom:1px solid rgba(139,92,246,0.06);display:flex;align-items:flex-start;gap:6px;">' +
           '<span style="color:'+outcomeColor+';font-weight:700;font-size:12px;min-width:14px;line-height:1.4;">'+outcome+'</span>' +
@@ -53385,6 +53459,8 @@ async function runAIInvestigation(ticketKey, issueData) {
           (elasticLogs.alertHistory||[]).filter(function(a){return a.status!=='NONE';}).length > 0 ? _pbWarnCount++ : _pbOkCount++;
         } else if (/threat.intel|ioc|reputation|known.bad|feed/i.test(txt)) {
           (elasticLogs.openctiResults||[]).filter(function(r){return r.found;}).length > 0 ? _pbWarnCount++ : _pbOkCount++;
+        } else if (/firewall|block|deny|drop|fortigate|palo.?alto|perimeter|acl|rule.?hit/i.test(txt)) {
+          (elasticLogs.firewallBlocks||[]).length > 0 ? _pbWarnCount++ : _pbOkCount++;
         } else { _pbUnkCount++; }
       });
       roundHTML += '<div style="margin-top:10px;background:rgba(139,92,246,0.04);border:1px solid rgba(139,92,246,0.2);border-radius:6px;overflow:hidden;">' +
@@ -55100,9 +55176,353 @@ function buildRoundHTML(num, totalRounds, title, state, content) {
 function updateRoundHTML(container, num, totalRounds, state, content) {
   var el = document.getElementById('aiRound' + num);
   if (el) {
-    var titleMap = {1:'Initial Classification', 2:'Threat Context Analysis', 3:'Deep Investigation & Recommendations'};
+    var titleMap = {1:'LLM Investigation', 2:'Evidence Synthesis', 3:'Adversarial Challenge'};
     el.outerHTML = buildRoundHTML(num, totalRounds, titleMap[num], state, content);
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// LLM-DRIVEN INVESTIGATION ENGINE
+// Three-Phase: Investigate → Synthesize → Adversarial Challenge
+// ══════════════════════════════════════════════════════════════
+
+async function callInvestigateAPI(ticketKey, alertContext, namespace, phase, previousPhases) {
+  var abortCtrl = new AbortController();
+  var timeout = setTimeout(function() { abortCtrl.abort(); }, 110000); // 110s timeout
+  try {
+    var resp = await fetch('/api/investigate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: abortCtrl.signal,
+      body: JSON.stringify({
+        ticket_key: ticketKey,
+        alert_context: alertContext,
+        namespace: namespace,
+        phase: phase,
+        previous_phases: previousPhases || null
+      })
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) {
+      var errData = await resp.json().catch(function() { return { error: 'Request failed' }; });
+      throw new Error(errData.error || 'Investigation API error (' + resp.status + ')');
+    }
+    return await resp.json();
+  } catch (e) {
+    clearTimeout(timeout);
+    console.error('[LLM Investigation] Phase ' + phase + ' error:', e.message);
+    throw e;
+  }
+}
+
+// ── Build Round 1 HTML: LLM Investigation Findings ──
+function buildLLMRound1HTML(phase1Result, toolCalls) {
+  if (!phase1Result || phase1Result.error) {
+    return '<div style="color:var(--red-bright);font-size:11px;padding:10px;">Phase 1 error: ' + (phase1Result ? phase1Result.error : 'No result') + '</div>';
+  }
+  var html = '';
+
+  // Tool activity summary
+  var ts = phase1Result.tools_summary || {};
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">';
+  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);">AI INVESTIGATOR — PHASE 1</span>';
+  if (ts.total_queries) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">' + ts.total_queries + ' TOOL CALLS</span>';
+  if (ts.siem_queries) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">' + ts.siem_queries + ' SIEM QUERIES</span>';
+  if (ts.tip_lookups) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);">' + ts.tip_lookups + ' TI LOOKUPS</span>';
+  html += '</div>';
+
+  // Preliminary assessment banner
+  if (phase1Result.preliminary_assessment) {
+    var conf = phase1Result.confidence || 0;
+    var assessColor = conf > 70 ? 'var(--red-bright)' : (conf > 40 ? 'var(--amber)' : 'var(--green)');
+    html += '<div style="padding:10px 12px;background:rgba(139,92,246,0.03);border-left:3px solid rgba(139,92,246,0.4);border-radius:0 6px 6px 0;margin-bottom:12px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#a78bfa;margin-bottom:4px;">PRELIMINARY ASSESSMENT</div>' +
+      '<div style="font-size:11px;color:var(--text-secondary);line-height:1.6;">' + escapeHtml(phase1Result.preliminary_assessment) + '</div>' +
+      '<div style="margin-top:6px;font-size:9px;color:' + assessColor + ';font-weight:600;">Investigation Confidence: ' + conf + '%</div>' +
+    '</div>';
+  }
+
+  // Observations (findings)
+  var observations = phase1Result.observations || [];
+  if (observations.length > 0) {
+    html += '<div style="margin-bottom:12px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--cyan);margin-bottom:8px;">' + dIcon('search',14) + ' INVESTIGATION FINDINGS (' + observations.length + ')</div>';
+    observations.forEach(function(obs, i) {
+      var sourceColor = 'var(--text-muted)';
+      var sourceBg = 'var(--surface-1)';
+      if (obs.source && obs.source.toLowerCase().includes('siem')) { sourceColor = '#10b981'; sourceBg = 'rgba(16,185,129,0.08)'; }
+      else if (obs.source && (obs.source.toLowerCase().includes('tip') || obs.source.toLowerCase().includes('threat'))) { sourceColor = '#8b5cf6'; sourceBg = 'rgba(139,92,246,0.08)'; }
+      else if (obs.source && obs.source.toLowerCase().includes('alert')) { sourceColor = 'var(--amber)'; sourceBg = 'rgba(245,158,11,0.08)'; }
+
+      html += '<div style="margin-bottom:6px;padding:8px 10px;background:var(--surface-1);border-radius:6px;border:1px solid var(--border-subtle);border-left:3px solid ' + sourceColor + ';">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">' +
+          '<div style="font-size:10px;font-weight:600;color:var(--text-primary);flex:1;">' + escapeHtml(obs.finding || '') + '</div>' +
+          '<span style="font-size:8px;padding:2px 6px;border-radius:8px;background:' + sourceBg + ';color:' + sourceColor + ';border:1px solid ' + sourceColor + '30;white-space:nowrap;margin-left:8px;">' + escapeHtml(obs.source || 'unknown') + '</span>' +
+        '</div>' +
+        (obs.significance ? '<div style="font-size:9px;color:var(--text-secondary);line-height:1.5;">' + escapeHtml(obs.significance) + '</div>' : '') +
+        (obs.tools_used && obs.tools_used.length > 0 ? '<div style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap;">' + obs.tools_used.map(function(t) { return '<span style="font-size:7px;padding:1px 5px;border-radius:6px;background:rgba(0,212,255,0.06);color:var(--cyan);border:1px solid rgba(0,212,255,0.15);">' + escapeHtml(t) + '</span>'; }).join('') + '</div>' : '') +
+      '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Hypotheses tested
+  var hypotheses = phase1Result.hypotheses_tested || [];
+  if (hypotheses.length > 0) {
+    html += '<div style="margin-bottom:12px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--amber);margin-bottom:8px;">HYPOTHESES TESTED (' + hypotheses.length + ')</div>';
+    hypotheses.forEach(function(h) {
+      var resultColor = h.result === 'confirmed' ? 'var(--red-bright)' : (h.result === 'refuted' ? 'var(--green)' : 'var(--amber)');
+      var resultIcon = h.result === 'confirmed' ? dIcon('siren',12) : (h.result === 'refuted' ? dIcon('checkCircle',12) : dIcon('help',12));
+      html += '<div style="padding:6px 10px;margin-bottom:4px;background:var(--surface-0);border-radius:4px;border:1px solid var(--border-subtle);">' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">' +
+          '<span style="font-size:10px;font-weight:600;color:var(--text-primary);flex:1;">' + escapeHtml(h.hypothesis || '') + '</span>' +
+          '<span style="font-size:8px;font-weight:700;color:' + resultColor + ';text-transform:uppercase;">' + resultIcon + ' ' + (h.result || 'unknown') + '</span>' +
+        '</div>' +
+        (h.evidence ? '<div style="font-size:9px;color:var(--text-secondary);line-height:1.4;">' + escapeHtml(h.evidence) + '</div>' : '') +
+      '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Open questions
+  var openQs = phase1Result.open_questions || [];
+  if (openQs.length > 0) {
+    html += '<div style="padding:8px 10px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15);border-radius:6px;">' +
+      '<div style="font-size:9px;font-weight:600;color:var(--amber);margin-bottom:4px;">OPEN QUESTIONS</div>';
+    openQs.forEach(function(q) {
+      html += '<div style="font-size:9px;color:var(--text-secondary);padding:2px 0;">\u2022 ' + escapeHtml(q) + '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Tool call log
+  if (toolCalls && toolCalls.length > 0) {
+    html += '<details style="margin-top:10px;"><summary style="font-size:9px;color:var(--text-muted);cursor:pointer;">\u25B6 Tool Execution Log (' + toolCalls.length + ' calls)</summary>' +
+      '<div style="margin-top:4px;">';
+    toolCalls.forEach(function(tc, i) {
+      var sc = tc.connected !== false ? '#10b981' : '#ef4444';
+      html += '<div style="font-size:9px;padding:2px 0;display:flex;gap:6px;border-bottom:1px solid var(--border-subtle);">' +
+        '<span style="color:var(--text-muted);min-width:16px;">' + (i + 1) + '</span>' +
+        '<span style="color:var(--cyan);font-family:var(--font-mono);min-width:120px;">' + escapeHtml(tc.tool) + '</span>' +
+        '<span style="color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(tc.result_summary || '') + '</span>' +
+        '<span style="color:' + sc + ';font-size:8px;font-weight:600;">\u25CF</span></div>';
+    });
+    html += '</div></details>';
+  }
+
+  return html;
+}
+
+// ── Build Round 2 HTML: LLM Synthesis ──
+function buildLLMRound2HTML(phase2Result) {
+  if (!phase2Result || phase2Result.error) {
+    return '<div style="color:var(--red-bright);font-size:11px;padding:10px;">Phase 2 error: ' + (phase2Result ? phase2Result.error : 'No result') + '</div>';
+  }
+  var html = '';
+
+  // Phase badge
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">';
+  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);">SYNTHESIS — PHASE 2</span>';
+  var kes = phase2Result.key_evidence_count || {};
+  if (kes.threat) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.25);font-weight:700;">' + kes.threat + ' THREAT</span>';
+  if (kes.benign) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);font-weight:700;">' + kes.benign + ' BENIGN</span>';
+  if (kes.inconclusive) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.25);">' + kes.inconclusive + ' INCONCLUSIVE</span>';
+  html += '</div>';
+
+  // Narrative
+  if (phase2Result.narrative) {
+    html += '<div style="padding:10px 12px;background:rgba(139,92,246,0.03);border-left:3px solid rgba(139,92,246,0.4);border-radius:0 6px 6px 0;margin-bottom:12px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#a78bfa;margin-bottom:6px;">INVESTIGATION NARRATIVE</div>' +
+      '<div style="font-size:11px;color:var(--text-secondary);line-height:1.7;">' + escapeHtml(phase2Result.narrative) + '</div>' +
+    '</div>';
+  }
+
+  // Evidence summary
+  var es = phase2Result.evidence_summary || {};
+  var threatEv = es.supporting_threat || [];
+  var benignEv = es.supporting_benign || [];
+  var inconcEv = es.inconclusive || [];
+
+  // Supporting threat evidence
+  if (threatEv.length > 0) {
+    html += '<div style="margin-bottom:10px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+        '<span style="font-size:10px;font-weight:600;color:var(--text-primary);">Evidence Supporting Threat</span>' +
+        '<span class="badge badge-red" style="font-size:9px;">' + threatEv.length + '</span></div>';
+    threatEv.forEach(function(ev, i) {
+      var wColor = ev.weight === 'critical' ? 'var(--red-bright)' : (ev.weight === 'high' ? '#f97316' : 'var(--amber)');
+      html += '<div class="reasoning-item" style="' + (i === threatEv.length - 1 ? 'border-bottom:none;' : '') + '">' +
+        '<div class="reasoning-num" style="background:rgba(239,68,68,0.15);color:var(--red-bright);">' + (i + 1) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;">' +
+          '<strong style="color:var(--text-primary);">' + escapeHtml(ev.finding) + '</strong>' +
+          '<span style="font-size:9px;font-weight:600;color:' + wColor + ';margin-left:6px;text-transform:uppercase;">[' + (ev.weight || 'medium') + ']</span>' +
+          (ev.source ? '<span style="font-size:8px;color:var(--text-muted);margin-left:6px;">' + escapeHtml(ev.source) + '</span>' : '') +
+        '</div></div>';
+    });
+    html += '</div>';
+  }
+
+  // Supporting benign evidence
+  if (benignEv.length > 0) {
+    html += '<div style="margin-bottom:10px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+        '<span style="font-size:10px;font-weight:600;color:var(--text-primary);">Evidence Supporting Benign</span>' +
+        '<span class="badge badge-green" style="font-size:9px;">' + benignEv.length + '</span></div>';
+    benignEv.forEach(function(ev) {
+      var wColor = ev.weight === 'strong' ? 'var(--green)' : (ev.weight === 'moderate' ? 'var(--amber)' : 'var(--cyan)');
+      html += '<div class="counter-item">' +
+        '<span class="counter-icon" style="color:' + wColor + ';">' + dIcon('checkCircle',14) + '</span>' +
+        '<div style="flex:1;"><strong style="color:var(--text-primary);font-size:11px;">' + escapeHtml(ev.finding) + '</strong>' +
+        '<span style="font-size:9px;font-weight:600;color:' + wColor + ';margin-left:6px;text-transform:uppercase;">[' + (ev.weight || 'moderate') + ']</span>' +
+        (ev.source ? '<span style="font-size:8px;color:var(--text-muted);margin-left:6px;">' + escapeHtml(ev.source) + '</span>' : '') +
+        '</div></div>';
+    });
+    html += '</div>';
+  }
+
+  // Attack chain / workflow reconstruction
+  if (phase2Result.attack_chain) {
+    html += '<div style="padding:8px 10px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15);border-radius:6px;margin-bottom:10px;">' +
+      '<div style="font-size:9px;font-weight:700;color:var(--amber);margin-bottom:4px;">' + (phase2Result.preliminary_verdict === 'TRUE_POSITIVE' ? 'ATTACK CHAIN RECONSTRUCTION' : 'WORKFLOW RECONSTRUCTION') + '</div>' +
+      '<div style="font-size:10px;color:var(--text-secondary);line-height:1.5;">' + escapeHtml(phase2Result.attack_chain) + '</div></div>';
+  }
+
+  // MITRE mapping
+  var mitreMap = phase2Result.mitre_mapping || [];
+  if (mitreMap.length > 0) {
+    html += '<div style="margin-bottom:10px;">' +
+      '<div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:6px;">MITRE ATT&CK MAPPING</div>' +
+      '<div style="display:grid;gap:3px;">';
+    mitreMap.forEach(function(m) {
+      html += '<div style="display:grid;grid-template-columns:80px 1fr;gap:8px;padding:4px 8px;background:var(--surface-1);border-radius:4px;border:1px solid var(--border-subtle);">' +
+        '<span style="font-size:9px;color:var(--amber);font-family:var(--font-mono);font-weight:600;">' + escapeHtml(m.technique_id || '') + '</span>' +
+        '<div><span style="font-size:9px;color:var(--text-primary);">' + escapeHtml(m.technique_name || '') + '</span>' +
+        '<span style="font-size:8px;color:var(--text-muted);margin-left:6px;">[' + escapeHtml(m.tactic || '') + ']</span></div></div>';
+    });
+    html += '</div></div>';
+  }
+
+  // Preliminary verdict
+  if (phase2Result.preliminary_verdict) {
+    var pvColor = phase2Result.preliminary_verdict === 'TRUE_POSITIVE' ? 'var(--red-bright)' : (phase2Result.preliminary_verdict === 'FALSE_POSITIVE' ? 'var(--green)' : 'var(--amber)');
+    html += '<div style="padding:8px 10px;background:' + pvColor + '08;border:1px solid ' + pvColor + '30;border-radius:6px;">' +
+      '<div style="font-size:10px;font-weight:700;color:' + pvColor + ';margin-bottom:4px;">PRELIMINARY VERDICT: ' + phase2Result.preliminary_verdict.replace('_', ' ') + ' (' + (phase2Result.confidence || 0) + '%)</div>' +
+      '<div style="font-size:10px;color:var(--text-secondary);line-height:1.5;">' + escapeHtml(phase2Result.verdict_reasoning || '') + '</div></div>';
+  }
+
+  return html;
+}
+
+// ── Build Round 3 HTML: Adversarial Challenge ──
+function buildLLMRound3HTML(phase3Result, toolCalls) {
+  if (!phase3Result || phase3Result.error) {
+    return '<div style="color:var(--red-bright);font-size:11px;padding:10px;">Phase 3 error: ' + (phase3Result ? phase3Result.error : 'No result') + '</div>';
+  }
+  var html = '';
+
+  // Phase badge
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">';
+  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;background:rgba(245,158,11,0.1);color:var(--amber);border:1px solid rgba(245,158,11,0.3);">ADVERSARIAL CHALLENGE — PHASE 3</span>';
+  var stressResult = phase3Result.stress_test_result || '';
+  var stressColor = stressResult === 'VERDICT_HOLDS' ? 'var(--green)' : (stressResult === 'VERDICT_SHOULD_FLIP' ? 'var(--red-bright)' : 'var(--amber)');
+  html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:700;background:' + stressColor + '15;color:' + stressColor + ';border:1px solid ' + stressColor + '30;">' + stressResult.replace(/_/g, ' ') + '</span>';
+  html += '</div>';
+
+  // Challenge direction
+  if (phase3Result.challenge_direction) {
+    html += '<div style="padding:8px 10px;background:rgba(245,158,11,0.04);border-left:3px solid var(--amber);border-radius:0 6px 6px 0;margin-bottom:12px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--amber);margin-bottom:4px;">CHALLENGE DIRECTION</div>' +
+      '<div style="font-size:10px;color:var(--text-secondary);line-height:1.5;">' + escapeHtml(phase3Result.challenge_direction) + '</div></div>';
+  }
+
+  // Counter-arguments
+  var counterArgs = phase3Result.counter_arguments || [];
+  if (counterArgs.length > 0) {
+    html += '<div style="margin-bottom:12px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--amber);margin-bottom:8px;">COUNTER-ARGUMENTS (' + counterArgs.length + ')</div>';
+    counterArgs.forEach(function(ca) {
+      var sColor = ca.strength === 'strong' ? 'var(--red-bright)' : (ca.strength === 'moderate' ? 'var(--amber)' : 'var(--text-muted)');
+      html += '<div style="padding:6px 10px;margin-bottom:4px;background:var(--surface-1);border-radius:4px;border:1px solid var(--border-subtle);border-left:3px solid ' + sColor + ';">' +
+        '<div style="font-size:10px;font-weight:600;color:var(--text-primary);margin-bottom:2px;">' + escapeHtml(ca.argument || '') + '</div>' +
+        (ca.targets ? '<div style="font-size:9px;color:var(--text-muted);margin-bottom:2px;">Targets: ' + escapeHtml(ca.targets) + '</div>' : '') +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<span style="font-size:8px;font-weight:700;color:' + sColor + ';text-transform:uppercase;">' + (ca.strength || 'moderate') + '</span>' +
+          (ca.evidence ? '<span style="font-size:9px;color:var(--text-secondary);">' + escapeHtml(ca.evidence) + '</span>' : '') +
+        '</div></div>';
+    });
+    html += '</div>';
+  }
+
+  // Overlooked evidence
+  var overlooked = phase3Result.overlooked_evidence || [];
+  if (overlooked.length > 0) {
+    html += '<div style="margin-bottom:12px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8b5cf6;margin-bottom:6px;">OVERLOOKED EVIDENCE</div>';
+    overlooked.forEach(function(oe) {
+      html += '<div style="padding:4px 8px;margin-bottom:3px;font-size:9px;color:var(--text-secondary);border-left:2px solid #8b5cf6;">' +
+        '<strong style="color:var(--text-primary);">' + escapeHtml(oe.finding || '') + '</strong>' +
+        (oe.significance ? ' \u2014 ' + escapeHtml(oe.significance) : '') + '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Bias check
+  var biasCheck = phase3Result.bias_check || {};
+  if ((biasCheck.identified_biases || []).length > 0) {
+    html += '<div style="padding:8px 10px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15);border-radius:6px;margin-bottom:12px;">' +
+      '<div style="font-size:9px;font-weight:600;color:var(--amber);margin-bottom:4px;">BIAS CHECK</div>';
+    (biasCheck.identified_biases || []).forEach(function(b) {
+      html += '<div style="font-size:9px;color:var(--text-secondary);padding:1px 0;">\u26A0 ' + escapeHtml(b) + '</div>';
+    });
+    if ((biasCheck.recommendations || []).length > 0) {
+      html += '<div style="margin-top:4px;font-size:9px;color:var(--text-muted);">';
+      (biasCheck.recommendations || []).forEach(function(r) {
+        html += '<div>\u2192 ' + escapeHtml(r) + '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Final verdict & reasoning
+  if (phase3Result.final_verdict) {
+    var fvColor = phase3Result.final_verdict === 'TRUE_POSITIVE' ? 'var(--red-bright)' : (phase3Result.final_verdict === 'FALSE_POSITIVE' ? 'var(--green)' : 'var(--amber)');
+    html += '<div style="padding:10px 12px;background:' + fvColor + '08;border:1px solid ' + fvColor + '30;border-radius:6px;margin-bottom:10px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:' + fvColor + ';margin-bottom:4px;">FINAL ASSESSMENT (POST-ADVERSARIAL)</div>' +
+      '<div style="font-size:12px;font-weight:700;color:' + fvColor + ';margin-bottom:4px;">' + phase3Result.final_verdict.replace('_', ' ') + ' \u2014 ' + (phase3Result.final_confidence || 0) + '% CONFIDENCE</div>' +
+      '<div style="font-size:10px;color:var(--text-secondary);line-height:1.6;">' + escapeHtml(phase3Result.final_reasoning || '') + '</div></div>';
+  }
+
+  // Recommended actions
+  var recs = phase3Result.recommended_actions || [];
+  if (recs.length > 0) {
+    html += '<div style="margin-bottom:4px;"><div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:6px;">RECOMMENDED ACTIONS</div>';
+    recs.forEach(function(rec) {
+      var pColor = rec.priority === 'HIGH' ? 'var(--red-bright)' : (rec.priority === 'MEDIUM' ? 'var(--amber)' : 'var(--text-muted)');
+      var typeColor = rec.type === 'containment' ? 'var(--red-bright)' : (rec.type === 'investigation' ? 'var(--cyan)' : 'var(--text-muted)');
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border-subtle);">' +
+        '<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:' + pColor + '15;color:' + pColor + ';border:1px solid ' + pColor + '30;min-width:42px;text-align:center;">' + (rec.priority || 'MEDIUM') + '</span>' +
+        '<span style="font-size:10px;color:var(--text-secondary);flex:1;">' + escapeHtml(rec.action || '') + '</span>' +
+        '<span style="font-size:8px;padding:2px 5px;border-radius:3px;background:' + typeColor + '10;color:' + typeColor + ';border:1px solid ' + typeColor + '20;">' + escapeHtml(rec.type || '') + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  // Tool call log for Phase 3
+  if (toolCalls && toolCalls.length > 0) {
+    html += '<details style="margin-top:10px;"><summary style="font-size:9px;color:var(--text-muted);cursor:pointer;">\u25B6 Adversarial Tool Calls (' + toolCalls.length + ')</summary>' +
+      '<div style="margin-top:4px;">';
+    toolCalls.forEach(function(tc, i) {
+      html += '<div style="font-size:9px;padding:2px 0;display:flex;gap:6px;border-bottom:1px solid var(--border-subtle);">' +
+        '<span style="color:var(--text-muted);">' + (i + 1) + '</span>' +
+        '<span style="color:var(--cyan);font-family:var(--font-mono);">' + escapeHtml(tc.tool) + '</span>' +
+        '<span style="color:var(--text-secondary);flex:1;">' + escapeHtml(tc.result_summary || '') + '</span></div>';
+    });
+    html += '</div></details>';
+  }
+
+  return html;
 }
 
 
