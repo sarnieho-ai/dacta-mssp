@@ -50067,16 +50067,18 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   var pathMatch = cleanDesc.match(/Path:?\s*([\w.]+)/i);
 
   // ── Extract rich behavioral data (from analyst comments / descriptions) ──
-  // Source IP: handle 'Source IP(s): 10.x.x.x' template format AND 'from the source address (10.x.x.x)'
-  var srcIPMatch = cleanDesc.match(/Source\s*IP\(?s?\)?:?\s*([\d.]+)/i) || cleanDesc.match(/(?:source\s*(?:address|ip|host)?|originating\s*from)[:\s]*\(?([\d.]+)\)?/i);
-  // Normalize: srcIPMatch group could be [1] or [2] depending on which pattern matched
-  var _srcIP = srcIPMatch ? (srcIPMatch[1] || srcIPMatch[2] || '') : '';
+  // Source IP: require valid IP format (at least x.x.x.x with dots) to avoid matching counts like '11'
+  // Handle 'Source IP(s): 10.x.x.x' template format AND 'from the source address (10.x.x.x)'
+  var srcIPMatch = cleanDesc.match(/Source\s*IP\(?s?\)?:?\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i) || cleanDesc.match(/(?:source\s*(?:address|ip|host)?|originating\s*from)[:\s]*\(?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)?/i);
+  // Normalize: srcIPMatch group is always [1] now
+  var _srcIP = srcIPMatch ? (srcIPMatch[1] || '') : '';
   // Connection counts: handle 'Connection Counts(s): 66' template AND 'N connection counts of traffic'
   var connCountMatch = cleanDesc.match(/Connection\s*Count(?:s)?\(?s?\)?:?\s*(\d[\d,]+)/i) || cleanDesc.match(/(\d[\d,]+)\s*connection\s*counts?\s+of/i) || cleanDesc.match(/(\d[\d,]+)\s*total\s*connections?/i);
   // Target / unique IPs: handle 'Unique Target IP(s): 20' template AND 'N unique target IPs' in text
   var targetCountMatch = cleanDesc.match(/Unique\s*Target\s*IP\(?s?\)?:?\s*(\d+)/i) || cleanDesc.match(/(\d+)\s*unique\s*(?:target|destination|internal)\s+IPs?/i) || cleanDesc.match(/(?:multiple|several)\s*internal\s*(?:addresses|hosts|IPs)/i);
-  // Ports
+  // Ports: 'over ports 53(DNS)...' OR 'Destination Port: 5355'
   var portsMatch = cleanDesc.match(/(?:over\s*)?ports?\s+([\d]+(?:\s*\([^)]*\))?(?:[,\s]+(?:and\s+)?\d+(?:\s*\([^)]*\))?)*)/i);
+  var destPortMatch = !portsMatch ? cleanDesc.match(/Destination\s*Port:?\s*(\d+)/i) : null;
   // Subnet
   var subnetMatch = cleanDesc.match(/subnet\s*(?:of)?\s*\(?([\d.X]+(?:\/\d+)?)\)?/i);
   // Timestamp from comment (e.g. "7 Mar 2026 08:45:40 pm")
@@ -50086,8 +50088,12 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   // Firewall device / action
   var fwDeviceMatch = cleanDesc.match(/(?:Fortinet|Palo Alto|Checkpoint|Sophos|Fortigate)\s*(?:device)?\s*(?:action)?/i);
   var fwActionMatch = cleanDesc.match(/device\s*action[^.]*(?:were|was)\s*(?:either\s*)?["']?([^"'.]+)["']?/i);
+  // ── Distributed Scan / Network Scan specific fields ──
+  var uniqueSrcCountMatch = cleanDesc.match(/(?:No\.?\s*of\s*)?Unique\s*Source\s*IP\(?s?\)?:?\s*(\d+)/i);
+  var destIPMatch = cleanDesc.match(/Destination\s*IP:?\s*([\w.:]+)/i);
+  var observerDeviceMatch = cleanDesc.match(/Observer\s*Device:?\s*([\w.-]+)(?:\s*\(([\w.-]+)\))?/i);
   // Behavioral pattern
-  var behaviorMatch = cleanDesc.match(/(?:fan-?out|lateral\s*movement|beaconing|scanning|brute.?force|reconnaissance|exfiltration|C2|command.and.control)/i);
+  var behaviorMatch = cleanDesc.match(/(?:fan-?out|lateral\s*movement|beaconing|(?:distributed\s*)?scan(?:ning)?|brute.?force|reconnaissance|exfiltration|C2|command.and.control)/i);
   // Related ticket
   var relatedTicketMatch = cleanDesc.match(/(?:related|previous|same)\s*(?:activity|ticket)\s*(?:has been\s*)?(?:escalated|raised)?\s*(?:on)?\s*(?:ticket)?\s*(DAC-\d+)/i);
   // Email / O365 user
@@ -50153,11 +50159,21 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   } else if (targetCountMatch) {
     scopeParts.push('multiple internal hosts');
   }
+  // Distributed scan: unique source IPs count
+  if (uniqueSrcCountMatch && uniqueSrcCountMatch[1]) {
+    scopeParts.push('<strong>' + escapeHtml(uniqueSrcCountMatch[1]) + ' unique source IPs</strong>');
+  }
   if (subnetMatch && subnetMatch[1]) {
     scopeParts.push('within subnet <code style="font-size:11px;padding:1px 6px;background:rgba(255,255,255,0.05);border-radius:3px;color:#60A5FA;">' + escapeHtml(subnetMatch[1]) + '</code>');
   }
   if (portsMatch && portsMatch[1]) {
     scopeParts.push('over ports <strong>' + escapeHtml(portsMatch[1]) + '</strong>');
+  } else if (destPortMatch && destPortMatch[1]) {
+    scopeParts.push('over port <strong>' + escapeHtml(destPortMatch[1]) + '</strong>');
+  }
+  // Distributed scan: destination IP
+  if (destIPMatch && destIPMatch[1]) {
+    scopeParts.push('targeting <code style="font-size:11px;padding:1px 6px;background:rgba(255,255,255,0.05);border-radius:3px;color:#60A5FA;">' + escapeHtml(destIPMatch[1]) + '</code>');
   }
   if (scopeParts.length > 0) {
     parts.push('The source generated traffic to ' + scopeParts.join(', ') + '.');
@@ -50185,6 +50201,12 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   }
   if (rulesetMatch && rulesetMatch[1]) {
     contextParts.push('Firewall ruleset: <em>' + escapeHtml(rulesetMatch[1]) + '</em>');
+  }
+  // Observer device (Distributed Scan alerts): 'Observer Device: DactaForti (Fortinet)'
+  if (observerDeviceMatch && observerDeviceMatch[1]) {
+    var _obsLabel = escapeHtml(observerDeviceMatch[1]);
+    if (observerDeviceMatch[2]) _obsLabel += ' (' + escapeHtml(observerDeviceMatch[2]) + ')';
+    contextParts.push('Observer: <strong>' + _obsLabel + '</strong>');
   }
   if (contextParts.length > 0) parts.push(contextParts.join('. ') + '.');
 
@@ -51656,7 +51678,11 @@ function extractIOCs(text) {
   var m;
   m = text.match(ipPattern) || []; iocs.ips = [...new Set(m)];
   // Filter out known product/vendor names that match the host pattern accidentally
-  var HOST_DENYLIST = /^(abuseipdb|virustotal|shodan|greynoise|maxmind|urlscan|misp|opencti|dacta|crowdstrike|sentinelone|trellix|cylanceapp|cylancedb|intelsrv|elasticsrv|kibanaapp|grafanaapp|splunkapp|splunkdb|jiraapp|jiradb|confdb|oktaapp|oktadc|gsuitesrv|azuredb|awsapp|awssrv|gcpapp|gcpdb|gcpsrv|teamsapp|slackapp|zoomapp|githubsrv|gitlabsrv|bitbucketapp)$/i;
+  // Denylist: product/vendor names AND common English words that accidentally match host suffix patterns
+  // Words ending in WS: allows, follows, windows, bellows, narrows, shadows, borrows, hallows, mallows, pillows, willows, meadows
+  // Words ending in DB: would-be matches are rare but include some
+  // Words ending in APP: whatsapp, overlap
+  var HOST_DENYLIST = /^(abuseipdb|virustotal|shodan|greynoise|maxmind|urlscan|misp|opencti|dacta|crowdstrike|sentinelone|trellix|cylanceapp|cylancedb|intelsrv|elasticsrv|kibanaapp|grafanaapp|splunkapp|splunkdb|jiraapp|jiradb|confdb|oktaapp|oktadc|gsuitesrv|azuredb|awsapp|awssrv|gcpapp|gcpdb|gcpsrv|teamsapp|slackapp|zoomapp|githubsrv|gitlabsrv|bitbucketapp|allows|follows|windows|bellows|narrows|shadows|borrows|hallows|mallows|pillows|willows|meadows|arrows|shows|knows|flows|throws|grows|below|endows|reviews|overflows|renews|withdraws|whatsapp|overlap|details|regards|alerts|events|tickets|contained|resolved|enabled|disabled|detected|triggered|observed|reported|escalated)$/i;
   m = text.match(hostPattern) || []; iocs.hosts = [...new Set(m)].filter(function(h) { return !HOST_DENYLIST.test(h); });
   m = text.match(exePattern) || []; iocs.files = [...new Set(m.map(function(f){return f.toLowerCase();}))];
   m = text.match(hashSha) || []; iocs.hashes = [...new Set(m)];
