@@ -49335,7 +49335,8 @@ async function openInvestigation(ticketKey) {
     var _impFullText = (f.summary || '') + ' ' + (_enrichedDesc || '').replace(/<[^>]+>/g, ' ');
     var _impUserMatch = _impFullText.match(/User\s*Involved:?\s*([\w.@-]+)/i);
     var _impDeviceMatches = [];
-    var _impDevRx = /(?:Firewall\s*Device|Device|Hostname|Host):?\s*([\w.-]+)/gi;
+    // Require colon after 'Host' to avoid matching 'Host Communication' in alert names
+    var _impDevRx = /(?:Firewall\s*Device|Device|Hostname|Host):\s*([\w.-]+)/gi;
     var _impDevM;
     while ((_impDevM = _impDevRx.exec(_impFullText)) !== null) { if (_impDevM[1].length > 2) _impDeviceMatches.push(_impDevM[1]); }
     // Also capture hostnames from IOC extraction
