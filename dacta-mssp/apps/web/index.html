@@ -49253,7 +49253,7 @@ async function openInvestigation(ticketKey) {
 
             // ══ SUMMARY / OVERVIEW TAB ══
             '<div id="invTab-overview" class="inv-radiant-tab-content" style="display:block;">' +
-              '<div id="invVerdictArea" style="display:none;margin-bottom:16px;"></div>' +
+              '' +
               '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 10px;">What happened?</h3>' +
               '<div style="margin-bottom:22px;">' + _rAlertSummary + '</div>' +
               '<p style="font-size:13px;margin:0 0 22px;"><a style="color:#6366F1;text-decoration:none;cursor:pointer;" onclick="window.invSwitchTab(\'triage\')">For further details, please review the incident triage. \u2192</a></p>' +
@@ -49536,6 +49536,21 @@ async function openInvestigation(ticketKey) {
     
     // ── Initialize Investigation Snapshot with ticket IOCs ──
     setTimeout(function() { initInvestigationSnapshot(ticketKey, f); }, 300);
+
+    // ── Populate attack path in Impact section on initial load (from detected techniques) ──
+    setTimeout(function() {
+      if (_rTechniques && _rTechniques.length > 0) {
+        populateSummaryAttackGraph(ticketKey, _rTechniques, f.summary || '');
+      }
+      // Also try to populate top findings from cached investigation
+      var cachedEntry = _investigationCache[ticketKey];
+      if (cachedEntry && cachedEntry.metadata) {
+        var meta = cachedEntry.metadata;
+        if (meta.inculpatory || meta.exculpatory) {
+          populateTopFindings(meta.inculpatory || [], meta.exculpatory || []);
+        }
+      }
+    }, 400);
     
     // ── Fetch and display SLA data from Jira API (existing Timeline SLA panel) ──
     fetchAndDisplaySLA(ticketKey, f);
@@ -49641,10 +49656,27 @@ async function openInvestigation(ticketKey) {
         var fullText = (f.summary || '') + ' ' + (description || '').replace(/<[^>]+>/g, ' ');
         var iocs = extractIOCs(fullText);
         var entities = [];
+        // Extract from Jira assignee and reporter fields
+        var _jiraAssignee = f.assignee ? (f.assignee.displayName || f.assignee.emailAddress || '') : '';
+        var _jiraReporter = f.reporter ? (f.reporter.displayName || f.reporter.emailAddress || '') : '';
         (iocs.hosts || []).forEach(function(h) { entities.push({type:'Device DNS', icon:'&#128187;', value:h}); });
         (iocs.ips || []).forEach(function(ip) { entities.push({type:'Device IP', icon:'&#127760;', value:ip}); });
+        // Add Jira assignee/reporter as entities if they look like real names
+        if (_jiraReporter && _jiraReporter.length > 3 && _jiraReporter !== 'Automation for Jira' && !_jiraReporter.toLowerCase().includes('automation')) {
+          entities.push({type:'Reporter', icon:'&#128100;', value:_jiraReporter});
+        }
+        if (_jiraAssignee && _jiraAssignee.length > 3 && _jiraAssignee !== 'Automation for Jira' && !_jiraAssignee.toLowerCase().includes('automation')) {
+          entities.push({type:'Assignee', icon:'&#128100;', value:_jiraAssignee});
+        }
+        // Add extracted usernames (now filtered for generic words)
         (iocs.users || []).forEach(function(u) { entities.push({type:'Username', icon:'&#128100;', value:u}); });
-        (iocs.domains || []).forEach(function(d) { entities.push({type:'Domain', icon:'&#127759;', value:d}); });
+        // Extract domain names from text
+        var _domainPattern = /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|co|gov|edu|mil|info|biz|us|uk|de|fr|au|ca|sg|my|jp|cn|ru|br|in)\b/gi;
+        var _domainMatches = fullText.match(_domainPattern) || [];
+        var _uniqueDomains = [...new Set(_domainMatches.map(function(d){return d.toLowerCase();}))].filter(function(d) {
+          return !d.includes('atlassian.') && !d.includes('jira.') && !d.includes('supabase.') && !d.includes('dacta.') && d.length > 5;
+        });
+        _uniqueDomains.slice(0,3).forEach(function(d) { entities.push({type:'Domain', icon:'&#127759;', value:d}); });
         (iocs.hashes || []).forEach(function(h) { entities.push({type:'Hash', icon:'&#128274;', value:h.length > 16 ? h.substring(0,16) + '\u2026' : h}); });
         (iocs.files || []).forEach(function(fi) { entities.push({type:'File', icon:'&#128196;', value:fi}); });
         if (entCount) entCount.textContent = entities.length;
@@ -49714,51 +49746,89 @@ async function openInvestigation(ticketKey) {
 // ── Build professional alert summary HTML for the "What happened?" section ──
 function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat, useCase) {
   var cleanDesc = (description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  // Lead sentence: the alert title / summary
-  var leadHTML = '<div style="font-size:14px;font-weight:600;color:#E2E8F0;line-height:1.6;margin-bottom:10px;">' + escapeHtml(summary || 'Alert details unavailable.') + '</div>';
-  // Detection rule / use case badge
-  var ruleHTML = '';
+  // Strip out "Hi *client*" preambles and boilerplate from Jira descriptions
+  var cleanedNarrative = cleanDesc
+    .replace(/^\s*Hi\s+[A-Za-z0-9 ]+(?:Team|team|Global|global)[,.]?\s*/i, '')
+    .replace(/^\s*Dear\s+[A-Za-z0-9 ]+[,.]?\s*/i, '')
+    .replace(/^\s*An alert pertaining to the rule\s*[-–—]\s*/i, '')
+    .replace(/has been triggered\.?\s*/i, ' ')
+    .replace(/Details of the event\(s\) are as follows?:?\s*/i, '')
+    .replace(/Details are as follows?:?\s*/i, '')
+    .trim();
+
+  // Extract key event details from the raw description
+  var timeMatch = cleanDesc.match(/Time of alert\(?s?\)?:?\s*([^\n]+?)(?=\s*(?:Rule|Message|Object|Source|Dest|$))/i);
+  var msgMatch = cleanDesc.match(/Message:?\s*([^\n]+?)(?=\s*(?:Object|Source|Dest|Rule|Time|$))/i);
+  var objMatch = cleanDesc.match(/Object[- ]?(?:attribute)?[- ]?(?:configured)?:?\s*([^\n]+?)(?=\s*(?:Message|Source|Dest|Rule|Time|$))/i);
+  var ruleDescMatch = cleanDesc.match(/Rule[- ]?Description:?\s*([^\n]+?)(?=\s*(?:Object|Message|Source|Dest|Time|$))/i);
+
+  // Build a proper conversational summary
+  var narrativeParts = [];
   var ruleName = alertCat || useCase || '';
+
+  // Lead: what detection rule triggered and why
   if (ruleName) {
-    ruleHTML = '<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
-      '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--rws-text-muted);">Detection Rule</span>' +
-      '<span style="font-size:10px;font-weight:600;padding:2px 9px;border-radius:8px;background:rgba(99,102,241,0.12);color:#6366F1;border:1px solid rgba(99,102,241,0.25);">' + escapeHtml(ruleName) + '</span>' +
-    '</div>';
+    narrativeParts.push('A detection rule <strong style="color:#6366F1;">' + escapeHtml(ruleName) + '</strong> was triggered');
+  } else {
+    narrativeParts.push('An alert was raised');
   }
+  if (timeMatch && timeMatch[1]) {
+    narrativeParts[narrativeParts.length-1] += ' on <strong>' + escapeHtml(timeMatch[1].trim()) + '</strong>';
+  }
+  narrativeParts[narrativeParts.length-1] += '.';
+
+  // What action was observed
+  if (ruleDescMatch && ruleDescMatch[1]) {
+    narrativeParts.push(escapeHtml(ruleDescMatch[1].trim()) + '.');
+  }
+  if (msgMatch && msgMatch[1]) {
+    narrativeParts.push('The observed activity: <em>' + escapeHtml(msgMatch[1].trim()) + '</em>.');
+  }
+  if (objMatch && objMatch[1] && objMatch[1].trim().length > 2) {
+    narrativeParts.push('Object involved: <code style="font-size:11px;padding:1px 6px;background:rgba(255,255,255,0.05);border-radius:3px;color:#60A5FA;">' + escapeHtml(objMatch[1].trim()) + '</code>.');
+  }
+
+  // If no structured fields extracted, use the cleaned narrative (but not raw boilerplate)
+  if (narrativeParts.length <= 1 && cleanedNarrative.length > 0) {
+    // Take a meaningful excerpt, stripping redundancy
+    var excerpt = cleanedNarrative.substring(0, 350);
+    if (cleanedNarrative.length > 350) excerpt += '\u2026';
+    narrativeParts.push(escapeHtml(excerpt));
+  }
+
+  var narrativeHTML = '<div style="font-size:13px;color:var(--rws-text-secondary);line-height:1.75;margin-bottom:14px;">' +
+    narrativeParts.join(' ') + '</div>';
+
+  // IOC indicators inline
+  var iocItems = [];
+  (iocs.ips || []).slice(0, 4).forEach(function(ip) { iocItems.push({type:'IP', val:ip, col:'#A78BFA'}); });
+  (iocs.hosts || []).slice(0, 3).forEach(function(h) { iocItems.push({type:'Host', val:h, col:'#60A5FA'}); });
+  (iocs.hashes || []).slice(0, 2).forEach(function(h) { iocItems.push({type:'Hash', val:h.length > 20 ? h.substring(0,20) + '\u2026' : h, col:'#F59E0B'}); });
+  (iocs.files || []).slice(0, 2).forEach(function(fi) { iocItems.push({type:'File', val:fi, col:'#EF4444'}); });
+  var iocHTML = '';
+  if (iocItems.length > 0) {
+    iocHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">';
+    iocItems.forEach(function(ioc) {
+      iocHTML += '<div style="display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:3px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:5px;">' +
+        '<span style="color:var(--rws-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;font-size:9px;">' + ioc.type + '</span>' +
+        '<code style="color:' + ioc.col + ';font-family:monospace;font-size:11px;">' + escapeHtml(ioc.val) + '</code></div>';
+    });
+    iocHTML += '</div>';
+  }
+
   // MITRE techniques
   var mitreHTML = '';
   if (techniques && techniques.length > 0) {
-    mitreHTML = '<div style="margin-bottom:10px;">' +
-      '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--rws-text-muted);margin-right:6px;">MITRE</span>' +
+    mitreHTML = '<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;">' +
+      '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--rws-text-muted);margin-right:2px;">MITRE ATT&CK</span>' +
       techniques.slice(0, 4).map(function(t) {
-        return '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,0.08);color:#F59E0B;border:1px solid rgba(245,158,11,0.2);margin-right:4px;">' + escapeHtml(t) + '</span>';
+        var tName = typeof t === 'string' ? t : (t.id ? t.id + ' ' + (t.name||'') : (t.name || ''));
+        return '<span style="font-size:10px;font-weight:500;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,0.08);color:#F59E0B;border:1px solid rgba(245,158,11,0.15);">' + escapeHtml(tName) + '</span>';
       }).join('') +
     '</div>';
   }
-  // Inline IOCs section
-  var iocItems = [];
-  (iocs.hosts || []).slice(0, 3).forEach(function(h) { iocItems.push({type:'host', val:h}); });
-  (iocs.ips || []).slice(0, 3).forEach(function(ip) { iocItems.push({type:'ip', val:ip}); });
-  (iocs.users || []).slice(0, 3).forEach(function(u) { iocItems.push({type:'user', val:u}); });
-  var iocHTML = '';
-  if (iocItems.length > 0) {
-    iocHTML = '<div style="font-size:12px;color:var(--rws-text-secondary);line-height:1.7;margin-bottom:10px;">';
-    if (cleanDesc.length > 0) {
-      iocHTML += '<span style="color:var(--rws-text-secondary);">' + escapeHtml(cleanDesc.substring(0, 280)) + (cleanDesc.length > 280 ? '\u2026' : '') + '</span>';
-    }
-    iocHTML += '</div>';
-    iocHTML += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
-    iocItems.forEach(function(ioc) {
-      var col = ioc.type === 'host' ? '#60A5FA' : ioc.type === 'ip' ? '#A78BFA' : '#34D399';
-      iocHTML += '<code style="font-size:11px;padding:2px 8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:' + col + ';font-family:monospace;">' + escapeHtml(ioc.val) + '</code>';
-    });
-    iocHTML += '</div>';
-  } else if (cleanDesc.length > 0) {
-    iocHTML = '<div style="font-size:12px;color:var(--rws-text-secondary);line-height:1.7;margin-bottom:4px;">' +
-      escapeHtml(cleanDesc.substring(0, 380)) + (cleanDesc.length > 380 ? '\u2026' : '') +
-    '</div>';
-  }
-  return leadHTML + ruleHTML + mitreHTML + iocHTML;
+
+  return narrativeHTML + iocHTML + mitreHTML;
 }
 
 // ── Populate Top Findings in Summary tab (called after AI investigation) ──
@@ -50022,21 +50092,8 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
     pipeWrap.style.background = 'rgba(16,185,129,0.02)';
   }
 
-  // ── Update subtle verdict bar in overview tab ──
-  var vArea = document.getElementById('invVerdictArea');
-  if (vArea && verdict) {
-    var verdictIcon = verdict.includes('TRUE POSITIVE') ? '⚠' : verdict.includes('FALSE POSITIVE') ? '✓' : '◑';
-    vArea.innerHTML =
-      '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:' + verdictColor + '08;border-radius:8px;border:1px solid ' + verdictColor + '25;">' +
-        '<div style="width:7px;height:7px;border-radius:50%;background:' + verdictColor + ';flex-shrink:0;box-shadow:0 0 6px ' + verdictColor + '60;"></div>' +
-        '<div style="display:flex;flex-direction:column;gap:1px;">' +
-          '<span style="font-size:10px;font-weight:700;color:' + verdictColor + ';">' + verdictIcon + ' ' + verdict + '</span>' +
-          (confidence ? '<span style="font-size:9px;color:var(--text-muted);">' + confidence + '% confidence — AI investigation complete</span>' : '') +
-        '</div>' +
-        '<button class="btn btn-xs" onclick="reInvestigate(_currentInvestigationKey||_currentTicketKey||\'\')" style="margin-left:auto;font-size:9px;padding:2px 8px;background:rgba(0,212,255,0.08);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);">↻ Re-run</button>' +
-      '</div>';
-    vArea.style.display = '';
-  }
+  // ── Verdict bar removed from main area — only shown in right panel (invSideConclusion) ──
+  // var vArea = document.getElementById('invVerdictArea'); // DISABLED — verdict only in right panel
 
   // ── Update Root Cause Analysis in overview tab ──
   var rcaEl = document.getElementById('rRootCause');
@@ -51169,7 +51226,7 @@ function extractIOCs(text) {
   var hostPattern = /\b[A-Z0-9][A-Z0-9_-]{3,}(?:DN|PC|WS|SRV|DC|DB|APP)\d*\b/gi;
   var exePattern = /\b[\w.-]+\.(?:exe|dll|ps1|bat|cmd|vbs|js|py|sh|msi|scr|hta)\b/gi;
   var pathPattern = /[A-Z]:\\[\w\\. -]+/gi;
-  var userPattern = /(?:user(?:name)?|account|logon|by user\s+)(\w[\w.-]+)/gi;
+  var userPattern = /(?:user(?:name)?|account|logon|by user\s+)(\w[\w.@\\\\-]+)/gi;
 
   var m;
   m = text.match(ipPattern) || []; iocs.ips = [...new Set(m)];
@@ -51182,7 +51239,8 @@ function extractIOCs(text) {
   m = text.match(pathPattern) || []; iocs.paths = [...new Set(m)];
   while ((m = portPattern.exec(text)) !== null) { var p = parseInt(m[1]); if (p > 0 && p < 65536 && p !== 1234) iocs.ports.push(p); }
   iocs.ports = [...new Set(iocs.ports)];
-  while ((m = userPattern.exec(text)) !== null) { var u = m[1]; if (u.length > 2 && !['the','this','that','from','with'].includes(u.toLowerCase())) iocs.users.push(u); }
+  var _userDenyList = ['the','this','that','from','with','name','user','account','logon','login','admin','system','unknown','none','null','undefined','true','false','test','here','have','been','will','configured','attribute','object','details','event','alert','rule','description','triggered','modified','deleted','created','field','value','type','status','action','above','below','following','your','their','when','where','which','note','please','team','global','local','remote','source','dest','internal','external'];
+  while ((m = userPattern.exec(text)) !== null) { var u = m[1]; if (u.length > 3 && !_userDenyList.includes(u.toLowerCase()) && !/^[0-9]+$/.test(u)) iocs.users.push(u); }
   iocs.users = [...new Set(iocs.users)];
   return iocs;
 }
