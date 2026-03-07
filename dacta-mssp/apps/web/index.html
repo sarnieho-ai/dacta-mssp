@@ -45265,6 +45265,11 @@ function showToast(message, type) {
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// Decode HTML entities (&#91; → [, &#93; → ], &amp; → &, etc.)
+function decodeHtmlEntities(s) {
+  return s.replace(/&#(\d+);/g, function(m, n) { return String.fromCharCode(parseInt(n)); })
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
 
 // ── Session State ──
 var _copilotIOCs = [];
@@ -49324,7 +49329,7 @@ async function openInvestigation(ticketKey) {
         _enrichedDesc = (_enrichedDesc ? _enrichedDesc + ' ' : '') + _firstCommentText;
       }
     }
-    var _rDescClean = (_enrichedDesc||f.summary||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+    var _rDescClean = decodeHtmlEntities((_enrichedDesc||f.summary||'').replace(/<[^>]+>/g,'')).replace(/\s+/g,' ').trim();
     // Use FULL text (summary + description/comment) for entity extraction
     var _rFullText = (f.summary||'') + ' ' + _rDescClean;
     var _rTechniques = detectTechniques(_rFullText);
@@ -49332,11 +49337,13 @@ async function openInvestigation(ticketKey) {
     var _ticketCreated = f.created || '';
     var _rAlertSummary = buildAlertSummaryHTML(f.summary||'', _enrichedDesc||'', _rTechniques, _rIOCs, _alertCat, useCase, _ticketCreated);
     // ── Extract live entities from ticket data for Impact section ──
-    var _impFullText = (f.summary || '') + ' ' + (_enrichedDesc || '').replace(/<[^>]+>/g, ' ');
-    var _impUserMatch = _impFullText.match(/User\s*Involved:?\s*([\w.@-]+)/i);
+    var _impFullText = (f.summary || '') + ' ' + decodeHtmlEntities((_enrichedDesc || '').replace(/<[^>]+>/g, ' '));
+    // Match 'User Involved:', 'Username:', 'User:' — prefer email format
+    var _impUserMatch = _impFullText.match(/(?:User(?:name)?\s*(?:Involved)?)[:\s]+(\S+@[\w.-]+)/i)
+      || _impFullText.match(/(?:User(?:name)?\s*(?:Involved)?)[:\s]+([\w.@-]+)/i);
     var _impDeviceMatches = [];
-    // Require colon after 'Host' to avoid matching 'Host Communication' in alert names
-    var _impDevRx = /(?:Firewall\s*Device|Device|Hostname|Host):\s*([\w.-]+)/gi;
+    // Match: 'Affected Firewall:', 'Firewall Device:', 'Observer Device:', 'Device:', 'Hostname:', 'Host:'
+    var _impDevRx = /(?:Affected\s*Firewall|Firewall\s*Device|Observer\s*Device|Device|Hostname|Host):\s*([\w.-]+)/gi;
     var _impDevM;
     while ((_impDevM = _impDevRx.exec(_impFullText)) !== null) { if (_impDevM[1].length > 2) _impDeviceMatches.push(_impDevM[1]); }
     // Also capture hostnames from IOC extraction
@@ -49914,12 +49921,13 @@ async function openInvestigation(ticketKey) {
         var entContent = document.getElementById('invSideEntitiesContent');
         var entCount = document.getElementById('invEntityCount');
         if (!entContent) return;
-        var fullText = (f.summary || '') + ' ' + (description || '').replace(/<[^>]+>/g, ' ');
+        var fullText = (f.summary || '') + ' ' + decodeHtmlEntities((description || '').replace(/<[^>]+>/g, ' '));
         var iocs = extractIOCs(fullText);
         var entities = [];
 
         // 1. IDENTITIES — users mentioned in the alert (not Jira reporter/assignee)
-        var _entUserRx = /User\s*Involved:?\s*([\w.@-]+)/gi;
+        // Match 'User Involved:', 'Username:', 'User:' — capture email or plain username
+        var _entUserRx = /(?:User(?:name)?\s*(?:Involved)?)[:\s]+(\S+@[\w.-]+|[\w.@-]+)/gi;
         var _entUserM;
         var _entUsersSeen = new Set();
         while ((_entUserM = _entUserRx.exec(fullText)) !== null) {
@@ -49938,8 +49946,8 @@ async function openInvestigation(ticketKey) {
         });
 
         // 2. DEVICES — hostnames, firewall devices from ticket
-        // Device entity: require colon after 'Host' to avoid matching 'Host Communication' in alert names
-        var _entDevRx = /(?:Firewall\s*Device|Device|Hostname|Host):\s*([\w.-]+)/gi;
+        // Match: 'Affected Firewall:', 'Firewall Device:', 'Observer Device:', 'Device:', 'Hostname:', 'Host:'
+        var _entDevRx = /(?:Affected\s*Firewall|Firewall\s*Device|Observer\s*Device|Device|Hostname|Host):\s*([\w.-]+)/gi;
         var _entDevM;
         var _entDevSeen = new Set();
         while ((_entDevM = _entDevRx.exec(fullText)) !== null) {
@@ -50037,7 +50045,7 @@ async function openInvestigation(ticketKey) {
 // Produces a concise, action-oriented narrative (Gemini-style) from ticket data.
 // Now accepts optional ticketCreated timestamp and uses enriched description (including comment data).
 function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat, useCase, ticketCreated) {
-  var cleanDesc = (description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  var cleanDesc = decodeHtmlEntities((description || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
 
   // ── Strip boilerplate, URLs, and raw diagnostic fields ──
   var cleaned = cleanDesc
@@ -50059,11 +50067,14 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   var ruleName = _derivedRuleName.length > 5 ? _derivedRuleName : (useCase || alertCat || '');
 
   // ── Extract structured entities for rich narrative ──
-  var userMatch = cleanDesc.match(/User\s*Involved:?\s*([\w.@-]+)/i);
-  // Device: require colon or strict context to avoid matching 'Host Communication'
-  var deviceMatch = cleanDesc.match(/Firewall\s*Device:?\s*([\w.-]+)/i);
+  // Match 'User Involved:', 'Username:', or 'User:' — capture email if present, else plain username
+  var userMatch = cleanDesc.match(/(?:User(?:name)?\s*(?:Involved)?)[:\s]+(\S+@[\w.-]+)/i)
+    || cleanDesc.match(/(?:User(?:name)?\s*(?:Involved)?)[:\s]+([\w.@-]+)/i);
+  // Device: match 'Affected Firewall:', 'Firewall Device:', 'Observer Device:'
+  var deviceMatch = cleanDesc.match(/(?:Affected\s*Firewall|Firewall\s*Device|Observer\s*Device)[:\s]+(\S+)/i);
   var changesMatch = cleanDesc.match(/(?:Total\s*)?(?:configuration\s*)?changes?\s*done:?\s*(\d+)/i);
-  var msgMatch = cleanDesc.match(/Message:?\s*([^\n]+?)(?=\s*(?:Object|Source|Dest|Rule|Time|Path|Kibana|$))/i);
+  // Message field: capture up to the next structured field or config block
+  var msgMatch = cleanDesc.match(/Message:?\s*([^\n]+?)(?=\s*(?:Firewall\s*Config|Object|Source|Dest|Rule|Time|Path|Kibana|Username|Affected|Observer|$))/i);
   var pathMatch = cleanDesc.match(/Path:?\s*([\w.]+)/i);
 
   // ── Extract rich behavioral data (from analyst comments / descriptions) ──
@@ -50095,7 +50106,9 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   // Behavioral pattern
   var behaviorMatch = cleanDesc.match(/(?:fan-?out|lateral\s*movement|beaconing|(?:distributed\s*)?scan(?:ning)?|brute.?force|reconnaissance|exfiltration|C2|command.and.control)/i);
   // Related ticket
-  var relatedTicketMatch = cleanDesc.match(/(?:related|previous|same)\s*(?:activity|ticket)\s*(?:has been\s*)?(?:escalated|raised)?\s*(?:on)?\s*(?:ticket)?\s*(DAC-\d+)/i);
+  // Match: 'Related activity previously escalated on DAC-XXXXX', 'escalated on DAC-XXXXX'
+  var relatedTicketMatch = cleanDesc.match(/(?:escalated|raised)\s+(?:on\s+)?(?:ticket\s*)?(DAC-\d+)/i)
+    || cleanDesc.match(/(?:related|previous|same)\s*(?:activity|ticket).*?(DAC-\d+)/i);
   // Email / O365 user
   var emailUserMatch = cleanDesc.match(/(?:user|account|mailbox)[:\s]*([\w.+-]+@[\w.-]+)/i);
   // Geo location
@@ -50231,15 +50244,21 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
     parts.push('Related activity previously escalated on <strong>' + escapeHtml(relatedTicketMatch[1]) + '</strong>.');
   }
 
-  // Fallback: if we only got the lead sentence and have cleaned text, use a condensed version
+  // Fallback: only if we got JUST the lead sentence (no scope/context/behavior)
+  // Strip structured fields and config dumps to avoid spewing raw data
   if (parts.length <= 1 && cleaned.length > 0) {
     var fallback = cleaned
-      .replace(/User\s*Involved:?\s*[\w.@-]+\s*/gi, '')
-      .replace(/Firewall\s*Device:?\s*[\w.-]+\s*/gi, '')
-      .replace(/Total\s*configuration\s*changes\s*done:?\s*\d+\s*/gi, '')
+      .replace(/(?:User(?:name)?\s*(?:Involved)?)[:\s]+\S+\s*/gi, '')
+      .replace(/(?:Affected\s*Firewall|Firewall\s*Device|Observer\s*Device)[:\s]+\S+\s*/gi, '')
+      .replace(/(?:Total\s*)?configuration\s*changes?\s*done:?\s*\d+\s*/gi, '')
       .replace(/Firewall\s*Configuration\s*Changes\s*Observed:?\.?/gi, '')
+      .replace(/Firewall\s*Config\s*Change:?[^.]*(?:\.|$)/gi, '')
+      .replace(/(?:name|srcintf|dstintf|action|srcaddr|dstaddr|schedule|service|logtraffic)\[[^\]]*\]/gi, '')
+      .replace(/\bKibana\b.*$/gi, '')
+      .replace(/Regards[,.]?\s*(?:Dacta\s*)?SOC\s*Team.*/gi, '')
+      .replace(/https?:\/\/[^\s]*/g, '')
       .replace(/\s+/g, ' ').trim();
-    if (fallback.length > 400) fallback = fallback.substring(0, 400) + '\u2026';
+    if (fallback.length > 200) fallback = fallback.substring(0, 200) + '\u2026';
     if (fallback.length > 10) parts.push(escapeHtml(fallback));
   }
 
@@ -50817,6 +50836,8 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
       overrideVerdict: cacheEntry.overrideVerdict, overrideReason: cacheEntry.overrideReason,
       feedbackRating: cacheEntry.feedbackRating, feedbackText: cacheEntry.feedbackText,
       promptNotes: cacheEntry.promptNotes, metadata: cacheEntry.metadata,
+      inculpatoryEvidence: (cacheEntry.inculpatoryEvidence || []).slice(0, 5),
+      exculpatoryEvidence: (cacheEntry.exculpatoryEvidence || []).slice(0, 5),
       sidebarPanels: cacheEntry.sidebarPanels || null,
       escalationData: cacheEntry.escalationData || null
     };
@@ -51673,7 +51694,8 @@ function extractIOCs(text) {
   var hostPattern = /\b[A-Z0-9][A-Z0-9_-]{3,}(?:DN|PC|WS|SRV|DC|DB|APP)\d*\b/gi;
   var exePattern = /\b[\w.-]+\.(?:exe|dll|ps1|bat|cmd|vbs|js|py|sh|msi|scr|hta)\b/gi;
   var pathPattern = /[A-Z]:\\[\w\\. -]+/gi;
-  var userPattern = /(?:user(?:name)?|account|logon|by user\s+)(\w[\w.@\\\\-]+)/gi;
+  // Require colon/whitespace after keyword to avoid capturing 'name' from 'Username'
+  var userPattern = /(?:user(?:name)?|account|logon|by user)\s*[:\s]\s*(\w[\w.@\\\\-]+)/gi;
 
   var m;
   m = text.match(ipPattern) || []; iocs.ips = [...new Set(m)];
@@ -53769,6 +53791,9 @@ async function runAIInvestigation(ticketKey, issueData) {
     confidence: confidence,
     timestamp: investigatedTimestamp,
     escalationData: { org: org, summary: summary, ticketData: f },
+    // Store actual evidence arrays for Top Findings restoration from cache
+    inculpatoryEvidence: (inculpatory || []).slice(0, 5),
+    exculpatoryEvidence: (exculpatory || []).slice(0, 5),
     metadata: {
       totalRounds: totalRounds,
       org: org,
