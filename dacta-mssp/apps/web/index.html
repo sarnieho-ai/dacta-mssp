@@ -37655,26 +37655,35 @@ async function loadClientsPage() {
   if (!tbody) return;
 
   var orgs = [];
-  if (typeof ORG_CONNECTORS !== 'undefined') {
-    Object.keys(ORG_CONNECTORS).forEach(function(id) {
-      var org = ORG_CONNECTORS[id];
-      org._id = id;
-      orgs.push(org);
-    });
-  }
+  var _dbLoaded = false;
 
-  // Enrich from DB — fetch industry, service_model from organizations table
+  // PRIMARY: Load org list from DB (organizations table is source of truth)
   if (window._dactaSupabase) {
     try {
-      var dbRes = await window._dactaSupabase.from('organizations').select('id,name,industry,service_model,status,endpoints_count');
-      if (dbRes.data) {
+      var dbRes = await window._dactaSupabase.from('organizations').select('id,name,short_name,industry,service_model,status,endpoints_count');
+      if (dbRes.data && dbRes.data.length > 0) {
+        _dbLoaded = true;
         dbRes.data.forEach(function(dbOrg) {
           _clientsDBData[dbOrg.id] = dbOrg;
-          // Also enrich ORG_CONNECTORS if it exists
-          if (ORG_CONNECTORS[dbOrg.id]) {
-            ORG_CONNECTORS[dbOrg.id]._industry = dbOrg.industry || '';
-            ORG_CONNECTORS[dbOrg.id]._serviceModel = dbOrg.service_model || ORG_CONNECTORS[dbOrg.id].type;
-            ORG_CONNECTORS[dbOrg.id]._endpoints = dbOrg.endpoints_count || 0;
+          // Build org entry: DB fields are primary, merge connector data from ORG_CONNECTORS if available
+          var connectorData = (typeof ORG_CONNECTORS !== 'undefined' && ORG_CONNECTORS[dbOrg.id]) ? ORG_CONNECTORS[dbOrg.id] : null;
+          orgs.push({
+            _id: dbOrg.id,
+            name: dbOrg.name,
+            code: dbOrg.short_name || (connectorData ? connectorData.code : '') || '',
+            type: dbOrg.service_model || (connectorData ? connectorData.type : '') || '',
+            _serviceModel: dbOrg.service_model || '',
+            _industry: dbOrg.industry || '',
+            _endpoints: dbOrg.endpoints_count || 0,
+            namespace: connectorData ? connectorData.namespace : (dbOrg.short_name ? dbOrg.short_name.toLowerCase() : ''),
+            connectors: connectorData ? connectorData.connectors : []
+          });
+          // Also update ORG_CONNECTORS in-memory with DB truth (for other pages)
+          if (connectorData) {
+            connectorData.name = dbOrg.name;
+            connectorData._industry = dbOrg.industry || '';
+            connectorData._serviceModel = dbOrg.service_model || connectorData.type;
+            connectorData._endpoints = dbOrg.endpoints_count || 0;
           }
         });
       }
@@ -37686,7 +37695,16 @@ async function loadClientsPage() {
           _clientsLogSourceCounts[ls.org_id] = (_clientsLogSourceCounts[ls.org_id] || 0) + 1;
         });
       }
-    } catch(e) { console.warn('[Clients] DB enrichment failed:', e.message); }
+    } catch(e) { console.warn('[Clients] DB load failed, falling back to hardcoded:', e.message); }
+  }
+
+  // FALLBACK: Only use ORG_CONNECTORS if DB was not reachable or returned empty
+  if (!_dbLoaded && typeof ORG_CONNECTORS !== 'undefined') {
+    Object.keys(ORG_CONNECTORS).forEach(function(id) {
+      var org = ORG_CONNECTORS[id];
+      org._id = id;
+      orgs.push(org);
+    });
   }
 
   // Stats
@@ -37696,7 +37714,7 @@ async function loadClientsPage() {
   var statTickets = document.getElementById('clientStatTickets');
   if (statTotal) statTotal.textContent = orgs.length;
   if (statActive) statActive.textContent = orgs.filter(function(o) { return o.connectors && o.connectors.some(function(c) { return c.is_enabled; }); }).length;
-  if (statNS) statNS.textContent = new Set(orgs.map(function(o) { return o.namespace; })).size;
+  if (statNS) statNS.textContent = new Set(orgs.map(function(o) { return o.namespace; }).filter(Boolean)).size;
   var totalTickets = 0;
   if (window._dactaJiraOrgCounts) {
     Object.values(window._dactaJiraOrgCounts).forEach(function(v) { totalTickets += v; });
