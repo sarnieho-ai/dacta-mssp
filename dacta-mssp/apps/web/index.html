@@ -49937,7 +49937,8 @@ async function openInvestigation(ticketKey) {
         });
 
         // 2. DEVICES — hostnames, firewall devices from ticket
-        var _entDevRx = /(?:Firewall\s*Device|Device|Hostname|Host):?\s*([\w.-]+)/gi;
+        // Device entity: require colon after 'Host' to avoid matching 'Host Communication' in alert names
+        var _entDevRx = /(?:Firewall\s*Device|Device|Hostname|Host):\s*([\w.-]+)/gi;
         var _entDevM;
         var _entDevSeen = new Set();
         while ((_entDevM = _entDevRx.exec(fullText)) !== null) {
@@ -50091,7 +50092,8 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   // Email / O365 user
   var emailUserMatch = cleanDesc.match(/(?:user|account|mailbox)[:\s]*([\w.+-]+@[\w.-]+)/i);
   // Geo location
-  var geoMatch = cleanDesc.match(/(?:geolocation|location|from|origin)[:\s]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z]{2})?)/i);
+  // Geo: require specific geolocation keywords (avoid matching partial words like 'originating')
+  var geoMatch = cleanDesc.match(/\b(?:geolocation|geo\s*location|login\s*location|from\s+location)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z]{2})?)/i);
   // Ruleset / policy
   var rulesetMatch = cleanDesc.match(/(?:ruleset|rule|policy)[:\s]*["']([^"']+)["']/i);
 
