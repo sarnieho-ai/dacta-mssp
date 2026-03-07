@@ -49304,11 +49304,13 @@ async function openInvestigation(ticketKey) {
           '<div style="font-size:11px;color:var(--rws-text-muted);margin-top:1px;">' + escapeHtml(task.d) + '</div></div></div>';
       }).join('');
     }
-    // ── Enrich description with first analyst comment when description is empty ──
+    // ── Enrich description with first analyst comment for richer summaries ──
+    // The Jira description is often just a boilerplate template with minimal data.
+    // Analyst comments contain the real investigative detail (behavioral analysis,
+    // subnets, ports, hostnames, related tickets). Always merge comment data.
     var _enrichedDesc = description || '';
     var _firstCommentText = '';
-    if (!_enrichedDesc.replace(/<[^>]+>/g,'').trim() && commentsArr.length > 0) {
-      // Description is empty — use earliest comment as the primary data source
+    if (commentsArr.length > 0) {
       var _fc = commentsArr[0];
       if (_fc.renderedBody) {
         _firstCommentText = _fc.renderedBody.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
@@ -49317,7 +49319,10 @@ async function openInvestigation(ticketKey) {
       } else if (typeof _fc.body === 'string') {
         _firstCommentText = _fc.body.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
       }
-      _enrichedDesc = _firstCommentText;
+      // Append comment text to description for richer entity extraction
+      if (_firstCommentText.length > 20) {
+        _enrichedDesc = (_enrichedDesc ? _enrichedDesc + ' ' : '') + _firstCommentText;
+      }
     }
     var _rDescClean = (_enrichedDesc||f.summary||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
     // Use FULL text (summary + description/comment) for entity extraction
@@ -50053,18 +50058,21 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
 
   // ── Extract structured entities for rich narrative ──
   var userMatch = cleanDesc.match(/User\s*Involved:?\s*([\w.@-]+)/i);
-  var deviceMatch = cleanDesc.match(/(?:Firewall\s*Device|Device|Hostname|Host):?\s*([\w.-]+)/i);
+  // Device: require colon or strict context to avoid matching 'Host Communication'
+  var deviceMatch = cleanDesc.match(/Firewall\s*Device:?\s*([\w.-]+)/i);
   var changesMatch = cleanDesc.match(/(?:Total\s*)?(?:configuration\s*)?changes?\s*done:?\s*(\d+)/i);
   var msgMatch = cleanDesc.match(/Message:?\s*([^\n]+?)(?=\s*(?:Object|Source|Dest|Rule|Time|Path|Kibana|$))/i);
   var pathMatch = cleanDesc.match(/Path:?\s*([\w.]+)/i);
 
   // ── Extract rich behavioral data (from analyst comments / descriptions) ──
-  // Source IP
-  var srcIPMatch = cleanDesc.match(/(?:source\s*(?:address|ip|host)?|originating\s*from)[:\s]*\(?([\d.]+)\)?/i);
-  // Connection counts
-  var connCountMatch = cleanDesc.match(/(\d[\d,]+)\s*connection\s*count/i) || cleanDesc.match(/(\d[\d,]+)\s*total\s*connections?/i) || cleanDesc.match(/(\d[\d,]+)\s*connections?\s*(?:of\s*traffic|from|to)/i);
-  // Target / unique IPs
-  var targetCountMatch = cleanDesc.match(/(\d+)\s*unique\s*(?:target|destination|internal)?\s*IPs?/i) || cleanDesc.match(/(?:multiple|several)\s*internal\s*(?:addresses|hosts|IPs)/i);
+  // Source IP: handle 'Source IP(s): 10.x.x.x' template format AND 'from the source address (10.x.x.x)'
+  var srcIPMatch = cleanDesc.match(/Source\s*IP\(?s?\)?:?\s*([\d.]+)/i) || cleanDesc.match(/(?:source\s*(?:address|ip|host)?|originating\s*from)[:\s]*\(?([\d.]+)\)?/i);
+  // Normalize: srcIPMatch group could be [1] or [2] depending on which pattern matched
+  var _srcIP = srcIPMatch ? (srcIPMatch[1] || srcIPMatch[2] || '') : '';
+  // Connection counts: handle 'Connection Counts(s): 66' template AND 'N connection counts of traffic'
+  var connCountMatch = cleanDesc.match(/Connection\s*Count(?:s)?\(?s?\)?:?\s*(\d[\d,]+)/i) || cleanDesc.match(/(\d[\d,]+)\s*connection\s*counts?\s+of/i) || cleanDesc.match(/(\d[\d,]+)\s*total\s*connections?/i);
+  // Target / unique IPs: handle 'Unique Target IP(s): 20' template AND 'N unique target IPs' in text
+  var targetCountMatch = cleanDesc.match(/Unique\s*Target\s*IP\(?s?\)?:?\s*(\d+)/i) || cleanDesc.match(/(\d+)\s*unique\s*(?:target|destination|internal)\s+IPs?/i) || cleanDesc.match(/(?:multiple|several)\s*internal\s*(?:addresses|hosts|IPs)/i);
   // Ports
   var portsMatch = cleanDesc.match(/(?:over\s*)?ports?\s+([\d]+(?:\s*\([^)]*\))?(?:[,\s]+(?:and\s+)?\d+(?:\s*\([^)]*\))?)*)/i);
   // Subnet
@@ -50105,8 +50113,8 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
 
   // Determine the primary source entity (IP, user, or host)
   var primaryEntity = '';
-  if (srcIPMatch && srcIPMatch[1]) {
-    primaryEntity = srcIPMatch[1];
+  if (_srcIP) {
+    primaryEntity = _srcIP;
   } else if (emailUserMatch && emailUserMatch[1]) {
     primaryEntity = emailUserMatch[1];
   } else if (userMatch && userMatch[1]) {
