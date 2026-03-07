@@ -14463,51 +14463,53 @@ function dIcon(name, size, color) {
           .lsc-field input:focus,.lsc-field select:focus,.lsc-field textarea:focus{border-color:rgba(0,212,255,0.35);}
           .lsc-field textarea{resize:vertical;min-height:60px;}
           .lsc-field select{cursor:pointer;-webkit-appearance:none;}
+          /* Global catalog styles */
+          .glsc-card{background:rgba(15,23,42,0.5);border:1px solid var(--border-card);border-radius:10px;padding:16px;margin-bottom:8px;transition:border-color .18s;cursor:pointer;}
+          .glsc-card:hover{border-color:rgba(0,212,255,0.25);}
+          .glsc-card.expanded{border-color:rgba(0,212,255,0.3);background:rgba(15,23,42,0.7);}
+          .glsc-rules-panel{display:none;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);}
+          .glsc-card.expanded .glsc-rules-panel{display:block;}
+          .glsc-rule-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;font-size:11px;color:var(--text-secondary);background:rgba(0,0,0,0.15);margin-bottom:4px;cursor:pointer;transition:background .12s;}
+          .glsc-rule-item:hover{background:rgba(0,212,255,0.06);}
+          .glsc-filter-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
         </style>
 
         <div class="page-header">
           <div>
             <div class="page-title">Log Source Catalog</div>
-            <div class="page-subtitle">Per-client monitoring checklist &mdash; what log sources are we actively ingesting</div>
+            <div class="page-subtitle">Global catalog of all supported log sources &mdash; linked to detection rules</div>
           </div>
           <div class="page-actions" style="display:flex;align-items:center;gap:10px;">
-            <select id="lscOrgSelect" class="lsc-org-select" onchange="lscLoadOrg(this.value)">
-              <option value="">Select Client...</option>
-            </select>
-            <button class="btn btn-secondary btn-sm" id="lscExportBtn" style="display:none;" onclick="lscExportCSV()">&#x2193; Export CSV</button>
-            <button class="btn btn-primary btn-sm" id="lscAddBtn" style="display:none;" onclick="lscOpenAddModal()">+ Add Source</button>
+            <span id="glscTotalCount" style="font-size:11px;color:var(--text-muted);"></span>
           </div>
         </div>
 
-        <!-- Metrics row (populated per-client) -->
-        <div class="metrics-row" id="lscMetrics" style="margin-bottom:16px;">
-          <div class="metric-card green"><div class="metric-label">Healthy</div><div class="metric-value" id="lscHealthy">—</div><div class="metric-sub">sources</div></div>
-          <div class="metric-card amber"><div class="metric-label">Degraded</div><div class="metric-value" id="lscDegraded">—</div><div class="metric-sub">sources</div></div>
-          <div class="metric-card red"><div class="metric-label">Silent</div><div class="metric-value" id="lscSilent">—</div><div class="metric-sub">sources</div></div>
-          <div class="metric-card cyan"><div class="metric-label">Total EPS</div><div class="metric-value" id="lscTotalEPS">—</div><div class="metric-sub">events/day</div></div>
+        <!-- Metrics row -->
+        <div class="metrics-row" id="glscMetrics" style="margin-bottom:16px;">
+          <div class="metric-card cyan"><div class="metric-label">Log Sources</div><div class="metric-value" id="glscSourceCount">&mdash;</div><div class="metric-sub">vendors</div></div>
+          <div class="metric-card green"><div class="metric-label">Detection Rules</div><div class="metric-value" id="glscRuleCount">&mdash;</div><div class="metric-sub">total</div></div>
+          <div class="metric-card amber"><div class="metric-label">Categories</div><div class="metric-value" id="glscCatCount">&mdash;</div><div class="metric-sub">types</div></div>
+          <div class="metric-card red"><div class="metric-label">Unmapped</div><div class="metric-value" id="glscUnmappedCount">&mdash;</div><div class="metric-sub">no rules</div></div>
         </div>
 
-        <!-- Gap alert (shown if client expects more sources than monitored) -->
-        <div class="lsc-gap-card" id="lscGapAlert">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <div>
-              <div style="font-size:12px;font-weight:600;color:#ef4444;">Monitoring Gap Detected</div>
-              <div id="lscGapText" style="font-size:11px;color:var(--text-muted);margin-top:2px;"></div>
-            </div>
-          </div>
+        <!-- Filter bar -->
+        <div class="glsc-filter-bar">
+          <input type="text" id="glscSearch" class="filter-input" placeholder="Search vendor, product, category..." style="min-width:260px;font-size:12px;" oninput="glscFilterCatalog()">
+          <select id="glscCatFilter" class="filter-select" style="min-width:140px;font-size:11px;" onchange="glscFilterCatalog()">
+            <option value="">All Categories</option>
+          </select>
+          <span id="glscFilterStatus" style="font-size:10px;color:var(--text-muted);margin-left:auto;"></span>
         </div>
 
-        <!-- Source cards container -->
-        <div id="lscSourcesContainer">
+        <!-- Catalog container -->
+        <div id="glscContainer">
           <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:0.3;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            <div style="font-size:14px;font-weight:600;margin-bottom:6px;">Select a client organization</div>
-            <div style="font-size:12px;line-height:1.6;">Choose a client from the dropdown above to view their monitored log sources, health status, and ingestion metrics.</div>
+            <div class="spinner" style="margin:0 auto 12px auto;"></div>
+            <div style="font-size:12px;">Loading global log source catalog...</div>
           </div>
         </div>
 
-        <!-- Add/Edit Modal -->
+        <!-- Keep the modal for Client Log Sources in Settings tab -->
         <div class="lsc-modal-overlay" id="lscModalOverlay">
           <div class="lsc-modal">
             <div class="lsc-modal-header">
@@ -24816,28 +24818,90 @@ Analyst: K. Rasmussen | 2026-02-28
         </div>
 
         <!-- Settings Tabs -->
-        <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid var(--border-card);">
-          <button class="btn" id="stgTabConnectors" onclick="switchSettingsTab('connectors')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid var(--cyan);color:var(--cyan);background:transparent;border-radius:0;cursor:pointer;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-12 0V8Z"/></svg> Client Connectors</button>
+        <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid var(--border-card);overflow-x:auto;">
+          <button class="btn" id="stgTabLogSources" onclick="switchSettingsTab('logsources')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid var(--cyan);color:var(--cyan);background:transparent;border-radius:0;cursor:pointer;white-space:nowrap;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><circle cx="4" cy="18" r="2"/></svg> Client Log Sources</button>
+          <button class="btn" id="stgTabConnectors" onclick="switchSettingsTab('connectors')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;white-space:nowrap;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-12 0V8Z"/></svg> Client Connectors</button>
           <button class="btn" id="stgTabRAG" onclick="switchSettingsTab('rag')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="8.5" cy="16" r="1.5"/><circle cx="15.5" cy="16" r="1.5"/><path d="M12 2v4"/><path d="M8 11V9a4 4 0 0 1 8 0v2"/><circle cx="12" cy="2" r="1"/></svg> AI Investigation Config</button>
           <button class="btn" id="stgTabEscalation" onclick="switchSettingsTab('escalation')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M12 2v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M19.07 4.93l-2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M6 19h12"/><path d="M7 15a5 5 0 0 1 10 0v4H7v-4z"/></svg> Escalation Matrix</button>
           <button class="btn" id="stgTabRules" onclick="switchSettingsTab('rules')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Decision & Audit</button>
           <button class="btn" id="stgTabSecurity" onclick="switchSettingsTab('security')" style="padding:8px 16px;font-size:11px;font-weight:600;border:none;border-bottom:2px solid transparent;color:var(--text-muted);background:transparent;border-radius:0;cursor:pointer;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Security & Access</button>
         </div>
 
+        <!-- TAB: Client Log Sources -->
+        <div id="stgPanelLogSources" class="stg-tab-panel">
+          <div class="card" style="margin-bottom:24px;">
+            <div class="card-header" style="margin-bottom:16px;">
+              <div>
+                <span class="card-title">Client Log Source Management</span>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Per-client SIEM index patterns, health monitoring, and ingestion status &mdash; loaded from SIEMLess DB</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:11px;color:var(--text-muted);">Client:</span>
+                <select id="stgLsOrgSelect" class="filter-select" style="min-width:220px;" onchange="stgLsLoadOrg(this.value)">
+                  <option value="">Select Client...</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" id="stgLsExportBtn" style="display:none;font-size:10px;" onclick="lscExportCSV()">&#x2193; Export</button>
+                <button class="btn btn-primary btn-sm" id="stgLsAddBtn" style="display:none;font-size:10px;" onclick="lscOpenAddModal()">+ Add Source</button>
+              </div>
+            </div>
+
+            <!-- Metrics row -->
+            <div class="metrics-row" id="stgLsMetrics" style="margin-bottom:16px;">
+              <div class="metric-card green"><div class="metric-label">Healthy</div><div class="metric-value" id="stgLsHealthy">&mdash;</div><div class="metric-sub">sources</div></div>
+              <div class="metric-card amber"><div class="metric-label">Degraded</div><div class="metric-value" id="stgLsDegraded">&mdash;</div><div class="metric-sub">sources</div></div>
+              <div class="metric-card red"><div class="metric-label">Silent</div><div class="metric-value" id="stgLsSilent">&mdash;</div><div class="metric-sub">sources</div></div>
+              <div class="metric-card cyan"><div class="metric-label">Total EPS</div><div class="metric-value" id="stgLsTotalEPS">&mdash;</div><div class="metric-sub">events/day</div></div>
+            </div>
+
+            <!-- Gap alert -->
+            <div class="lsc-gap-card" id="stgLsGapAlert">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <div>
+                  <div style="font-size:12px;font-weight:600;color:#ef4444;">Monitoring Gap Detected</div>
+                  <div id="stgLsGapText" style="font-size:11px;color:var(--text-muted);margin-top:2px;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Source cards container -->
+            <div id="stgLsSourcesContainer">
+              <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:0.3;"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><circle cx="4" cy="18" r="2"/></svg>
+                <div style="font-size:14px;font-weight:600;margin-bottom:6px;">Select a client organization</div>
+                <div style="font-size:12px;line-height:1.6;">Choose a client to view their monitored log sources, health status, and ingestion metrics.</div>
+              </div>
+            </div>
+          </div>
+        </div><!-- end stgPanelLogSources -->
+
         <!-- TAB: Client Connectors -->
-        <div id="stgPanelConnectors" class="stg-tab-panel">
+        <div id="stgPanelConnectors" class="stg-tab-panel" style="display:none;">
         <div class="card" style="margin-bottom:24px;">
           <div class="card-header" style="margin-bottom:16px;">
             <div>
-              <span class="card-title">Client Environment Connectors</span>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Per-tenant tech stack connectors &amp; API integrations</div>
+              <span class="card-title">Client Connectors</span>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Per-client tech stack connectors &mdash; SIEM, EDR, Firewall, Threat Intel, and more</div>
 
-              <!-- Log Sources moved to Log Source Catalog page -->
-              <div style="margin-top:16px;">
-                <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:10px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M4.9 19.1A10 10 0 0 1 12 2a10 10 0 0 1 7.1 17.1"/><path d="M8.1 15.9A6 6 0 0 1 12 6a6 6 0 0 1 3.9 9.9"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="14" x2="12" y2="22"/></svg> Connector Registry</div>
-                <div style="font-size:11px;color:var(--text-muted);padding:12px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.1);border-radius:8px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Log source index patterns are managed in the <a href="#" onclick="navigateTo('logsources');return false;" style="color:var(--cyan);text-decoration:underline;">Log Source Catalog</a>. This page manages tech stack connectors for data ingestion and response actions.</div>
+              <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">
+                <div style="font-size:10px;padding:5px 10px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.15);border-radius:5px;color:var(--cyan);">
+                  <strong>SIEM</strong> &mdash; Log search &amp; correlation
+                </div>
+                <div style="font-size:10px;padding:5px 10px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:5px;color:#a78bfa;">
+                  <strong>EDR</strong> &mdash; Host query, isolation, containment
+                </div>
+                <div style="font-size:10px;padding:5px 10px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:5px;color:#fb923c;">
+                  <strong>Firewall</strong> &mdash; Block/allow, responsive actions
+                </div>
+                <div style="font-size:10px;padding:5px 10px;background:rgba(234,179,8,0.06);border:1px solid rgba(234,179,8,0.15);border-radius:5px;color:#eab308;">
+                  <strong>Threat Intel</strong> &mdash; IOC enrichment &amp; lookups
+                </div>
               </div>
-              <div style="margin-top:12px;font-size:11px;color:var(--text-muted);"> — loaded from SIEMLess DB</div>
+              <div style="margin-top:10px;font-size:10px;color:var(--text-muted);padding:8px 12px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.08);border-radius:6px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                Connectors that interact with SIEMLess via API &mdash; different clients may use different vendors. Log source SIEM indices are managed in <a href="#" onclick="switchSettingsTab('logsources');return false;" style="color:var(--cyan);text-decoration:underline;">Client Log Sources</a>.
+              </div>
+              <div style="margin-top:8px;font-size:11px;color:var(--text-muted);"> &mdash; loaded from SIEMLess DB</div>
             </div>
             <div style="display:flex;align-items:center;gap:10px;">
               <span style="font-size:11px;color:var(--text-muted);">Client:</span>
@@ -28663,7 +28727,7 @@ function renderMitreIcs() {
 }
 
 function renderLogSources() {
-  lscInit();
+  glscInit();
 }
 
 // ── Log Source Catalog (Per-Client) ──────────────────────────────────────────
@@ -29002,6 +29066,10 @@ async function lscSaveSource() {
     lscCloseModal();
     showToast(editId ? 'Log source updated' : 'Log source added', 'success');
     lscLoadOrg(_lscCurrentOrgId);
+    // Also refresh Settings tab panel if it exists
+    if (_stgLsCurrentOrgId === _lscCurrentOrgId && document.getElementById('stgLsSourcesContainer')) {
+      stgLsLoadOrg(_stgLsCurrentOrgId);
+    }
   } catch(e) {
     console.error('[LSC] Save error', e);
     showToast('Save failed: ' + (e.message || 'Unknown error'), 'error');
@@ -29015,6 +29083,10 @@ async function lscDeleteSource(id, name) {
     if (res.error) throw res.error;
     showToast('Log source removed', 'success');
     lscLoadOrg(_lscCurrentOrgId);
+    // Also refresh Settings tab panel if it exists
+    if (_stgLsCurrentOrgId === _lscCurrentOrgId && document.getElementById('stgLsSourcesContainer')) {
+      stgLsLoadOrg(_stgLsCurrentOrgId);
+    }
   } catch(e) {
     console.error('[LSC] Delete error', e);
     showToast('Delete failed: ' + (e.message || 'Unknown error'), 'error');
@@ -29046,6 +29118,351 @@ function lscExportCSV() {
   showToast('CSV exported', 'success');
 }
 
+// ══════════════════════════════════════════════════════════════
+//  SETTINGS > CLIENT LOG SOURCES TAB
+//  Reuses the lsc* functions but targets stgLs* element IDs
+// ══════════════════════════════════════════════════════════════
+var _stgLsOrgsLoaded = false;
+var _stgLsCurrentOrgId = null;
+var _stgLsCurrentData = [];
+
+function stgLsInit() {
+  if (!_stgLsOrgsLoaded) stgLsLoadOrgs();
+}
+
+async function stgLsLoadOrgs() {
+  var sel = document.getElementById('stgLsOrgSelect');
+  if (!sel || !window._dactaSupabase) return;
+  try {
+    var res = await window._dactaSupabase.from('organizations').select('id,name').order('name');
+    if (res.data && res.data.length) {
+      var html = '<option value="">Select Client...</option>';
+      res.data.forEach(function(o) {
+        html += '<option value="' + o.id + '">' + o.name + '</option>';
+      });
+      sel.innerHTML = html;
+      _stgLsOrgsLoaded = true;
+    }
+  } catch(e) { console.warn('[StgLS] Failed to load orgs', e); }
+}
+
+async function stgLsLoadOrg(orgId) {
+  _stgLsCurrentOrgId = orgId;
+  _lscCurrentOrgId = orgId; // share with modal functions
+  var container = document.getElementById('stgLsSourcesContainer');
+  var addBtn = document.getElementById('stgLsAddBtn');
+  var exportBtn = document.getElementById('stgLsExportBtn');
+  var gapAlert = document.getElementById('stgLsGapAlert');
+  if (gapAlert) gapAlert.classList.remove('visible');
+  if (!orgId) {
+    if (addBtn) addBtn.style.display = 'none';
+    if (exportBtn) exportBtn.style.display = 'none';
+    stgLsUpdateMetrics([]);
+    container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:0.3;"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><circle cx="4" cy="18" r="2"/></svg><div style="font-size:14px;font-weight:600;margin-bottom:6px;">Select a client organization</div><div style="font-size:12px;line-height:1.6;">Choose a client to view their monitored log sources, health status, and ingestion metrics.</div></div>';
+    return;
+  }
+  if (addBtn) addBtn.style.display = '';
+  if (exportBtn) exportBtn.style.display = '';
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);"><div class="spinner" style="margin:0 auto 12px auto;"></div><div style="font-size:12px;">Loading log sources...</div></div>';
+
+  try {
+    var res = await window._dactaSupabase
+      .from('client_log_sources')
+      .select('*')
+      .eq('org_id', orgId)
+      .order('source_name');
+    if (res.error) throw res.error;
+    _stgLsCurrentData = res.data || [];
+    _lscCurrentData = _stgLsCurrentData; // share with modal/export functions
+    stgLsUpdateMetrics(_stgLsCurrentData);
+    stgLsRenderCards(_stgLsCurrentData);
+    // Gap detection
+    var expectedCount = _stgLsCurrentData.filter(function(s){ return s.expected_by_client === true; }).length;
+    var monitoredCount = _stgLsCurrentData.filter(function(s){ return s.monitoring_active !== false && s.status !== 'silent'; }).length;
+    if (expectedCount > 0 && monitoredCount < expectedCount) {
+      var gapText = document.getElementById('stgLsGapText');
+      if (gapText) gapText.textContent = 'Client expects ' + expectedCount + ' source(s) but only ' + monitoredCount + ' are actively monitored.';
+      if (gapAlert) gapAlert.classList.add('visible');
+    }
+  } catch(e) {
+    console.error('[StgLS] Load error', e);
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--red-bright);"><div style="font-size:13px;font-weight:600;">Failed to load log sources</div><div style="font-size:11px;margin-top:4px;color:var(--text-muted);">' + (e.message || 'Unknown error') + '</div></div>';
+  }
+}
+
+function stgLsUpdateMetrics(data) {
+  var h = 0, d = 0, s = 0, eps = 0;
+  data.forEach(function(src) {
+    if (src.status === 'healthy') h++;
+    else if (src.status === 'degraded') d++;
+    else if (src.status === 'silent') s++;
+    eps += (src.events_per_day || 0);
+  });
+  var hEl = document.getElementById('stgLsHealthy');
+  var dEl = document.getElementById('stgLsDegraded');
+  var sEl = document.getElementById('stgLsSilent');
+  var eEl = document.getElementById('stgLsTotalEPS');
+  if (hEl) hEl.textContent = data.length ? h : '\u2014';
+  if (dEl) dEl.textContent = data.length ? d : '\u2014';
+  if (sEl) sEl.textContent = data.length ? s : '\u2014';
+  if (eEl) {
+    if (!data.length) { eEl.innerHTML = '\u2014'; }
+    else if (eps >= 1000000) { eEl.innerHTML = (eps / 1000000).toFixed(1) + '<span style="font-size:14px;">M</span>'; }
+    else if (eps >= 1000) { eEl.innerHTML = (eps / 1000).toFixed(1) + '<span style="font-size:14px;">K</span>'; }
+    else { eEl.textContent = eps.toLocaleString(); }
+  }
+}
+
+function stgLsRenderCards(data) {
+  var container = document.getElementById('stgLsSourcesContainer');
+  if (!container) return;
+  if (!data.length) {
+    container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:0.3;"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><div style="font-size:14px;font-weight:600;margin-bottom:6px;">No log sources configured</div><div style="font-size:12px;line-height:1.6;">Click "+ Add Source" to register a log source for this client.</div></div>';
+    return;
+  }
+  var TYPE_LABELS = {"edr":"EDR","firewall":"Firewall","siem":"SIEM","audit":"Audit","identity":"Identity","security":"Security","email":"Email","cloud":"Cloud","custom":"Custom"};
+  var html = '';
+  data.forEach(function(src) {
+    var statusClass = src.status || 'healthy';
+    var statusLabel = statusClass.charAt(0).toUpperCase() + statusClass.slice(1);
+    var typeLabel = TYPE_LABELS[src.source_type] || (src.source_type || 'Unknown');
+    var epsDisplay = src.events_per_day ? src.events_per_day.toLocaleString() : '\u2014';
+    var onboardDate = src.onboarded_at ? new Date(src.onboarded_at).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '\u2014';
+    var lastEvent = src.last_event_at ? _lscTimeAgo(src.last_event_at) : '\u2014';
+
+    html += '<div class="lsc-source-card" data-lsc-id="' + src.id + '">';
+    html += '<div class="src-header">';
+    html += '<div class="src-status ' + statusClass + '" title="' + statusLabel + '"></div>';
+    html += '<div class="src-name">' + _lscEsc(src.source_name) + '</div>';
+    html += '<span class="src-type-badge">' + typeLabel + '</span>';
+    html += '<span style="font-size:10px;font-weight:600;color:' + (statusClass === 'healthy' ? '#22c55e' : statusClass === 'degraded' ? '#f59e0b' : '#ef4444') + ';">' + statusLabel + '</span>';
+    html += '</div>';
+    html += '<div class="src-meta">';
+    html += '<div class="src-meta-item"><div class="lbl">Vendor</div><div class="val">' + _lscEsc(src.vendor || '\u2014') + '</div></div>';
+    var _idxRaw = (src.index_pattern || '').trim();
+    var _idxArr = _idxRaw.split(/[\s,]+/).filter(function(p){ return p.length > 0; });
+    if (_idxArr.length <= 1) {
+      html += '<div class="src-meta-item"><div class="lbl">Index Pattern</div><div class="val">' + _lscEsc(_idxRaw || '\u2014') + '</div></div>';
+    } else {
+      html += '<div class="src-meta-item idx-col"><div class="lbl">Index Patterns <span style="font-size:8px;opacity:0.6;">(' + _idxArr.length + ')</span></div>';
+      html += '<div class="idx-chips">';
+      _idxArr.forEach(function(p) { html += '<span class="idx-chip">' + _lscEsc(p) + '</span>'; });
+      html += '</div></div>';
+    }
+    html += '<div class="src-meta-item"><div class="lbl">Events/Day</div><div class="val">' + epsDisplay + '</div></div>';
+    html += '<div class="src-meta-item"><div class="lbl">Onboarded</div><div class="val">' + onboardDate + '</div></div>';
+    html += '<div class="src-meta-item"><div class="lbl">Last Event</div><div class="val lsc-last-event">' + lastEvent + '</div></div>';
+    html += '</div>';
+    if (src.notes) {
+      html += '<div class="src-notes">' + _lscEsc(src.notes) + '</div>';
+    }
+    html += '<div class="src-actions">';
+    html += '<button class="btn btn-secondary btn-xs" onclick="lscEditSource(\'' + src.id + '\')">Edit</button>';
+    html += '<button class="btn btn-xs" style="background:rgba(239,68,68,0.08);color:#ef4444;border:1px solid rgba(239,68,68,0.2);" onclick="lscDeleteSource(\'' + src.id + '\',\'' + _lscEsc(src.source_name).replace(/'/g, "\\'") + '\')">Remove</button>';
+    html += '</div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  GLOBAL LOG SOURCE CATALOG — derived from detection_rules
+// ══════════════════════════════════════════════════════════════
+var _glscData = null; // { vendorKey: { vendor, platform, category, rules: [...] } }
+var _glscAllEntries = [];
+
+async function glscInit() {
+  var container = document.getElementById('glscContainer');
+  if (!container) return;
+
+  // Show loading
+  container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><div class="spinner" style="margin:0 auto 12px auto;"></div><div style="font-size:12px;">Loading global log source catalog from detection rules...</div></div>';
+
+  try {
+    var sb = window._dactaSupabase || window._supabaseRef;
+    if (!sb) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Waiting for SIEMLess DB connection...</div>';
+      setTimeout(glscInit, 1000);
+      return;
+    }
+    var res = await sb.from('detection_rules').select('id,name,vendor,platform,log_source_product,log_source_category,log_source_service,severity,mitre_tactic,status');
+    if (res.error) throw res.error;
+    var rules = res.data || [];
+
+    // Aggregate by vendor + platform
+    var catalog = {};
+    var categories = new Set();
+    rules.forEach(function(r) {
+      var v = (r.vendor || 'unknown').trim().toLowerCase();
+      var p = (r.platform || r.log_source_service || r.vendor || 'Unknown').trim();
+      var cat = (r.log_source_category || 'unknown').trim().toLowerCase();
+      var key = v + '::' + p.toLowerCase();
+      if (!catalog[key]) {
+        catalog[key] = {
+          vendor: r.vendor || 'Unknown',
+          vendorLower: v,
+          platform: p,
+          category: cat,
+          categoryLabel: cat.charAt(0).toUpperCase() + cat.slice(1),
+          rules: []
+        };
+      }
+      catalog[key].rules.push(r);
+      if (cat) categories.add(cat);
+    });
+
+    // Sort entries by vendor name then rule count desc
+    _glscAllEntries = Object.values(catalog).sort(function(a, b) {
+      if (a.vendorLower < b.vendorLower) return -1;
+      if (a.vendorLower > b.vendorLower) return 1;
+      return b.rules.length - a.rules.length;
+    });
+
+    // Update metrics
+    var srcEl = document.getElementById('glscSourceCount');
+    var ruleEl = document.getElementById('glscRuleCount');
+    var catEl = document.getElementById('glscCatCount');
+    var unmEl = document.getElementById('glscUnmappedCount');
+    if (srcEl) srcEl.textContent = _glscAllEntries.length;
+    if (ruleEl) ruleEl.textContent = rules.length;
+    if (catEl) catEl.textContent = categories.size;
+    if (unmEl) unmEl.textContent = _glscAllEntries.filter(function(e) { return e.rules.length === 0; }).length;
+
+    // Populate category filter
+    var catSelect = document.getElementById('glscCatFilter');
+    if (catSelect) {
+      var catHTML = '<option value="">All Categories</option>';
+      Array.from(categories).sort().forEach(function(c) {
+        catHTML += '<option value="' + c + '">' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>';
+      });
+      catSelect.innerHTML = catHTML;
+    }
+
+    glscRenderCatalog(_glscAllEntries);
+
+  } catch(e) {
+    console.error('[GLSC] Init error:', e);
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--red-bright);"><div style="font-size:13px;font-weight:600;">Failed to load catalog</div><div style="font-size:11px;margin-top:4px;color:var(--text-muted);">' + (e.message || 'Unknown error') + '</div></div>';
+  }
+}
+
+function glscFilterCatalog() {
+  var searchVal = (document.getElementById('glscSearch') || {}).value || '';
+  var catVal = (document.getElementById('glscCatFilter') || {}).value || '';
+  var q = searchVal.toLowerCase().trim();
+
+  var filtered = _glscAllEntries.filter(function(e) {
+    if (catVal && e.category !== catVal) return false;
+    if (q) {
+      var haystack = (e.vendor + ' ' + e.platform + ' ' + e.category).toLowerCase();
+      if (haystack.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+
+  var statusEl = document.getElementById('glscFilterStatus');
+  if (statusEl) {
+    if (q || catVal) {
+      statusEl.textContent = 'Showing ' + filtered.length + ' of ' + _glscAllEntries.length + ' log sources';
+    } else {
+      statusEl.textContent = '';
+    }
+  }
+  glscRenderCatalog(filtered);
+}
+
+function glscRenderCatalog(entries) {
+  var container = document.getElementById('glscContainer');
+  if (!container) return;
+  if (!entries.length) {
+    container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:0.3;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><div style="font-size:14px;font-weight:600;margin-bottom:6px;">No matching log sources</div><div style="font-size:12px;">Try adjusting your search or filter criteria.</div></div>';
+    return;
+  }
+
+  var CAT_COLORS = {
+    'edr': { bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.2)', color: '#a78bfa' },
+    'firewall': { bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.2)', color: '#fb923c' },
+    'siem': { bg: 'rgba(0,212,255,0.08)', border: 'rgba(0,212,255,0.2)', color: '#00d4ff' },
+    'identity': { bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.2)', color: '#3b82f6' },
+    'email': { bg: 'rgba(236,72,153,0.08)', border: 'rgba(236,72,153,0.2)', color: '#ec4899' },
+    'cloud': { bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.2)', color: '#10b981' },
+    'audit': { bg: 'rgba(234,179,8,0.08)', border: 'rgba(234,179,8,0.2)', color: '#eab308' },
+    'network': { bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.2)', color: '#fb923c' }
+  };
+  var DEFAULT_CAT = { bg: 'rgba(100,116,139,0.08)', border: 'rgba(100,116,139,0.2)', color: '#94a3b8' };
+
+  var SEV_COLORS = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#10b981', info: '#64748b' };
+
+  var html = '';
+  entries.forEach(function(entry, idx) {
+    var cc = CAT_COLORS[entry.category] || DEFAULT_CAT;
+    var ruleCount = entry.rules.length;
+
+    html += '<div class="glsc-card" id="glsc-card-' + idx + '" onclick="glscToggleCard(' + idx + ')">';
+    html += '<div style="display:flex;align-items:center;gap:14px;">';
+    // Vendor icon placeholder
+    html += '<div style="width:38px;height:38px;border-radius:8px;background:' + cc.bg + ';border:1px solid ' + cc.border + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
+    html += '<span style="font-size:12px;font-weight:700;color:' + cc.color + ';text-transform:uppercase;">' + (entry.vendor || '?').substring(0, 2) + '</span>';
+    html += '</div>';
+    // Info
+    html += '<div style="flex:1;min-width:0;">';
+    html += '<div style="font-size:13px;font-weight:600;color:var(--text-primary);">' + _glscEsc(entry.vendor) + '</div>';
+    html += '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + _glscEsc(entry.platform) + '</div>';
+    html += '</div>';
+    // Category badge
+    html += '<span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;letter-spacing:0.5px;text-transform:uppercase;background:' + cc.bg + ';color:' + cc.color + ';border:1px solid ' + cc.border + ';">' + entry.categoryLabel + '</span>';
+    // Rule count
+    html += '<div style="text-align:center;min-width:60px;">';
+    html += '<div style="font-size:16px;font-weight:700;color:' + (ruleCount > 0 ? 'var(--cyan)' : 'var(--text-muted)') + ';font-family:var(--font-mono);">' + ruleCount + '</div>';
+    html += '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;">rules</div>';
+    html += '</div>';
+    // Expand arrow
+    html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.3;transition:transform .15s;" class="glsc-arrow-' + idx + '"><polyline points="6 9 12 15 18 9"/></svg>';
+    html += '</div>';
+
+    // Expandable rules panel
+    html += '<div class="glsc-rules-panel" id="glsc-rules-' + idx + '">';
+    if (ruleCount > 0) {
+      html += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Detection Rules (' + ruleCount + ')</div>';
+      entry.rules.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+      entry.rules.forEach(function(r) {
+        var sevColor = SEV_COLORS[r.severity] || '#64748b';
+        html += '<div class="glsc-rule-item" onclick="event.stopPropagation();navigateTo(\'rules\')">';
+        html += '<span style="width:6px;height:6px;border-radius:50%;background:' + sevColor + ';flex-shrink:0;"></span>';
+        html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _glscEsc(r.name) + '</span>';
+        if (r.mitre_tactic) {
+          html += '<span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);flex-shrink:0;">' + _glscEsc(r.mitre_tactic) + '</span>';
+        }
+        html += '<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(0,0,0,0.2);color:' + sevColor + ';font-weight:600;text-transform:uppercase;flex-shrink:0;">' + (r.severity || 'info') + '</span>';
+        html += '</div>';
+      });
+    } else {
+      html += '<div style="font-size:11px;color:var(--text-muted);font-style:italic;">No detection rules mapped to this log source yet.</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function glscToggleCard(idx) {
+  var card = document.getElementById('glsc-card-' + idx);
+  if (!card) return;
+  var isExpanded = card.classList.contains('expanded');
+  // Collapse all first
+  document.querySelectorAll('.glsc-card.expanded').forEach(function(c) { c.classList.remove('expanded'); });
+  document.querySelectorAll('[class^="glsc-arrow-"]').forEach(function(a) { a.style.transform = ''; });
+  if (!isExpanded) {
+    card.classList.add('expanded');
+    var arrow = document.querySelector('.glsc-arrow-' + idx);
+    if (arrow) arrow.style.transform = 'rotate(180deg)';
+  }
+}
+
+function _glscEsc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 
 function renderAssets() {
@@ -34296,9 +34713,9 @@ async function loadIntegrationHub() {
 //  SETTINGS PAGE — TAB SWITCHING
 // ============================================================
 function switchSettingsTab(tabName) {
-  var tabs = ['connectors', 'rag', 'escalation', 'rules', 'security'];
-  var tabMap = { connectors: 'stgTabConnectors', rag: 'stgTabRAG', escalation: 'stgTabEscalation', rules: 'stgTabRules', security: 'stgTabSecurity' };
-  var panelMap = { connectors: 'stgPanelConnectors', rag: 'stgPanelRAG', escalation: 'stgPanelEscalation', rules: 'stgPanelRules', security: 'stgPanelSecurity' };
+  var tabs = ['logsources', 'connectors', 'rag', 'escalation', 'rules', 'security'];
+  var tabMap = { logsources: 'stgTabLogSources', connectors: 'stgTabConnectors', rag: 'stgTabRAG', escalation: 'stgTabEscalation', rules: 'stgTabRules', security: 'stgTabSecurity' };
+  var panelMap = { logsources: 'stgPanelLogSources', connectors: 'stgPanelConnectors', rag: 'stgPanelRAG', escalation: 'stgPanelEscalation', rules: 'stgPanelRules', security: 'stgPanelSecurity' };
   tabs.forEach(function(t) {
     var tabEl = document.getElementById(tabMap[t]);
     var panelEl = document.getElementById(panelMap[t]);
@@ -34312,6 +34729,8 @@ function switchSettingsTab(tabName) {
   });
   // Load escalation matrix data when switching to that tab
   if (tabName === 'escalation') initEscalationMatrixTab();
+  // Init client log sources when switching to that tab
+  if (tabName === 'logsources') stgLsInit();
 }
 
 // ============================================================
@@ -34328,8 +34747,8 @@ function renderSettingsConnectors() {
   var meta = document.getElementById('settingsConnectorMeta');
   if (!grid) return;
 
-  var iconMap = { siem: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>', edr: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>', firewall: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>', threat_intel: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>', ticketing: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>' };
-  var labelMap = { siem: 'SIEM', edr: 'EDR / XDR', firewall: 'Firewall / Network', threat_intel: 'Threat Intelligence', ticketing: 'Ticketing & Workflow' };
+  var iconMap = { siem: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>', edr: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>', firewall: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>', threat_intel: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>', ticketing: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>', identity: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', knowledge_base: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>', email_security: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>', cloud_security: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>', vulnerability: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M12 9v2m0 4h.01M5.07 19H19a2 2 0 0 0 1.75-2.75L13.75 4a2 2 0 0 0-3.5 0L3.32 16.25A2 2 0 0 0 5.07 19z"/></svg>', custom: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' };
+  var labelMap = { siem: 'SIEM', edr: 'EDR / XDR', firewall: 'Firewall / Network', threat_intel: 'Threat Intelligence', ticketing: 'Ticketing & Workflow', identity: 'Identity / IAM', knowledge_base: 'Knowledge Base', email_security: 'Email Security', cloud_security: 'Cloud Security', vulnerability: 'Vulnerability Scanner', custom: 'Custom / Other' };
 
   var html = '';
   org.connectors.forEach(function(c, idx) {
@@ -34492,12 +34911,16 @@ async function addNewConnector(orgId) {
       '<label style="font-size:10px;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Connector Type</label>' +
       '<select id="newConnType" style="width:100%;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border-card);border-radius:6px;color:var(--text-primary);font-size:12px;">' +
         '<option value="siem">SIEM</option>' +
-        '<option value="edr">EDR</option>' +
-        '<option value="firewall">Firewall</option>' +
-        '<option value="threat_intel">Threat Intel</option>' +
-        '<option value="ticketing">Ticketing</option>' +
-        '<option value="identity">Identity</option>' +
+        '<option value="edr">EDR / XDR</option>' +
+        '<option value="firewall">Firewall / Network</option>' +
+        '<option value="threat_intel">Threat Intelligence</option>' +
+        '<option value="ticketing">Ticketing &amp; Workflow</option>' +
+        '<option value="identity">Identity / IAM</option>' +
         '<option value="knowledge_base">Knowledge Base</option>' +
+        '<option value="email_security">Email Security</option>' +
+        '<option value="cloud_security">Cloud Security</option>' +
+        '<option value="vulnerability">Vulnerability Scanner</option>' +
+        '<option value="custom">Custom / Other</option>' +
       '</select>' +
     '</div>' +
     '<div style="margin-bottom:12px;">' +
@@ -34556,15 +34979,9 @@ async function addNewConnector(orgId) {
       // Insert into org_connectors DB table
       var sb = window._supabaseRef || window._dactaSupabase;
       if (sb) {
-        // Look up org uuid from organizations table by name/code
-        var orgUuid = null;
-        try {
-          var orgRes = await sb.from('organizations').select('id').or('name.eq.' + (org.name || '') + ',code.eq.' + (org.code || '')).limit(1).single();
-          if (orgRes.data) orgUuid = orgRes.data.id;
-        } catch(e2) { console.warn('[AddConnector] Could not resolve org UUID:', e2); }
-
+        // orgId is already the UUID key from ORG_CONNECTORS
         var insertData = {
-          org_id: orgUuid,
+          org_id: orgId,
           connector_type: connType,
           vendor: vendor,
           display_name: displayName || vendor,
@@ -34575,6 +34992,7 @@ async function addNewConnector(orgId) {
         var res = await sb.from('org_connectors').insert(insertData).select('id').single();
         if (res.error) throw res.error;
         if (res.data && res.data.id) newConn.id = res.data.id;
+        console.log('[AddConnector] Saved to SIEMLess DB, id:', newConn.id);
       }
     } catch(e) {
       console.warn('[AddConnector] DB insert failed, adding in-memory only:', e);
@@ -34598,22 +35016,52 @@ async function removeConnector(orgId, connIdx) {
   var label = c.display_name || c.vendor || c.connector_type || 'connector';
   if (!confirm('Remove this connector?\n\n' + label + '\n\nThis action cannot be undone.')) return;
 
-  // Delete from DB if it has an id
-  if (c.id) {
+  var sb = window._supabaseRef || window._dactaSupabase;
+  var dbDeleted = false;
+
+  // Strategy 1: Delete by id if present
+  if (c.id && sb) {
     try {
-      var sb = window._supabaseRef || window._dactaSupabase;
-      if (sb) {
-        var res = await sb.from('org_connectors').delete().eq('id', c.id);
-        if (res.error) throw res.error;
+      var res = await sb.from('org_connectors').delete().eq('id', c.id);
+      if (res.error) throw res.error;
+      dbDeleted = true;
+      console.log('[RemoveConnector] Deleted by id:', c.id);
+    } catch(e) {
+      console.warn('[RemoveConnector] DB delete by id failed:', e);
+    }
+  }
+
+  // Strategy 2: If no id, try to find and delete by org_id + connector_type + vendor
+  if (!dbDeleted && sb) {
+    try {
+      // Resolve the org uuid
+      var orgUuid = orgId; // orgId might already be a UUID
+      var query = sb.from('org_connectors').delete()
+        .eq('org_id', orgUuid)
+        .eq('connector_type', c.connector_type);
+      if (c.vendor) query = query.eq('vendor', c.vendor);
+      var res2 = await query;
+      if (res2.error) {
+        console.warn('[RemoveConnector] DB delete by compound key failed:', res2.error);
+      } else {
+        dbDeleted = true;
+        console.log('[RemoveConnector] Deleted by org_id + type + vendor');
       }
     } catch(e) {
-      console.warn('[RemoveConnector] DB delete failed:', e);
-      showToast('Warning: Could not remove from SIEMLess DB (' + (e.message || 'unknown error') + ')', 'warning');
+      console.warn('[RemoveConnector] DB compound delete error:', e);
     }
+  }
+
+  if (!dbDeleted) {
+    showToast('Warning: Could not remove from SIEMLess DB — removed locally only', 'warning');
   }
 
   // Remove from in-memory array
   org.connectors.splice(connIdx, 1);
+
+  // Persist updated ORG_CONNECTORS to localStorage
+  try { localStorage.setItem('dacta_allOrgConnectors', JSON.stringify(ORG_CONNECTORS)); } catch(e) {}
+
   renderSettingsConnectors();
   showToast('Connector removed: ' + label, 'success');
 }
@@ -34928,11 +35376,17 @@ async function loadSettingsPage() {
     // Render first org's connectors
     renderSettingsConnectors();
 
+    // Also populate the Client Log Sources org selector
+    stgLsInit();
+
     // Load SSO admin settings UI
     loadSSOSettingsUI();
 
     // Load platform settings (notifications, audit toggles, tenant settings, LLM config)
     loadPlatformSettings();
+
+    // Default to Client Log Sources tab
+    switchSettingsTab('logsources');
 
     console.log('[Settings] Live connector registry loaded: ' + orgCount + ' orgs');
   } catch(err) {
