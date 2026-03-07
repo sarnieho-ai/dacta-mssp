@@ -22377,6 +22377,8 @@ Analyst: K. Rasmussen | 2026-02-28
                   <th>Organization</th>
                   <th>Code</th>
                   <th>Service Model</th>
+                  <th>Industry</th>
+                  <th>Log Sources</th>
                   <th>Namespace</th>
                   <th>Connectors</th>
                   <th>Jira Tickets</th>
@@ -22385,7 +22387,7 @@ Analyst: K. Rasmussen | 2026-02-28
                 </tr>
               </thead>
               <tbody id="clientsTableBody">
-                <tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">Loading clients...</td></tr>
+                <tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text-muted);">Loading clients...</td></tr>
               </tbody>
             </table>
           </div>
@@ -37643,7 +37645,11 @@ function populateSettingsLogSources() {
   tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No log sources configured</td></tr>';
 }
 
-function loadClientsPage() {
+// Cache for DB-enriched org data (industry, log source counts)
+var _clientsDBData = {};
+var _clientsLogSourceCounts = {};
+
+async function loadClientsPage() {
   var tbody = document.getElementById('clientsTableBody');
   var countBadge = document.getElementById('clientsCountBadge');
   if (!tbody) return;
@@ -37655,6 +37661,32 @@ function loadClientsPage() {
       org._id = id;
       orgs.push(org);
     });
+  }
+
+  // Enrich from DB — fetch industry, service_model from organizations table
+  if (window._dactaSupabase) {
+    try {
+      var dbRes = await window._dactaSupabase.from('organizations').select('id,name,industry,service_model,status,endpoints_count');
+      if (dbRes.data) {
+        dbRes.data.forEach(function(dbOrg) {
+          _clientsDBData[dbOrg.id] = dbOrg;
+          // Also enrich ORG_CONNECTORS if it exists
+          if (ORG_CONNECTORS[dbOrg.id]) {
+            ORG_CONNECTORS[dbOrg.id]._industry = dbOrg.industry || '';
+            ORG_CONNECTORS[dbOrg.id]._serviceModel = dbOrg.service_model || ORG_CONNECTORS[dbOrg.id].type;
+            ORG_CONNECTORS[dbOrg.id]._endpoints = dbOrg.endpoints_count || 0;
+          }
+        });
+      }
+      // Fetch log source counts per org
+      var lsRes = await window._dactaSupabase.from('client_log_sources').select('org_id');
+      if (lsRes.data) {
+        _clientsLogSourceCounts = {};
+        lsRes.data.forEach(function(ls) {
+          _clientsLogSourceCounts[ls.org_id] = (_clientsLogSourceCounts[ls.org_id] || 0) + 1;
+        });
+      }
+    } catch(e) { console.warn('[Clients] DB enrichment failed:', e.message); }
   }
 
   // Stats
@@ -37669,11 +37701,11 @@ function loadClientsPage() {
   if (window._dactaJiraOrgCounts) {
     Object.values(window._dactaJiraOrgCounts).forEach(function(v) { totalTickets += v; });
   }
-  if (statTickets) statTickets.textContent = totalTickets || '—';
+  if (statTickets) statTickets.textContent = totalTickets || '\u2014';
   if (countBadge) countBadge.textContent = orgs.length + ' organizations';
 
   if (orgs.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">No organizations found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text-muted);">No organizations found</td></tr>';
     return;
   }
 
@@ -37682,20 +37714,25 @@ function loadClientsPage() {
   orgs.forEach(function(org) {
     var enabledConnectors = (org.connectors || []).filter(function(c) { return c.is_enabled; }).length;
     var totalConnectors = (org.connectors || []).length;
-    var jiraCount = (window._dactaJiraOrgCounts && window._dactaJiraOrgCounts[org.name]) || '—';
-    var serviceModel = serviceModelMap[org.type] || org.type || '—';
+    var jiraCount = (window._dactaJiraOrgCounts && window._dactaJiraOrgCounts[org.name]) || '\u2014';
+    var svcModel = org._serviceModel || org.type || '';
+    var serviceLabel = serviceModelMap[svcModel] || svcModel || '\u2014';
+    var industry = org._industry || '\u2014';
+    var lsCount = _clientsLogSourceCounts[org._id] || 0;
+    var svcBadgeColor = svcModel === 'internal' ? 'cyan' : svcModel === 'socaas' ? 'green' : svcModel === 'mdr' ? 'amber' : 'secondary';
     html += '<tr onclick="showClientDetail(\'' + org._id + '\')" style="cursor:pointer;">';
-    html += '<td><strong>' + (org.name || '—') + '</strong></td>';
-    html += '<td><code>' + (org.code || '—') + '</code></td>';
-    html += '<td><span class="badge badge-' + (org.type === 'internal' ? 'cyan' : org.type === 'socaas' ? 'green' : 'amber') + '">' + serviceModel + '</span></td>';
-    html += '<td><code>' + (org.namespace || '—') + '</code></td>';
+    html += '<td><strong>' + (org.name || '\u2014') + '</strong></td>';
+    html += '<td><code>' + (org.code || '\u2014') + '</code></td>';
+    html += '<td><span class="badge badge-' + svcBadgeColor + '">' + serviceLabel + '</span></td>';
+    html += '<td>' + (industry !== '\u2014' ? '<span style="font-size:11px;">' + industry + '</span>' : '<span style="color:var(--text-muted);">\u2014</span>') + '</td>';
+    html += '<td>' + (lsCount > 0 ? '<span style="font-weight:600;">' + lsCount + '</span>' : '<span style="color:var(--text-muted);">0</span>') + '</td>';
+    html += '<td><code>' + (org.namespace || '\u2014') + '</code></td>';
     html += '<td>' + enabledConnectors + '/' + totalConnectors + ' active</td>';
     html += '<td>' + jiraCount + '</td>';
     html += '<td><span class="status-dot" style="background:var(--green);"></span> Active</td>';
-    html += '<td>';
-    html += '<button class="btn btn-xs btn-secondary" onclick="event.stopPropagation();editClient(\'' + org._id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit</button> ';
-    html += '<button class="btn btn-xs btn-secondary" onclick="event.stopPropagation();editNamespace(\'' + org._id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg> Namespace</button> ';
-    html += '<button class="btn btn-xs" style="color:var(--red-bright);" onclick="event.stopPropagation();deleteClient(\'' + org._id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>';
+    html += '<td style="white-space:nowrap;">';
+    html += '<button class="btn btn-xs btn-secondary" onclick="event.stopPropagation();editClient(\'' + org._id + '\')" title="Edit organization details"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit</button> ';
+    html += '<button class="btn btn-xs" style="color:var(--red-bright);" onclick="event.stopPropagation();deleteClient(\'' + org._id + '\')" title="Remove organization"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>';
     html += '</td>';
     html += '</tr>';
   });
@@ -37726,7 +37763,11 @@ function showClientDetail(id) {
   var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">';
   html += '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Organization</div><div style="font-size:14px;font-weight:600;">' + org.name + '</div></div>';
   html += '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Code</div><div style="font-family:var(--font-mono);font-size:14px;">' + org.code + '</div></div>';
-  html += '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Service Model</div><div>' + (org.type || '—') + '</div></div>';
+  var detailSvcModel = org._serviceModel || org.type || '—';
+  var svcModelLabelMap = { 'internal': 'Internal', 'socaas': 'SOCaaS', 'mdr': 'MDR' };
+  var detailSvcLabel = svcModelLabelMap[detailSvcModel] || detailSvcModel;
+  html += '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Service Model</div><div>' + detailSvcLabel + '</div></div>';
+  html += '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Industry</div><div>' + (org._industry || '—') + '</div></div>';
   html += '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Namespace</div><div style="font-family:var(--font-mono);">' + org.namespace + '</div></div>';
   html += '</div>';
   html += '<div style="margin-top:16px;"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;">Connectors</div>';
@@ -37753,19 +37794,111 @@ function showAddClientModal() {
 function editClient(id) {
   var org = ORG_CONNECTORS[id];
   if (!org) return;
-  showToast('Editing ' + org.name + ' — modify connectors in Settings', 'info');
-  navigate('settings');
+  var dbData = _clientsDBData[id] || {};
+  var currentName = dbData.name || org.name || '';
+  var currentIndustry = dbData.industry || org._industry || '';
+  var currentSvcModel = dbData.service_model || org._serviceModel || org.type || '';
+
+  var industries = ['Technology','Financial','Healthcare','Hospitality','Maritime','Real Estate','Energy','Government','Education','Retail','Manufacturing','Telecommunications','Transportation','Media','Insurance','Legal','Aerospace','Agriculture','Construction','Pharmaceutical'];
+
+  var overlay = document.createElement('div');
+  overlay.id = 'editClientOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:12px;padding:28px;width:440px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.4);';
+
+  var industryOptions = '<option value="">— Select Industry —</option>';
+  industries.forEach(function(ind) {
+    industryOptions += '<option value="' + ind + '"' + (ind === currentIndustry ? ' selected' : '') + '>' + ind + '</option>';
+  });
+
+  modal.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">'
+    + '<h3 style="margin:0;font-size:16px;font-weight:600;color:var(--text-primary);">Edit Organization</h3>'
+    + '<button onclick="document.getElementById(\'editClientOverlay\').remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px;">&times;</button>'
+    + '</div>'
+    + '<div style="margin-bottom:18px;">'
+    + '<label style="display:block;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Organization Name</label>'
+    + '<input type="text" id="editClientName" value="' + currentName.replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;background:var(--bg-subtle);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-size:13px;box-sizing:border-box;outline:none;" onfocus="this.style.borderColor=\'var(--cyan)\'" onblur="this.style.borderColor=\'var(--border-subtle)\'">'
+    + '</div>'
+    + '<div style="margin-bottom:18px;">'
+    + '<label style="display:block;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Industry</label>'
+    + '<select id="editClientIndustry" style="width:100%;padding:10px 12px;background:var(--bg-subtle);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-size:13px;box-sizing:border-box;outline:none;cursor:pointer;" onfocus="this.style.borderColor=\'var(--cyan)\'" onblur="this.style.borderColor=\'var(--border-subtle)\'">'
+    + industryOptions
+    + '</select>'
+    + '</div>'
+    + '<div style="margin-bottom:24px;">'
+    + '<label style="display:block;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Service Model</label>'
+    + '<select id="editClientSvcModel" style="width:100%;padding:10px 12px;background:var(--bg-subtle);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-size:13px;box-sizing:border-box;outline:none;cursor:pointer;" onfocus="this.style.borderColor=\'var(--cyan)\'" onblur="this.style.borderColor=\'var(--border-subtle)\'">'
+    + '<option value="internal"' + (currentSvcModel === 'internal' ? ' selected' : '') + '>Internal</option>'
+    + '<option value="socaas"' + (currentSvcModel === 'socaas' ? ' selected' : '') + '>SOCaaS</option>'
+    + '<option value="mdr"' + (currentSvcModel === 'mdr' ? ' selected' : '') + '>MDR</option>'
+    + '</select>'
+    + '</div>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;">'
+    + '<button onclick="document.getElementById(\'editClientOverlay\').remove()" class="btn btn-secondary" style="padding:8px 20px;font-size:12px;">Cancel</button>'
+    + '<button id="editClientSaveBtn" onclick="saveClientEdit(\'' + id + '\')" class="btn btn-primary" style="padding:8px 20px;font-size:12px;background:var(--cyan);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Save Changes</button>'
+    + '</div>';
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  setTimeout(function(){ document.getElementById('editClientName').focus(); }, 100);
 }
 
-function editNamespace(id) {
-  var org = ORG_CONNECTORS[id];
-  if (!org) return;
-  var newNS = prompt('Edit namespace for ' + org.name + ':', org.namespace);
-  if (newNS && newNS !== org.namespace) {
-    org.namespace = newNS.toLowerCase().replace(/[^a-z0-9_]/g, '');
-    showToast('Namespace updated to: ' + org.namespace, 'success');
-    loadClientsPage();
+async function saveClientEdit(id) {
+  var nameInput = document.getElementById('editClientName');
+  var industryInput = document.getElementById('editClientIndustry');
+  var svcModelInput = document.getElementById('editClientSvcModel');
+  var saveBtn = document.getElementById('editClientSaveBtn');
+  if (!nameInput || !industryInput || !svcModelInput) return;
+
+  var newName = nameInput.value.trim();
+  var newIndustry = industryInput.value;
+  var newSvcModel = svcModelInput.value;
+
+  if (!newName) { showToast('Organization name cannot be empty', 'warn'); nameInput.focus(); return; }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+
+  if (window._dactaSupabase) {
+    try {
+      var updatePayload = { name: newName, industry: newIndustry || null, service_model: newSvcModel };
+      var { error } = await window._dactaSupabase.from('organizations').update(updatePayload).eq('id', id);
+      if (error) {
+        showToast('DB error: ' + error.message, 'warn');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+        return;
+      }
+    } catch(e) {
+      showToast('Could not reach database: ' + e.message, 'warn');
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Changes';
+      return;
+    }
   }
+
+  // Update in-memory ORG_CONNECTORS
+  if (ORG_CONNECTORS[id]) {
+    ORG_CONNECTORS[id].name = newName;
+    ORG_CONNECTORS[id]._industry = newIndustry;
+    ORG_CONNECTORS[id]._serviceModel = newSvcModel;
+    ORG_CONNECTORS[id].type = newSvcModel;
+  }
+  // Update DB cache
+  if (_clientsDBData[id]) {
+    _clientsDBData[id].name = newName;
+    _clientsDBData[id].industry = newIndustry;
+    _clientsDBData[id].service_model = newSvcModel;
+  }
+
+  // Close modal and refresh
+  var overlay = document.getElementById('editClientOverlay');
+  if (overlay) overlay.remove();
+  showToast(newName + ' updated successfully', 'success');
+  loadClientsPage();
 }
 
 async function deleteClient(id) {
