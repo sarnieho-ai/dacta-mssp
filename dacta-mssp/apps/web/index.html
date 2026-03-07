@@ -14446,6 +14446,9 @@ function dIcon(name, size, color) {
           .lsc-source-card .src-meta-item{display:flex;flex-direction:column;gap:2px;}
           .lsc-source-card .src-meta-item .lbl{font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--font-mono);}
           .lsc-source-card .src-meta-item .val{font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);}
+          .lsc-source-card .src-meta-item.idx-col{grid-column:1 / -1;}
+          .lsc-source-card .idx-chips{display:flex;flex-wrap:wrap;gap:4px;}
+          .lsc-source-card .idx-chip{font-size:10px;font-family:var(--font-mono);color:var(--cyan);background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.15);padding:2px 8px;border-radius:4px;line-height:1.4;white-space:nowrap;}
           .lsc-source-card .src-notes{font-size:11px;color:var(--text-muted);margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04);font-style:italic;}
           .lsc-source-card .src-actions{display:flex;gap:6px;margin-top:10px;}
           /* Add/Edit modal */
@@ -28778,10 +28781,20 @@ function lscRenderCards(data) {
     html += '</div>';
     html += '<div class="src-meta">';
     html += '<div class="src-meta-item"><div class="lbl">Vendor</div><div class="val">' + _lscEsc(src.vendor || '\u2014') + '</div></div>';
-    html += '<div class="src-meta-item"><div class="lbl">Index Pattern</div><div class="val">' + _lscEsc(src.index_pattern || '\u2014') + '</div></div>';
+    // Index patterns: split by space or comma and render as chips if multiple
+    var _idxRaw = (src.index_pattern || '').trim();
+    var _idxArr = _idxRaw.split(/[\s,]+/).filter(function(p){ return p.length > 0; });
+    if (_idxArr.length <= 1) {
+      html += '<div class="src-meta-item"><div class="lbl">Index Pattern</div><div class="val">' + _lscEsc(_idxRaw || '\u2014') + '</div></div>';
+    } else {
+      html += '<div class="src-meta-item idx-col"><div class="lbl">Index Patterns <span style="font-size:8px;opacity:0.6;">(' + _idxArr.length + ')</span></div>';
+      html += '<div class="idx-chips">';
+      _idxArr.forEach(function(p) { html += '<span class="idx-chip">' + _lscEsc(p) + '</span>'; });
+      html += '</div></div>';
+    }
     html += '<div class="src-meta-item"><div class="lbl">Events/Day</div><div class="val">' + epsDisplay + '</div></div>';
     html += '<div class="src-meta-item"><div class="lbl">Onboarded</div><div class="val">' + onboardDate + '</div></div>';
-    html += '<div class="src-meta-item"><div class="lbl">Last Event</div><div class="val">' + lastEvent + '</div></div>';
+    html += '<div class="src-meta-item"><div class="lbl">Last Event</div><div class="val lsc-last-event">' + lastEvent + '</div></div>';
     html += '</div>';
     if (src.notes) {
       html += '<div class="src-notes">' + _lscEsc(src.notes) + '</div>';
@@ -28797,15 +28810,24 @@ function lscRenderCards(data) {
 
 async function lscRefreshLastEvents(data) {
   if (!data || !Array.isArray(data)) return;
+  // Show a "refreshing" indicator
+  document.querySelectorAll('.lsc-last-event').forEach(function(el) {
+    if (el.textContent === '\u2014' || el.textContent.includes('ago')) {
+      el.innerHTML = '<span style="color:var(--cyan);font-size:10px;">\u21bb pulling...</span>';
+    }
+  });
   var updatePromises = data.map(function(src) {
     return (async function() {
       try {
+        // Convert space-separated or comma-separated index patterns to comma-separated for Elastic API
+        var indexForQuery = (src.index_pattern || '').trim().split(/[\s,]+/).filter(function(p){ return p.length > 0; }).join(',');
+        if (!indexForQuery) return;
         var res = await fetch('/api/elastic', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'search',
-            index: src.index_pattern,
+            index: indexForQuery,
             body: {
               size: 1,
               sort: [{ '@timestamp': 'desc' }],
@@ -28814,35 +28836,29 @@ async function lscRefreshLastEvents(data) {
             }
           })
         });
-        if (!res.ok) throw new Error('API error');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         var result = await res.json();
+        // Handle cases where the index doesn't exist or has no data
+        if (result.error) {
+          console.warn('[LSC] Elastic error for ' + src.source_name + ':', result.error.type || result.error);
+          _lscUpdateCardStatus(src.id, null, 'silent', 'No index');
+          return;
+        }
         if (!result.hits || !result.hits.hits || result.hits.hits.length === 0) {
-          console.log('[LSC] No events for ' + src.id);
+          console.log('[LSC] No events for ' + src.source_name);
+          _lscUpdateCardStatus(src.id, null, 'silent', 'No events (30d)');
           return;
         }
         var realTs = result.hits.hits[0]._source['@timestamp'];
+        var totalHits = result.hits.total ? (typeof result.hits.total === 'object' ? result.hits.total.value : result.hits.total) : 0;
         var timeDiff = Date.now() - new Date(realTs).getTime();
         var newStatus = 'silent';
         if (timeDiff < 4 * 3600000) newStatus = 'healthy';
         else if (timeDiff < 24 * 3600000) newStatus = 'degraded';
-        var card = document.querySelector('[data-lsc-id="' + src.id + '"]');
-        if (card) {
-          var lastEventEl = card.querySelector('.src-meta-item:last-child .val');
-          if (lastEventEl) {
-            lastEventEl.textContent = _lscTimeAgo(realTs);
-          }
-          var statusDot = card.querySelector('.src-status');
-          var statusLabel = card.querySelector('.src-header span:last-child');
-          if (statusDot) {
-            statusDot.className = 'src-status ' + newStatus;
-            statusDot.title = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
-          }
-          if (statusLabel) {
-            var statusColor = newStatus === 'healthy' ? '#22c55e' : newStatus === 'degraded' ? '#f59e0b' : '#ef4444';
-            statusLabel.style.color = statusColor;
-            statusLabel.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
-          }
-        }
+        _lscUpdateCardStatus(src.id, realTs, newStatus, null);
+        // Also update the metrics bar counts
+        src._liveStatus = newStatus;
+        src._liveLastEvent = realTs;
         if (newStatus !== (src.status || 'healthy')) {
           var sb = window._dactaSupabase;
           if (sb) {
@@ -28857,9 +28873,52 @@ async function lscRefreshLastEvents(data) {
       }
     })();
   });
-  Promise.allSettled(updatePromises).catch(function(e) {
+  Promise.allSettled(updatePromises).then(function() {
+    // After all Elastic queries settle, re-calculate the metrics bar from live statuses
+    var h = 0, d = 0, s = 0;
+    data.forEach(function(src) {
+      var st = src._liveStatus || src.status || 'healthy';
+      if (st === 'healthy') h++;
+      else if (st === 'degraded') d++;
+      else s++;
+    });
+    var hEl = document.getElementById('lscHealthy');
+    var dEl = document.getElementById('lscDegraded');
+    var sEl = document.getElementById('lscSilent');
+    if (hEl) hEl.textContent = h;
+    if (dEl) dEl.textContent = d;
+    if (sEl) sEl.textContent = s;
+    console.log('[LSC] Elastic refresh complete: ' + h + ' healthy, ' + d + ' degraded, ' + s + ' silent');
+  }).catch(function(e) {
     console.warn('[LSC] Batch refresh error', e);
   });
+}
+
+// Helper: update a card's status dot, label, and last event time
+function _lscUpdateCardStatus(id, timestamp, newStatus, fallbackText) {
+  var card = document.querySelector('[data-lsc-id="' + id + '"]');
+  if (!card) return;
+  var lastEventEl = card.querySelector('.lsc-last-event');
+  if (lastEventEl) {
+    if (timestamp) {
+      lastEventEl.textContent = _lscTimeAgo(timestamp);
+      lastEventEl.style.color = '';
+    } else {
+      lastEventEl.textContent = fallbackText || '\u2014';
+      lastEventEl.style.color = '#ef4444';
+    }
+  }
+  var statusDot = card.querySelector('.src-status');
+  if (statusDot) {
+    statusDot.className = 'src-status ' + newStatus;
+    statusDot.title = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+  }
+  var statusLabel = card.querySelector('.src-header span:last-child');
+  if (statusLabel) {
+    var statusColor = newStatus === 'healthy' ? '#22c55e' : newStatus === 'degraded' ? '#f59e0b' : '#ef4444';
+    statusLabel.style.color = statusColor;
+    statusLabel.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+  }
 }
 
 function _lscEsc(str) { var d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
