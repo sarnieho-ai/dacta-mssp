@@ -49286,11 +49286,9 @@ async function openInvestigation(ticketKey) {
           '<div style="font-size:11px;color:var(--rws-text-muted);margin-top:1px;">' + escapeHtml(task.d) + '</div></div></div>';
       }).join('');
     }
-    var _rDescShort = (description||f.summary||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
-    if (_rDescShort.length > 420) _rDescShort = _rDescShort.substring(0,420) + '\u2026';
-    var _rWhatHappened = _rDescShort;
-    // Build smart alert summary for the "What happened?" section
-    var _rFullText = (f.summary||'') + ' ' + _rDescShort;
+    var _rDescClean = (description||f.summary||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+    // Use FULL description for entity extraction (not truncated)
+    var _rFullText = (f.summary||'') + ' ' + _rDescClean;
     var _rTechniques = detectTechniques(_rFullText);
     var _rIOCs = extractIOCs(_rFullText);
     var _rAlertSummary = buildAlertSummaryHTML(f.summary||'', description||'', _rTechniques, _rIOCs, _alertCat, useCase);
