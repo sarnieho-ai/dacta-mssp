@@ -27375,7 +27375,7 @@ function _populateVendorDropdown() {
   if (_vendorDropdownPopulated) return;
   var sel = document.getElementById('drLogSourceFilter');
   if (!sel) return;
-  var VENDOR_NAMES = {"akamai":"Akamai","alibaba_cloud":"Alibaba Cloud","aqua":"Aqua Security","arcsight":"ArcSight","attivo":"Attivo Networks","aws":"AWS","azure":"Microsoft Azure","barracuda":"Barracuda","beyondtrust":"BeyondTrust","bitdefender":"Bitdefender","carbon_black":"Carbon Black","checkpoint":"Check Point","cisco":"Cisco","cloudflare":"Cloudflare","correlation":"Multi-Source Correlation","crowdstrike":"CrowdStrike","crowdstrike_identity":"CrowdStrike Identity","crowdstrike_intel":"CrowdStrike Intel","cyberark":"CyberArk","darktrace":"Darktrace","digital_guardian":"Digital Guardian","digitalocean":"DigitalOcean","docker":"Docker","duo":"Cisco Duo","elastic":"Elastic","eset":"ESET","f5_bigip":"F5 BIG-IP","forcepoint":"Forcepoint","fortimail":"FortiMail","fortinet":"Fortinet","fortinet_ztna":"Fortinet ZTNA","gcp":"Google Cloud Platform","github":"GitHub","google_workspace":"Google Workspace","imperva":"Imperva","juniper":"Juniper","kaspersky":"Kaspersky","kubernetes":"Kubernetes","logrhythm":"LogRhythm","m365":"Microsoft 365","mandiant":"Mandiant","mcafee":"McAfee","meraki":"Cisco Meraki","microsoft365":"Microsoft 365","microsoft_defender":"Microsoft Defender","mimecast":"Mimecast","nagios":"Nagios","netskope":"Netskope","okta":"Okta","onelogin":"OneLogin","oracle_cloud":"Oracle Cloud","palo_alto":"Palo Alto Networks","paloalto":"Palo Alto Networks","ping_identity":"Ping Identity","prisma_cloud":"Prisma Cloud","proofpoint":"Proofpoint","qradar":"IBM QRadar","qualys":"Qualys","rapid7":"Rapid7","sailpoint":"SailPoint","sentinelone":"SentinelOne","snort_suricata":"Snort/Suricata","solarwinds":"SolarWinds","sophos":"Sophos","splunk_uba":"Splunk UBA","symantec":"Symantec","tenable":"Tenable","trellix":"Trellix","trend_micro":"Trend Micro","vectra":"Vectra AI","veeam":"Veeam","wazuh":"Wazuh","windows_security":"Windows Security","windows_sysmon":"Windows Sysmon","zeek":"Zeek","zscaler":"Zscaler"};
+  var VENDOR_NAMES = {"akamai":"Akamai","alibaba_cloud":"Alibaba Cloud","aqua":"Aqua Security","arcsight":"ArcSight","attivo":"Attivo Networks","aws":"AWS","azure":"Microsoft Azure","barracuda":"Barracuda","beyondtrust":"BeyondTrust","bitdefender":"Bitdefender","carbon_black":"Carbon Black","checkpoint":"Check Point","cisco":"Cisco","cloudflare":"Cloudflare","correlation":"Multi-Source Correlation","crowdstrike":"CrowdStrike","crowdstrike_identity":"CrowdStrike Identity","crowdstrike_intel":"CrowdStrike Intel","cyberark":"CyberArk","darktrace":"Darktrace","digital_guardian":"Digital Guardian","digitalocean":"DigitalOcean","docker":"Docker","duo":"Cisco Duo","elastic":"Elastic","eset":"ESET","f5_bigip":"F5 BIG-IP","forcepoint":"Forcepoint","fortimail":"FortiMail","fortinet":"Fortinet","fortinet_ztna":"Fortinet ZTNA","gcp":"Google Cloud Platform","github":"GitHub","google_workspace":"Google Workspace","heimdal":"Heimdal","imperva":"Imperva","juniper":"Juniper","kaspersky":"Kaspersky","kubernetes":"Kubernetes","logrhythm":"LogRhythm","m365":"Microsoft 365","mandiant":"Mandiant","mcafee":"McAfee","meraki":"Cisco Meraki","microsoft365":"Microsoft 365","microsoft_defender":"Microsoft Defender","mimecast":"Mimecast","nagios":"Nagios","netskope":"Netskope","okta":"Okta","onelogin":"OneLogin","oracle_cloud":"Oracle Cloud","palo_alto":"Palo Alto Networks","paloalto":"Palo Alto Networks","ping_identity":"Ping Identity","prisma_cloud":"Prisma Cloud","proofpoint":"Proofpoint","qradar":"IBM QRadar","qualys":"Qualys","rapid7":"Rapid7","sailpoint":"SailPoint","sentinelone":"SentinelOne","snort_suricata":"Snort/Suricata","solarwinds":"SolarWinds","sophos":"Sophos","splunk_uba":"Splunk UBA","symantec":"Symantec","tenable":"Tenable","trellix":"Trellix","trend_micro":"Trend Micro","vectra":"Vectra AI","veeam":"Veeam","wazuh":"Wazuh","windows_security":"Windows Security","windows_sysmon":"Windows Sysmon","zeek":"Zeek","zscaler":"Zscaler"};
   var vendors = Object.keys(VENDOR_NAMES).sort();
   sel.innerHTML = '<option value="">All Log Sources</option>';
   vendors.forEach(function(v) {
@@ -34762,6 +34762,51 @@ function renderSettingsConnectors() {
     var label = labelMap[c.connector_type] || c.connector_type;
     var cid = orgId + '__' + idx;
 
+    // ── Type-specific config hints ──
+    // Vendor-specific config hints (keyed by vendor name lowercase, then by connector_type)
+    var vendorConfigHints = {
+      'crowdstrike': { endpoint_label: 'CrowdStrike API Base URL', endpoint_hint: 'https://api.us-2.crowdstrike.com', auth_hint: 'OAuth2 Client ID + Secret', needs_endpoint: true, auth_type_default: 'oauth2_client_credentials', cred_fields: ['client_id', 'client_secret'] },
+      'trendmicro': { endpoint_label: 'Trend Vision One API URL', endpoint_hint: 'https://api.xdr.trendmicro.com', auth_hint: 'Vision One API Token (Bearer)', needs_endpoint: true, auth_type_default: 'token', cred_fields: ['api_token'] },
+      'trend micro': { endpoint_label: 'Trend Vision One API URL', endpoint_hint: 'https://api.xdr.trendmicro.com', auth_hint: 'Vision One API Token (Bearer)', needs_endpoint: true, auth_type_default: 'token', cred_fields: ['api_token'] },
+      'heimdal': { endpoint_label: 'Heimdal API Base URL', endpoint_hint: 'https://dashboard.heimdalsecurity.com/api/heimdalapi/2.0', auth_hint: 'Bearer API Key + Customer ID', needs_endpoint: true, auth_type_default: 'api_key', cred_fields: ['api_key', 'customer_id'] },
+      'fortinet': { endpoint_label: 'FortiGate / FortiAnalyzer URL', endpoint_hint: 'https://fortianalyzer.example.com', auth_hint: 'API Key or Admin Credentials', needs_endpoint: true, auth_type_default: 'api_key', cred_fields: ['api_key'] },
+      'fortigate': { endpoint_label: 'FortiGate Management URL', endpoint_hint: 'https://fortigate.example.com', auth_hint: 'API Key (access_token)', needs_endpoint: true, auth_type_default: 'api_key', cred_fields: ['api_key'] },
+      'palo alto': { endpoint_label: 'PAN-OS / Cortex Data Lake URL', endpoint_hint: 'https://api.us.cdl.paloaltonetworks.com', auth_hint: 'API Key or OAuth2', needs_endpoint: true, auth_type_default: 'api_key', cred_fields: ['api_key', 'api_type'] },
+      'paloalto': { endpoint_label: 'PAN-OS / Cortex Data Lake URL', endpoint_hint: 'https://api.us.cdl.paloaltonetworks.com', auth_hint: 'API Key or OAuth2', needs_endpoint: true, auth_type_default: 'api_key', cred_fields: ['api_key', 'api_type'] },
+      'imperva': { endpoint_label: 'Imperva Cloud WAF API URL', endpoint_hint: 'https://my.imperva.com/api', auth_hint: 'API ID + API Key', needs_endpoint: true, auth_type_default: 'api_key', cred_fields: ['api_id', 'api_key', 'account_id', 'site_id'] },
+      'elastic': { endpoint_label: 'Elastic Cluster URL', endpoint_hint: 'https://your-cluster.es.region.cloud', auth_hint: 'API Key or Basic Auth', needs_endpoint: true, auth_type_default: 'api_key', cred_fields: ['api_key'] },
+      'microsoft': { endpoint_label: 'Microsoft Graph / Entra ID URL', endpoint_hint: 'https://graph.microsoft.com', auth_hint: 'OAuth2 Client Credentials', needs_endpoint: true, auth_type_default: 'oauth2_client_credentials', cred_fields: ['client_id', 'client_secret', 'tenant_id'] },
+      'okta': { endpoint_label: 'Okta Domain', endpoint_hint: 'https://your-org.okta.com', auth_hint: 'API Token', needs_endpoint: true, auth_type_default: 'token', cred_fields: ['token'] },
+      'sophos': { endpoint_label: 'Sophos Central API URL', endpoint_hint: 'https://api.central.sophos.com', auth_hint: 'OAuth2 Client Credentials', needs_endpoint: true, auth_type_default: 'oauth2_client_credentials', cred_fields: ['client_id', 'client_secret'] },
+      'sentinelone': { endpoint_label: 'SentinelOne Console API URL', endpoint_hint: 'https://your-tenant.sentinelone.net', auth_hint: 'API Token', needs_endpoint: true, auth_type_default: 'token', cred_fields: ['api_token'] },
+      'atlassian': { endpoint_label: 'Atlassian Instance URL', endpoint_hint: 'https://company.atlassian.net', auth_hint: 'API Token + Email', needs_endpoint: true, auth_type_default: 'basic', cred_fields: ['username', 'api_token'] },
+      'confluence': { endpoint_label: 'Confluence Instance URL', endpoint_hint: 'https://company.atlassian.net/wiki', auth_hint: 'API Token + Email', needs_endpoint: true, auth_type_default: 'basic', cred_fields: ['username', 'api_token'] }
+    };
+    var typeConfigHints = {
+      siem: { endpoint_label: 'SIEM URL', endpoint_hint: 'https://your-siem.example.com', auth_hint: 'API Key or Basic Auth', needs_endpoint: true },
+      edr: { endpoint_label: 'EDR API Base URL', endpoint_hint: 'https://api.vendor.com', auth_hint: 'OAuth2 or API Token', needs_endpoint: true },
+      firewall: { endpoint_label: 'Management API / Analyzer URL', endpoint_hint: 'https://firewall-mgmt.example.com', auth_hint: 'API Key or Token', needs_endpoint: true },
+      threat_intel: { endpoint_label: 'TIP Endpoint', endpoint_hint: 'https://tip.example.com', auth_hint: 'API Token', needs_endpoint: true },
+      ticketing: { endpoint_label: 'Instance URL', endpoint_hint: 'https://company.atlassian.net', auth_hint: 'API Token + Email', needs_endpoint: true },
+      identity: { endpoint_label: 'Directory Endpoint', endpoint_hint: 'https://graph.microsoft.com or Okta domain', auth_hint: 'OAuth2 or API Token', needs_endpoint: true },
+      email_security: { endpoint_label: 'API Endpoint', endpoint_hint: 'https://api.vendor.com', auth_hint: 'API Key', needs_endpoint: true },
+      cloud_security: { endpoint_label: 'API Endpoint', endpoint_hint: 'AWS Security Hub / Azure Sentinel URL', auth_hint: 'IAM Role or API Key', needs_endpoint: true },
+      vulnerability: { endpoint_label: 'Scanner API URL', endpoint_hint: 'https://cloud.tenable.com/api', auth_hint: 'API Key', needs_endpoint: true }
+    };
+    // Resolve: vendor-specific first, then type fallback
+    var vendorKey = (c.vendor || '').toLowerCase().replace(/\s+/g, '');
+    var vendorKeySpaced = (c.vendor || '').toLowerCase();
+    var hint = vendorConfigHints[vendorKey] || vendorConfigHints[vendorKeySpaced] || typeConfigHints[c.connector_type] || { endpoint_label: 'API Endpoint', endpoint_hint: '', auth_hint: 'API Key', needs_endpoint: true };
+
+    // Parse credentials_ref (JSON string or object)
+    var creds = c.credentials_ref || {};
+    if (typeof creds === 'string') { try { creds = JSON.parse(creds); } catch(e) { creds = {}; } }
+    var hasApiEndpoint = !!(c.api_endpoint);
+    var hasCreds = !!(creds.client_id || creds.api_key || creds.token || creds.username);
+    var configComplete = hasApiEndpoint && hasCreds;
+    var configBadge = configComplete ? '<span style="font-size:8px;padding:1px 5px;background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.2);border-radius:3px;margin-left:6px;">API Configured</span>'
+      : '<span style="font-size:8px;padding:1px 5px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);border-radius:3px;margin-left:6px;">Needs Config</span>';
+
     // Build metadata fields as editable rows
     var metaKeys = Object.keys(c.metadata || {});
     var metaHtml = '';
@@ -34773,12 +34818,44 @@ function renderSettingsConnectors() {
       '</div>';
     });
 
+    // ── Auth type options ──
+    var authTypeOpts = ['api_key','oauth2_client_credentials','token','basic'].map(function(at) {
+      var sel = (c.auth_type || 'api_key') === at ? ' selected' : '';
+      var lbl = { api_key: 'API Key', oauth2_client_credentials: 'OAuth2 Client Credentials', token: 'Bearer Token', basic: 'Basic Auth (user:pass)' }[at] || at;
+      return '<option value="' + at + '"' + sel + '>' + lbl + '</option>';
+    }).join('');
+
+    // ── Credential fields based on auth_type ──
+    var authType = c.auth_type || 'api_key';
+    var credFieldsHtml = '';
+    if (authType === 'oauth2_client_credentials') {
+      credFieldsHtml = '<div style="display:flex;gap:6px;margin-top:4px;">' +
+        '<div style="flex:1;"><div style="font-size:8px;color:var(--text-muted);margin-bottom:2px;">CLIENT ID</div>' +
+        '<input class="filter-input stg-cred-input" data-cid="' + cid + '" data-cred="client_id" type="text" value="' + (creds.client_id || '').replace(/"/g,'&quot;') + '" placeholder="Client ID" style="width:100%;font-size:10px;font-family:var(--font-mono);padding:3px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-secondary);"></div>' +
+        '<div style="flex:1;"><div style="font-size:8px;color:var(--text-muted);margin-bottom:2px;">CLIENT SECRET</div>' +
+        '<input class="filter-input stg-cred-input" data-cid="' + cid + '" data-cred="client_secret" type="password" value="' + (creds.client_secret || '').replace(/"/g,'&quot;') + '" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" style="width:100%;font-size:10px;font-family:var(--font-mono);padding:3px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-secondary);"></div>' +
+      '</div>';
+    } else if (authType === 'basic') {
+      credFieldsHtml = '<div style="display:flex;gap:6px;margin-top:4px;">' +
+        '<div style="flex:1;"><div style="font-size:8px;color:var(--text-muted);margin-bottom:2px;">USERNAME / EMAIL</div>' +
+        '<input class="filter-input stg-cred-input" data-cid="' + cid + '" data-cred="username" type="text" value="' + (creds.username || '').replace(/"/g,'&quot;') + '" placeholder="admin@company.com" style="width:100%;font-size:10px;font-family:var(--font-mono);padding:3px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-secondary);"></div>' +
+        '<div style="flex:1;"><div style="font-size:8px;color:var(--text-muted);margin-bottom:2px;">PASSWORD / API TOKEN</div>' +
+        '<input class="filter-input stg-cred-input" data-cid="' + cid + '" data-cred="password" type="password" value="' + (creds.password || '').replace(/"/g,'&quot;') + '" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" style="width:100%;font-size:10px;font-family:var(--font-mono);padding:3px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-secondary);"></div>' +
+      '</div>';
+    } else {
+      // api_key or token
+      var credLabel = authType === 'token' ? 'BEARER TOKEN' : 'API KEY';
+      var credKey = authType === 'token' ? 'token' : 'api_key';
+      credFieldsHtml = '<div style="margin-top:4px;"><div style="font-size:8px;color:var(--text-muted);margin-bottom:2px;">' + credLabel + '</div>' +
+        '<input class="filter-input stg-cred-input" data-cid="' + cid + '" data-cred="' + credKey + '" type="password" value="' + (creds[credKey] || '').replace(/"/g,'&quot;') + '" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" style="width:100%;font-size:10px;font-family:var(--font-mono);padding:3px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-secondary);"></div>';
+    }
+
     html += '<div class="stg-conn-card" id="stg-card-' + cid + '" style="position:relative;border-color:' + borderColor + ';' + (!enabled ? 'opacity:0.7;' : '') + '">' +
       '<button onclick="removeConnector(\'' + orgId + '\', ' + idx + ')" title="Remove connector" style="position:absolute;top:6px;right:6px;z-index:2;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:4px;color:#ef4444;font-size:10px;line-height:1;padding:2px 5px;cursor:pointer;">&times;</button>' +
       '<div class="stg-conn-top">' +
         '<div class="stg-conn-icon"' + (!enabled ? ' style="background:rgba(239,68,68,0.08);"' : '') + '>' + icon + '</div>' +
         '<div class="stg-conn-meta">' +
-          '<div class="stg-conn-name">' + label + '</div>' +
+          '<div class="stg-conn-name">' + label + configBadge + '</div>' +
           '<span class="badge ' + badgeClass + '" style="font-size:9px;padding:2px 7px;margin-top:3px;display:inline-flex;">' + badgeText + '</span>' +
         '</div>' +
         '<div style="margin-left:auto;display:flex;align-items:center;gap:6px;">' +
@@ -34789,6 +34866,7 @@ function renderSettingsConnectors() {
           '<div class="stg-conn-status-dot ' + dotClass + '"></div>' +
         '</div>' +
       '</div>' +
+      // ── Vendor / Display Name ──
       '<div class="stg-conn-field">' +
         '<div class="stg-conn-field-label">VENDOR / DISPLAY NAME</div>' +
         '<div style="display:flex;gap:6px;">' +
@@ -34796,17 +34874,42 @@ function renderSettingsConnectors() {
           '<input class="filter-input stg-meta-input" data-cid="' + cid + '" data-field="display_name" value="' + (c.display_name || '').replace(/"/g,'&quot;') + '" placeholder="Display Name" style="flex:2;font-size:11px;padding:4px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-primary);">' +
         '</div>' +
       '</div>' +
-      '<div class="stg-conn-field">' +
+      // ── API Connection (critical) ──
+      '<div class="stg-conn-field" style="background:rgba(0,212,255,0.02);border:1px solid rgba(0,212,255,0.08);border-radius:6px;padding:8px 10px;margin-top:6px;">' +
+        '<div class="stg-conn-field-label" style="color:var(--cyan);">' + hint.endpoint_label.toUpperCase() + ' <span style="font-size:8px;color:var(--text-muted);font-weight:400;">(required for investigation)</span></div>' +
+        '<input class="filter-input stg-meta-input" data-cid="' + cid + '" data-field="api_endpoint" value="' + (c.api_endpoint || '').replace(/"/g,'&quot;') + '" placeholder="' + hint.endpoint_hint + '" style="width:100%;font-size:11px;font-family:var(--font-mono);padding:5px 8px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-primary);">' +
+        '<div style="margin-top:6px;">' +
+          '<div class="stg-conn-field-label">AUTHENTICATION</div>' +
+          '<select class="filter-input stg-meta-input" data-cid="' + cid + '" data-field="auth_type" onchange="onAuthTypeChange(\'' + orgId + '\')" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-primary);">' +
+            authTypeOpts +
+          '</select>' +
+        '</div>' +
+        '<div class="stg-cred-fields" data-cid="' + cid + '">' + credFieldsHtml + '</div>' +
+      '</div>' +
+      // ── Sync interval ──
+      '<div class="stg-conn-field" style="margin-top:4px;">' +
+        '<div style="display:flex;gap:8px;align-items:center;">' +
+          '<div style="flex:1;"><div class="stg-conn-field-label">SYNC INTERVAL (seconds)</div>' +
+          '<input class="filter-input stg-meta-input" data-cid="' + cid + '" data-field="sync_interval" type="number" min="60" value="' + (c.sync_interval_seconds || 300) + '" style="width:100%;font-size:10px;font-family:var(--font-mono);padding:3px 6px;background:var(--bg-elevated);border-color:var(--border-card);color:var(--text-secondary);"></div>' +
+          '<div style="flex:2;"><div class="stg-conn-field-label">LAST SYNC</div>' +
+          '<div style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);padding:4px 0;">' + (c.last_sync_at ? new Date(c.last_sync_at).toLocaleString() : 'Never') + '</div></div>' +
+        '</div>' +
+      '</div>' +
+      // ── Metadata (LLM context) ──
+      '<div class="stg-conn-field" style="margin-top:4px;">' +
         '<div class="stg-conn-field-label">METADATA <span style="font-size:8px;color:var(--cyan);">(used by LLM investigation)</span></div>' +
         metaHtml +
-        '<button class="btn" style="margin-top:6px;padding:2px 8px;font-size:9px;color:var(--text-muted);border:1px solid var(--border-card);border-radius:4px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;gap:3px;" onclick="addConnectorMeta(\'' + cid + '\')">' +
+        '<button class="btn" style="margin-top:4px;padding:2px 8px;font-size:9px;color:var(--text-muted);border:1px solid var(--border-card);border-radius:4px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;gap:3px;" onclick="addConnectorMeta(\'' + cid + '\')">' +
           '+ Add Field</button>' +
       '</div>' +
+      // ── Last error display ──
+      (c.last_error ? '<div style="margin-top:4px;padding:6px 8px;background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.15);border-radius:4px;font-size:9px;font-family:var(--font-mono);color:#ef4444;word-break:break-all;">Last error: ' + String(c.last_error).substring(0,200) + '</div>' : '') +
+      // ── Footer actions ──
       '<div class="stg-conn-footer" style="justify-content:space-between;">' +
         '<button class="stg-conn-test-btn" style="' + (!enabled ? 'border-color:rgba(239,68,68,0.35);color:#ef4444;background:rgba(239,68,68,0.08);' : '') + '" onclick="testAndUpdateHealth(\'' + cid + '\')">' +
-          (enabled ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Test Connection' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Configure') + '</button>' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Test Connection</button>' +
         '<button class="btn btn-sm" style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);padding:4px 12px;font-size:10px;font-weight:600;" onclick="saveConnectorChanges(\'' + orgId + '\')">' +
-          '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Changes</button>' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Changes</button>' +
       '</div>' +
     '</div>';
   });
@@ -34846,6 +34949,48 @@ function toggleConnectorEnabled(cid, checked) {
   if (!c) return;
   c.is_enabled = checked;
   c.health_status = checked ? 'healthy' : 'not_configured';
+}
+
+function onAuthTypeChange(orgId) {
+  // Save current field values into ORG_CONNECTORS before re-render
+  var org = ORG_CONNECTORS[orgId];
+  if (!org) return;
+  org.connectors.forEach(function(c, idx) {
+    var cid = orgId + '__' + idx;
+    // Read auth_type from dropdown
+    var authTypeEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="auth_type"]');
+    if (authTypeEl) c.auth_type = authTypeEl.value;
+    // Read api_endpoint
+    var apiEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="api_endpoint"]');
+    if (apiEl) c.api_endpoint = apiEl.value.trim();
+    // Read vendor + display_name
+    var vendorEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="vendor"]');
+    if (vendorEl) c.vendor = vendorEl.value.trim();
+    var dnEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="display_name"]');
+    if (dnEl) c.display_name = dnEl.value.trim();
+    // Read sync interval
+    var syncEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="sync_interval"]');
+    if (syncEl) c.sync_interval_seconds = parseInt(syncEl.value) || 300;
+    // Read credential fields
+    var credInputs = document.querySelectorAll('.stg-cred-input[data-cid="' + cid + '"]');
+    if (credInputs.length > 0) {
+      var creds = {};
+      credInputs.forEach(function(el) {
+        var key = el.getAttribute('data-cred');
+        var val = el.value.trim();
+        if (key && val) creds[key] = val;
+      });
+      if (Object.keys(creds).length > 0) c.credentials_ref = creds;
+    }
+    // Read metadata
+    var metaInputs = document.querySelectorAll('.stg-meta-input[data-cid="' + cid + '"][data-key]');
+    metaInputs.forEach(function(el) {
+      var k = el.getAttribute('data-key');
+      if (k) { if (!c.metadata) c.metadata = {}; c.metadata[k] = el.value.trim(); }
+    });
+  });
+  // Re-render with updated auth_type so credential fields change
+  renderSettingsConnectors();
 }
 
 function addConnectorMeta(cid) {
@@ -35079,9 +35224,6 @@ function removeConnector(orgId, connIdx) {
     // Remove from in-memory array
     org.connectors.splice(connIdx, 1);
 
-    // Persist updated ORG_CONNECTORS to localStorage
-    try { localStorage.setItem('dacta_allOrgConnectors', JSON.stringify(ORG_CONNECTORS)); } catch(e) {}
-
     cleanup();
     renderSettingsConnectors();
     showToast('Connector removed: ' + label, 'success');
@@ -35100,6 +35242,30 @@ function saveConnectorChanges(orgId) {
     var dnEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="display_name"]');
     if (vendorEl) c.vendor = vendorEl.value.trim();
     if (dnEl) c.display_name = dnEl.value.trim();
+
+    // ── API Connection fields ──
+    var apiEndpointEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="api_endpoint"]');
+    var authTypeEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="auth_type"]');
+    var syncIntervalEl = document.querySelector('.stg-meta-input[data-cid="' + cid + '"][data-field="sync_interval"]');
+    if (apiEndpointEl) c.api_endpoint = apiEndpointEl.value.trim();
+    if (authTypeEl) c.auth_type = authTypeEl.value;
+    if (syncIntervalEl) c.sync_interval_seconds = parseInt(syncIntervalEl.value) || 300;
+
+    // ── Credential fields (from dynamic cred inputs) ──
+    var credInputs = document.querySelectorAll('.stg-cred-input[data-cid="' + cid + '"]');
+    if (credInputs.length > 0) {
+      var creds = {};
+      credInputs.forEach(function(el) {
+        var credKey = el.getAttribute('data-cred');
+        var val = el.value.trim();
+        if (credKey && val) creds[credKey] = val;
+      });
+      // Only update if user provided something (don't wipe existing creds with empty)
+      if (Object.keys(creds).length > 0) {
+        c.credentials_ref = creds;
+      }
+    }
+
     // Metadata key-value pairs
     var metaInputs = document.querySelectorAll('.stg-meta-input[data-cid="' + cid + '"][data-key]');
     metaInputs.forEach(function(el) {
@@ -35108,15 +35274,10 @@ function saveConnectorChanges(orgId) {
     });
   });
 
-  // Persist to SIEMLess DB
+  // Persist to SIEMLess DB (single source of truth)
   persistConnectorConfig(orgId, org);
 
-  // Also save to localStorage as fallback
-  try { localStorage.setItem('dacta_orgConnectors_' + orgId, JSON.stringify(org)); } catch(e) {}
-  // Also update the global backup
-  try { localStorage.setItem('dacta_allOrgConnectors', JSON.stringify(ORG_CONNECTORS)); } catch(e) {}
-
-  showToast('Connector config saved for ' + org.name + ' — LLM will use updated values', 'success');
+  showToast('Connector config saved for ' + org.name + ' — API configuration updated', 'success');
 }
 
 async function persistConnectorConfig(orgId, org) {
@@ -35136,6 +35297,10 @@ async function persistConnectorConfig(orgId, org) {
         display_name: c.display_name || '',
         is_enabled: !!c.is_enabled,
         health_status: c.health_status || 'unknown',
+        api_endpoint: c.api_endpoint || null,
+        auth_type: c.auth_type || 'api_key',
+        credentials_ref: c.credentials_ref || null,
+        sync_interval_seconds: c.sync_interval_seconds || 300,
         metadata: c.metadata || {},
         updated_at: new Date().toISOString()
       };
@@ -35173,8 +35338,6 @@ async function saveAllSettings() {
   var sel = document.getElementById('settingsOrgSelector');
   if (!sel || !sel.value) { showToast('No organization selected', 'warn'); return; }
   saveConnectorChanges(sel.value);
-  // Also persist all ORG_CONNECTORS to localStorage for global access
-  try { localStorage.setItem('dacta_allOrgConnectors', JSON.stringify(ORG_CONNECTORS)); } catch(e) {}
   showToast('All settings saved globally', 'success');
 }
 
@@ -35276,40 +35439,15 @@ async function loadSSOSettingsUI() {
 // Load persisted connector configs on startup
 async function loadPersistedConnectors() {
   try {
-    // DB loading is now handled by loadOrgConnectorsFromDB() at boot time
-    // This function serves as a fallback for when DB loading hasn't completed yet
-    if (_orgConnectorsLoadedFromDB) return; // Already loaded from DB
+    // DB is the single source of truth — if already loaded, nothing to do
+    if (_orgConnectorsLoadedFromDB) return;
     
-    // Try SIEMLess DB — individual connector rows
+    // Try loading from DB directly
     if (window._supabaseRef) {
-      var { data, error } = await window._supabaseRef.from('org_connectors').select('*');
-      if (!error && data && data.length > 0) {
-        // Group connectors by org_id
-        var byOrg = {};
-        data.forEach(function(row) {
-          if (!byOrg[row.org_id]) byOrg[row.org_id] = [];
-          byOrg[row.org_id].push(row);
-        });
-        // Merge into ORG_CONNECTORS
-        Object.keys(byOrg).forEach(function(orgId) {
-          if (ORG_CONNECTORS[orgId]) {
-            ORG_CONNECTORS[orgId].connectors = byOrg[orgId];
-            console.log('[Settings] Loaded ' + byOrg[orgId].length + ' connectors for', ORG_CONNECTORS[orgId].name);
-          }
-        });
-        return;
-      }
+      await loadOrgConnectorsFromDB();
     }
-    // Fallback to localStorage
-    var allJson = localStorage.getItem('dacta_allOrgConnectors');
-    if (allJson) {
-      var allData = JSON.parse(allJson);
-      Object.keys(allData).forEach(function(key) {
-        if (ORG_CONNECTORS[key]) {
-          ORG_CONNECTORS[key].connectors = allData[key].connectors || ORG_CONNECTORS[key].connectors;
-        }
-      });
-    }
+    // Note: localStorage fallback removed — DB is authoritative.
+    // This prevents deleted connectors from being re-injected by stale local data.
   } catch(e) { console.warn('[Settings] Load persisted failed:', e.message); }
 }
 
@@ -35332,21 +35470,51 @@ async function testAndUpdateHealth(cid) {
   try {
     var ok = false;
     var detail = '';
-    if (c.connector_type === 'siem' || c.connector_type === 'firewall') {
+    // Determine vendor-specific proxy endpoint
+    var vendorLower = (c.vendor || '').toLowerCase();
+    if (c.connector_type === 'siem') {
       var r = await fetch('/api/elastic?action=cluster_health', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ namespace: org.namespace }) });
       if (r.ok) { var d = await r.json(); ok = d.status && d.status !== 'red'; detail = d.status || 'unknown'; }
     } else if (c.connector_type === 'edr') {
-      var r2 = await fetch('/api/crowdstrike', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping' }) });
-      ok = r2.ok;
+      // Route to correct vendor API proxy
+      if (vendorLower.includes('crowdstrike') || vendorLower.includes('falcon')) {
+        var r2 = await fetch('/api/crowdstrike', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        ok = r2.ok; if (r2.ok) { var d2 = await r2.json(); detail = d2.status || 'connected'; }
+      } else if (vendorLower.includes('trend') || vendorLower.includes('vision')) {
+        var r2b = await fetch('/api/trendmicro', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        ok = r2b.ok; if (r2b.ok) { var d2b = await r2b.json(); detail = d2b.status || 'connected'; }
+      } else if (vendorLower.includes('heimdal')) {
+        var r2c = await fetch('/api/heimdal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        ok = r2c.ok; if (r2c.ok) { var d2c = await r2c.json(); detail = d2c.status || 'connected'; }
+      } else {
+        // Generic EDR — check if api_endpoint is configured
+        ok = !!(c.api_endpoint); detail = ok ? 'endpoint configured' : 'no API endpoint';
+      }
+    } else if (c.connector_type === 'firewall') {
+      if (vendorLower.includes('fortinet') || vendorLower.includes('fortigate')) {
+        var r3a = await fetch('/api/fortinet', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        ok = r3a.ok; if (r3a.ok) { var d3a = await r3a.json(); detail = d3a.status || 'connected'; }
+      } else if (vendorLower.includes('palo') || vendorLower.includes('pan-os')) {
+        var r3b = await fetch('/api/paloalto', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        ok = r3b.ok; if (r3b.ok) { var d3b = await r3b.json(); detail = d3b.status || 'connected'; }
+      } else if (vendorLower.includes('imperva')) {
+        var r3c = await fetch('/api/imperva', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        ok = r3c.ok; if (r3c.ok) { var d3c = await r3c.json(); detail = d3c.status || 'connected'; }
+      } else {
+        // Fallback: test via Elastic
+        var r3d = await fetch('/api/elastic?action=cluster_health', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ namespace: org.namespace }) });
+        if (r3d.ok) { var d3d = await r3d.json(); ok = d3d.status && d3d.status !== 'red'; detail = d3d.status || 'unknown'; }
+      }
     } else if (c.connector_type === 'ticketing') {
-      var r3 = await fetch('/api/jira?action=health', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
-      ok = r3.ok;
+      var r4 = await fetch('/api/jira?action=health', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+      ok = r4.ok;
     } else if (c.connector_type === 'threat_intel') {
-      // TI is passive — just verify URL metadata is present
-      ok = !!(c.metadata && (c.metadata.url || c.metadata.api_key));
+      ok = !!(c.api_endpoint || (c.metadata && (c.metadata.url || c.metadata.api_key)));
       detail = ok ? 'configured' : 'missing config';
     } else {
-      ok = true; detail = 'no test available';
+      // For other types, check if api_endpoint is configured
+      ok = !!(c.api_endpoint || c.is_enabled);
+      detail = c.api_endpoint ? 'endpoint configured' : 'no direct API test';
     }
     c.health_status = ok ? 'healthy' : 'degraded';
     showToast((ok ? 'Connection OK' : 'Connection degraded') + ' — ' + (c.display_name || c.connector_type) + (detail ? ' (' + detail + ')' : ''), ok ? 'success' : 'warn');
@@ -35374,11 +35542,14 @@ async function loadSettingsPage() {
       return;
     }
 
-    // Ensure DB-onboarded orgs are merged before rendering (parallel)
-    await Promise.all([
-      loadOrgsFromSupabase().catch(function(e) { console.warn('[Settings] loadOrgs error:', e.message); }),
-      loadPersistedConnectors().catch(function(e) { console.warn('[Settings] loadConnectors error:', e.message); })
-    ]);
+    // Ensure DB connector data is loaded (DB is single source of truth)
+    // If loadOrgConnectorsFromDB hasn't completed yet, await it now
+    if (!_orgConnectorsLoadedFromDB && window._supabaseRef) {
+      console.log('[Settings] Awaiting loadOrgConnectorsFromDB...');
+      await loadOrgConnectorsFromDB().catch(function(e) { console.warn('[Settings] DB connector load error:', e.message); });
+    }
+    // Also load any newly onboarded orgs
+    await loadOrgsFromSupabase().catch(function(e) { console.warn('[Settings] loadOrgs error:', e.message); });
 
     // Populate org selector from ORG_CONNECTORS
     var optHTML = '';
@@ -38828,8 +38999,8 @@ async function loadOrgConnectorsFromDB() {
     var connectors = (connRes.data || []);
     var logSources = (lsRes.data || []);
     
-    if (orgs.length === 0 || connectors.length === 0) {
-      console.log('[OrgConn] DB empty, keeping hardcoded ORG_CONNECTORS');
+    if (orgs.length === 0) {
+      console.log('[OrgConn] No orgs in DB, keeping hardcoded ORG_CONNECTORS');
       return;
     }
     
@@ -52327,9 +52498,152 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   var _allFwConnectors = getOrgConnectors(namespace, 'firewall'); // ALL firewall connectors (Palo Alto + FortiGate + etc)
   console.log('[Investigation] Org: ' + namespace + ' | EDR: ' + _hasEDR + ' | Firewall: ' + _hasFirewall);
 
+  // ── Direct Vendor API Queries (when connector has api_endpoint configured) ──
+  // If the EDR connector has a direct API endpoint, query the vendor API in addition to Elastic
+  var _edrVendorLower = _edrConnector ? (_edrConnector.vendor || '').toLowerCase() : '';
+  var _edrHasDirectAPI = _edrConnector && _edrConnector.api_endpoint;
+  if (_edrHasDirectAPI) {
+    var _edrOrgId = _orgConfig ? _orgConfig.id : null;
+    try {
+      if (_edrVendorLower.includes('crowdstrike') || _edrVendorLower.includes('falcon')) {
+        // Direct CrowdStrike Falcon API — query detections by hostname or IP
+        var csQueryBody = { action: 'query_detections', org_id: _edrOrgId, limit: 5 };
+        var _hostToQuery = (iocs.hosts || [])[0] || '';
+        var _ipToQuery = (iocs.ips || [])[0] || '';
+        if (_hostToQuery) csQueryBody.hostname = _hostToQuery;
+        else if (_ipToQuery) csQueryBody.ip = _ipToQuery;
+        var qDirect1 = { name: 'CrowdStrike Direct API — Detections', query: _hostToQuery || _ipToQuery || 'latest', status: 'running' };
+        logs.queryDetails.push(qDirect1); logs.queriesRun++;
+        var csDirectResp = await fetch('/api/crowdstrike', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(csQueryBody) });
+        if (csDirectResp.ok) {
+          var csDirectData = await csDirectResp.json();
+          qDirect1.status = 'success'; qDirect1.hits = (csDirectData.detections || []).length;
+          (csDirectData.detections || []).forEach(function(det) {
+            logs.rawAlerts.push({
+              timestamp: det.created_timestamp, hostname: det.hostname, processName: (det.behaviors[0] || {}).filename || '',
+              parentProcess: ((det.behaviors[0] || {}).parent_details || {}).filename || '', cmdline: (det.behaviors[0] || {}).cmdline || '',
+              alertName: (det.behaviors[0] || {}).display_name || '', severity: det.max_severity_displayname || '',
+              confidence: det.max_confidence || 0, disposition: (det.behaviors[0] || {}).pattern_disposition_description || '',
+              dispositionDetails: (det.behaviors[0] || {}).pattern_disposition_details || {},
+              tactic: (det.behaviors || []).map(function(b) { return b.tactic; }), technique: (det.behaviors || []).map(function(b) { return b.technique; }),
+              techniqueId: (det.behaviors || []).map(function(b) { return b.technique_id; }),
+              relatedIPs: [det.local_ip, det.external_ip].filter(Boolean), relatedHashes: (det.behaviors || []).map(function(b) { return b.sha256; }).filter(Boolean),
+              relatedUsers: (det.behaviors || []).map(function(b) { return b.user_name; }).filter(Boolean),
+              relatedHosts: [det.hostname].filter(Boolean), falconLink: '', product: 'CrowdStrike Falcon (Direct API)',
+              scenario: '', objective: '', localPrevalence: '', globalPrevalence: '', _source: 'direct_api'
+            });
+          });
+          if (csDirectData.detections && csDirectData.detections.length) logs.elasticConnected = true;
+        } else { qDirect1.status = 'error'; }
+      } else if (_edrVendorLower.includes('trend') || _edrVendorLower.includes('vision')) {
+        // Direct Trend Micro Vision One API
+        var tmQueryBody = { action: 'search_detections', org_id: _edrOrgId, limit: 5 };
+        if ((iocs.hosts || [])[0]) tmQueryBody.hostname = iocs.hosts[0];
+        else if ((iocs.ips || [])[0]) tmQueryBody.ip = iocs.ips[0];
+        var qDirect2 = { name: 'Trend Vision One Direct API — Alerts', query: (iocs.hosts || [])[0] || (iocs.ips || [])[0] || 'latest', status: 'running' };
+        logs.queryDetails.push(qDirect2); logs.queriesRun++;
+        var tmDirectResp = await fetch('/api/trendmicro', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(tmQueryBody) });
+        if (tmDirectResp.ok) {
+          var tmDirectData = await tmDirectResp.json();
+          qDirect2.status = 'success'; qDirect2.hits = (tmDirectData.items || []).length;
+          (tmDirectData.items || []).forEach(function(item) {
+            logs.rawAlerts.push({
+              timestamp: item.createdDateTime || '', hostname: item.endpointHostName || '',
+              processName: item.entityValue || '', alertName: item.alertName || item.modelName || '',
+              severity: item.severity || '', confidence: item.score || 0,
+              tactic: [], technique: [], techniqueId: [],
+              relatedIPs: [], relatedHashes: [], relatedUsers: [], relatedHosts: [item.endpointHostName].filter(Boolean),
+              product: 'Trend Vision One (Direct API)', _source: 'direct_api'
+            });
+          });
+          if (tmDirectData.items && tmDirectData.items.length) logs.elasticConnected = true;
+        } else { qDirect2.status = 'error'; }
+      } else if (_edrVendorLower.includes('heimdal')) {
+        // Direct Heimdal Security API
+        var hmQueryBody = { action: 'get_detections', org_id: _edrOrgId, per_page: 5 };
+        if ((iocs.hosts || [])[0]) hmQueryBody.hostname = iocs.hosts[0];
+        var qDirect3 = { name: 'Heimdal Direct API — Detections', query: (iocs.hosts || [])[0] || 'latest', status: 'running' };
+        logs.queryDetails.push(qDirect3); logs.queriesRun++;
+        var hmDirectResp = await fetch('/api/heimdal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(hmQueryBody) });
+        if (hmDirectResp.ok) {
+          var hmDirectData = await hmDirectResp.json();
+          var hmItems = Array.isArray(hmDirectData) ? hmDirectData : (hmDirectData.data || []);
+          qDirect3.status = 'success'; qDirect3.hits = hmItems.length;
+          hmItems.forEach(function(item) {
+            logs.rawAlerts.push({
+              timestamp: item.detectionDate || item.createdAt || '', hostname: item.machineName || item.hostname || '',
+              processName: item.processName || item.fileName || '', alertName: item.detectionName || item.threatName || '',
+              severity: item.severity || 'medium', confidence: 0,
+              tactic: [], technique: [], techniqueId: [],
+              relatedIPs: [], relatedHashes: [item.fileHash].filter(Boolean), relatedUsers: [item.userName].filter(Boolean),
+              relatedHosts: [item.machineName || item.hostname].filter(Boolean),
+              product: 'Heimdal Security (Direct API)', _source: 'direct_api'
+            });
+          });
+          if (hmItems.length) logs.elasticConnected = true;
+        } else { qDirect3.status = 'error'; }
+      }
+    } catch(directApiErr) {
+      console.warn('[Investigation] Direct vendor API query failed:', directApiErr.message);
+    }
+  }
+
+  // ── Direct Firewall API Queries ──
+  var _fwHasDirectAPI = false;
+  if (_allFwConnectors && _allFwConnectors.length) {
+    _allFwConnectors.forEach(function(fwc) {
+      if (fwc.api_endpoint) _fwHasDirectAPI = true;
+    });
+  }
+  if (_fwHasDirectAPI) {
+    try {
+      for (var fwi = 0; fwi < _allFwConnectors.length; fwi++) {
+        var fwc = _allFwConnectors[fwi];
+        if (!fwc.api_endpoint) continue;
+        var fwVendor = (fwc.vendor || '').toLowerCase();
+        var fwOrgId = _orgConfig ? _orgConfig.id : null;
+        var ipToCheck = (iocs.ips || [])[0] || '';
+        if (!ipToCheck) continue;
+
+        if (fwVendor.includes('fortinet') || fwVendor.includes('fortigate')) {
+          var fwQ = { name: 'Fortinet Direct API — Traffic Logs', query: 'srcip=' + ipToCheck, status: 'running' };
+          logs.queryDetails.push(fwQ); logs.queriesRun++;
+          var fnResp = await fetch('/api/fortinet', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'get_traffic_logs', org_id: fwOrgId, filter: 'srcip=' + ipToCheck + ' or dstip=' + ipToCheck, limit: 10 }) });
+          if (fnResp.ok) {
+            var fnData = await fnResp.json();
+            fwQ.status = 'success'; fwQ.hits = (fnData.results || []).length;
+            (fnData.results || []).forEach(function(log) {
+              if (log.action === 'deny' || log.action === 'drop') {
+                logs.firewallBlocks.push({ status: 'BLOCKED', source: log.srcip || '', dest: log.dstip || '', port: log.dstport || '', action: log.action, rule: log.policyid || '', engine: 'Fortinet (Direct API)', _source: 'direct_api' });
+              }
+            });
+          } else { fwQ.status = 'error'; }
+        } else if (fwVendor.includes('palo') || fwVendor.includes('pan')) {
+          var paQ = { name: 'Palo Alto Direct API — Traffic Logs', query: 'addr.src=' + ipToCheck, status: 'running' };
+          logs.queryDetails.push(paQ); logs.queriesRun++;
+          var paResp = await fetch('/api/paloalto', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'get_traffic_logs', org_id: fwOrgId, src_ip: ipToCheck, limit: 10 }) });
+          if (paResp.ok) {
+            var paData = await paResp.json();
+            paQ.status = 'success';
+          } else { paQ.status = 'error'; }
+        } else if (fwVendor.includes('imperva')) {
+          var imQ = { name: 'Imperva Direct API — Security Events', query: ipToCheck, status: 'running' };
+          logs.queryDetails.push(imQ); logs.queriesRun++;
+          var imResp = await fetch('/api/imperva', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'get_security_events', org_id: fwOrgId, limit: 10 }) });
+          if (imResp.ok) {
+            var imData = await imResp.json();
+            imQ.status = 'success';
+          } else { imQ.status = 'error'; }
+        }
+      }
+    } catch(fwApiErr) {
+      console.warn('[Investigation] Direct firewall API query failed:', fwApiErr.message);
+    }
+  }
+
   // ── QUERY 1: EDR Alert Correlation (connector-aware) ──
   if (_hasEDR) {
-    // Client has EDR — proceed with CrowdStrike/EDR queries
+    // Client has EDR — proceed with CrowdStrike/EDR queries via Elastic
     var edrMeta = _edrConnector ? _edrConnector.metadata : {};
     var alertIndex = edrMeta.index_pattern || ('.ds-logs-crowdstrike.alert-' + namespace + '-*');
     var alertQuery = { size: 5, sort: [{ '@timestamp': 'desc' }], _source: true };

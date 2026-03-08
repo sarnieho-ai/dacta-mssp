@@ -385,6 +385,148 @@ export default async function handler(req, res) {
         break;
       }
 
+      // ── Detection queries — search and get full detection details ──
+      case 'query_detections': {
+        // Search detections by IP, hostname, user, or FQL filter
+        // POST body: { filter: "...", limit: 20, offset: 0, sort: "created_timestamp|desc" }
+        // Shorthand: { hostname: 'WS-001' } or { ip: '10.20.14.1' } or { user: 'jdoe' }
+        let dFilter = body.filter || '';
+        if (!dFilter) {
+          const parts = [];
+          if (body.hostname) parts.push(`device.hostname:'${body.hostname}'`);
+          if (body.ip) parts.push(`device.local_ip:'${body.ip}'`);
+          if (body.user) parts.push(`behaviors.user_name:'${body.user}'`);
+          if (body.severity) parts.push(`max_severity_displayname:'${body.severity}'`);
+          if (body.start_time) parts.push(`created_timestamp:>'${body.start_time}'`);
+          dFilter = parts.join('+');
+        }
+        const dParams = {
+          filter: dFilter,
+          limit: parseInt(body.limit || 20),
+          offset: parseInt(body.offset || 0),
+          sort: body.sort || 'created_timestamp|desc'
+        };
+        const dIdsResp = await csGet('/detects/queries/detects/v1', dParams);
+        const dIds = dIdsResp.resources || [];
+        if (!dIds.length) { result = { detections: [], total: 0 }; break; }
+        // Fetch full detection details
+        const dDetailsResp = await csPost('/detects/entities/summaries/GET/v1', { ids: dIds });
+        const detections = (dDetailsResp.resources || []).map(d => ({
+          detection_id: d.detection_id,
+          created_timestamp: d.created_timestamp,
+          hostname: (d.device || {}).hostname || '',
+          local_ip: (d.device || {}).local_ip || '',
+          external_ip: (d.device || {}).external_ip || '',
+          os_version: (d.device || {}).os_version || '',
+          status: d.status,
+          max_severity: d.max_severity,
+          max_severity_displayname: d.max_severity_displayname,
+          max_confidence: d.max_confidence,
+          first_behavior: d.first_behavior,
+          last_behavior: d.last_behavior,
+          behaviors: (d.behaviors || []).map(b => ({
+            tactic: b.tactic,
+            tactic_id: b.tactic_id,
+            technique: b.technique,
+            technique_id: b.technique_id,
+            display_name: b.display_name,
+            description: b.description,
+            severity: b.severity,
+            confidence: b.confidence,
+            cmdline: b.cmdline,
+            filename: b.filename,
+            filepath: b.filepath,
+            parent_details: b.parent_details || {},
+            user_name: b.user_name,
+            sha256: b.sha256,
+            md5: b.md5,
+            pattern_disposition_description: b.pattern_disposition_description,
+            pattern_disposition_details: b.pattern_disposition_details || {}
+          })),
+          hostinfo: d.hostinfo || {},
+          quarantined_files: d.quarantined_files || []
+        }));
+        result = { detections, total: dIdsResp.meta ? dIdsResp.meta.pagination.total : dIds.length };
+        break;
+      }
+
+      case 'get_detections': {
+        // Get full detection details by IDs
+        // POST body: { ids: ['ldt:abc123:456'] }
+        const detIds = body.ids;
+        if (!detIds || !detIds.length) return res.status(400).json({ error: 'Missing ids array' });
+        const detResp = await csPost('/detects/entities/summaries/GET/v1', { ids: detIds });
+        result = detResp;
+        break;
+      }
+
+      // ── Incident queries — search and get incident details ──
+      case 'query_incidents': {
+        // Search incidents by FQL filter or shorthand params
+        let iFilter = body.filter || '';
+        if (!iFilter) {
+          const iParts = [];
+          if (body.hostname) iParts.push(`hosts.hostname:'${body.hostname}'`);
+          if (body.status) iParts.push(`status:'${body.status}'`); // new, in_progress, closed, reopened
+          if (body.start_time) iParts.push(`start:>'${body.start_time}'`);
+          if (body.assigned_to) iParts.push(`assigned_to_name:'${body.assigned_to}'`);
+          iFilter = iParts.join('+');
+        }
+        const iParams = {
+          filter: iFilter,
+          limit: parseInt(body.limit || 20),
+          offset: parseInt(body.offset || 0),
+          sort: body.sort || 'start.desc'
+        };
+        const iIdsResp = await csGet('/incidents/queries/incidents/v1', iParams);
+        const iIds = iIdsResp.resources || [];
+        if (!iIds.length) { result = { incidents: [], total: 0 }; break; }
+        // Fetch full incident details
+        const iDetailsResp = await csPost('/incidents/entities/incidents/GET/v1', { ids: iIds });
+        result = {
+          incidents: iDetailsResp.resources || [],
+          total: iIdsResp.meta ? iIdsResp.meta.pagination.total : iIds.length
+        };
+        break;
+      }
+
+      case 'get_incidents': {
+        // Get full incident details by IDs
+        const incIds = body.ids;
+        if (!incIds || !incIds.length) return res.status(400).json({ error: 'Missing ids array' });
+        const incResp = await csPost('/incidents/entities/incidents/GET/v1', { ids: incIds });
+        result = incResp;
+        break;
+      }
+
+      // ── Network containment — for Response Center ──
+      case 'contain_host': {
+        // Contain or lift containment on a device
+        // POST body: { device_id: 'abc123', action: 'contain' | 'lift_containment' }
+        const deviceId = body.device_id;
+        const containAction = body.contain_action || 'contain'; // 'contain' or 'lift_containment'
+        if (!deviceId) return res.status(400).json({ error: 'Missing device_id' });
+        const containResp = await csPost('/devices/entities/devices-actions/v2', {
+          action_name: containAction,
+          ids: [deviceId]
+        });
+        result = containResp;
+        break;
+      }
+
+      // ── Real-Time Response session — run commands on endpoint ──
+      case 'rtr_session': {
+        // Start an RTR session
+        const rtrDeviceId = body.device_id;
+        if (!rtrDeviceId) return res.status(400).json({ error: 'Missing device_id' });
+        const sessionResp = await csPost('/real-time-response/entities/sessions/v1', {
+          device_id: rtrDeviceId,
+          queue_offline: body.queue_offline || false
+        });
+        result = sessionResp;
+        break;
+      }
+
       // ── Health check — verifies credentials are working ──
       case 'ping': {
         const token = await getToken();
