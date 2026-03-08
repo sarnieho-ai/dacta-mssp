@@ -22,6 +22,11 @@ function elasticFetchOptions(opts) {
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+// Heimdal credentials (for direct EDR calls)
+const HM_BASE = process.env.HEIMDAL_BASE_URL || 'https://dashboard.heimdalsecurity.com/api/heimdalapi/2.0';
+const HM_API_KEY = process.env.HEIMDAL_API_KEY || '';
+const HM_CUSTOMER_ID = process.env.HEIMDAL_CUSTOMER_ID || '';
+
 function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
 const OPENCTI_URL = process.env.OPENCTI_URL || _d('aHR0cDovLzYxLjEzLjIxNC4xOTg6ODA4MA==');
 const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || _d('NjE4OTZjMTQtNWM0OS00NDQ2LTllMDEtYTI4MWRmNTNmY2Qz');
@@ -30,6 +35,92 @@ const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || _d('NjE4OTZjMTQtNWM0OS00NDQ2L
 const CS_CLIENT_ID = process.env.CROWDSTRIKE_CLIENT_ID || '';
 const CS_CLIENT_SECRET = process.env.CROWDSTRIKE_CLIENT_SECRET || '';
 const CS_BASE_URL = process.env.CROWDSTRIKE_BASE_URL || 'https://api.us-2.crowdstrike.com';
+
+// ═══════════════════════════════════════════════
+// Organization Context Loader
+// Resolves org name → org_id → connectors + log sources
+// ═══════════════════════════════════════════════
+async function loadOrgContext(orgName, namespace) {
+  if (!SUPABASE_SERVICE_KEY) return { orgId: null, connectors: [], logSources: [], indexPatterns: [] };
+  const headers = {
+    'apikey': SUPABASE_SERVICE_KEY,
+    'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+    'Accept': 'application/json'
+  };
+  try {
+    // Step 1: Resolve org name to org_id
+    let orgId = null;
+    if (orgName) {
+      const orgResp = await fetch(`${SUPABASE_URL}/rest/v1/organizations?select=id,name,short_name`, { headers });
+      if (orgResp.ok) {
+        const orgs = await orgResp.json();
+        const nameLower = orgName.toLowerCase();
+        const org = orgs.find(o =>
+          o.name.toLowerCase() === nameLower ||
+          nameLower.includes(o.name.toLowerCase()) ||
+          o.name.toLowerCase().includes(nameLower) ||
+          (o.short_name && nameLower.includes(o.short_name.toLowerCase()))
+        );
+        if (org) orgId = org.id;
+      }
+    }
+    if (!orgId) {
+      console.log('[Investigate] Could not resolve org_id for:', orgName);
+      return { orgId: null, connectors: [], logSources: [], indexPatterns: [] };
+    }
+
+    // Step 2: Load connectors and log sources in parallel
+    const [connResp, lsResp] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/org_connectors?org_id=eq.${orgId}&is_enabled=eq.true&select=id,connector_type,vendor,api_endpoint,auth_type,credentials_ref,health_status`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/client_log_sources?org_id=eq.${orgId}&select=source_name,vendor,source_type,index_pattern,status`, { headers })
+    ]);
+
+    const connectors = connResp.ok ? await connResp.json() : [];
+    const logSources = lsResp.ok ? await lsResp.json() : [];
+
+    // Step 3: Extract all unique index patterns
+    const indexPatterns = [];
+    logSources.forEach(ls => {
+      if (ls.index_pattern) {
+        ls.index_pattern.split(/\s+/).forEach(idx => {
+          if (idx && !indexPatterns.includes(idx)) indexPatterns.push(idx);
+        });
+      }
+    });
+
+    console.log(`[Investigate] Org context loaded: orgId=${orgId}, connectors=${connectors.length}, logSources=${logSources.length}, indices=${indexPatterns.length}`);
+    return { orgId, connectors, logSources, indexPatterns };
+  } catch (err) {
+    console.error('[Investigate] Failed to load org context:', err.message);
+    return { orgId: null, connectors: [], logSources: [], indexPatterns: [] };
+  }
+}
+
+// Resolve EDR credentials from org_connectors
+async function resolveEDRAuth(connector) {
+  if (!connector || !connector.credentials_ref) return null;
+  const creds = typeof connector.credentials_ref === 'string'
+    ? JSON.parse(connector.credentials_ref) : connector.credentials_ref;
+  const vendor = (connector.vendor || '').toLowerCase();
+
+  if (vendor.includes('heimdal')) {
+    return {
+      vendor: 'heimdal',
+      baseUrl: connector.api_endpoint || HM_BASE,
+      apiKey: creds.api_key || creds.token || creds.client_secret || HM_API_KEY,
+      customerId: creds.customer_id || creds.client_id || HM_CUSTOMER_ID
+    };
+  }
+  if (vendor.includes('crowdstrike')) {
+    return {
+      vendor: 'crowdstrike',
+      baseUrl: connector.api_endpoint || CS_BASE_URL,
+      clientId: creds.client_id || CS_CLIENT_ID,
+      clientSecret: creds.client_secret || CS_CLIENT_SECRET
+    };
+  }
+  return null;
+}
 
 // ═══════════════════════════════════════════════
 // PHASE 1: INVESTIGATOR SYSTEM PROMPT
@@ -52,11 +143,12 @@ const INVESTIGATOR_PROMPT = `You are a senior SOC forensic investigator at DACTA
 
 ## Tool Usage Strategy
 - Start with the alert context and extract IOCs (IPs, hashes, domains, hostnames, processes)
-- Query Elastic SIEM for: child processes, network connections, file events, EDR actions, auth events
+- Query Elastic SIEM using the SPECIFIC INDEX PATTERNS provided in the alert context (never use generic "logs-*")
+- If an EDR tool (search_edr) is available, query it for endpoint detections, device status, and security events
 - Check DACTA TIP for IOC reputation and MITRE technique context
 - Look at alert history on the same host — is this a recurring pattern?
-- Check CrowdStrike alert data if available in the logs
 - Search for lateral movement indicators across the environment
+- IMPORTANT: Use the exact index patterns listed in the alert context. These are org-specific and different per client.
 
 ## Output Format
 You MUST respond with a valid JSON object (no markdown, no code fences) containing:
@@ -82,6 +174,7 @@ You MUST respond with a valid JSON object (no markdown, no code fences) containi
   "tools_summary": {
     "total_queries": 0,
     "siem_queries": 0,
+    "edr_queries": 0,
     "tip_lookups": 0,
     "findings_from_tools": 0
   }
@@ -196,11 +289,11 @@ CRITICAL: Output ONLY the JSON object. No explanatory text before or after.`;
 const INVESTIGATION_TOOLS = [
   {
     name: "search_siem",
-    description: "Search Elastic SIEM logs using Elasticsearch query DSL. Query for log events, alerts, network connections, process executions, authentication events. Supports aggregations. ALWAYS scope queries to the correct client namespace.",
+    description: "Search Elastic SIEM logs using Elasticsearch query DSL. Query for log events, alerts, network connections, process executions, authentication events. Supports aggregations. ALWAYS use the specific index patterns listed in the alert context — never use generic wildcards like 'logs-*'.",
     input_schema: {
       type: "object",
       properties: {
-        index: { type: "string", description: "Elasticsearch index pattern. Use 'logs-*-{namespace}-*' for client-scoped queries, '.ds-logs-crowdstrike.alert-{namespace}-*' for CrowdStrike alerts, 'logs-panw.panos-{namespace}-*' for firewall." },
+        index: { type: "string", description: "Elasticsearch index pattern. Use the EXACT index patterns from the 'Available Elasticsearch Indices' section in the alert context. If no specific indices listed, use 'logs-*-{namespace}' (no trailing wildcard)." },
         query: { type: "object", description: "Elasticsearch DSL query. Common fields: source.ip, destination.ip, host.name, process.name, event.action, @timestamp, message" },
         size: { type: "integer", description: "Results count (default 10, max 50)" },
         sort: { type: "array", description: "Sort order. Default: [{'@timestamp': 'desc'}]" },
@@ -231,6 +324,27 @@ const INVESTIGATION_TOOLS = [
         technique_id: { type: "string", description: "MITRE technique ID, e.g., 'T1059.001'" }
       },
       required: ["technique_id"]
+    }
+  },
+  {
+    name: "search_edr",
+    description: "Query the organization's EDR platform (Heimdal/CrowdStrike) for endpoint detections, device info, and security events. Use this to investigate endpoint-level activity beyond SIEM logs.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["get_detections", "device_search", "query_detections", "get_endpoints"],
+          description: "EDR action: 'get_detections' for EDR alerts/detections, 'device_search' for endpoint info by hostname/IP, 'query_detections' for detection search by filter, 'get_endpoints' for endpoint inventory"
+        },
+        hostname: { type: "string", description: "Filter by hostname" },
+        ip: { type: "string", description: "Filter by IP address" },
+        start_date: { type: "string", description: "Start date for detection search (ISO format)" },
+        end_date: { type: "string", description: "End date for detection search" },
+        severity: { type: "string", description: "Severity filter (e.g., 'High', 'Critical')" },
+        limit: { type: "integer", description: "Max results (default 10)" }
+      },
+      required: ["action"]
     }
   }
 ];
@@ -348,11 +462,183 @@ async function executeLookupMITRE(params) {
   }
 }
 
+// ═══════════════════════════════════════════════
+// EDR Tool Execution — Heimdal / CrowdStrike
+// Routes to correct vendor based on org connectors
+// ═══════════════════════════════════════════════
+
+// CrowdStrike token cache for investigation
+let _invCsToken = null;
+let _invCsTokenExpiry = 0;
+
+async function getCrowdStrikeToken(auth) {
+  const now = Date.now();
+  if (_invCsToken && now < _invCsTokenExpiry - 60000) return _invCsToken;
+  const resp = await fetch(`${auth.baseUrl}/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `client_id=${encodeURIComponent(auth.clientId)}&client_secret=${encodeURIComponent(auth.clientSecret)}`
+  });
+  if (!resp.ok) throw new Error(`CrowdStrike auth failed: ${resp.status}`);
+  const data = await resp.json();
+  _invCsToken = data.access_token;
+  _invCsTokenExpiry = now + (data.expires_in * 1000);
+  return _invCsToken;
+}
+
+async function executeSearchEDR(params, edrContext) {
+  if (!edrContext || !edrContext.auth) {
+    return { error: 'No EDR connector configured for this organization', connected: false };
+  }
+
+  const { auth } = edrContext;
+  const action = params.action || 'get_detections';
+
+  try {
+    if (auth.vendor === 'heimdal') {
+      return await executeHeimdalEDR(auth, action, params);
+    } else if (auth.vendor === 'crowdstrike') {
+      return await executeCrowdStrikeEDR(auth, action, params);
+    } else {
+      return { error: `Unsupported EDR vendor: ${auth.vendor}`, connected: false };
+    }
+  } catch (err) {
+    return { error: `EDR query failed (${auth.vendor}): ${err.message}`, connected: false };
+  }
+}
+
+async function executeHeimdalEDR(auth, action, params) {
+  const queryParams = { customerId: auth.customerId };
+  if (params.hostname) queryParams.machineName = params.hostname;
+  if (params.start_date) queryParams.startDate = params.start_date;
+  if (params.end_date) queryParams.endDate = params.end_date;
+  if (params.severity) queryParams.severity = params.severity;
+  queryParams.perPage = Math.min(params.limit || 10, 20);
+
+  let endpoint;
+  switch (action) {
+    case 'get_detections': endpoint = 'vigilancedetections'; break;
+    case 'get_endpoints': endpoint = 'activeclients'; break;
+    case 'query_detections': endpoint = 'xtp/getDetections'; break;
+    case 'device_search': endpoint = 'activeclients'; break;
+    default: endpoint = 'vigilancedetections';
+  }
+
+  const qs = new URLSearchParams(queryParams).toString();
+  const url = `${auth.baseUrl}/${endpoint}${qs ? '?' + qs : ''}`;
+  const resp = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${auth.apiKey}`, 'Accept': 'application/json' }
+  });
+
+  if (resp.status === 429) {
+    return { error: 'Heimdal rate limited (5 req/min). Try again shortly.', connected: true, rate_limited: true };
+  }
+  if (!resp.ok) {
+    const errText = await resp.text();
+    return { error: `Heimdal ${action} failed (${resp.status}): ${errText}`, connected: false };
+  }
+
+  const data = await resp.json();
+  // Normalize to a standard shape
+  const items = Array.isArray(data) ? data : (data.data || data.items || data.results || []);
+  return {
+    connected: true,
+    vendor: 'heimdal',
+    action,
+    total: items.length,
+    results: items.slice(0, 20).map(item => ({
+      ...item,
+      // Truncate long fields
+      description: item.description ? (item.description.length > 300 ? item.description.substring(0, 300) + '...' : item.description) : undefined
+    }))
+  };
+}
+
+async function executeCrowdStrikeEDR(auth, action, params) {
+  const token = await getCrowdStrikeToken(auth);
+  const csHeaders = { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' };
+
+  if (action === 'device_search') {
+    let filter = '';
+    if (params.hostname) filter = `hostname:'${params.hostname}'`;
+    else if (params.ip) filter = `local_ip:'${params.ip}'`;
+    if (!filter) return { error: 'device_search requires hostname or ip', connected: true };
+    const qs = new URLSearchParams({ filter, limit: Math.min(params.limit || 5, 10) }).toString();
+    const idResp = await fetch(`${auth.baseUrl}/devices/queries/devices/v1?${qs}`, { headers: csHeaders });
+    if (!idResp.ok) throw new Error(`CS device search: ${idResp.status}`);
+    const idData = await idResp.json();
+    const deviceIds = idData.resources || [];
+    if (!deviceIds.length) return { connected: true, vendor: 'crowdstrike', action, total: 0, results: [] };
+    const detResp = await fetch(`${auth.baseUrl}/devices/entities/devices/v2?ids=${deviceIds.join('&ids=')}`, { headers: csHeaders });
+    if (!detResp.ok) throw new Error(`CS device details: ${detResp.status}`);
+    const detData = await detResp.json();
+    return {
+      connected: true, vendor: 'crowdstrike', action, total: (detData.resources || []).length,
+      results: (detData.resources || []).map(d => ({
+        device_id: d.device_id, hostname: d.hostname, local_ip: d.local_ip, external_ip: d.external_ip,
+        os_version: d.os_version, platform_name: d.platform_name, last_seen: d.last_seen, status: d.status,
+        agent_version: d.agent_version, tags: d.tags || []
+      }))
+    };
+  }
+
+  if (action === 'get_detections' || action === 'query_detections') {
+    const parts = [];
+    if (params.hostname) parts.push(`device.hostname:'${params.hostname}'`);
+    if (params.ip) parts.push(`device.local_ip:'${params.ip}'`);
+    if (params.severity) parts.push(`max_severity_displayname:'${params.severity}'`);
+    if (params.start_date) parts.push(`created_timestamp:>'${params.start_date}'`);
+    const filter = parts.join('+') || '';
+    const dParams = new URLSearchParams({
+      filter, limit: Math.min(params.limit || 10, 20), sort: 'created_timestamp|desc'
+    }).toString();
+    const dIdsResp = await fetch(`${auth.baseUrl}/detects/queries/detects/v1?${dParams}`, { headers: csHeaders });
+    if (!dIdsResp.ok) throw new Error(`CS detection query: ${dIdsResp.status}`);
+    const dIdsData = await dIdsResp.json();
+    const dIds = dIdsData.resources || [];
+    if (!dIds.length) return { connected: true, vendor: 'crowdstrike', action, total: 0, results: [] };
+    const dDetResp = await fetch(`${auth.baseUrl}/detects/entities/summaries/GET/v1`, {
+      method: 'POST', headers: { ...csHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: dIds })
+    });
+    if (!dDetResp.ok) throw new Error(`CS detection details: ${dDetResp.status}`);
+    const dDetData = await dDetResp.json();
+    return {
+      connected: true, vendor: 'crowdstrike', action,
+      total: dIdsData.meta?.pagination?.total || dIds.length,
+      results: (dDetData.resources || []).slice(0, 20).map(d => ({
+        detection_id: d.detection_id, created: d.created_timestamp, status: d.status,
+        hostname: d.device?.hostname, local_ip: d.device?.local_ip,
+        max_severity: d.max_severity_displayname, confidence: d.max_confidence,
+        behaviors: (d.behaviors || []).slice(0, 5).map(b => ({
+          tactic: b.tactic, technique: b.technique, technique_id: b.technique_id,
+          display_name: b.display_name, severity: b.severity, cmdline: b.cmdline,
+          filename: b.filename, user_name: b.user_name, sha256: b.sha256
+        }))
+      }))
+    };
+  }
+
+  if (action === 'get_endpoints') {
+    // Return summary of managed endpoints
+    const resp = await fetch(`${auth.baseUrl}/devices/queries/devices/v1?limit=20&sort=last_seen.desc`, { headers: csHeaders });
+    if (!resp.ok) throw new Error(`CS endpoints: ${resp.status}`);
+    const data = await resp.json();
+    return { connected: true, vendor: 'crowdstrike', action, total: data.meta?.pagination?.total || 0, device_ids: (data.resources || []).slice(0, 10) };
+  }
+
+  return { error: `Unknown EDR action: ${action}`, connected: true };
+}
+
+// Global EDR context — set per-investigation in handler
+let _currentEDRContext = null;
+
 async function executeTool(name, input) {
   switch (name) {
     case 'search_siem': return await executeSearchSIEM(input);
     case 'lookup_threat_intel': return await executeLookupThreatIntel(input);
     case 'lookup_mitre': return await executeLookupMITRE(input);
+    case 'search_edr': return await executeSearchEDR(input, _currentEDRContext);
     default: return { error: `Unknown tool: ${name}` };
   }
 }
@@ -681,7 +967,7 @@ async function logInvestigationUsage({ ticketKey, phase, model, usage, toolCallL
 // Vercel Config
 // ═══════════════════════════════════════════════
 export const config = {
-  maxDuration: 60
+  maxDuration: 90
 };
 
 // ═══════════════════════════════════════════════
@@ -716,6 +1002,55 @@ export default async function handler(req, res) {
       'SilverKey', 'Silver Key', 'ADV Partners', 'Dacta Training', 'Dacta Global'];
     vault.registerClientNames(KNOWN_CLIENTS);
 
+    // ── Load Organization Context (connectors + log sources from DB) ──
+    const orgName = alert_context.organization || '';
+    const orgCtx = await loadOrgContext(orgName, namespace);
+
+    // Set up EDR context for tool execution
+    const edrConnector = orgCtx.connectors.find(c => c.connector_type === 'edr');
+    let edrAuth = null;
+    if (edrConnector) {
+      edrAuth = await resolveEDRAuth(edrConnector);
+    }
+    // If no org-level EDR creds, fall back to env var defaults
+    if (!edrAuth && CS_CLIENT_ID && CS_CLIENT_SECRET) {
+      edrAuth = { vendor: 'crowdstrike', baseUrl: CS_BASE_URL, clientId: CS_CLIENT_ID, clientSecret: CS_CLIENT_SECRET };
+    } else if (!edrAuth && HM_API_KEY && HM_CUSTOMER_ID) {
+      edrAuth = { vendor: 'heimdal', baseUrl: HM_BASE, apiKey: HM_API_KEY, customerId: HM_CUSTOMER_ID };
+    }
+    _currentEDRContext = edrAuth ? { auth: edrAuth, vendor: edrAuth.vendor } : null;
+
+    // ── Build index pattern context for LLM ──
+    let indexContext = '';
+    if (orgCtx.indexPatterns.length > 0) {
+      // Use actual indices from client_log_sources
+      const indexList = orgCtx.indexPatterns.map(idx => `  - ${idx}`).join('\n');
+      indexContext = `### Available Elasticsearch Indices for This Organization\nUse ONLY these specific index patterns when querying SIEM. Do NOT use generic wildcard patterns like "logs-*":\n${indexList}\n\nFor a broad search across all log sources, use a comma-separated list of these indices or the first matching index for the relevant log type.`;
+    } else if (namespace) {
+      // Fallback: construct patterns from namespace (less precise)
+      indexContext = `### Client Namespace for SIEM queries: ${namespace}\nNo specific index patterns configured. Try these patterns:\n  - logs-*-${namespace} (primary — note: NO trailing wildcard after namespace)\n  - .ds-logs-*-${namespace}-* (data streams)\nIMPORTANT: Scope ALL Elastic queries to this namespace.`;
+    }
+
+    // ── Build log source summary ──
+    let logSourceSummary = '';
+    if (orgCtx.logSources.length > 0) {
+      logSourceSummary = '\n### Configured Log Sources\n' + orgCtx.logSources.map(ls =>
+        `- **${ls.source_name}** (${ls.vendor}, type: ${ls.source_type}, status: ${ls.status})${ls.index_pattern ? ' — indices: ' + ls.index_pattern : ''}`
+      ).join('\n');
+    }
+
+    // ── Build connector/tools summary ──
+    let connectorSummary = '';
+    const activeConnectors = orgCtx.connectors.filter(c => c.health_status === 'healthy' || c.health_status === 'degraded');
+    if (activeConnectors.length > 0) {
+      connectorSummary = '\n### Available Security Tools for This Organization\n' + activeConnectors.map(c =>
+        `- **${c.vendor}** (${c.connector_type}) — status: ${c.health_status}`
+      ).join('\n');
+      if (_currentEDRContext) {
+        connectorSummary += `\n\n**EDR Available**: ${_currentEDRContext.vendor}. Use the search_edr tool to query endpoint detections, device info, and security events from ${_currentEDRContext.vendor}.`;
+      }
+    }
+
     // Build the context message for the LLM
     const alertBrief = `## Alert Under Investigation: ${ticket_key}
 **Summary**: ${alert_context.summary || 'N/A'}
@@ -738,8 +1073,9 @@ ${alert_context.description || 'No description available'}
 ### Detected MITRE Techniques
 ${(alert_context.techniques || []).map(t => `- ${t.id}: ${t.name} [${t.tactic}]`).join('\n') || 'None detected'}
 
-### Client Namespace for SIEM queries: ${namespace || 'unknown'}
-${namespace ? `IMPORTANT: Scope ALL Elastic queries to namespace "${namespace}". Use index "logs-*-${namespace}-*" or filter by data_stream.namespace.` : ''}`;
+${indexContext}
+${logSourceSummary}
+${connectorSummary}`;
 
     const tokenizedBrief = vault.tokenize(alertBrief);
 

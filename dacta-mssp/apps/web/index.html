@@ -56090,6 +56090,7 @@ function buildLLMRound1HTML(phase1Result, toolCalls) {
   html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3);">AI INVESTIGATOR — PHASE 1</span>';
   if (ts.total_queries) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">' + ts.total_queries + ' TOOL CALLS</span>';
   if (ts.siem_queries) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">' + ts.siem_queries + ' SIEM QUERIES</span>';
+  if (ts.edr_queries) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.25);">' + ts.edr_queries + ' EDR QUERIES</span>';
   if (ts.tip_lookups) html += '<span style="font-size:8px;padding:2px 8px;border-radius:10px;background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);">' + ts.tip_lookups + ' TI LOOKUPS</span>';
   html += '</div>';
 
