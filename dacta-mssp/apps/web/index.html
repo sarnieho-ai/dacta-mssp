@@ -11862,9 +11862,12 @@ function dIcon(name, size, color) {
           async function loadCoverageAnalytics() {
             var panel = document.getElementById('dr-panel-coverage');
             if(!panel) return;
-            showToast('Loading coverage analytics from SIEMLess DB...');
-            // Use DB data (renderCoverage already called by loadDetectionRulesLive)
-            renderCoverage();
+            // Use live data from SIEMLess DB
+            if (typeof loadCoverageAnalyticsLive === 'function') {
+              await loadCoverageAnalyticsLive();
+            } else {
+              renderCoverage();
+            }
             // Also attempt Elastic for heatmap cell coverage (best-effort)
             try {
               var resp = await fetch('/api/elastic', {
@@ -27043,7 +27046,7 @@ var _playbookCache = {};
 var _playbooksLoaded = false; // kept for compat — always true once first fetch done
 
 // Slim columns for table listing (no heavy text blobs)
-var _rulesListColumns = 'id,name,syntax,severity,status,mitre_tactic,mitre_technique_id,vendor,author,version,avg_daily_hits,false_positive_rate,is_enabled,source_type,log_source_product,log_source_category';
+var _rulesListColumns = 'id,name,syntax,severity,status,mitre_tactic,mitre_technique_id,vendor,author,version,avg_daily_hits,false_positive_rate,is_enabled,source_type,log_source_product,log_source_category,log_source_service';
 
 // ── Map raw DB row → display object (slim) ──
 function mapRuleRow(r) {
@@ -27068,9 +27071,10 @@ function mapRuleRow(r) {
     _vendor: r.vendor || '',
     _isEnabled: r.is_enabled !== false,
     _syntax: r.syntax || 'sigma',
-    _sourceType: r.source_type || '',
+    _sourceType: (r.source_type && r.log_source_service && r.log_source_service !== r.source_type && r.log_source_service.toLowerCase() !== (r.vendor || '').toLowerCase()) ? r.source_type + ' \u2014 ' + r.log_source_service : (r.source_type || ''),
     _logSourceProduct: r.log_source_product || '',
-    _logSourceCategory: r.log_source_category || ''
+    _logSourceCategory: r.log_source_category || '',
+    _logSourceService: r.log_source_service || ''
   };
 }
 
@@ -29002,79 +29006,9 @@ function _lscTimeAgo(dateStr) {
   return d.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
 }
 
-// ── Add/Edit Modal ──
-function lscOpenAddModal() {
-  document.getElementById('lscEditId').value = '';
-  document.getElementById('lscFName').value = '';
-  document.getElementById('lscFVendor').value = '';
-  document.getElementById('lscFType').value = 'edr';
-  document.getElementById('lscFIndex').value = '';
-  document.getElementById('lscFStatus').value = 'healthy';
-  document.getElementById('lscFEPD').value = '';
-  document.getElementById('lscFNotes').value = '';
-  document.getElementById('lscModalTitle').textContent = 'Add Log Source';
-  document.getElementById('lscSaveBtn').textContent = 'Add Source';
-  document.getElementById('lscModalOverlay').classList.add('active');
-}
-
-function lscEditSource(id) {
-  var src = _lscCurrentData.find(function(s){ return s.id === id; });
-  if (!src) return;
-  document.getElementById('lscEditId').value = src.id;
-  document.getElementById('lscFName').value = src.source_name || '';
-  document.getElementById('lscFVendor').value = src.vendor || '';
-  document.getElementById('lscFType').value = src.source_type || 'edr';
-  document.getElementById('lscFIndex').value = src.index_pattern || '';
-  document.getElementById('lscFStatus').value = src.status || 'healthy';
-  document.getElementById('lscFEPD').value = src.events_per_day || '';
-  document.getElementById('lscFNotes').value = src.notes || '';
-  document.getElementById('lscModalTitle').textContent = 'Edit Log Source';
-  document.getElementById('lscSaveBtn').textContent = 'Update Source';
-  document.getElementById('lscModalOverlay').classList.add('active');
-}
-
-function lscCloseModal() {
-  document.getElementById('lscModalOverlay').classList.remove('active');
-}
-
-async function lscSaveSource() {
-  if (!window._dactaSupabase || !_lscCurrentOrgId) return;
-  var editId = document.getElementById('lscEditId').value;
-  var payload = {
-    source_name: document.getElementById('lscFName').value.trim(),
-    vendor: document.getElementById('lscFVendor').value.trim().toLowerCase(),
-    source_type: document.getElementById('lscFType').value,
-    index_pattern: document.getElementById('lscFIndex').value.trim(),
-    status: document.getElementById('lscFStatus').value,
-    events_per_day: parseInt(document.getElementById('lscFEPD').value) || 0,
-    notes: document.getElementById('lscFNotes').value.trim()
-  };
-  if (!payload.source_name) { showToast('Source name is required', 'error'); return; }
-  try {
-    var res;
-    if (editId) {
-      payload.updated_at = new Date().toISOString();
-      res = await window._dactaSupabase.from('client_log_sources').update(payload).eq('id', editId);
-    } else {
-      payload.org_id = _lscCurrentOrgId;
-      payload.onboarded_at = new Date().toISOString();
-      payload.monitoring_active = true;
-      payload.expected_by_client = true;
-      res = await window._dactaSupabase.from('client_log_sources').insert(payload);
-    }
-    if (res.error) throw res.error;
-    lscCloseModal();
-    showToast(editId ? 'Log source updated' : 'Log source added', 'success');
-    lscLoadOrg(_lscCurrentOrgId);
-    // Also refresh Settings tab panel if it exists
-    if (_stgLsCurrentOrgId === _lscCurrentOrgId && document.getElementById('stgLsSourcesContainer')) {
-      stgLsLoadOrg(_stgLsCurrentOrgId);
-    }
-  } catch(e) {
-    console.error('[LSC] Save error', e);
-    showToast('Save failed: ' + (e.message || 'Unknown error'), 'error');
-  }
-}
+// ── Add/Edit Modal (legacy — overridden by global modal functions below) ──
+// Functions lscOpenAddModal, lscEditSource, lscCloseModal, lscSaveSource
+// are now defined in the PATCHED section below to use the global modal
 
 async function lscDeleteSource(id, name) {
   if (!confirm('Remove "' + name + '" from this client\u2019s monitored sources?')) return;
@@ -29175,7 +29109,11 @@ async function stgLsLoadOrg(orgId) {
     _stgLsCurrentData = res.data || [];
     _lscCurrentData = _stgLsCurrentData; // share with modal/export functions
     stgLsUpdateMetrics(_stgLsCurrentData);
-    stgLsRenderCards(_stgLsCurrentData);
+    if (_stgLsCurrentData.length === 0) {
+      stgLsShowConnectorSources(orgId);
+    } else {
+      stgLsRenderCards(_stgLsCurrentData);
+    }
     // Gap detection
     var expectedCount = _stgLsCurrentData.filter(function(s){ return s.expected_by_client === true; }).length;
     var monitoredCount = _stgLsCurrentData.filter(function(s){ return s.monitoring_active !== false && s.status !== 'silent'; }).length;
@@ -29264,6 +29202,351 @@ function stgLsRenderCards(data) {
   });
   container.innerHTML = html;
 }
+
+// ══════════════════════════════════════════════════════════════
+//  PATCHED: Global Add/Edit Source Modal + Auto-populate from connectors
+// ══════════════════════════════════════════════════════════════
+
+// Override lscOpenAddModal to use the global modal
+function lscOpenAddModal() {
+  var overlay = document.getElementById('lscModalOverlayGlobal');
+  if (!overlay) { /* fallback to old modal */ var old = document.getElementById('lscModalOverlay'); if(old) old.classList.add('active'); return; }
+  document.getElementById('lscEditIdG').value = '';
+  document.getElementById('lscFNameG').value = '';
+  document.getElementById('lscFVendorG').value = '';
+  document.getElementById('lscFTypeG').value = 'edr';
+  document.getElementById('lscFIndexG').value = '';
+  document.getElementById('lscFStatusG').value = 'healthy';
+  document.getElementById('lscFEPDG').value = '';
+  document.getElementById('lscFNotesG').value = '';
+  document.getElementById('lscModalTitleG').textContent = 'Add Log Source';
+  document.getElementById('lscSaveBtnG').textContent = 'Add Source';
+  overlay.style.display = 'flex';
+}
+
+function lscEditSource(id) {
+  var src = (_lscCurrentData || []).find(function(s){ return s.id === id; });
+  if (!src) src = (_stgLsCurrentData || []).find(function(s){ return s.id === id; });
+  if (!src) return;
+  var overlay = document.getElementById('lscModalOverlayGlobal');
+  if (!overlay) return;
+  document.getElementById('lscEditIdG').value = src.id;
+  document.getElementById('lscFNameG').value = src.source_name || '';
+  document.getElementById('lscFVendorG').value = src.vendor || '';
+  document.getElementById('lscFTypeG').value = src.source_type || 'edr';
+  document.getElementById('lscFIndexG').value = src.index_pattern || '';
+  document.getElementById('lscFStatusG').value = src.status || 'healthy';
+  document.getElementById('lscFEPDG').value = src.events_per_day || '';
+  document.getElementById('lscFNotesG').value = src.notes || '';
+  document.getElementById('lscModalTitleG').textContent = 'Edit Log Source';
+  document.getElementById('lscSaveBtnG').textContent = 'Update Source';
+  overlay.style.display = 'flex';
+}
+
+function lscCloseModal() {
+  var overlay = document.getElementById('lscModalOverlayGlobal');
+  if (overlay) overlay.style.display = 'none';
+  // Also close old modal if it exists
+  var old = document.getElementById('lscModalOverlay');
+  if (old) old.classList.remove('active');
+}
+
+async function lscSaveSource() {
+  if (!window._dactaSupabase || !_lscCurrentOrgId) return;
+  var editId = document.getElementById('lscEditIdG').value;
+  var payload = {
+    source_name: document.getElementById('lscFNameG').value.trim(),
+    vendor: document.getElementById('lscFVendorG').value.trim().toLowerCase(),
+    source_type: document.getElementById('lscFTypeG').value,
+    index_pattern: document.getElementById('lscFIndexG').value.trim(),
+    status: document.getElementById('lscFStatusG').value,
+    events_per_day: parseInt(document.getElementById('lscFEPDG').value) || 0,
+    notes: document.getElementById('lscFNotesG').value.trim()
+  };
+  if (!payload.source_name) { showToast('Source name is required', 'error'); return; }
+  try {
+    var res;
+    if (editId) {
+      payload.updated_at = new Date().toISOString();
+      res = await window._dactaSupabase.from('client_log_sources').update(payload).eq('id', editId);
+    } else {
+      payload.org_id = _lscCurrentOrgId;
+      payload.onboarded_at = new Date().toISOString();
+      payload.monitoring_active = true;
+      payload.expected_by_client = true;
+      res = await window._dactaSupabase.from('client_log_sources').insert(payload);
+    }
+    if (res.error) throw res.error;
+    lscCloseModal();
+    showToast(editId ? 'Log source updated' : 'Log source added', 'success');
+    // Refresh whichever view is active
+    if (typeof lscLoadOrg === 'function' && _lscCurrentOrgId) lscLoadOrg(_lscCurrentOrgId);
+    if (_stgLsCurrentOrgId && document.getElementById('stgLsSourcesContainer')) {
+      stgLsLoadOrg(_stgLsCurrentOrgId);
+    }
+  } catch(e) {
+    console.error('[LSC] Save error', e);
+    showToast('Save failed: ' + (e.message || 'Unknown error'), 'error');
+  }
+}
+
+// ── Auto-populate from connectors when no log sources exist ──
+async function stgLsShowConnectorSources(orgId) {
+  if (!window._dactaSupabase || !orgId) return;
+  try {
+    var res = await window._dactaSupabase.from('org_connectors').select('*').eq('org_id', orgId);
+    if (res.error || !res.data || res.data.length === 0) return;
+    var connectors = res.data.filter(function(c) { return c.is_enabled && c.vendor !== 'None'; });
+    if (connectors.length === 0) return;
+    // Get org details for service model
+    var orgRes = await window._dactaSupabase.from('organizations').select('name,service_model').eq('id', orgId).single();
+    var orgName = orgRes.data ? orgRes.data.name : '';
+    var serviceModel = orgRes.data ? (orgRes.data.service_model || '').toUpperCase() : '';
+    var serviceLabel = serviceModel === 'SOCAAS' ? 'MDR-MIS' : (serviceModel || 'Managed');
+
+    var container = document.getElementById('stgLsSourcesContainer');
+    if (!container) return;
+    var html = '<div style="margin-bottom:16px;padding:12px 16px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.12);border-radius:8px;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+    html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+    html += '<span style="font-size:11px;font-weight:600;color:var(--cyan);">No log sources configured for ' + _lscEsc(orgName) + '</span>';
+    html += '<span class="badge badge-cyan" style="font-size:9px;margin-left:auto;">' + serviceLabel + '</span>';
+    html += '</div>';
+    html += '<div style="font-size:10px;color:var(--text-muted);line-height:1.6;margin-bottom:6px;">The following connectors are onboarded via <a href="#" onclick="switchSettingsTab('connectors');return false;" style="color:var(--cyan);text-decoration:underline;">Client Connectors</a>. Click <b>+ Add Source</b> above to register SIEM log source indices for monitoring.</div>';
+    html += '</div>';
+
+    var CONN_TYPE_COLORS = { siem:'rgba(0,212,255,0.12)', edr:'rgba(139,92,246,0.1)', firewall:'rgba(249,115,22,0.08)', threat_intel:'rgba(234,179,8,0.08)', identity:'rgba(251,191,36,0.08)', ticketing:'rgba(100,116,139,0.08)', knowledge_base:'rgba(100,116,139,0.06)' };
+    var CONN_TYPE_LABELS = { siem:'SIEM', edr:'EDR', firewall:'Firewall', threat_intel:'Threat Intel', identity:'Identity', ticketing:'Ticketing', knowledge_base:'Knowledge Base' };
+    var CONN_TYPE_BORDER = { siem:'rgba(0,212,255,0.2)', edr:'rgba(139,92,246,0.2)', firewall:'rgba(249,115,22,0.2)', threat_intel:'rgba(234,179,8,0.2)', identity:'rgba(251,191,36,0.2)', ticketing:'rgba(100,116,139,0.15)', knowledge_base:'rgba(100,116,139,0.12)' };
+    var HEALTH_COLORS = { healthy:'#22c55e', degraded:'#f59e0b', not_configured:'#64748b' };
+
+    connectors.forEach(function(c) {
+      var bg = CONN_TYPE_COLORS[c.connector_type] || 'rgba(255,255,255,0.03)';
+      var border = CONN_TYPE_BORDER[c.connector_type] || 'var(--border-subtle)';
+      var typeLabel = CONN_TYPE_LABELS[c.connector_type] || c.connector_type;
+      var healthColor = HEALTH_COLORS[c.health_status] || '#64748b';
+      html += '<div style="padding:12px 16px;border:1px solid ' + border + ';border-radius:8px;background:' + bg + ';margin-bottom:8px;display:flex;align-items:center;gap:12px;opacity:0.85;">';
+      html += '<div style="width:8px;height:8px;border-radius:50%;background:' + healthColor + ';flex-shrink:0;" title="' + (c.health_status || 'unknown') + '"></div>';
+      html += '<div style="flex:1;">';
+      html += '<div style="font-size:12px;font-weight:600;color:var(--text-primary);">' + _lscEsc(c.vendor) + '</div>';
+      html += '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">' + typeLabel + ' Connector &middot; ' + (c.health_status || 'unknown') + '</div>';
+      html += '</div>';
+      html += '<span style="font-size:9px;font-weight:600;padding:2px 8px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border-subtle);">Read-only</span>';
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  } catch(e) {
+    console.warn('[StgLS] Failed to load connectors for auto-populate', e);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  PATCHED: Live Coverage Analytics from detection_rules
+// ══════════════════════════════════════════════════════════════
+
+async function loadCoverageAnalyticsLive() {
+  var panel = document.getElementById('dr-panel-coverage');
+  if (!panel) return;
+  if (!window._dactaSupabase) return;
+
+  showToast('Loading coverage analytics from SIEMLess DB...');
+
+  try {
+    // Fetch all active rules with MITRE technique IDs + tactic + vendor info
+    var res = await window._dactaSupabase.from('detection_rules')
+      .select('mitre_technique_id,mitre_tactic,vendor,source_type,log_source_category,severity,status')
+      .eq('status', 'active');
+    if (res.error) throw res.error;
+    var rules = res.data || [];
+    var totalRules = rules.length;
+
+    // Count production rules, critical, log source types
+    var critCount = rules.filter(function(r) { return r.severity === 'critical'; }).length;
+    var lsTypes = {};
+    rules.forEach(function(r) { if (r.source_type) lsTypes[r.source_type] = (lsTypes[r.source_type] || 0) + 1; });
+    var lsTypeCount = Object.keys(lsTypes).length;
+
+    // Update stat cards
+    var ct = document.getElementById('covStatTotal'); if (ct) ct.textContent = totalRules;
+    var cls = document.getElementById('covStatLogSources'); if (cls) cls.textContent = lsTypeCount;
+    var cp = document.getElementById('covStatProduction'); if (cp) cp.textContent = totalRules;
+    var cc = document.getElementById('covStatCritical'); if (cc) cc.textContent = critCount;
+
+    // ── MITRE Heatmap: Build dynamic mitreStatus from actual rules ──
+    var techCounts = {};
+    rules.forEach(function(r) {
+      var t = r.mitre_technique_id;
+      if (t) {
+        // Also count parent technique (e.g., T1059 from T1059.001)
+        techCounts[t] = (techCounts[t] || 0) + 1;
+        var parent = t.split('.')[0];
+        if (parent !== t) techCounts[parent] = (techCounts[parent] || 0) + 1;
+      }
+    });
+
+    // Build live mitreStatus: covered (3+ rules), partial (1-2 rules), empty (0)
+    var liveMitreStatus = {};
+    var allTechIds = new Set();
+    mitreTactics.forEach(function(tac) { tac.techs.forEach(function(t) { if (t) allTechIds.add(t); }); });
+    allTechIds.forEach(function(t) {
+      var count = techCounts[t] || 0;
+      if (count >= 3) liveMitreStatus[t] = 'covered';
+      else if (count >= 1) liveMitreStatus[t] = 'partial';
+      else liveMitreStatus[t] = 'empty';
+    });
+
+    // Re-render MITRE grid with live status
+    var grid = document.getElementById('mitreGrid');
+    if (grid) {
+      grid.innerHTML = mitreTactics.map(function(tac) {
+        return '<div class="mitre-tactic">' +
+          '<div class="tac-name">' + tac.name + '</div>' +
+          tac.techs.map(function(t) {
+            if (!t) return '<div style="height:4px;"></div>';
+            var st = liveMitreStatus[t] || 'empty';
+            var count = techCounts[t] || 0;
+            return '<div class="mitre-tech ' + st + '" data-tooltip="' + t + ' (' + count + ' rules)" title="' + t + ' — ' + count + ' rules">' + t.replace('T', '') + '</div>';
+          }).join('') +
+        '</div>';
+      }).join('');
+    }
+
+    // ── Kill Chain: Compute from live tactic data ──
+    var tacticCounts = {};
+    rules.forEach(function(r) {
+      var tac = (r.mitre_tactic || '').toLowerCase().replace(/[_-]/g, ' ');
+      if (tac) tacticCounts[tac] = (tacticCounts[tac] || 0) + 1;
+    });
+
+    var killChainMap = [
+      { phase: 1, name: 'Reconnaissance', tactics: ['reconnaissance'] },
+      { phase: 2, name: 'Weaponization', tactics: ['resource development'] },
+      { phase: 3, name: 'Delivery', tactics: ['initial access'] },
+      { phase: 4, name: 'Exploitation', tactics: ['execution'] },
+      { phase: 5, name: 'Installation', tactics: ['persistence', 'privilege escalation'] },
+      { phase: 6, name: 'Command &amp; Control', tactics: ['command and control'] },
+      { phase: 7, name: 'Actions on Objectives', tactics: ['exfiltration', 'impact'] }
+    ];
+
+    var kcPipeline = document.querySelector('#dr-panel-coverage .kc-pipeline');
+    if (kcPipeline) {
+      var totalTacticRules = 0;
+      killChainMap.forEach(function(kc) {
+        kc.count = 0;
+        kc.tactics.forEach(function(t) { kc.count += (tacticCounts[t] || 0); });
+        totalTacticRules = Math.max(totalTacticRules, kc.count);
+      });
+
+      var kcHtml = '';
+      killChainMap.forEach(function(kc) {
+        var pct = totalTacticRules > 0 ? Math.round((kc.count / totalTacticRules) * 100) : 0;
+        var cls = pct >= 70 ? 'high' : (pct >= 35 ? 'med' : 'low');
+        var covCls = pct >= 70 ? 'coverage-high' : (pct >= 35 ? 'coverage-med' : 'coverage-low');
+        kcHtml += '<div class="kc-phase"><div class="kc-card ' + covCls + '">';
+        kcHtml += '<div class="kc-number">Phase ' + kc.phase + '</div>';
+        kcHtml += '<div class="kc-name">' + kc.name + '</div>';
+        kcHtml += '<div class="kc-rules" style="color:var(--' + (cls === 'high' ? 'green' : (cls === 'med' ? 'amber' : 'red-bright')) + ');">' + kc.count + '</div>';
+        kcHtml += '<div class="kc-rules-label">Detection Rules</div>';
+        kcHtml += '<div class="kc-progress"><div class="kc-progress-fill ' + cls + '" style="width:' + pct + '%;"></div></div>';
+        kcHtml += '<div class="kc-coverage ' + cls + '">' + pct + '%</div>';
+        kcHtml += '</div></div>';
+      });
+      kcPipeline.innerHTML = kcHtml;
+
+      // Update kill chain badge
+      var kcBadge = kcPipeline.parentElement.querySelector('.badge');
+      if (kcBadge) kcBadge.textContent = totalRules + ' rules mapped';
+    }
+
+    // ── Log Source Coverage Matrix: Build from live vendor data ──
+    var vendorCounts = {};
+    var vendorCategories = {};
+    rules.forEach(function(r) {
+      var cat = (r.log_source_category || 'custom').toLowerCase();
+      vendorCounts[cat] = (vendorCounts[cat] || 0) + 1;
+    });
+    var matrix = document.getElementById('drLogSourceMatrix');
+    if (matrix) {
+      var catNames = {
+        'process_creation':'Windows / Sysmon','edr':'EDR','firewall':'Firewall',
+        'cloud':'Cloud / Azure','identity':'Identity','security':'Security',
+        'network':'DNS / Network','custom':'Custom / Other'
+      };
+      var catTagClass = {
+        'process_creation':'windows','edr':'edr','firewall':'firewall',
+        'cloud':'cloud','identity':'identity','security':'security',
+        'network':'network','custom':'custom'
+      };
+      var catOrder = ['process_creation','edr','firewall','cloud','identity','security','network','custom'];
+      var maxCat = 1;
+      catOrder.forEach(function(k) { if ((vendorCounts[k] || 0) > maxCat) maxCat = vendorCounts[k]; });
+
+      var matHtml = '';
+      catOrder.forEach(function(k) {
+        var count = vendorCounts[k] || 0;
+        if (count === 0) return;
+        var pct = Math.round((count / maxCat) * 100);
+        var barColor = pct >= 70 ? 'var(--green)' : (pct >= 40 ? 'var(--amber)' : 'var(--red-bright)');
+        var textColor = pct >= 70 ? 'var(--green)' : (pct >= 40 ? 'var(--amber)' : 'var(--red-bright)');
+        matHtml += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;">';
+        matHtml += '<span class="logsrc-tag ' + (catTagClass[k] || '') + '" style="width:130px;">' + (catNames[k] || k) + '</span>';
+        matHtml += '<div style="flex:1;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:' + barColor + ';border-radius:4px;"></div></div>';
+        matHtml += '<span style="font-family:var(--font-mono);font-size:11px;color:' + textColor + ';font-weight:700;width:60px;text-align:right;">' + count + ' rules</span>';
+        matHtml += '</div>';
+      });
+      matrix.innerHTML = matHtml;
+    }
+
+    // ── Blind Spots: Find uncovered techniques from live data ──
+    var blindSpotContainer = document.querySelector('#dr-panel-coverage .dr-coverage-grid .card:first-child');
+    if (blindSpotContainer) {
+      var gapList = blindSpotContainer.querySelector('div:nth-child(2)');
+      var gapBadge = blindSpotContainer.querySelector('.badge');
+      var gapCount = 0;
+      var gapHtml = '';
+      var fullMitreTechs = [
+        { id:'T1134', name:'Access Token Manipulation', desc:'Token theft/impersonation via Windows APIs' },
+        { id:'T1037', name:'Boot/Logon Init Scripts', desc:'Startup folder monitoring and registry run key detection' },
+        { id:'T1534', name:'Internal Spearphishing', desc:'Correlation rule for internal email-based lateral movement' },
+        { id:'T1491', name:'Defacement', desc:'Web defacement detection via HTTP response monitoring' },
+        { id:'T1595', name:'Active Scanning', desc:'External reconnaissance and port scanning detection' },
+        { id:'T1592', name:'Gather Victim Host Info', desc:'Pre-attack target profiling and information collection' },
+        { id:'T1583', name:'Acquire Infrastructure', desc:'Adversary infrastructure provisioning detection' },
+        { id:'T1133', name:'External Remote Services', desc:'VPN/RDP exposure and unauthorized remote access' },
+        { id:'T1555', name:'Credentials from Password Stores', desc:'Browser/keychain credential theft detection' },
+        { id:'T1548', name:'Abuse Elevation Control', desc:'UAC bypass and sudo abuse detection' },
+        { id:'T1489', name:'Service Stop', desc:'Critical service disruption and anti-forensics detection' }
+      ];
+
+      fullMitreTechs.forEach(function(mt) {
+        if (!techCounts[mt.id] || techCounts[mt.id] === 0) {
+          gapCount++;
+          gapHtml += '<div class="dr-gap-item">';
+          gapHtml += '<div style="flex:1;"><div class="technique">' + mt.id + ' \u2014 ' + mt.name + '</div><div class="desc">' + mt.desc + '</div></div>';
+          gapHtml += '<button class="btn btn-xs btn-primary action-btn" onclick="switchDrTab('builder'); showToast('Open Rule Builder to create rule for ' + mt.id + '')">Generate Rule</button>';
+          gapHtml += '</div>';
+        }
+      });
+      if (gapCount === 0) gapHtml = '<div style="text-align:center;padding:20px;color:var(--green);font-size:12px;">All priority techniques are covered.</div>';
+      if (gapList) gapList.innerHTML = gapHtml;
+      if (gapBadge) gapBadge.textContent = gapCount + ' gaps';
+    }
+
+    // ── OT coverage: Count ICS technique rules if any ──
+    var icsRules = rules.filter(function(r) {
+      var t = r.mitre_technique_id || '';
+      return t.startsWith('T0');
+    });
+    // Update ICS percentage
+    var icsPctEl = document.querySelector('#dr-panel-coverage .mitre-grid + div span[style*="font-size:18px"]');
+    // (skip ICS update for now, keep static)
+
+  } catch(e) {
+    console.warn('[Coverage] Live analytics failed, falling back to renderCoverage():', e);
+    renderCoverage();
+  }
+}
+
 
 // ══════════════════════════════════════════════════════════════
 //  GLOBAL LOG SOURCE CATALOG — derived from detection_rules
@@ -57400,6 +57683,45 @@ window.addEventListener('unhandledrejection', function(e) {
     </div>
   </div>
 </div>
+
+<!-- GLOBAL: Add/Edit Log Source Modal (shared by Settings + Log Sources pages) -->
+<div class="lsc-modal-overlay" id="lscModalOverlayGlobal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:10000;align-items:center;justify-content:center;" onclick="if(event.target===this)lscCloseModal()">
+  <div class="lsc-modal" style="background:#0d1424;border:1px solid var(--border-card);border-radius:14px;width:520px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+    <div class="lsc-modal-header" style="padding:18px 22px;border-bottom:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;">
+      <span id="lscModalTitleG" style="font-size:13px;font-weight:700;color:var(--text-primary);">Add Log Source</span>
+      <button onclick="lscCloseModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px;">&times;</button>
+    </div>
+    <div class="lsc-modal-body" style="padding:16px 22px;">
+      <input type="hidden" id="lscEditIdG">
+      <div class="lsc-field" style="margin-bottom:12px;"><label style="display:block;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Source Name</label><input type="text" id="lscFNameG" class="filter-input" style="width:100%;" placeholder="e.g. CrowdStrike Falcon EDR"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div class="lsc-field"><label style="display:block;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Vendor</label><input type="text" id="lscFVendorG" class="filter-input" style="width:100%;" placeholder="e.g. crowdstrike"></div>
+        <div class="lsc-field"><label style="display:block;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Source Type</label>
+          <select id="lscFTypeG" class="filter-select" style="width:100%;">
+            <option value="edr">EDR</option><option value="firewall">Firewall</option><option value="siem">SIEM</option>
+            <option value="audit">Audit</option><option value="identity">Identity</option><option value="security">Security</option>
+            <option value="email">Email</option><option value="cloud">Cloud</option><option value="custom">Custom</option>
+          </select>
+        </div>
+      </div>
+      <div class="lsc-field" style="margin-bottom:12px;"><label style="display:block;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Index Pattern</label><input type="text" id="lscFIndexG" class="filter-input" style="width:100%;" placeholder="e.g. crowdstrike-*"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div class="lsc-field"><label style="display:block;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Status</label>
+          <select id="lscFStatusG" class="filter-select" style="width:100%;">
+            <option value="healthy">Healthy</option><option value="degraded">Degraded</option><option value="silent">Silent</option>
+          </select>
+        </div>
+        <div class="lsc-field"><label style="display:block;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Expected Events/Day</label><input type="number" id="lscFEPDG" class="filter-input" style="width:100%;" placeholder="e.g. 50000"></div>
+      </div>
+      <div class="lsc-field" style="margin-bottom:16px;"><label style="display:block;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Notes</label><textarea id="lscFNotesG" class="filter-input" style="width:100%;min-height:60px;resize:vertical;" placeholder="Operational notes about this source..."></textarea></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-secondary btn-sm" onclick="lscCloseModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="lscSaveBtnG" onclick="lscSaveSource()">Save Source</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
 
