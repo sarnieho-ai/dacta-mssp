@@ -35491,7 +35491,8 @@ async function loadPersistedConnectors() {
 
 async function testAndUpdateHealth(cid) {
   var parts = cid.split('__');
-  var org = ORG_CONNECTORS[parts[0]];
+  var orgId = parts[0];
+  var org = ORG_CONNECTORS[orgId];
   if (!org) return;
   var c = org.connectors[parseInt(parts[1])];
   if (!c) return;
