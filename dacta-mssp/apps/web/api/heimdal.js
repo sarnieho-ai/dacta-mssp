@@ -55,8 +55,8 @@ async function resolveAuth(orgId) {
       ? JSON.parse(orgCreds.credentials_ref) : orgCreds.credentials_ref;
     return {
       baseUrl: orgCreds.api_endpoint || HM_BASE,
-      apiKey: creds.api_key || creds.token || HM_API_KEY,
-      customerId: creds.customer_id || HM_CUSTOMER_ID
+      apiKey: creds.api_key || creds.token || creds.client_secret || HM_API_KEY,
+      customerId: creds.customer_id || creds.client_id || HM_CUSTOMER_ID
     };
   }
   return { baseUrl: HM_BASE, apiKey: HM_API_KEY, customerId: HM_CUSTOMER_ID };
