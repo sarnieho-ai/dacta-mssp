@@ -18,7 +18,6 @@
 //   get_vpn_events       — VPN connection events
 //   ping                 — Health check
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const FN_BASE = process.env.FORTINET_BASE_URL || '';
 const FN_API_KEY = process.env.FORTINET_API_KEY || '';
@@ -26,19 +25,21 @@ const FN_API_KEY = process.env.FORTINET_API_KEY || '';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-// ── Per-org credential resolution ──
+// ── Per-org credential resolution (fetch-based, no npm deps) ──
 async function getOrgCredentials(orgId) {
   if (!orgId || !SUPABASE_SERVICE_KEY) return null;
   try {
-    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { data } = await sb.from('org_connectors')
-      .select('api_endpoint, auth_type, credentials_ref')
-      .eq('org_id', orgId)
-      .ilike('vendor', '%fortinet%')
-      .eq('is_enabled', true)
-      .limit(1)
-      .single();
-    return data || null;
+    const url = `${SUPABASE_URL}/rest/v1/org_connectors?org_id=eq.${orgId}&vendor=ilike.*fortinet*&is_enabled=eq.true&select=api_endpoint,auth_type,credentials_ref&limit=1`;
+    const resp = await fetch(url, {
+      headers: {
+        'apikey': SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Accept': 'application/json'
+      }
+    });
+    if (!resp.ok) return null;
+    const rows = await resp.json();
+    return rows && rows.length > 0 ? rows[0] : null;
   } catch { return null; }
 }
 

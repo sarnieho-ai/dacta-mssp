@@ -35309,20 +35309,23 @@ async function persistConnectorConfig(orgId, org) {
         payload.id = c.id;
         var { error } = await sb.from('org_connectors').update(payload).eq('id', c.id);
         if (error) console.warn('[Settings] DB update error for', c.connector_type, ':', error.message);
+        else c._saved = true;
       } else {
-        // Find existing by org_id + connector_type to avoid duplicates
-        var existing = await sb.from('org_connectors')
-          .select('id')
-          .eq('org_id', orgId)
-          .eq('connector_type', c.connector_type)
-          .maybeSingle();
+        // Find existing by org_id + connector_type + vendor to avoid duplicates
+        // Use vendor match too because orgs can have multiple connectors of same type
+        var query = sb.from('org_connectors').select('id').eq('org_id', orgId).eq('connector_type', c.connector_type);
+        if (c.vendor) query = query.eq('vendor', c.vendor);
+        var existing = await query.maybeSingle();
         if (existing.data && existing.data.id) {
+          c.id = existing.data.id;
           payload.id = existing.data.id;
           var { error } = await sb.from('org_connectors').update(payload).eq('id', existing.data.id);
           if (error) console.warn('[Settings] DB update error:', error.message);
+          else c._saved = true;
         } else {
-          var { error } = await sb.from('org_connectors').insert(payload);
+          var { data: inserted, error } = await sb.from('org_connectors').insert(payload).select('id').single();
           if (error) console.warn('[Settings] DB insert error:', error.message);
+          else { c.id = inserted.id; c._saved = true; }
         }
       }
     }
