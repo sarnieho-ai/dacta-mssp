@@ -35182,38 +35182,47 @@ function removeConnector(orgId, connIdx) {
     var btn = document.getElementById('rmConnConfirm');
     btn.disabled = true; btn.textContent = 'Removing...';
 
-    var sb = window._supabaseRef || window._dactaSupabase;
     var dbDeleted = false;
 
-    // Strategy 1: Delete by id if present
-    if (c.id && sb) {
+    // Use server-side API proxy for deletion (service role key bypasses RLS)
+    // The anon key used by the frontend Supabase client silently fails on DELETE due to RLS
+    if (c.id) {
       try {
-        var res = await sb.from('org_connectors').delete().eq('id', c.id);
-        if (res.error) throw res.error;
-        dbDeleted = true;
-        console.log('[RemoveConnector] Deleted by id:', c.id);
+        var resp = await fetch('/api/connectors?action=delete_connector', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: c.id })
+        });
+        var result = await resp.json();
+        if (result.success) {
+          dbDeleted = true;
+          console.log('[RemoveConnector] Deleted via API proxy, id:', c.id);
+        } else {
+          console.warn('[RemoveConnector] API delete returned:', result.error || 'unknown error');
+        }
       } catch(e) {
-        console.warn('[RemoveConnector] DB delete by id failed:', e);
+        console.warn('[RemoveConnector] API delete failed:', e);
       }
     }
 
-    // Strategy 2: If no id, try to find and delete by org_id + connector_type + vendor
-    if (!dbDeleted && sb) {
-      try {
-        var orgUuid = orgId;
-        var query = sb.from('org_connectors').delete()
-          .eq('org_id', orgUuid)
-          .eq('connector_type', c.connector_type);
-        if (c.vendor) query = query.eq('vendor', c.vendor);
-        var res2 = await query;
-        if (res2.error) {
-          console.warn('[RemoveConnector] DB delete by compound key failed:', res2.error);
-        } else {
-          dbDeleted = true;
-          console.log('[RemoveConnector] Deleted by org_id + type + vendor');
+    // Fallback: Try direct Supabase client if API proxy unavailable
+    if (!dbDeleted) {
+      var sb = window._supabaseRef || window._dactaSupabase;
+      if (sb && c.id) {
+        try {
+          var res = await sb.from('org_connectors').delete().eq('id', c.id);
+          if (res.error) throw res.error;
+          // Verify deletion actually happened (RLS may silently return success)
+          var check = await sb.from('org_connectors').select('id').eq('id', c.id).maybeSingle();
+          if (!check.data) {
+            dbDeleted = true;
+            console.log('[RemoveConnector] Direct delete confirmed, id:', c.id);
+          } else {
+            console.warn('[RemoveConnector] Direct delete silently failed (RLS), row still exists');
+          }
+        } catch(e) {
+          console.warn('[RemoveConnector] Direct delete error:', e);
         }
-      } catch(e) {
-        console.warn('[RemoveConnector] DB compound delete error:', e);
       }
     }
 
@@ -35282,12 +35291,9 @@ function saveConnectorChanges(orgId) {
 
 async function persistConnectorConfig(orgId, org) {
   try {
-    if (!window._supabaseRef) {
-      console.warn('[Settings] No DB ref — using localStorage only');
-      return;
-    }
-    // Upsert each connector individually to org_connectors table
-    var sb = window._supabaseRef;
+    // Use server-side API proxy for upserts (service role key bypasses RLS)
+    var savedCount = 0;
+    var apiAvailable = true;
     for (var i = 0; i < org.connectors.length; i++) {
       var c = org.connectors[i];
       var payload = {
@@ -35301,18 +35307,44 @@ async function persistConnectorConfig(orgId, org) {
         auth_type: c.auth_type || 'api_key',
         credentials_ref: c.credentials_ref || null,
         sync_interval_seconds: c.sync_interval_seconds || 300,
-        metadata: c.metadata || {},
-        updated_at: new Date().toISOString()
+        metadata: c.metadata || {}
       };
-      // If connector has a DB id, update by id; otherwise upsert by org_id + connector_type
+
+      // Primary: Use API proxy (service role key)
+      if (apiAvailable) {
+        try {
+          var action = c.id ? 'update_connector' : 'upsert_connector';
+          var apiPayload = Object.assign({}, payload);
+          if (c.id) apiPayload.id = c.id;
+          var resp = await fetch('/api/connectors?action=' + action, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(apiPayload)
+          });
+          var result = await resp.json();
+          if (result.success) {
+            if (result.data && result.data.id) c.id = result.data.id;
+            c._saved = true;
+            savedCount++;
+            continue;
+          } else {
+            console.warn('[Settings] API proxy save failed for', c.vendor, ':', result.error);
+          }
+        } catch(e) {
+          console.warn('[Settings] API proxy unavailable:', e.message);
+          apiAvailable = false; // Don't retry API for remaining connectors
+        }
+      }
+
+      // Fallback: Direct Supabase client (may fail silently due to RLS)
+      var sb = window._supabaseRef;
+      if (!sb) continue;
       if (c.id) {
         payload.id = c.id;
         var { error } = await sb.from('org_connectors').update(payload).eq('id', c.id);
         if (error) console.warn('[Settings] DB update error for', c.connector_type, ':', error.message);
-        else c._saved = true;
+        else { c._saved = true; savedCount++; }
       } else {
-        // Find existing by org_id + connector_type + vendor to avoid duplicates
-        // Use vendor match too because orgs can have multiple connectors of same type
         var query = sb.from('org_connectors').select('id').eq('org_id', orgId).eq('connector_type', c.connector_type);
         if (c.vendor) query = query.eq('vendor', c.vendor);
         var existing = await query.maybeSingle();
@@ -35321,15 +35353,15 @@ async function persistConnectorConfig(orgId, org) {
           payload.id = existing.data.id;
           var { error } = await sb.from('org_connectors').update(payload).eq('id', existing.data.id);
           if (error) console.warn('[Settings] DB update error:', error.message);
-          else c._saved = true;
+          else { c._saved = true; savedCount++; }
         } else {
           var { data: inserted, error } = await sb.from('org_connectors').insert(payload).select('id').single();
           if (error) console.warn('[Settings] DB insert error:', error.message);
-          else { c.id = inserted.id; c._saved = true; }
+          else { c.id = inserted.id; c._saved = true; savedCount++; }
         }
       }
     }
-    console.log('[Settings] Saved ' + org.connectors.length + ' connectors to DB for', org.name);
+    console.log('[Settings] Saved ' + savedCount + '/' + org.connectors.length + ' connectors to DB for', org.name);
   } catch(e) {
     console.warn('[Settings] Persist error:', e.message);
     showToast('Saved locally. DB error: ' + e.message, 'warn');
