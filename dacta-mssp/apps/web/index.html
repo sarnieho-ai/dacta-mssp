@@ -34805,7 +34805,8 @@ function renderSettingsConnectors() {
     if (typeof creds === 'string') { try { creds = JSON.parse(creds); } catch(e) { creds = {}; } }
     var hasApiEndpoint = !!(c.api_endpoint);
     var hasCreds = !!(creds.client_id || creds.api_key || creds.token || creds.username);
-    var configComplete = hasApiEndpoint && hasCreds;
+    // Config is complete if: has both endpoint + creds, OR connection was tested healthy, OR has creds with a known-default endpoint vendor
+    var configComplete = (hasApiEndpoint && hasCreds) || (c.health_status === 'healthy') || (hasCreds && !hint.needs_endpoint) || (hasApiEndpoint && !hint.needs_creds);
     var configBadge = configComplete ? '<span style="font-size:8px;padding:1px 5px;background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.2);border-radius:3px;margin-left:6px;">API Configured</span>'
       : '<span style="font-size:8px;padding:1px 5px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);border-radius:3px;margin-left:6px;">Needs Config</span>';
 
@@ -35511,7 +35512,7 @@ async function testAndUpdateHealth(cid) {
     // Determine vendor-specific proxy endpoint
     var vendorLower = (c.vendor || '').toLowerCase();
     if (c.connector_type === 'siem') {
-      var r = await fetch('/api/elastic?action=cluster_health', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ namespace: org.namespace }) });
+      var r = await fetch('/api/elastic', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'cluster_health', namespace: org.namespace }) });
       if (r.ok) { var d = await r.json(); ok = d.status && d.status !== 'red'; detail = d.status || 'unknown'; }
     } else if (c.connector_type === 'edr') {
       // Route to correct vendor API proxy
@@ -35540,7 +35541,7 @@ async function testAndUpdateHealth(cid) {
         ok = r3c.ok; if (r3c.ok) { var d3c = await r3c.json(); detail = d3c.status || 'connected'; }
       } else {
         // Fallback: test via Elastic
-        var r3d = await fetch('/api/elastic?action=cluster_health', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ namespace: org.namespace }) });
+        var r3d = await fetch('/api/elastic', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'cluster_health', namespace: org.namespace }) });
         if (r3d.ok) { var d3d = await r3d.json(); ok = d3d.status && d3d.status !== 'red'; detail = d3d.status || 'unknown'; }
       }
     } else if (c.connector_type === 'ticketing') {
@@ -35559,6 +35560,16 @@ async function testAndUpdateHealth(cid) {
   } catch(e) {
     c.health_status = 'degraded';
     showToast('Connection test failed — ' + (c.display_name || c.connector_type) + ': ' + e.message, 'error');
+  }
+  // Persist health status to DB so it survives refresh
+  if (c.id) {
+    try {
+      fetch('/api/connectors?action=update_connector', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: c.id, health_status: c.health_status })
+      });
+    } catch(e) { /* non-blocking */ }
   }
   renderSettingsConnectors();
 }
