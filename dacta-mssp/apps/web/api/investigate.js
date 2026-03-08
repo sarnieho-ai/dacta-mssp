@@ -150,6 +150,8 @@ const INVESTIGATOR_PROMPT = `You are a senior SOC forensic investigator at DACTA
 ## Tool Usage Strategy
 - Start with the alert context and extract IOCs (IPs, hashes, domains, hostnames, processes)
 - Query Elastic SIEM using the SPECIFIC INDEX PATTERNS provided in the alert context (never use generic "logs-*")
+- **CRITICAL**: Use ONLY the exact field names from the 'ACTUAL Elasticsearch Field Names' section in the alert context. Do NOT guess field names — wrong field names return 0 hits.
+- If field mappings are not available, start with a small match_all query (size 1-2) on the target index to discover the actual document structure before constructing targeted queries.
 - If an EDR tool (search_edr) is available, query it for endpoint detections, device status, and security events
 - Check DACTA TIP for IOC reputation and MITRE technique context
 - Look at alert history on the same host — is this a recurring pattern?
@@ -300,7 +302,7 @@ const INVESTIGATION_TOOLS = [
       type: "object",
       properties: {
         index: { type: "string", description: "Elasticsearch index pattern. Use the EXACT index patterns from the 'Available Elasticsearch Indices' section in the alert context. If no specific indices listed, use 'logs-*-{namespace}' (no trailing wildcard)." },
-        query: { type: "object", description: "Elasticsearch DSL query. Common fields: source.ip, destination.ip, host.name, process.name, event.action, @timestamp, message" },
+        query: { type: "object", description: "Elasticsearch DSL query. IMPORTANT: Use ONLY the exact field names listed in the 'ACTUAL Elasticsearch Field Names' section of the alert context. Do NOT guess field names — wrong field names will return 0 results." },
         size: { type: "integer", description: "Results count (default 10, max 50)" },
         sort: { type: "array", description: "Sort order. Default: [{'@timestamp': 'desc'}]" },
         aggs: { type: "object", description: "Aggregations for statistics" },
@@ -356,6 +358,102 @@ const INVESTIGATION_TOOLS = [
 ];
 
 // ═══════════════════════════════════════════════
+// Elastic Field Mapping Discovery
+// Fetches real field names from indices so the LLM
+// can generate accurate queries instead of guessing
+// ═══════════════════════════════════════════════
+async function fetchElasticFieldMappings(indexPatterns) {
+  if (!ELASTIC_URL || !ELASTIC_API_KEY || indexPatterns.length === 0) return null;
+  try {
+    // Use the first few indices (limit to 3 to avoid huge responses)
+    const indicesToQuery = indexPatterns.slice(0, 3).join(',');
+    const resp = await fetch(`${ELASTIC_URL}/${indicesToQuery}/_mapping`, elasticFetchOptions({
+      method: 'GET',
+      headers: {
+        'Authorization': `ApiKey ${ELASTIC_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    }));
+    if (!resp.ok) {
+      console.log(`[Investigate] Field mapping fetch failed: ${resp.status}`);
+      return null;
+    }
+    const mappings = await resp.json();
+    
+    // Extract top-level field names from all returned indices, grouped by category
+    const fieldsByCategory = {
+      network: new Set(),
+      host_endpoint: new Set(),
+      process: new Set(),
+      user_identity: new Set(),
+      event_metadata: new Set(),
+      file: new Set(),
+      timestamp: new Set(),
+      other: new Set()
+    };
+
+    function categorizeField(fieldPath) {
+      const lf = fieldPath.toLowerCase();
+      if (lf.includes('timestamp') || lf === '@timestamp' || lf.includes('_time') || lf.includes('date')) return 'timestamp';
+      if (lf.startsWith('source.') || lf.startsWith('destination.') || lf.startsWith('network.') || lf.includes('.ip') || lf.includes('.port') || lf.includes('dns.') || lf.includes('url.')) return 'network';
+      if (lf.startsWith('host.') || lf.startsWith('agent.') || lf.startsWith('observer.') || lf.startsWith('os.') || lf.includes('hostname')) return 'host_endpoint';
+      if (lf.startsWith('process.') || lf.includes('command_line') || lf.includes('executable') || lf.includes('pid')) return 'process';
+      if (lf.startsWith('user.') || lf.includes('user_name') || lf.includes('logon') || lf.includes('auth')) return 'user_identity';
+      if (lf.startsWith('event.') || lf.startsWith('rule.') || lf.startsWith('data_stream.') || lf.startsWith('ecs.') || lf.includes('message') || lf.includes('tags')) return 'event_metadata';
+      if (lf.startsWith('file.') || lf.includes('hash.')) return 'file';
+      return 'other';
+    }
+
+    // Walk the mappings tree to get dot-notation paths (max depth 3)
+    function extractFields(properties, prefix, depth) {
+      if (depth > 3 || !properties) return;
+      for (const [key, val] of Object.entries(properties)) {
+        const fullPath = prefix ? `${prefix}.${key}` : key;
+        if (val.properties) {
+          extractFields(val.properties, fullPath, depth + 1);
+        } else {
+          const cat = categorizeField(fullPath);
+          fieldsByCategory[cat].add(fullPath);
+        }
+      }
+    }
+
+    for (const indexData of Object.values(mappings)) {
+      const props = indexData.mappings?.properties;
+      if (props) extractFields(props, '', 0);
+    }
+
+    // Build a concise summary (limit fields per category to keep prompt manageable)
+    const MAX_PER_CAT = 25;
+    const categoryLabels = {
+      timestamp: 'Timestamps',
+      network: 'Network (IPs, Ports, DNS, URLs)',
+      host_endpoint: 'Host / Endpoint / Agent',
+      process: 'Process / Command Line',
+      user_identity: 'User / Identity',
+      event_metadata: 'Event Metadata / Rules / Tags',
+      file: 'File / Hash',
+      other: 'Other Fields'
+    };
+
+    let summary = '';
+    let totalFields = 0;
+    for (const [cat, fields] of Object.entries(fieldsByCategory)) {
+      if (fields.size === 0) continue;
+      const sorted = [...fields].sort().slice(0, MAX_PER_CAT);
+      totalFields += fields.size;
+      summary += `**${categoryLabels[cat]}**: ${sorted.join(', ')}${fields.size > MAX_PER_CAT ? ` ... (+${fields.size - MAX_PER_CAT} more)` : ''}\n`;
+    }
+
+    console.log(`[Investigate] Field mappings discovered: ${totalFields} fields across ${Object.keys(mappings).length} indices`);
+    return summary || null;
+  } catch (err) {
+    console.log(`[Investigate] Field mapping discovery error: ${err.message}`);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════
 // Tool Execution Functions
 // ═══════════════════════════════════════════════
 async function executeSearchSIEM(params) {
@@ -371,6 +469,9 @@ async function executeSearchSIEM(params) {
   if (params.aggs) body.aggs = params.aggs;
   if (params._source) body._source = params._source;
 
+  // Log the actual query for debugging
+  console.log(`[Investigate] SIEM Query → index: ${index}, query: ${JSON.stringify(body.query).substring(0, 500)}`);
+
   try {
     const resp = await fetch(`${ELASTIC_URL}/${index}/_search`, elasticFetchOptions({
       method: 'POST',
@@ -380,8 +481,14 @@ async function executeSearchSIEM(params) {
       },
       body: JSON.stringify(body)
     }));
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.log(`[Investigate] SIEM Query FAILED: ${resp.status} — ${errText.substring(0, 300)}`);
+      return { error: `Elastic query failed: HTTP ${resp.status}`, connected: false, debug: { index, status: resp.status } };
+    }
     const data = await resp.json();
     const total = data.hits?.total?.value || 0;
+    console.log(`[Investigate] SIEM Query result: ${total} hits from index ${index}`);
     const hits = (data.hits?.hits || []).map(h => {
       const src = h._source || {};
       return {
@@ -859,13 +966,20 @@ async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds =
         const realInput = vault.detokenizeDeep(tb.input);
         const toolResult = await executeTool(tb.name, realInput);
         const tokenizedResult = vault.tokenizeDeep(toolResult);
-        toolLog.push({
+        // Build enhanced tool log entry with query details for SIEM searches
+        const logEntry = {
           tool: tb.name,
           input: tb.input,  // Full input for drill-down
           input_summary: JSON.stringify(tb.input).substring(0, 200),
           result_summary: toolResult.error || `${toolResult.total !== undefined ? toolResult.total + ' hits' : (toolResult.found ? 'FOUND' : 'not found')}`,
           connected: toolResult.connected !== false
-        });
+        };
+        // For SIEM queries, include the index and query for debugging
+        if (tb.name === 'search_siem' && realInput) {
+          logEntry.siem_index = realInput.index || 'logs-*';
+          logEntry.siem_query = JSON.stringify(realInput.query || {}).substring(0, 500);
+        }
+        toolLog.push(logEntry);
         if (useClaude) {
           return { type: 'tool_result', tool_use_id: tb.id, content: JSON.stringify(tokenizedResult) };
         } else {
@@ -1036,6 +1150,11 @@ export default async function handler(req, res) {
     }
     _currentEDRContext = edrAuth ? { auth: edrAuth, vendor: edrAuth.vendor } : null;
 
+    // ── Discover actual Elastic field mappings for accurate queries ──
+    const effectivePatterns = orgCtx.indexPatterns.length > 0 ? orgCtx.indexPatterns
+      : (namespace ? [`logs-*-${namespace}`] : []);
+    const fieldMappings = await fetchElasticFieldMappings(effectivePatterns);
+
     // ── Build index pattern context for LLM ──
     let indexContext = '';
     if (orgCtx.indexPatterns.length > 0) {
@@ -1045,6 +1164,12 @@ export default async function handler(req, res) {
     } else if (namespace) {
       // Fallback: construct patterns from namespace (less precise)
       indexContext = `### Client Namespace for SIEM queries: ${namespace}\nNo specific index patterns configured. Try these patterns:\n  - logs-*-${namespace} (primary — note: NO trailing wildcard after namespace)\n  - .ds-logs-*-${namespace}-* (data streams)\nIMPORTANT: Scope ALL Elastic queries to this namespace.`;
+    }
+
+    // ── Build field mapping context for LLM ──
+    let fieldMappingContext = '';
+    if (fieldMappings) {
+      fieldMappingContext = `\n### ACTUAL Elasticsearch Field Names (from index mappings)\nThese are the REAL field names that exist in the indices. You MUST use ONLY these exact field names in your Elasticsearch queries. Do NOT invent or guess field names.\n${fieldMappings}\nCRITICAL: If a field you want to query is not listed above, try using a match_all query with a small size first to see the actual document structure, or use a wildcard aggregation to discover values.`;
     }
 
     // ── Build log source summary ──
@@ -1090,6 +1215,7 @@ ${alert_context.description || 'No description available'}
 ${(alert_context.techniques || []).map(t => `- ${t.id}: ${t.name} [${t.tactic}]`).join('\n') || 'None detected'}
 
 ${indexContext}
+${fieldMappingContext}
 ${logSourceSummary}
 ${connectorSummary}`;
 
