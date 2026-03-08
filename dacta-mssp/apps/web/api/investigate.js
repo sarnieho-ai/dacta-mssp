@@ -48,18 +48,24 @@ async function loadOrgContext(orgName, namespace) {
     'Accept': 'application/json'
   };
   try {
-    // Step 1: Resolve org name to org_id
+    // Step 1: Resolve org name to org_id (prioritize exact matches)
     let orgId = null;
     if (orgName) {
       const orgResp = await fetch(`${SUPABASE_URL}/rest/v1/organizations?select=id,name,short_name`, { headers });
       if (orgResp.ok) {
         const orgs = await orgResp.json();
-        const nameLower = orgName.toLowerCase();
-        const org = orgs.find(o =>
-          o.name.toLowerCase() === nameLower ||
-          nameLower.includes(o.name.toLowerCase()) ||
-          o.name.toLowerCase().includes(nameLower) ||
-          (o.short_name && nameLower.includes(o.short_name.toLowerCase()))
+        const nameLower = orgName.toLowerCase().trim();
+        // Priority 1: Exact name match
+        let org = orgs.find(o => o.name.toLowerCase() === nameLower);
+        // Priority 2: Full name contained in the other (but require full word match)
+        if (!org) org = orgs.find(o => {
+          const dbName = o.name.toLowerCase();
+          return (nameLower.includes(dbName) && dbName.length > 3) ||
+                 (dbName.includes(nameLower) && nameLower.length > 3);
+        });
+        // Priority 3: Short name match (only if short_name >= 3 chars to avoid false matches)
+        if (!org) org = orgs.find(o =>
+          o.short_name && o.short_name.length >= 3 && nameLower.includes(o.short_name.toLowerCase())
         );
         if (org) orgId = org.id;
       }
@@ -1011,12 +1017,22 @@ export default async function handler(req, res) {
     let edrAuth = null;
     if (edrConnector) {
       edrAuth = await resolveEDRAuth(edrConnector);
+      if (edrAuth) {
+        console.log(`[Investigate] EDR auth resolved from org connector: vendor=${edrAuth.vendor}`);
+      } else {
+        console.log(`[Investigate] EDR connector found (${edrConnector.vendor}) but credentials could not be resolved`);
+      }
     }
-    // If no org-level EDR creds, fall back to env var defaults
-    if (!edrAuth && CS_CLIENT_ID && CS_CLIENT_SECRET) {
-      edrAuth = { vendor: 'crowdstrike', baseUrl: CS_BASE_URL, clientId: CS_CLIENT_ID, clientSecret: CS_CLIENT_SECRET };
-    } else if (!edrAuth && HM_API_KEY && HM_CUSTOMER_ID) {
-      edrAuth = { vendor: 'heimdal', baseUrl: HM_BASE, apiKey: HM_API_KEY, customerId: HM_CUSTOMER_ID };
+    // Only fall back to env var defaults if NO EDR connector exists in org_connectors
+    // (Don't override an org's configured vendor with a different one from env vars)
+    if (!edrAuth && !edrConnector) {
+      if (CS_CLIENT_ID && CS_CLIENT_SECRET) {
+        edrAuth = { vendor: 'crowdstrike', baseUrl: CS_BASE_URL, clientId: CS_CLIENT_ID, clientSecret: CS_CLIENT_SECRET };
+        console.log('[Investigate] EDR fallback to CrowdStrike env vars (no org EDR connector)');
+      } else if (HM_API_KEY && HM_CUSTOMER_ID) {
+        edrAuth = { vendor: 'heimdal', baseUrl: HM_BASE, apiKey: HM_API_KEY, customerId: HM_CUSTOMER_ID };
+        console.log('[Investigate] EDR fallback to Heimdal env vars (no org EDR connector)');
+      }
     }
     _currentEDRContext = edrAuth ? { auth: edrAuth, vendor: edrAuth.vendor } : null;
 
