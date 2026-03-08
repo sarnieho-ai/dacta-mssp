@@ -24905,7 +24905,7 @@ Analyst: K. Rasmussen | 2026-02-28
             </div>
             <div style="display:flex;align-items:center;gap:10px;">
               <span style="font-size:11px;color:var(--text-muted);">Client:</span>
-              <select id="settingsOrgSelector" class="filter-select" style="min-width:220px;" onchange="renderSettingsConnectors()"></select>
+              <select id="settingsOrgSelector" class="filter-select" style="min-width:220px;" onchange="try{localStorage.setItem('stg_selectedOrg',this.value)}catch(e){} renderSettingsConnectors()"></select>
             </div>
           </div>
           <div id="settingsConnectorGrid" class="stg-connector-grid"></div>
@@ -34727,6 +34727,8 @@ function switchSettingsTab(tabName) {
       if (panelEl) panelEl.style.display = 'none';
     }
   });
+  // Persist active tab so it survives page refresh
+  try { localStorage.setItem('stg_activeTab', tabName); } catch(e) {}
   // Load escalation matrix data when switching to that tab
   if (tabName === 'escalation') initEscalationMatrixTab();
   // Init client log sources when switching to that tab
@@ -35601,7 +35603,14 @@ async function loadSettingsPage() {
     sel.innerHTML = optHTML;
     if (countEl) countEl.textContent = orgCount + ' organizations registered';
 
-    // Render first org's connectors
+    // Restore previously selected org from localStorage (if still valid)
+    var savedOrg = '';
+    try { savedOrg = localStorage.getItem('stg_selectedOrg') || ''; } catch(e) {}
+    if (savedOrg && sel.querySelector('option[value="' + savedOrg + '"]')) {
+      sel.value = savedOrg;
+    }
+
+    // Render selected org's connectors
     renderSettingsConnectors();
 
     // Also populate the Client Log Sources org selector
@@ -35613,8 +35622,11 @@ async function loadSettingsPage() {
     // Load platform settings (notifications, audit toggles, tenant settings, LLM config)
     loadPlatformSettings();
 
-    // Default to Client Log Sources tab
-    switchSettingsTab('logsources');
+    // Restore previously active tab from localStorage (default to logsources)
+    var savedTab = '';
+    try { savedTab = localStorage.getItem('stg_activeTab') || ''; } catch(e) {}
+    var validTabs = ['logsources', 'connectors', 'rag', 'escalation', 'rules', 'security'];
+    switchSettingsTab(validTabs.indexOf(savedTab) !== -1 ? savedTab : 'logsources');
 
     console.log('[Settings] Live connector registry loaded: ' + orgCount + ' orgs');
   } catch(err) {
