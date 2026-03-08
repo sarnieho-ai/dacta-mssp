@@ -35484,10 +35484,10 @@ async function testAndUpdateHealth(cid) {
         var r2 = await fetch('/api/crowdstrike', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
         ok = r2.ok; if (r2.ok) { var d2 = await r2.json(); detail = d2.status || 'connected'; }
       } else if (vendorLower.includes('trend') || vendorLower.includes('vision')) {
-        var r2b = await fetch('/api/vendor-proxy?vendor=trendmicro', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        var r2b = await fetch('/api/trendmicro', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
         ok = r2b.ok; if (r2b.ok) { var d2b = await r2b.json(); detail = d2b.status || 'connected'; }
       } else if (vendorLower.includes('heimdal')) {
-        var r2c = await fetch('/api/vendor-proxy?vendor=heimdal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        var r2c = await fetch('/api/heimdal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
         ok = r2c.ok; if (r2c.ok) { var d2c = await r2c.json(); detail = d2c.status || 'connected'; }
       } else {
         // Generic EDR — check if api_endpoint is configured
@@ -35495,13 +35495,13 @@ async function testAndUpdateHealth(cid) {
       }
     } else if (c.connector_type === 'firewall') {
       if (vendorLower.includes('fortinet') || vendorLower.includes('fortigate')) {
-        var r3a = await fetch('/api/vendor-proxy?vendor=fortinet', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        var r3a = await fetch('/api/fortinet', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
         ok = r3a.ok; if (r3a.ok) { var d3a = await r3a.json(); detail = d3a.status || 'connected'; }
       } else if (vendorLower.includes('palo') || vendorLower.includes('pan-os')) {
-        var r3b = await fetch('/api/vendor-proxy?vendor=paloalto', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        var r3b = await fetch('/api/paloalto', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
         ok = r3b.ok; if (r3b.ok) { var d3b = await r3b.json(); detail = d3b.status || 'connected'; }
       } else if (vendorLower.includes('imperva')) {
-        var r3c = await fetch('/api/vendor-proxy?vendor=imperva', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
+        var r3c = await fetch('/api/imperva', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'ping', org_id: orgId }) });
         ok = r3c.ok; if (r3c.ok) { var d3c = await r3c.json(); detail = d3c.status || 'connected'; }
       } else {
         // Fallback: test via Elastic
@@ -52545,7 +52545,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         else if ((iocs.ips || [])[0]) tmQueryBody.ip = iocs.ips[0];
         var qDirect2 = { name: 'Trend Vision One Direct API — Alerts', query: (iocs.hosts || [])[0] || (iocs.ips || [])[0] || 'latest', status: 'running' };
         logs.queryDetails.push(qDirect2); logs.queriesRun++;
-        var tmDirectResp = await fetch('/api/vendor-proxy?vendor=trendmicro', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(tmQueryBody) });
+        var tmDirectResp = await fetch('/api/trendmicro', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(tmQueryBody) });
         if (tmDirectResp.ok) {
           var tmDirectData = await tmDirectResp.json();
           qDirect2.status = 'success'; qDirect2.hits = (tmDirectData.items || []).length;
@@ -52567,7 +52567,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         if ((iocs.hosts || [])[0]) hmQueryBody.hostname = iocs.hosts[0];
         var qDirect3 = { name: 'Heimdal Direct API — Detections', query: (iocs.hosts || [])[0] || 'latest', status: 'running' };
         logs.queryDetails.push(qDirect3); logs.queriesRun++;
-        var hmDirectResp = await fetch('/api/vendor-proxy?vendor=heimdal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(hmQueryBody) });
+        var hmDirectResp = await fetch('/api/heimdal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(hmQueryBody) });
         if (hmDirectResp.ok) {
           var hmDirectData = await hmDirectResp.json();
           var hmItems = Array.isArray(hmDirectData) ? hmDirectData : (hmDirectData.data || []);
@@ -52611,7 +52611,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         if (fwVendor.includes('fortinet') || fwVendor.includes('fortigate')) {
           var fwQ = { name: 'Fortinet Direct API — Traffic Logs', query: 'srcip=' + ipToCheck, status: 'running' };
           logs.queryDetails.push(fwQ); logs.queriesRun++;
-          var fnResp = await fetch('/api/vendor-proxy?vendor=fortinet', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'get_traffic_logs', org_id: fwOrgId, filter: 'srcip=' + ipToCheck + ' or dstip=' + ipToCheck, limit: 10 }) });
+          var fnResp = await fetch('/api/fortinet', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'get_traffic_logs', org_id: fwOrgId, filter: 'srcip=' + ipToCheck + ' or dstip=' + ipToCheck, limit: 10 }) });
           if (fnResp.ok) {
             var fnData = await fnResp.json();
             fwQ.status = 'success'; fwQ.hits = (fnData.results || []).length;
@@ -52624,7 +52624,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         } else if (fwVendor.includes('palo') || fwVendor.includes('pan')) {
           var paQ = { name: 'Palo Alto Direct API — Traffic Logs', query: 'addr.src=' + ipToCheck, status: 'running' };
           logs.queryDetails.push(paQ); logs.queriesRun++;
-          var paResp = await fetch('/api/vendor-proxy?vendor=paloalto', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'get_traffic_logs', org_id: fwOrgId, src_ip: ipToCheck, limit: 10 }) });
+          var paResp = await fetch('/api/paloalto', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'get_traffic_logs', org_id: fwOrgId, src_ip: ipToCheck, limit: 10 }) });
           if (paResp.ok) {
             var paData = await paResp.json();
             paQ.status = 'success';
@@ -52632,7 +52632,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         } else if (fwVendor.includes('imperva')) {
           var imQ = { name: 'Imperva Direct API — Security Events', query: ipToCheck, status: 'running' };
           logs.queryDetails.push(imQ); logs.queriesRun++;
-          var imResp = await fetch('/api/vendor-proxy?vendor=imperva', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'get_security_events', org_id: fwOrgId, limit: 10 }) });
+          var imResp = await fetch('/api/imperva', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'get_security_events', org_id: fwOrgId, limit: 10 }) });
           if (imResp.ok) {
             var imData = await imResp.json();
             imQ.status = 'success';
