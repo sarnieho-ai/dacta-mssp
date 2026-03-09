@@ -50877,8 +50877,14 @@ async function openInvestigation(ticketKey) {
       var cachedEntry = _investigationCache[ticketKey];
       if (cachedEntry) {
         // Check multiple possible cache structures
-        var incEvidence = cachedEntry.inculpatoryEvidence || (cachedEntry.metadata && cachedEntry.metadata.inculpatory) || [];
-        var excEvidence = cachedEntry.exculpatoryEvidence || (cachedEntry.metadata && cachedEntry.metadata.exculpatory) || [];
+        var incEvidence = cachedEntry.inculpatoryEvidence || (cachedEntry.metadata && cachedEntry.metadata.inculpatoryEvidence) || (cachedEntry.metadata && cachedEntry.metadata.inculpatory) || [];
+        var excEvidence = cachedEntry.exculpatoryEvidence || (cachedEntry.metadata && cachedEntry.metadata.exculpatoryEvidence) || (cachedEntry.metadata && cachedEntry.metadata.exculpatory) || [];
+        // Fallback: extract evidence from cached HTML if metadata doesn't have it
+        if (incEvidence.length === 0 && excEvidence.length === 0 && cachedEntry.html) {
+          var extracted = extractEvidenceFromCachedHTML(cachedEntry.html);
+          incEvidence = extracted.inculpatory;
+          excEvidence = extracted.exculpatory;
+        }
         if (incEvidence.length > 0 || excEvidence.length > 0) {
           populateTopFindings(incEvidence, excEvidence);
         }
@@ -51397,6 +51403,28 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   }
 
   return narrativeHTML + iocHTML + mitreHTML;
+}
+
+// ── Extract evidence from cached investigation HTML (fallback for old cache entries without metadata evidence) ──
+function extractEvidenceFromCachedHTML(htmlContent) {
+  if (!htmlContent) return { inculpatory: [], exculpatory: [] };
+  var tmp = document.createElement('div');
+  tmp.innerHTML = htmlContent;
+  var incItems = tmp.querySelectorAll('.reasoning-item');
+  var excItems = tmp.querySelectorAll('.counter-item');
+  var inc = [], exc = [];
+  incItems.forEach(function(el) {
+    var strong = el.querySelector('strong');
+    var text = strong ? strong.textContent.trim() : '';
+    if (text) inc.push({ title: text, detail: '' });
+  });
+  excItems.forEach(function(el) {
+    var strong = el.querySelector('strong');
+    var text = strong ? strong.textContent.trim() : '';
+    if (text) exc.push({ title: text, detail: '' });
+  });
+  tmp.remove();
+  return { inculpatory: inc, exculpatory: exc };
 }
 
 // ── Populate Top Findings in Summary tab (called after AI investigation) ──
@@ -51960,7 +51988,7 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
       prompt_notes: cacheEntry.promptNotes || null,
       feedback_rating: cacheEntry.feedbackRating || null,
       feedback_text: cacheEntry.feedbackText || null,
-      metadata: Object.assign({}, cacheEntry.metadata || {}, cacheEntry.sidebarPanels ? { sidebarPanels: cacheEntry.sidebarPanels } : {}, cacheEntry.escalationData ? { escalationData: cacheEntry.escalationData } : {})
+      metadata: Object.assign({}, cacheEntry.metadata || {}, cacheEntry.sidebarPanels ? { sidebarPanels: cacheEntry.sidebarPanels } : {}, cacheEntry.escalationData ? { escalationData: cacheEntry.escalationData } : {}, cacheEntry.inculpatoryEvidence ? { inculpatoryEvidence: (cacheEntry.inculpatoryEvidence || []).slice(0, 5) } : {}, cacheEntry.exculpatoryEvidence ? { exculpatoryEvidence: (cacheEntry.exculpatoryEvidence || []).slice(0, 5) } : {})
     }, { onConflict: 'ticket_key' });
     if (resp.error) console.warn('[InvCache] SIEMLess DB upsert error:', resp.error.message);
     else console.log('[InvCache] Saved to SIEMLess DB:', ticketKey);
@@ -52002,7 +52030,9 @@ async function loadInvestigationCache(ticketKey) {
         feedbackText: resp.data.feedback_text || null,
         metadata: dbMeta,
         sidebarPanels: dbMeta.sidebarPanels || null,
-        escalationData: dbMeta.escalationData || null
+        escalationData: dbMeta.escalationData || null,
+        inculpatoryEvidence: dbMeta.inculpatoryEvidence || [],
+        exculpatoryEvidence: dbMeta.exculpatoryEvidence || []
       };
       _investigationCache[ticketKey] = entry;
       return entry;
@@ -52305,8 +52335,16 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
         );
       }
       // Populate Top Findings from cached inculpatory/exculpatory data
-      if (cacheEntry.inculpatoryEvidence || cacheEntry.exculpatoryEvidence) {
-        try { populateTopFindings(cacheEntry.inculpatoryEvidence || [], cacheEntry.exculpatoryEvidence || []); } catch(e2) { console.warn('[TopFindings cache]', e2.message); }
+      var _tfInc = cacheEntry.inculpatoryEvidence || (cacheEntry.metadata && cacheEntry.metadata.inculpatoryEvidence) || [];
+      var _tfExc = cacheEntry.exculpatoryEvidence || (cacheEntry.metadata && cacheEntry.metadata.exculpatoryEvidence) || [];
+      // Fallback: extract from cached HTML if no structured evidence
+      if (_tfInc.length === 0 && _tfExc.length === 0 && cacheEntry.html) {
+        var _tfExtracted = extractEvidenceFromCachedHTML(cacheEntry.html);
+        _tfInc = _tfExtracted.inculpatory;
+        _tfExc = _tfExtracted.exculpatory;
+      }
+      if (_tfInc.length > 0 || _tfExc.length > 0) {
+        try { populateTopFindings(_tfInc, _tfExc); } catch(e2) { console.warn('[TopFindings cache]', e2.message); }
       }
     } catch(e) { console.warn('[Snapshot cache]', e.message); }
   }, 400);
