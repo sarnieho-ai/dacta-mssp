@@ -37491,7 +37491,7 @@ async function loadUserManagement() {
     var ov = document.getElementById('jiraLinkModalOverlay');
     if (ov) ov.remove();
     try {
-      await _supabase.from('users').update({
+      await window._supabaseRef.from('users').update({
         jira_account_id: accountId,
         jira_display_name: displayName,
         jira_email: jiraEmail,
@@ -37516,7 +37516,7 @@ async function loadUserManagement() {
   // Unlink Jira account
   window.umUnlinkJira = async function(uid) {
     try {
-      await _supabase.from('users').update({
+      await window._supabaseRef.from('users').update({
         jira_account_id: null,
         jira_display_name: null,
         jira_email: null,
@@ -37560,7 +37560,7 @@ async function loadUserManagement() {
         if (u.jira_account_id) { skipped++; continue; } // already linked
         var match = u.email ? jiraByEmail[u.email.toLowerCase()] : null;
         if (match) {
-          await _supabase.from('users').update({
+          await window._supabaseRef.from('users').update({
             jira_account_id: match.accountId,
             jira_display_name: match.displayName || '',
             jira_email: match.emailAddress || '',
@@ -49250,7 +49250,7 @@ async function doTransition(ticketKey, transitionId, toName) {
     } else {
       // Fallback to logged-in user email
       try {
-        var sess = await _supabase.auth.getSession();
+        var sess = await window._supabaseRef.auth.getSession();
         var userEmail = (sess.data && sess.data.session && sess.data.session.user) ? sess.data.session.user.email : '';
         if (userEmail) analystLabel = '[SIEMLess — ' + toName + ' by ' + userEmail + ']';
       } catch(ae) { /* skip */ }
