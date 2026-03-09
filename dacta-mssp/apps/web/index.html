@@ -48544,10 +48544,13 @@ async function _bgRunInvestigation(ticketKey) {
   if (window._currentInvestigationKey === ticketKey) return;
 
   // Create a hidden shadow environment for runAIInvestigation
+  // IMPORTANT: Do NOT include aiRoundsContainer here — runAIInvestigation creates it
+  // inside aiInvestigationPanel. Having a duplicate here causes getElementById to find
+  // the wrong one, resulting in round content being placed outside aiInvestigationPanel
+  // and the cached HTML missing all investigation findings.
   var shadow = document.createElement('div');
   shadow.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;';
   var innerHTML = '<div class="prod-investigation-live">' +
-    '<div id="aiRoundsContainer"></div>' +
     '<div id="invMainContent"></div>' +
     '<div id="invLoadingSpinner" style="display:none;"></div>' +
     '<div id="invSpinnerLabel"></div><div id="invSpinnerSub"></div>' +
@@ -48556,8 +48559,11 @@ async function _bgRunInvestigation(ticketKey) {
     '<div id="invSnapshotResults"></div><div id="invSnapshotBadge"></div>' +
     '<div id="invSnapshotMetrics"></div><div id="invSnapshotEntities"></div>' +
     '<div id="alertGraphCard"></div><div id="snapshotPipelineWrap"></div>' +
-    '<div id="invVerdictArea"></div><div id="enrichmentSummaryCard"></div>' +
-    '<div id="correlatedAlertsCard"></div><div id="recommendedActionsCard"></div>' +
+    '<div id="invVerdictArea"></div>' +
+    '<div id="enrichmentSummaryCard"><div class="inv-collapsible-body"></div></div>' +
+    '<div id="correlatedAlertsCard"><div class="inv-collapsible-body"></div></div>' +
+    '<div id="recommendedActionsCard"><div class="inv-collapsible-body"></div></div>' +
+    '<div id="playbookActionsCard"><div class="inv-collapsible-body"></div></div>' +
     '<div id="clientEscalationCard"></div><div id="escalationDraftContent"></div>' +
     '<div id="invSLAPanel"></div><div id="invSLAContent"></div>' +
     '<div id="invReInvestigateBar"></div><div id="rRootCause"></div>' +
@@ -51119,39 +51125,26 @@ async function openInvestigation(ticketKey) {
 
         // ── Check investigation cache before running LLM ──
     var cachedResult = await loadInvestigationCache(ticketKey);
-    if (cachedResult && cachedResult.html) {
+    // Detect incomplete cache: HTML exists but missing round content (caused by
+    // background auto-investigation shadow DOM bug where rounds were placed outside
+    // aiInvestigationPanel). Treat as if no usable cache exists.
+    var _hasUsableHTML = cachedResult && cachedResult.html &&
+      (cachedResult.html.indexOf('aiRound') !== -1 || cachedResult.html.length > 15000);
+    if (_hasUsableHTML) {
       // Serve from cache — no LLM credits used
       console.log('[AI Investigation] Serving cached result for ' + ticketKey);
       var invMainContent = document.getElementById('invMainContent');
       if (invMainContent) {
         renderCachedInvestigation(ticketKey, cachedResult, invMainContent, issueData);
       }
-    } else if (cachedResult && cachedResult.verdict && !cachedResult.html) {
-      // Verdict-only cache (loaded by loadAllCachedKeys summary fetch or DB row
-      // with empty html_content). Show verdict summary without re-triggering
-      // a full LLM investigation that would flip the triage badge to "Investigating".
-      console.log('[AI Investigation] Verdict-only cache for ' + ticketKey + ' — showing summary, skipping LLM re-run');
-      var invMainContent2 = document.getElementById('invMainContent');
-      if (invMainContent2) {
-        var vColor = cachedResult.verdict.toUpperCase().indexOf('TRUE POSITIVE') !== -1 ? '#EF4444' :
-                     cachedResult.verdict.toUpperCase().indexOf('FALSE POSITIVE') !== -1 ? '#10B981' : '#F59E0B';
-        invMainContent2.innerHTML = '<div style="padding:20px;">' +
-          '<div style="display:flex;align-items:center;gap:10px;padding:14px 18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;margin-bottom:16px;">' +
-            '<div style="font-size:14px;">' + dIcon('save',16) + '</div>' +
-            '<div style="flex:1;">' +
-              '<div style="font-size:12px;font-weight:600;color:var(--text-primary);">Previous Investigation Result</div>' +
-              '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">AI Verdict: <span style="color:' + vColor + ';font-weight:700;">' + escapeHtml(cachedResult.verdict) + '</span>' +
-                (cachedResult.confidence ? ' (' + cachedResult.confidence + '% confidence)' : '') +
-                (cachedResult.timestamp ? ' — ' + new Date(cachedResult.timestamp).toLocaleString() : '') +
-              '</div>' +
-            '</div>' +
-            '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:#6366F1;border:1px solid #818CF8;color:#fff;border-radius:6px;font-weight:600;" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-investigate for full findings</button>' +
-          '</div>' +
-          '<div style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:12px;">' +
-            'Full investigation findings are not available in cache.<br>Click <strong>Re-investigate</strong> above to run a fresh AI investigation.' +
-          '</div>' +
-        '</div>';
-      }
+    } else if (cachedResult && cachedResult.verdict) {
+      // Verdict exists but HTML is empty/incomplete — auto re-investigate silently
+      // instead of showing a dead-end "Re-investigate" prompt
+      console.log('[AI Investigation] Incomplete/missing cache HTML for ' + ticketKey + ' (verdict: ' + cachedResult.verdict + '). Auto-re-investigating...');
+      // Clear broken cache so fresh results overwrite it
+      delete _investigationCache[ticketKey];
+      _forceReinvestigateSet.add(ticketKey);
+      runAIInvestigation(ticketKey, issueData);
     } else {
       // No cache at all — run fresh AI investigation
       runAIInvestigation(ticketKey, issueData);
