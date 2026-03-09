@@ -50306,6 +50306,11 @@ async function openInvestigation(ticketKey) {
       document.querySelectorAll('.r-tab').forEach(function(b) {
         b.classList.toggle('active', b.getAttribute('data-tab') === tabId);
       });
+      // Re-populate Top Findings when switching back to Summary tab
+      if (tabId === 'overview' && ticketKey) {
+        var _swCache = _investigationCache[ticketKey];
+        if (_swCache) _populateTopFindingsFromCache(_swCache);
+      }
       // ── Contextual right panel — show different sidebar sections per tab ──
       var sections = {
         'invSideConclusion': tabId === 'overview',
@@ -50879,22 +50884,9 @@ async function openInvestigation(ticketKey) {
       if (_rTechniques && _rTechniques.length > 0) {
         populateSummaryAttackGraph(ticketKey, _rTechniques, f.summary || '');
       }
-      // Also try to populate top findings from cached investigation
-      var cachedEntry = _investigationCache[ticketKey];
-      if (cachedEntry) {
-        // Check multiple possible cache structures
-        var incEvidence = cachedEntry.inculpatoryEvidence || (cachedEntry.metadata && cachedEntry.metadata.inculpatoryEvidence) || (cachedEntry.metadata && cachedEntry.metadata.inculpatory) || [];
-        var excEvidence = cachedEntry.exculpatoryEvidence || (cachedEntry.metadata && cachedEntry.metadata.exculpatoryEvidence) || (cachedEntry.metadata && cachedEntry.metadata.exculpatory) || [];
-        // Fallback: extract evidence from cached HTML if metadata doesn't have it
-        if (incEvidence.length === 0 && excEvidence.length === 0 && cachedEntry.html) {
-          var extracted = extractEvidenceFromCachedHTML(cachedEntry.html);
-          incEvidence = extracted.inculpatory;
-          excEvidence = extracted.exculpatory;
-        }
-        if (incEvidence.length > 0 || excEvidence.length > 0) {
-          populateTopFindings(incEvidence, excEvidence);
-        }
-      }
+      // Top Findings population is now handled deterministically by
+      // _populateTopFindingsFromCache() called after loadInvestigationCache resolves.
+      // The setTimeout here was unreliable — cache often hadn't loaded at 400ms.
     }, 400);
     
     // ── Fetch and display SLA data from Jira API (existing Timeline SLA panel) ──
@@ -51133,6 +51125,8 @@ async function openInvestigation(ticketKey) {
       if (invMainContent) {
         renderCachedInvestigation(ticketKey, cachedResult, invMainContent, issueData);
       }
+      // Deterministically populate Top Findings in Summary tab — no setTimeout race
+      _populateTopFindingsFromCache(cachedResult);
     } else if (cachedResult && cachedResult.verdict) {
       // Verdict exists but HTML is empty/incomplete — auto re-investigate silently
       // instead of showing a dead-end "Re-investigate" prompt
@@ -51453,6 +51447,23 @@ function populateTopFindings(inculpatory, exculpatory) {
       '<span style="font-size:11px;font-weight:700;color:' + dotColor + ';width:18px;flex-shrink:0;">' + (i + 1) + '</span>' +
       '<span style="font-size:12px;color:var(--rws-text-secondary);line-height:1.5;">' + highlightEntities(finding.text) + '</span></div>';
   }).join('');
+}
+
+// ── Deterministic Top Findings population from a cache entry ──
+// Called right after loadInvestigationCache resolves, so the data is guaranteed to be present.
+function _populateTopFindingsFromCache(cacheEntry) {
+  if (!cacheEntry) return;
+  var inc = cacheEntry.inculpatoryEvidence || (cacheEntry.metadata && cacheEntry.metadata.inculpatoryEvidence) || [];
+  var exc = cacheEntry.exculpatoryEvidence || (cacheEntry.metadata && cacheEntry.metadata.exculpatoryEvidence) || [];
+  // Fallback: extract from cached HTML
+  if (inc.length === 0 && exc.length === 0 && cacheEntry.html) {
+    var extracted = extractEvidenceFromCachedHTML(cacheEntry.html);
+    inc = extracted.inculpatory;
+    exc = extracted.exculpatory;
+  }
+  if (inc.length > 0 || exc.length > 0) {
+    populateTopFindings(inc, exc);
+  }
 }
 
 // ── Open AI Copilot with ticket context pre-filled ──
@@ -52340,18 +52351,8 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
           cacheEntry.confidence || 0
         );
       }
-      // Populate Top Findings from cached inculpatory/exculpatory data
-      var _tfInc = cacheEntry.inculpatoryEvidence || (cacheEntry.metadata && cacheEntry.metadata.inculpatoryEvidence) || [];
-      var _tfExc = cacheEntry.exculpatoryEvidence || (cacheEntry.metadata && cacheEntry.metadata.exculpatoryEvidence) || [];
-      // Fallback: extract from cached HTML if no structured evidence
-      if (_tfInc.length === 0 && _tfExc.length === 0 && cacheEntry.html) {
-        var _tfExtracted = extractEvidenceFromCachedHTML(cacheEntry.html);
-        _tfInc = _tfExtracted.inculpatory;
-        _tfExc = _tfExtracted.exculpatory;
-      }
-      if (_tfInc.length > 0 || _tfExc.length > 0) {
-        try { populateTopFindings(_tfInc, _tfExc); } catch(e2) { console.warn('[TopFindings cache]', e2.message); }
-      }
+      // Top Findings is now populated deterministically by _populateTopFindingsFromCache()
+      // called directly after renderCachedInvestigation in openInvestigation().
     } catch(e) { console.warn('[Snapshot cache]', e.message); }
   }, 400);
 

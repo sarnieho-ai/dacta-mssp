@@ -884,7 +884,9 @@ function normalizeOpenAIResponse(oaiResp) {
 // ═══════════════════════════════════════════════
 // Unified agentic phase runner — works with both Claude and OpenAI
 async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds = 6, provider = 'claude') {
-  const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+  // Dual-model strategy: Haiku for tool-use rounds (fast, cheap), Sonnet for final synthesis (quality)
+  const CLAUDE_TOOL_MODEL = 'claude-haiku-4-5-20251001';
+  const CLAUDE_SYNTH_MODEL = 'claude-sonnet-4-20250514';
   const OPENAI_MODEL = 'gpt-4o';
   const useClaude = provider === 'claude';
   let messages = useClaude
@@ -908,7 +910,7 @@ async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds =
     let result;
     if (useClaude) {
       const callBody = {
-        model: CLAUDE_MODEL,
+        model: isLast ? CLAUDE_SYNTH_MODEL : CLAUDE_TOOL_MODEL,
         max_tokens: isLast ? 4096 : 2048,
         system: isLast
           ? systemPrompt + '\n\n[FINAL] All tool calls done. Produce your complete JSON response NOW.'
@@ -1012,14 +1014,14 @@ async function runPhaseWithFallback(phase, systemPrompt, userMessage, vault, max
 
   try {
     const result = await runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds, provider);
-    return { ...result, model: provider === 'claude' ? 'claude-sonnet-4' : 'gpt-4o', fallback_used: false };
+    return { ...result, model: provider === 'claude' ? 'claude-haiku/sonnet-4' : 'gpt-4o', fallback_used: false };
   } catch (primaryErr) {
     console.warn(`[Investigate] ${phase} primary (${provider}) failed: ${primaryErr.message}. Falling back to ${routing.fallback}`);
     provider = routing.fallback;
     fallbackUsed = true;
     try {
       const result = await runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds, provider);
-      return { ...result, model: provider === 'claude' ? 'claude-sonnet-4' : 'gpt-4o', fallback_used: true };
+      return { ...result, model: provider === 'claude' ? 'claude-haiku/sonnet-4' : 'gpt-4o', fallback_used: true };
     } catch (fallbackErr) {
       console.error(`[Investigate] ${phase} fallback (${provider}) also failed: ${fallbackErr.message}`);
       throw new Error(`Both ${routing.primary} and ${routing.fallback} failed for ${phase}`);
