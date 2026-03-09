@@ -54802,6 +54802,8 @@ async function runAIInvestigation(ticketKey, issueData) {
     var csEnKeys = Object.keys(csEnLookup);
     var csEnHighCount = csEnKeys.filter(function(k) { return csEnLookup[k].malicious_confidence === 'high'; }).length;
     var csEnMedCount  = csEnKeys.filter(function(k) { return csEnLookup[k].malicious_confidence === 'medium'; }).length;
+    // Only show CrowdStrike Intel section if org has CrowdStrike (skip for non-CS orgs)
+    if (!csEn.skippedNoCS) {
     eHTML += '<div style="margin-top:8px;">';
     eHTML += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><div style="width:6px;height:6px;border-radius:50%;background:' + (!csEn.error ? '#ea580c' : '#6b7280') + ';"></div>' +
       '<span style="font-size:10px;color:' + (!csEn.error ? '#ea580c' : 'var(--text-muted)') + ';font-weight:600;">' + dIcon('target',14) + ' CROWDSTRIKE FALCON INTEL' + (!csEn.error && csEn.total !== undefined ? ' LIVE' : csEn.error ? ' \u2014 ERROR' : '') + '</span></div>';
@@ -54824,6 +54826,7 @@ async function runAIInvestigation(ticketKey, issueData) {
       if (csEnClean > 0) eHTML += '<div style="font-size:9px;color:var(--text-muted);">' + csEnClean + ' other indicator(s) \u2014 low/unverified</div>';
     }
     eHTML += '</div>';
+    } // end if (!csEn.skippedNoCS) — hide CS section for non-CS orgs
     var enrichBody = enrichCard.querySelector('.inv-collapsible-body');
     if (enrichBody) { enrichBody.innerHTML = eHTML; enrichBody.style.display = ''; }
     else { enrichCard.innerHTML = '<div class="inv-collapsible-body">' + eHTML + '</div>'; }
@@ -55460,8 +55463,10 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
     actionsTaken.push('1. Alert triaged and escalated by Dacta SG SOC');
     if (iocs.hosts && iocs.hosts.length > 0) actionsTaken.push('2. Affected host(s) flagged for isolation review');
     if (iocs.users && iocs.users.length > 0) actionsTaken.push('3. Affected user account(s) flagged for review');
-    var csActionNote = 'IOC enrichment via DACTA TIP and CrowdStrike Falcon Intelligence completed';
-    if (csEnrichment && !csEnrichment.error) {
+    var csActionNote = csEnrichment && csEnrichment.skippedNoCS
+      ? 'IOC enrichment via DACTA TIP completed'
+      : 'IOC enrichment via DACTA TIP and CrowdStrike Falcon Intelligence completed';
+    if (csEnrichment && !csEnrichment.error && !csEnrichment.skippedNoCS) {
       var csActN = csEnrichment.actors && csEnrichment.actors.length > 0;
       var csHN = Object.values(csEnrichment.lookup || {}).filter(function(i) { return i.malicious_confidence === 'high'; }).length;
       if (csHN > 0) csActionNote = csHN + ' IOC(s) confirmed MALICIOUS by CrowdStrike Falcon Intelligence' + (csActN ? ' — attributed to: ' + csEnrichment.actors.slice(0,3).join(', ') : '');
