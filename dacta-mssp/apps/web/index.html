@@ -54798,29 +54798,37 @@ async function runAIInvestigation(ticketKey, issueData) {
               var _fv = _llmResp.result.final_verdict;
 
               // ── Verdict coherence check ──
-              // Pull evidence counts from Phase 2 for sanity validation
+              // Use BOTH Phase 2 LLM evidence counts AND heuristic evidence counts for validation
               var _p2es = (_llmPhaseResults.phase2 && _llmPhaseResults.phase2.evidence_summary) || {};
               var _p2Threat = (_p2es.supporting_threat || []).length;
               var _p2Benign = (_p2es.supporting_benign || []).length;
-              // If LLM says TRUE_POSITIVE but there are 0 inculpatory findings and exculpatory > 0, downgrade
-              if (_fv === 'TRUE_POSITIVE' && _p2Threat === 0 && _p2Benign > 0) {
-                console.warn('[Verdict Coherence] LLM Phase 3 said TRUE_POSITIVE but Phase 2 has 0 threat / ' + _p2Benign + ' benign evidence. Overriding to FALSE_POSITIVE.');
+              // Also use the heuristic evidence counts as a cross-check
+              var _heuristicIncCount = inculpatory.length;
+              var _heuristicExcCount = exculpatory.length;
+              // Use the more conservative (larger exculpatory, smaller inculpatory) of the two sources
+              var _effectiveThreat = Math.min(_p2Threat || _heuristicIncCount, _heuristicIncCount || _p2Threat);
+              var _effectiveBenign = Math.max(_p2Benign || _heuristicExcCount, _heuristicExcCount || _p2Benign);
+
+              // RULE 1: If LLM says TRUE_POSITIVE but there are 0 inculpatory findings and exculpatory > 0, downgrade to FP
+              if (_fv === 'TRUE_POSITIVE' && _effectiveThreat === 0 && _effectiveBenign > 0) {
+                console.warn('[Verdict Coherence] TRUE_POSITIVE but 0 threat / ' + _effectiveBenign + ' benign evidence. Overriding to FALSE_POSITIVE.');
                 _fv = 'FALSE_POSITIVE';
               }
-              // If LLM says TRUE_POSITIVE but exculpatory greatly outweighs inculpatory (3:1+), downgrade to SUSPICIOUS
-              else if (_fv === 'TRUE_POSITIVE' && _p2Benign > 0 && _p2Threat > 0 && _p2Benign >= _p2Threat * 3) {
-                console.warn('[Verdict Coherence] LLM Phase 3 said TRUE_POSITIVE but evidence heavily benign (' + _p2Threat + ' threat / ' + _p2Benign + ' benign). Downgrading to SUSPICIOUS.');
+              // RULE 2: If LLM says TRUE_POSITIVE but exculpatory >= inculpatory, NEVER allow TP — downgrade to SUSPICIOUS
+              // An analyst would never confirm a threat when more evidence supports benign
+              else if (_fv === 'TRUE_POSITIVE' && _effectiveBenign > 0 && _effectiveBenign >= _effectiveThreat) {
+                console.warn('[Verdict Coherence] TRUE_POSITIVE but exculpatory(' + _effectiveBenign + ') >= inculpatory(' + _effectiveThreat + '). Evidence does not support confirmed threat. Downgrading to SUSPICIOUS.');
                 _fv = 'SUSPICIOUS';
               }
-              // If LLM says FALSE_POSITIVE but threat evidence greatly outweighs benign (3:1+), upgrade to SUSPICIOUS
-              else if (_fv === 'FALSE_POSITIVE' && _p2Threat > 0 && (_p2Benign === 0 || _p2Threat >= _p2Benign * 3)) {
-                console.warn('[Verdict Coherence] LLM Phase 3 said FALSE_POSITIVE but evidence heavily threatening (' + _p2Threat + ' threat / ' + _p2Benign + ' benign). Upgrading to SUSPICIOUS.');
+              // RULE 3: If LLM says FALSE_POSITIVE but threat evidence greatly outweighs benign (3:1+), upgrade to SUSPICIOUS
+              else if (_fv === 'FALSE_POSITIVE' && _effectiveThreat > 0 && (_effectiveBenign === 0 || _effectiveThreat >= _effectiveBenign * 3)) {
+                console.warn('[Verdict Coherence] FALSE_POSITIVE but evidence heavily threatening (' + _effectiveThreat + ' threat / ' + _effectiveBenign + ' benign). Upgrading to SUSPICIOUS.');
                 _fv = 'SUSPICIOUS';
               }
               // ── Telemetry depth check for LLM verdict ──
               // If LLM says TRUE_POSITIVE but no EDR and no SIEM-confirmed malicious indicators, cap at SUSPICIOUS
               if (_fv === 'TRUE_POSITIVE' && _forceSuspiciousCap) {
-                console.warn('[Verdict Coherence] LLM Phase 3 said TRUE_POSITIVE but telemetry is insufficient (no EDR + no SIEM-confirmed threats). Downgrading to SUSPICIOUS.');
+                console.warn('[Verdict Coherence] TRUE_POSITIVE but telemetry is insufficient (no EDR + no SIEM-confirmed threats). Downgrading to SUSPICIOUS.');
                 _fv = 'SUSPICIOUS';
               }
 
