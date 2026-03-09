@@ -39365,9 +39365,11 @@ async function loadOrgConnectorsFromDB() {
       var orgLogSrcs = logSources.filter(function(ls) { return ls.org_id === org.id; });
       
       // Merge index_patterns from client_log_sources into connector metadata
+      var matchedLSTypes = {};
       orgConns.forEach(function(c) {
         var matchingLS = orgLogSrcs.find(function(ls) { return ls.source_type === c.connector_type; });
         if (matchingLS) {
+          matchedLSTypes[matchingLS.source_type] = true;
           c.metadata = c.metadata || {};
           c.metadata.index_pattern = matchingLS.index_pattern;
           if (matchingLS.source_type === 'edr') {
@@ -39375,6 +39377,23 @@ async function loadOrgConnectorsFromDB() {
             c.metadata.host_index = '.ds-logs-crowdstrike.host-' + ns + '-*';
           }
           c.metadata.namespace = ID_TO_NAMESPACE[org.id] || '';
+        }
+      });
+      // Create synthetic connectors from client_log_sources that have no org_connector entry
+      orgLogSrcs.forEach(function(ls) {
+        if (!matchedLSTypes[ls.source_type]) {
+          var nsForSynth = ID_TO_NAMESPACE[org.id] || '';
+          orgConns.push({
+            id: 'synth-' + ls.id,
+            org_id: org.id,
+            connector_type: ls.source_type,
+            vendor: ls.vendor || ls.source_name || ls.source_type,
+            display_name: ls.source_name || ls.source_type,
+            is_enabled: (ls.status !== 'disabled'),
+            health_status: ls.status || 'unknown',
+            metadata: { index_pattern: ls.index_pattern, namespace: nsForSynth }
+          });
+          console.log('[OrgConn] Created synthetic ' + ls.source_type + ' connector for ' + nsForSynth + ' from client_log_sources: ' + ls.index_pattern);
         }
       });
       
