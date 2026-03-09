@@ -51126,8 +51126,34 @@ async function openInvestigation(ticketKey) {
       if (invMainContent) {
         renderCachedInvestigation(ticketKey, cachedResult, invMainContent, issueData);
       }
+    } else if (cachedResult && cachedResult.verdict && !cachedResult.html) {
+      // Verdict-only cache (loaded by loadAllCachedKeys summary fetch or DB row
+      // with empty html_content). Show verdict summary without re-triggering
+      // a full LLM investigation that would flip the triage badge to "Investigating".
+      console.log('[AI Investigation] Verdict-only cache for ' + ticketKey + ' — showing summary, skipping LLM re-run');
+      var invMainContent2 = document.getElementById('invMainContent');
+      if (invMainContent2) {
+        var vColor = cachedResult.verdict.toUpperCase().indexOf('TRUE POSITIVE') !== -1 ? '#EF4444' :
+                     cachedResult.verdict.toUpperCase().indexOf('FALSE POSITIVE') !== -1 ? '#10B981' : '#F59E0B';
+        invMainContent2.innerHTML = '<div style="padding:20px;">' +
+          '<div style="display:flex;align-items:center;gap:10px;padding:14px 18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;margin-bottom:16px;">' +
+            '<div style="font-size:14px;">' + dIcon('save',16) + '</div>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:12px;font-weight:600;color:var(--text-primary);">Previous Investigation Result</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">AI Verdict: <span style="color:' + vColor + ';font-weight:700;">' + escapeHtml(cachedResult.verdict) + '</span>' +
+                (cachedResult.confidence ? ' (' + cachedResult.confidence + '% confidence)' : '') +
+                (cachedResult.timestamp ? ' — ' + new Date(cachedResult.timestamp).toLocaleString() : '') +
+              '</div>' +
+            '</div>' +
+            '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:#6366F1;border:1px solid #818CF8;color:#fff;border-radius:6px;font-weight:600;" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-investigate for full findings</button>' +
+          '</div>' +
+          '<div style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:12px;">' +
+            'Full investigation findings are not available in cache.<br>Click <strong>Re-investigate</strong> above to run a fresh AI investigation.' +
+          '</div>' +
+        '</div>';
+      }
     } else {
-      // No cache — run fresh AI investigation
+      // No cache at all — run fresh AI investigation
       runAIInvestigation(ticketKey, issueData);
     }
 
@@ -51975,9 +52001,12 @@ async function loadInvestigationCache(ticketKey) {
     console.log('[InvCache] Forced re-investigation for', ticketKey, '— skipping all cache sources');
     return null;
   }
-  // Check in-memory first
-  if (_investigationCache[ticketKey]) return _investigationCache[ticketKey];
-  // Try SIEMLess DB
+  // Check in-memory first — but only if it has full HTML content.
+  // loadAllCachedKeys() pre-populates verdict-only summaries (no html)
+  // for triage badges; when opening an investigation we need the full record.
+  var memEntry = _investigationCache[ticketKey];
+  if (memEntry && memEntry.html) return memEntry;
+  // Try SIEMLess DB (fetches full record including html_content)
   try {
     if (!window._supabaseRef) return null;
     var resp = await window._supabaseRef.from('investigation_cache')
