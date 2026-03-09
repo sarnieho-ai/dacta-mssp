@@ -51113,27 +51113,30 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   // Normalize: srcIPMatch group is always [1] now
   var _srcIP = srcIPMatch ? (srcIPMatch[1] || '') : '';
   // Connection counts: handle 'Connection Counts(s): 66' template AND 'N connection counts of traffic'
-  var connCountMatch = cleanDesc.match(/Connection\s*Count(?:s)?\(?s?\)?:?\s*(\d[\d,]+)/i) || cleanDesc.match(/(\d[\d,]+)\s*connection\s*counts?\s+of/i) || cleanDesc.match(/(\d[\d,]+)\s*total\s*connections?/i);
+  var connCountMatch = cleanDesc.match(/Connection\s*Count(?:s)?\(?s?\)?:?\s*(\d[\d,]+)/i) || cleanDesc.match(/(\d[\d,]+)\s*connection\s*counts?\s+of/i) || cleanDesc.match(/(\d[\d,]+)\s*total\s*connections?/i) || cleanDesc.match(/(?:approximately|approx\.?|about|~)?\s*(\d[\d,]+)\s*(?:outbound|inbound)?\s*connections?\s+to/i);
   // Target / unique IPs: handle 'Unique Target IP(s): 20' template AND 'N unique target IPs' in text
   var targetCountMatch = cleanDesc.match(/Unique\s*Target\s*IP\(?s?\)?:?\s*(\d+)/i) || cleanDesc.match(/(\d+)\s*unique\s*(?:target|destination|internal)\s+IPs?/i) || cleanDesc.match(/(?:multiple|several)\s*internal\s*(?:addresses|hosts|IPs)/i);
   // Ports: 'over ports 53(DNS)...' OR 'Destination Port: 5355'
-  var portsMatch = cleanDesc.match(/(?:over\s*)?ports?\s+([\d]+(?:\s*\([^)]*\))?(?:[,\s]+(?:and\s+)?\d+(?:\s*\([^)]*\))?)*)/i);
+  // Ports: 'Unique Port(s): 6881 - 6999' OR 'over ports 53(DNS)...' OR 'port 443'
+  var portsMatch = cleanDesc.match(/Unique\s*Port\(?s?\)?:?\s*([\d]+ ?- ?[\d]+(?:\s*\([^)]*\))?)/i) || cleanDesc.match(/(?:over\s*)?ports?\s+([\d]+(?:\s*\([^)]*\))?(?:[,\s]+(?:and\s+)?\d+(?:\s*\([^)]*\))?)*)/i);
   var destPortMatch = !portsMatch ? cleanDesc.match(/Destination\s*Port:?\s*(\d+)/i) : null;
   // Subnet
   var subnetMatch = cleanDesc.match(/subnet\s*(?:of)?\s*\(?([\d.X]+(?:\/\d+)?)\)?/i);
   // Timestamp from comment (e.g. "7 Mar 2026 08:45:40 pm")
   var alertTimeMatch = cleanDesc.match(/(\d{1,2}\s+[A-Za-z]+\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)/i);
   // Host/hostname
-  var hostMatch = cleanDesc.match(/(?:related\s*host|hostname|host\s*name)[:\s]*\(?([\w.-]+)\)?/i);
+  // Require colon/equals after keyword to avoid capturing 'seen' from 'hostname seen to be...'
+  var hostMatch = cleanDesc.match(/(?:related\s*host|hostname|host\s*name)\s*[:=]\s*\(?([\w.-]+)\)?/i);
   // Firewall device / action
   var fwDeviceMatch = cleanDesc.match(/(?:Fortinet|Palo Alto|Checkpoint|Sophos|Fortigate)\s*(?:device)?\s*(?:action)?/i);
   var fwActionMatch = cleanDesc.match(/device\s*action[^.]*(?:were|was)\s*(?:either\s*)?["']?([^"'.]+)["']?/i);
   // ── Distributed Scan / Network Scan specific fields ──
   var uniqueSrcCountMatch = cleanDesc.match(/(?:No\.?\s*of\s*)?Unique\s*Source\s*IP\(?s?\)?:?\s*(\d+)/i);
-  var destIPMatch = cleanDesc.match(/Destination\s*IP:?\s*([\w.:]+)/i);
+  // Require colon after 'Destination IP' to avoid capturing 's' from 'destination IPs (Sample: ...)'
+  var destIPMatch = cleanDesc.match(/Destination\s*IP:\s*([\d.:]+)/i);
   var observerDeviceMatch = cleanDesc.match(/Observer\s*Device:?\s*([\w.-]+)(?:\s*\(([\w.-]+)\))?/i);
   // Behavioral pattern
-  var behaviorMatch = cleanDesc.match(/(?:fan-?out|lateral\s*movement|beaconing|(?:distributed\s*)?scan(?:ning)?|brute.?force|reconnaissance|exfiltration|C2|command.and.control)/i);
+  var behaviorMatch = cleanDesc.match(/(?:fan-?out|lateral\s*movement|beaconing|(?:distributed\s*)?scan(?:ning)?|brute.?force|reconnaissance|exfiltration|C2|command.and.control|torrent(?:ing)?|peer.to.peer|p2p)/i);
   // Related ticket
   // Match: 'Related activity previously escalated on DAC-XXXXX', 'escalated on DAC-XXXXX'
   var relatedTicketMatch = cleanDesc.match(/(?:escalated|raised)\s+(?:on\s+)?(?:ticket\s*)?(DAC-\d+)/i)
@@ -53212,8 +53215,8 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       for (var fi = 0; fi < allIPs.length; fi++) {
         var fip = allIPs[fi];
         var isPrivateFW = fip.startsWith('10.') || fip.startsWith('172.') || fip.startsWith('192.168.') || fip.startsWith('127.');
-        var fwQ = { size: 10, query: { bool: { must: [{ range: { '@timestamp': { gte: 'now-24h' } } }], should: [{ match: { 'destination.ip': fip } }, { match: { 'source.ip': fip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
-        var qDFW = { name: 'Firewall: ' + fip, index: fwIndex, query: 'ip:"' + fip + '" (24h)', status: 'running' };
+        var fwQ = { size: 10, query: { bool: { must: [{ range: { '@timestamp': { gte: 'now-7d' } } }], should: [{ match: { 'destination.ip': fip } }, { match: { 'source.ip': fip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
+        var qDFW = { name: 'Firewall: ' + fip, index: fwIndex, query: 'ip:"' + fip + '" (7d)', status: 'running' };
         logs.queryDetails.push(qDFW); logs.queriesRun++;
 
         var fwResult = await queryElastic('search', fwIndex, fwQ);
@@ -53224,7 +53227,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         } else {
           qDFW.status = fwResult ? 'success' : 'error'; qDFW.hits = 0;
           if (fwResult) logs.elasticConnected = true;
-          logs.networkConnections.push({ status: 'CLEAR', query: 'ip:"' + fip + '" (Firewall 24h)', result: 'No firewall events for ' + fip + (isPrivateFW ? ' (private IP)' : ''), ip: fip, count: 0, live: true });
+          logs.networkConnections.push({ status: 'CLEAR', query: 'ip:"' + fip + '" (Firewall 7d)', result: 'No firewall events for ' + fip + (isPrivateFW ? ' (private IP)' : ''), ip: fip, count: 0, live: true });
         }
       }
     } else {
@@ -54138,10 +54141,12 @@ async function runAIInvestigation(ticketKey, issueData) {
   var cmdCtx = analyzeCommandContext(fullText);
 
   // ── CrowdStrike Falcon Intel enrichment (parallel with Elastic) ──
-  var csEnrichment = { lookup: {}, total: 0, queried: 0, actors: [], error: null };
-  var csAllIOCs = [].concat(
+  // Only enrich with CS if the org actually has CrowdStrike as EDR connector
+  var _orgHasCrowdStrike = _invEdrConn && _invEdrConn.vendor && _invEdrConn.vendor.toLowerCase().includes('crowdstrike');
+  var csEnrichment = { lookup: {}, total: 0, queried: 0, actors: [], error: null, skippedNoCS: !_orgHasCrowdStrike };
+  var csAllIOCs = _orgHasCrowdStrike ? [].concat(
     iocs.ips || [], iocs.domains || [], iocs.hashes || [], iocs.urls || []
-  ).filter(Boolean).slice(0, 100); // CS limit guard
+  ).filter(Boolean).slice(0, 100) : []; // Skip CS enrichment for non-CS orgs
 
   var csEnrichPromise = (csAllIOCs.length > 0)
     ? fetch('/api/crowdstrike', {
@@ -54277,7 +54282,7 @@ async function runAIInvestigation(ticketKey, issueData) {
       severity: 'high',
       detail: csMediumConfirmCount + ' indicator(s) have a medium-confidence malicious verdict from CrowdStrike Falcon Intelligence. Recommend treating as malicious pending further analysis.'
     });
-  } else if (csAllIOCs.length > 0 && csEnrichment.total === 0 && !csEnrichment.error) {
+  } else if (csAllIOCs.length > 0 && csEnrichment.total === 0 && !csEnrichment.error && !csEnrichment.skippedNoCS) {
     exculpatory.push({
       title: 'CrowdStrike Intel: All ' + csAllIOCs.length + ' IOC(s) returned UNVERIFIED/CLEAN',
       severity: 'moderate',
