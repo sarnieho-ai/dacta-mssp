@@ -2655,6 +2655,15 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 .tq-ai-badge.cached {
   background:rgba(16,185,129,0.10); border:1px solid rgba(16,185,129,0.25); color:#10b981;
 }
+.tq-ai-badge.cached-tp {
+  background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.30); color:#ef4444;
+}
+.tq-ai-badge.cached-fp {
+  background:rgba(16,185,129,0.10); border:1px solid rgba(16,185,129,0.25); color:#10b981;
+}
+.tq-ai-badge.cached-susp {
+  background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.30); color:#f59e0b;
+}
 .tq-ai-badge.overridden {
   background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.25); color:#f59e0b;
 }
@@ -40235,7 +40244,13 @@ async function loadOrgsFromSupabase() {
       return;
     }
 
-    var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false
+      }
+    });
     window._dactaSupabase = _supabase;
     window._supabaseRef = _supabase;
 
@@ -40364,30 +40379,54 @@ async function loadOrgsFromSupabase() {
       }
     });
 
-    // ── DEF-001: Session Expiry Monitor ──
+    // ── DEF-001: Session Expiry Monitor with Proactive Refresh ──
     var _sessionExpiryTimer = null;
-    var _sessionWarningTimer = null;
+    var _sessionRefreshTimer = null;
     function _startSessionExpiryMonitor(session) {
       if (_sessionExpiryTimer) clearTimeout(_sessionExpiryTimer);
-      if (_sessionWarningTimer) clearTimeout(_sessionWarningTimer);
+      if (_sessionRefreshTimer) clearTimeout(_sessionRefreshTimer);
       if (!session || !session.expires_at) return;
       var expiresAt = session.expires_at * 1000; // Convert to ms
       var now = Date.now();
       var msUntilExpiry = expiresAt - now;
-      var warningMs = msUntilExpiry - (5 * 60 * 1000); // 5 min before
 
-      if (warningMs > 0) {
-        _sessionWarningTimer = setTimeout(function() {
-          showToast('Your session will expire in 5 minutes. Please save your work.', 'warn', 10000);
-        }, warningMs);
+      // Proactive refresh: refresh token 2 minutes BEFORE expiry (not 5 min warning)
+      // This prevents the user from ever seeing a logout prompt during active sessions
+      var refreshMs = msUntilExpiry - (2 * 60 * 1000); // 2 min before expiry
+      if (refreshMs > 0) {
+        _sessionRefreshTimer = setTimeout(function() {
+          console.log('[Session] Proactively refreshing token before expiry...');
+          _supabase.auth.refreshSession().then(function(res) {
+            if (res.data && res.data.session) {
+              console.log('[Session] Token refreshed successfully. New expiry:', new Date(res.data.session.expires_at * 1000).toLocaleString());
+              // onAuthStateChange TOKEN_REFRESHED will re-call _startSessionExpiryMonitor
+            } else {
+              console.warn('[Session] Refresh returned no session — user may need to re-login');
+            }
+          }).catch(function(err) {
+            console.warn('[Session] Proactive refresh failed:', err.message);
+          });
+        }, refreshMs);
+      } else if (refreshMs <= 0 && msUntilExpiry > 0) {
+        // Token expiring very soon — refresh immediately
+        _supabase.auth.refreshSession().catch(function() {});
       }
 
+      // Hard expiry fallback: only logout if token is truly expired AND refresh fails
       if (msUntilExpiry > 0) {
         _sessionExpiryTimer = setTimeout(function() {
-          showToast('Session expired. Redirecting to login...', 'error', 5000);
-          setTimeout(function() {
-            _supabase.auth.signOut();
-          }, 2000);
+          // Try one last refresh before logging out
+          _supabase.auth.refreshSession().then(function(res) {
+            if (res.data && res.data.session) {
+              console.log('[Session] Last-resort refresh succeeded.');
+            } else {
+              showToast('Session expired. Redirecting to login...', 'error', 5000);
+              setTimeout(function() { _supabase.auth.signOut(); }, 2000);
+            }
+          }).catch(function() {
+            showToast('Session expired. Redirecting to login...', 'error', 5000);
+            setTimeout(function() { _supabase.auth.signOut(); }, 2000);
+          });
         }, msUntilExpiry);
       }
     }
@@ -50285,7 +50324,7 @@ async function openInvestigation(ticketKey) {
                 '<span style="font-size:10px;font-weight:600;color:var(--cyan);">' + escapeHtml(item.author) + '</span>' +
                 '<span style="font-size:9px;color:var(--text-muted);">' + jiraTimeAgo(item.time) + '</span>' +
               '</div>' +
-              '<div style="font-size:10px;color:var(--text-secondary);line-height:1.4;max-height:100px;overflow:hidden;">' + (item.body || '') + '</div></div>';
+              '<div class="inv-tl-comment-body" style="font-size:10px;color:var(--text-secondary);line-height:1.4;">' + (item.body || '') + '</div></div>';
           } else {
             return '<div style="padding:4px 12px;border-left:1px solid rgba(255,255,255,0.06);margin-left:8px;margin-bottom:2px;">' +
               '<div style="font-size:9px;color:var(--text-muted);">' + escapeHtml(item.author) + ' \u00b7 ' + jiraTimeAgo(item.time) + '</div>' +
@@ -50714,7 +50753,7 @@ async function openInvestigation(ticketKey) {
                               '<span style="font-size:11px;font-weight:600;color:#4F46E5;">' + escapeHtml(item.author) + '</span>' +
                               '<span style="font-size:10px;color:var(--rws-text-muted);">' + jiraTimeAgo(item.time) + '</span>' +
                             '</div>' +
-                            '<div style="font-size:11px;color:var(--rws-text-secondary);line-height:1.4;max-height:100px;overflow:hidden;">' + (item.body||'') + '</div></div>';
+                            '<div style="font-size:11px;color:var(--rws-text-secondary);line-height:1.4;">' + (item.body||'') + '</div></div>';
                         } else {
                           return '<div style="padding:4px 14px;border-left:1px solid var(--rws-border-card);margin-left:8px;margin-bottom:2px;">' +
                             '<div style="font-size:10px;color:var(--rws-text-muted);">' + escapeHtml(item.author) + ' \u00b7 ' + jiraTimeAgo(item.time) + '</div>' +
@@ -51987,7 +52026,12 @@ function getTriageAIBadge(ticketKey) {
     }
     var shortVerdict = (cached.verdict || '').split('\u2014')[0].trim();
     if (shortVerdict.length > 14) shortVerdict = shortVerdict.substring(0, 14) + '\u2026';
-    return '<span class="tq-ai-badge cached" title="Cached ' + new Date(cached.timestamp).toLocaleString() + '">' + dIcon('check',14) + ' ' + (shortVerdict || 'Investigated') + '</span>';
+    // Color-code by verdict type for quick visual identification
+    var isTP = shortVerdict.toUpperCase().indexOf('TRUE POSITIVE') !== -1 || shortVerdict.toUpperCase() === 'TRUE_POSITIVE';
+    var isFP = shortVerdict.toUpperCase().indexOf('FALSE POSITIVE') !== -1 || shortVerdict.toUpperCase() === 'FALSE_POSITIVE';
+    var isSusp = shortVerdict.toUpperCase().indexOf('SUSPICIOUS') !== -1;
+    var badgeClass = isTP ? 'cached-tp' : isFP ? 'cached-fp' : isSusp ? 'cached-susp' : 'cached';
+    return '<span class="tq-ai-badge ' + badgeClass + '" title="Cached ' + new Date(cached.timestamp).toLocaleString() + '">' + dIcon('check',14) + ' ' + (shortVerdict || 'Investigated') + '</span>';
   }
   return '<span style="font-size:10px;color:var(--text-muted);">\u2014</span>';
 }
@@ -54763,6 +54807,23 @@ async function runAIInvestigation(ticketKey, issueData) {
           var _r1Pb = _r1Playbooks[0];
           var _r1AllSteps = Array.isArray(_r1Pb.triage_steps) ? _r1Pb.triage_steps : [];
           _r1AutoSteps = _r1AllSteps.filter(_isPlaybookStepAutomated);
+        }
+        // If no matching playbook, generate a generic triage playbook so every ticket has drill-down
+        if (_r1Playbooks.length === 0) {
+          var _alertRuleName = (issueData && issueData.fields && issueData.fields.summary) || 'Alert';
+          _r1Playbooks = [{
+            playbook_name: 'Generic Triage: ' + _alertRuleName.substring(0, 60),
+            match_type: 'auto-generated',
+            false_positive_guidance: 'Review alert details, source/destination IPs, user context, and determine if activity is expected for the environment.',
+            triage_steps: [
+              'Review alert details: identify source/destination IPs, affected user/host, and timestamp for the alert.',
+              'Determine the scope — is this an isolated incident or part of a broader pattern across multiple hosts/accounts?',
+              'Query SIEM EDR for the past 24h of activity from the involved source to establish behavioral context.',
+              'Cross-reference involved IPs and accounts against threat intelligence feeds (VirusTotal, AbuseIPDB, internal IOC lists).',
+              'Check for prior alerts or similar events from this host/user in the past 7 days.'
+            ]
+          }];
+          _r1AutoSteps = _r1Playbooks[0].triage_steps;
         }
       } catch (e) { console.warn('[R1Playbook] error:', e.message); }
     }
