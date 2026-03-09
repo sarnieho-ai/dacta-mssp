@@ -24605,8 +24605,8 @@ Analyst: K. Rasmussen | 2026-02-28
               <input id="um-edit-name" type="text" class="um-search" style="width:100%;box-sizing:border-box;" placeholder="Full Name" />
             </div>
             <div style="margin-bottom:14px;">
-              <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:5px;">Email (read-only)</label>
-              <input id="um-edit-email" type="email" class="um-search" style="width:100%;box-sizing:border-box;opacity:0.6;" readonly />
+              <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:5px;">Email</label>
+              <input id="um-edit-email" type="email" class="um-search" style="width:100%;box-sizing:border-box;" placeholder="user@example.com" />
             </div>
             <div style="margin-bottom:14px;">
               <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:5px;">Role *</label>
@@ -37548,17 +37548,21 @@ async function loadUserManagement() {
       }
       if (!_umJiraUsers || _umJiraUsers.length === 0) { showToast('No Jira users found', 'warn'); return; }
 
-      // Build email lookup map
+      // Build email + display name lookup maps
       var jiraByEmail = {};
+      var jiraByName = {};
       _umJiraUsers.forEach(function(ju) {
         if (ju.emailAddress) jiraByEmail[ju.emailAddress.toLowerCase()] = ju;
+        if (ju.displayName) jiraByName[ju.displayName.toLowerCase().trim()] = ju;
       });
 
       var linked = 0, skipped = 0;
       for (var i = 0; i < _users.length; i++) {
         var u = _users[i];
         if (u.jira_account_id) { skipped++; continue; } // already linked
+        // Match by email first, then fall back to display name
         var match = u.email ? jiraByEmail[u.email.toLowerCase()] : null;
+        if (!match && u.display_name) match = jiraByName[u.display_name.toLowerCase().trim()] || null;
         if (match) {
           await window._supabaseRef.from('users').update({
             jira_account_id: match.accountId,
@@ -38359,6 +38363,7 @@ async function loadUserManagement() {
     editSaveBtn.addEventListener('click', async function() {
       var uid2     = (document.getElementById('um-edit-uid')   || {}).value || '';
       var newName  = (document.getElementById('um-edit-name')  || {}).value || '';
+      var newEmail = (document.getElementById('um-edit-email') || {}).value || '';
       var newRole2 = (document.getElementById('um-edit-role')  || {}).value || 'soc_l1';
       var newMfa   = !!(document.getElementById('um-edit-mfa') || {}).checked;
       if (!uid2 || !newName) { showToast('Display Name is required', 'error'); return; }
@@ -38373,6 +38378,7 @@ async function loadUserManagement() {
       if (!user2) return;
       var oldRole2 = user2.role;
       user2.display_name  = newName;
+      user2.email         = newEmail;
       user2.role          = newRole2;
       user2.assigned_orgs = selectedOrgs2;
       user2.mfa_enabled   = newMfa;
@@ -38380,7 +38386,7 @@ async function loadUserManagement() {
       try {
         if (window._supabaseRef) {
           var upd = await window._supabaseRef.from('platform_users').update({
-            name: newName, role: newRole2
+            name: newName, email: newEmail, role: newRole2
           }).eq('id', uid2);
           if (!upd.error) saved2 = true;
         }
@@ -38392,7 +38398,7 @@ async function loadUserManagement() {
         actor: 'current_user',
         action: 'role_changed',
         target: user2.email,
-        details: 'Edited: name=' + newName + (oldRole2 !== newRole2 ? ', role=' + oldRole2 + '\u2192' + newRole2 : '')
+        details: 'Edited: name=' + newName + (newEmail ? ', email=' + newEmail : '') + (oldRole2 !== newRole2 ? ', role=' + oldRole2 + '\u2192' + newRole2 : '')
       };
       _auditLog.unshift(auditEntry2);
       try {
@@ -46471,10 +46477,10 @@ async function copilotCheckSources() {
     var r3 = await fetch('/api/jira', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'search',jql:'project=DAC',maxResults:1}) });
     sources.push(r3.ok ? 'Jira ' + dIcon('check',14) + '' : 'Jira ' + dIcon('close',14) + '');
   } catch(e) { sources.push('Jira ' + dIcon('close',14) + ''); }
-  // Check Claude
+  // Check Claude (OPTIONS pre-flight only — does NOT consume API tokens)
   try {
-    var r4 = await fetch('/api/copilot', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({messages:[{role:'user',content:'ping'}]}) });
-    sources.push(r4.ok ? 'Claude AI ' + dIcon('check',14) + '' : 'Claude AI ' + dIcon('close',14) + '');
+    var r4 = await fetch('/api/copilot', { method:'OPTIONS' });
+    sources.push((r4.ok || r4.status === 204) ? 'Claude AI ' + dIcon('check',14) + '' : 'Claude AI ' + dIcon('close',14) + '');
   } catch(e) { sources.push('Claude AI ' + dIcon('close',14) + ''); }
   if (statusEl) statusEl.innerHTML = sources.join(' \u00b7 ');
 }
