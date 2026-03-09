@@ -1210,9 +1210,54 @@ ${alert_context.description || 'No description available'}
 - Files: ${(alert_context.iocs?.files || []).join(', ') || 'None'}
 - Hosts: ${(alert_context.iocs?.hosts || []).join(', ') || 'None'}
 - Ports: ${(alert_context.iocs?.ports || []).join(', ') || 'None'}
+- Devices: ${(alert_context.iocs?.devices || []).join(', ') || 'None'}
+- MAC Addresses: ${(alert_context.iocs?.macs || []).join(', ') || 'None'}
 
 ### Detected MITRE Techniques
 ${(alert_context.techniques || []).map(t => `- ${t.id}: ${t.name} [${t.tactic}]`).join('\n') || 'None detected'}
+
+${(() => {
+  const di = alert_context.deep_investigation;
+  if (!di) return '';
+  let sections = [];
+  if (di.investigation_mode === 'firewall_only') {
+    sections.push('### Investigation Mode: FIREWALL-ONLY (No EDR endpoint agent)');
+    sections.push('IMPORTANT: This org has NO EDR telemetry. Rely on firewall logs, geo-location, bytes transferred, temporal patterns, and TIP lookups. Do NOT assert TRUE POSITIVE without SIEM-confirmed evidence. Default to SUSPICIOUS when evidence is insufficient.');
+  }
+  if (di.dest_geo && di.dest_geo.length > 0) {
+    sections.push('### Destination Geo-Location Analysis');
+    di.dest_geo.forEach(g => {
+      sections.push(`- IP ${g.ip}: ${g.geoBreakdown.map(gb => gb.location + ' (' + gb.count + ' events)').join(', ')} (${g.totalEvents} total)`);
+    });
+  }
+  if (di.bytes_analysis && di.bytes_analysis.length > 0) {
+    sections.push('### Bytes Transferred Analysis');
+    di.bytes_analysis.forEach(b => {
+      sections.push(`- IP ${b.ip}: Total=${b.totalNetworkBytes}B, Src=${b.totalSourceBytes}B, Dst=${b.totalDestBytes}B, Avg=${b.avgBytesPerEvent}B/event, Assessment=${b.assessment}`);
+    });
+  }
+  if (di.temporal_analysis && di.temporal_analysis.length > 0) {
+    sections.push('### Temporal Traffic Pattern Analysis');
+    di.temporal_analysis.forEach(t => {
+      const peakStr = t.peakHours.map(h => h.hour + ':00 UTC (' + h.count + ' events)').join(', ');
+      const portStr = t.portBreakdown.map(p => 'port ' + p.port + ' (' + p.count + 'x)').join(', ');
+      sections.push(`- IP ${t.ip}: Pattern=${t.assessment}, Peak hours=${peakStr}, Ports=${portStr}`);
+    });
+  }
+  if (di.dest_tip_results && di.dest_tip_results.length > 0) {
+    sections.push('### DACTA TIP Lookup Results (Destination IP Pivot)');
+    di.dest_tip_results.forEach(t => {
+      sections.push(`- ${t.value}: ${t.found ? 'FOUND — Labels: ' + t.labels.join(', ') + ' (Source: ' + t.source + ')' : 'NOT FOUND in TIP — no abuse reports'}`);
+    });
+  }
+  if (di.device_names && di.device_names.length > 0) {
+    sections.push(`### Identified Device Names: ${di.device_names.join(', ')}`);
+  }
+  if (di.mac_addresses && di.mac_addresses.length > 0) {
+    sections.push(`### Identified MAC Addresses: ${di.mac_addresses.join(', ')}`);
+  }
+  return sections.join('\n');
+})()}
 
 ${indexContext}
 ${fieldMappingContext}

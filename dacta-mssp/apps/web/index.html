@@ -52722,9 +52722,9 @@ async function queryOpenCTI(gqlQuery, variables) {
   } catch (err) { console.error('[DACTA TIP] Query failed:', err); return null; }
 }
 
-// Helper: extract IOCs (IPs, domains, hashes, files, hosts) from text
+// Helper: extract IOCs (IPs, domains, hashes, files, hosts, devices, MACs) from text
 function extractIOCs(text) {
-  var iocs = { ips: [], hosts: [], files: [], hashes: [], ports: [], users: [], paths: [] };
+  var iocs = { ips: [], hosts: [], files: [], hashes: [], ports: [], users: [], paths: [], devices: [], macs: [] };
   var ipPattern = /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g;
   var portPattern = /(?::|port\s*)([0-9]{2,5})\b/gi;
   var hashMd5 = /\b[a-f0-9]{32}\b/gi;
@@ -52734,6 +52734,12 @@ function extractIOCs(text) {
   var pathPattern = /[A-Z]:\\[\w\\. -]+/gi;
   // Require colon/whitespace after keyword to avoid capturing 'name' from 'Username'
   var userPattern = /(?:user(?:name)?|account|logon|by user)\s*[:\s]\s*(\w[\w.@\\\\-]+)/gi;
+  // MAC address pattern: 00:1A:2B:3C:4D:5E or 00-1A-2B-3C-4D-5E
+  var macPattern = /\b([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}\b/g;
+  // Device name pattern: captures non-Windows hostnames like "iphone", "accounta", "Galaxy-S23", etc.
+  // Also matches hostnames from source.name / observer.hostname / host.name fields
+  // Looks for device-like words near contextual keywords OR standalone short identifiers from structured logs
+  var deviceNamePattern = /(?:(?:source\.?\s*(?:name)?|host\.?\s*(?:name)?|device\.?\s*(?:name)?|hostname|devname|srcname)\s*[:=]\s*["']?)([A-Za-z][A-Za-z0-9._-]{1,30})(?:["']?)/gi;
 
   var m;
   m = text.match(ipPattern) || []; iocs.ips = [...new Set(m)];
@@ -52753,6 +52759,23 @@ function extractIOCs(text) {
   var _userDenyList = ['the','this','that','from','with','name','user','account','logon','login','admin','system','unknown','none','null','undefined','true','false','test','here','have','been','will','configured','attribute','object','details','event','alert','rule','description','triggered','modified','deleted','created','field','value','type','status','action','above','below','following','your','their','when','where','which','note','please','team','global','local','remote','source','dest','internal','external'];
   while ((m = userPattern.exec(text)) !== null) { var u = m[1]; if (u.length > 3 && !_userDenyList.includes(u.toLowerCase()) && !/^[0-9]+$/.test(u)) iocs.users.push(u); }
   iocs.users = [...new Set(iocs.users)];
+
+  // MAC address extraction
+  m = text.match(macPattern) || []; iocs.macs = [...new Set(m.map(function(mac) { return mac.toUpperCase().replace(/-/g, ':'); }))];
+
+  // Device name extraction — captures non-standard hostnames from structured log fields
+  var DEVICE_DENYLIST = /^(unknown|none|null|undefined|localhost|default|any|name|host|device|source|destination|true|false|internal|external|string|number|object|array|function|query|search|index|field|value|alert|event|log|data|type|status|action|rule|process|network|firewall|elastic|siem|http|https|ftp|tcp|udp|icmp)$/i;
+  while ((m = deviceNamePattern.exec(text)) !== null) {
+    var dev = m[1];
+    if (dev && dev.length >= 2 && dev.length <= 30 && !DEVICE_DENYLIST.test(dev) && !/^[0-9.]+$/.test(dev)) {
+      // Skip if it matches an already-captured host or is an IP
+      if (!iocs.hosts.some(function(h) { return h.toLowerCase() === dev.toLowerCase(); }) && !iocs.ips.includes(dev)) {
+        iocs.devices.push(dev);
+      }
+    }
+  }
+  iocs.devices = [...new Set(iocs.devices)];
+
   return iocs;
 }
 
@@ -52858,8 +52881,15 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     childProcesses: [], networkConnections: [], fileEvents: [],
     authEvents: [], edrActions: [], queryResults: [],
     rawAlerts: [], hostInfo: null, alertHistory: null,
-    firewallBlocks: [],  // ← NEW: dedicated deny/drop events from firewall connector
+    firewallBlocks: [],  // ← dedicated deny/drop events from firewall connector
     openctiResults: [],
+    // Deep investigation enrichments
+    destGeoData: [],       // geo-location for destination IPs
+    bytesAnalysis: [],     // bytes transferred analysis per IP
+    temporalAnalysis: [],  // temporal traffic patterns
+    destTipResults: [],    // DACTA TIP lookups for dest IPs from firewall logs
+    deviceNames: [],       // device names extracted from logs (e.g. iphone, accounta)
+    macAddresses: [],      // MAC addresses found in logs
     elasticConnected: false, openctiConnected: false,
     queriesRun: 0, queryDetails: []
   };
@@ -53225,8 +53255,9 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     logs.edrActions.push({ status: 'INFO', action: 'No Endpoint Agent', result: 'Endpoint containment not available. Containment actions limited to firewall block rules.', engine: 'N/A' });
     logs.fileEvents.push({ status: 'INFO', query: 'Endpoint agent not available', result: 'File-level analysis unavailable without endpoint agent. Review firewall logs for data exfil indicators.', count: 0, live: true });
 
-    // Still query firewall logs for network connections
+    // Still query firewall logs for network connections — ENHANCED: deep investigation with geo, bytes, temporal, TIP pivot
     var allIPs = (iocs.ips || []);
+    var _deepDestIPs = new Set(); // Collect unique dest IPs for TIP pivot later
     if (allIPs.length > 0) {
       // Use resolveFirewallIndexes to get correct index from actual connector data
       var fwConnsForResolve = _allFwConnectors && _allFwConnectors.length > 0 ? _allFwConnectors : (_fwConnector ? [_fwConnector] : []);
@@ -53234,24 +53265,168 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       for (var fi = 0; fi < allIPs.length; fi++) {
         var fip = allIPs[fi];
         var isPrivateFW = fip.startsWith('10.') || fip.startsWith('172.') || fip.startsWith('192.168.') || fip.startsWith('127.');
-        var fwQ = { size: 10, query: { bool: { must: [{ range: { '@timestamp': { gte: 'now-7d' } } }], should: [{ match: { 'destination.ip': fip } }, { match: { 'source.ip': fip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
-        var qDFW = { name: 'Firewall: ' + fip, index: fwIndex, query: 'ip:"' + fip + '" (7d)', status: 'running' };
+        // Enhanced query: request geo, bytes, device name, MAC, port, action fields
+        var fwQ = {
+          size: 25,
+          query: { bool: { must: [{ range: { '@timestamp': { gte: 'now-7d' } } }], should: [{ match: { 'destination.ip': fip } }, { match: { 'source.ip': fip } }], minimum_should_match: 1 } },
+          sort: [{ '@timestamp': 'desc' }],
+          _source: ['@timestamp', 'source.ip', 'destination.ip', 'destination.port', 'source.port',
+            'destination.geo.country_name', 'destination.geo.city_name', 'destination.geo.country_iso_code',
+            'source.geo.country_name', 'source.geo.city_name', 'source.geo.country_iso_code',
+            'network.bytes', 'source.bytes', 'destination.bytes',
+            'source.mac', 'destination.mac', 'source.name', 'destination.name',
+            'observer.hostname', 'host.name', 'event.action',
+            'network.transport', 'network.protocol', 'network.direction',
+            'rule.name', 'observer.name']
+        };
+        var qDFW = { name: 'Firewall (Deep): ' + fip, index: fwIndex, query: 'ip:"' + fip + '" (7d) + geo/bytes/device', status: 'running' };
         logs.queryDetails.push(qDFW); logs.queriesRun++;
 
         var fwResult = await queryElastic('search', fwIndex, fwQ);
         if (fwResult && fwResult.hits && fwResult.hits.total && fwResult.hits.total.value > 0) {
           qDFW.status = 'success'; qDFW.hits = fwResult.hits.total.value;
+          var fwHits = fwResult.hits.hits || [];
           logs.networkConnections.push({ status: 'ALERT', query: 'ip:"' + fip + '" (Firewall)', result: fwResult.hits.total.value + ' firewall events for ' + fip, ip: fip, count: fwResult.hits.total.value, live: true });
           logs.elasticConnected = true;
+
+          // ── DEEP ENRICHMENT: Extract geo-location, bytes, device names, MACs, temporal data ──
+          var _totalBytes = 0; var _totalSrcBytes = 0; var _totalDstBytes = 0; var _eventCount = fwHits.length;
+          var _geoMap = {}; var _portMap = {}; var _hourMap = {};
+          var _deviceSet = new Set(); var _macSet = new Set();
+
+          fwHits.forEach(function(hit) {
+            var s = hit._source || {};
+            // Geo extraction
+            var dstGeo = (s.destination || {}).geo || {};
+            var srcGeo = (s.source || {}).geo || {};
+            var dstIp = (s.destination || {}).ip || '';
+            var srcIp = (s.source || {}).ip || '';
+            // Collect dest IPs for TIP pivot (skip private)
+            if (dstIp && !dstIp.startsWith('10.') && !dstIp.startsWith('172.') && !dstIp.startsWith('192.168.') && !dstIp.startsWith('127.')) {
+              _deepDestIPs.add(dstIp);
+            }
+            if (srcIp && !srcIp.startsWith('10.') && !srcIp.startsWith('172.') && !srcIp.startsWith('192.168.') && !srcIp.startsWith('127.')) {
+              _deepDestIPs.add(srcIp);
+            }
+            // Build geo summary
+            var geoLabel = dstGeo.country_name || srcGeo.country_name || '';
+            var geoCity = dstGeo.city_name || srcGeo.city_name || '';
+            var geoIso = dstGeo.country_iso_code || srcGeo.country_iso_code || '';
+            if (geoLabel) {
+              var geoKey = geoLabel + (geoCity ? ' (' + geoCity + ')' : '');
+              _geoMap[geoKey] = (_geoMap[geoKey] || 0) + 1;
+            }
+            // Bytes aggregation
+            var nBytes = (s.network || {}).bytes || 0;
+            var sBytes = (s.source || {}).bytes || 0;
+            var dBytes = (s.destination || {}).bytes || 0;
+            _totalBytes += nBytes; _totalSrcBytes += sBytes; _totalDstBytes += dBytes;
+            // Port aggregation
+            var dstPort = (s.destination || {}).port;
+            if (dstPort) { _portMap[dstPort] = (_portMap[dstPort] || 0) + 1; }
+            // Temporal: extract hour from timestamp
+            try {
+              var ts = new Date(s['@timestamp']);
+              if (!isNaN(ts.getTime())) { var hr = ts.getUTCHours(); _hourMap[hr] = (_hourMap[hr] || 0) + 1; }
+            } catch(e) {}
+            // Device name extraction
+            var srcName = (s.source || {}).name || '';
+            var dstName = (s.destination || {}).name || '';
+            var obsHost = (s.observer || {}).hostname || '';
+            var hostName = (s.host || {}).name || '';
+            [srcName, dstName, obsHost, hostName].forEach(function(n) {
+              if (n && n.length >= 2 && n.length <= 30 && !/^[0-9.]+$/.test(n) && n !== 'unknown') _deviceSet.add(n);
+            });
+            // MAC extraction
+            var srcMac = (s.source || {}).mac || '';
+            var dstMac = (s.destination || {}).mac || '';
+            [srcMac, dstMac].forEach(function(mac) {
+              if (mac && mac.length >= 11) _macSet.add(mac.toUpperCase().replace(/-/g, ':'));
+            });
+          });
+
+          // Store geo data
+          var geoEntries = Object.keys(_geoMap).map(function(k) { return { location: k, count: _geoMap[k] }; });
+          geoEntries.sort(function(a, b) { return b.count - a.count; });
+          if (geoEntries.length > 0) {
+            logs.destGeoData.push({ ip: fip, geoBreakdown: geoEntries, totalEvents: fwResult.hits.total.value });
+          }
+
+          // Store bytes analysis
+          logs.bytesAnalysis.push({
+            ip: fip,
+            totalNetworkBytes: _totalBytes,
+            totalSourceBytes: _totalSrcBytes,
+            totalDestBytes: _totalDstBytes,
+            eventCount: _eventCount,
+            avgBytesPerEvent: _eventCount > 0 ? Math.round(_totalBytes / _eventCount) : 0,
+            zeroByteEvents: _totalBytes === 0,
+            assessment: _totalBytes === 0 ? 'ZERO_TRANSFER' : (_totalBytes < 1000 ? 'MINIMAL' : (_totalBytes < 100000 ? 'MODERATE' : 'SIGNIFICANT'))
+          });
+
+          // Store port analysis
+          var portEntries = Object.keys(_portMap).map(function(k) { return { port: parseInt(k), count: _portMap[k] }; });
+          portEntries.sort(function(a, b) { return b.count - a.count; });
+
+          // Store temporal analysis
+          var hourEntries = Object.keys(_hourMap).map(function(k) { return { hour: parseInt(k), count: _hourMap[k] }; });
+          hourEntries.sort(function(a, b) { return b.count - a.count; });
+          var peakHours = hourEntries.slice(0, 3);
+          var isWorkHours = peakHours.length > 0 && peakHours.every(function(h) { return h.hour >= 0 && h.hour <= 12; }); // UTC 0-12 = ~SGT 8-20 (work hours)
+          logs.temporalAnalysis.push({
+            ip: fip,
+            hourDistribution: hourEntries,
+            peakHours: peakHours,
+            isWorkHoursPattern: isWorkHours,
+            portBreakdown: portEntries.slice(0, 10),
+            assessment: isWorkHours ? 'WORK_HOURS' : (hourEntries.length <= 2 ? 'BURST' : 'DISTRIBUTED')
+          });
+
+          // Store device names and MACs from logs
+          _deviceSet.forEach(function(d) { if (!logs.deviceNames.includes(d)) logs.deviceNames.push(d); });
+          _macSet.forEach(function(m) { if (!logs.macAddresses.includes(m)) logs.macAddresses.push(m); });
+
         } else {
           qDFW.status = fwResult ? 'success' : 'error'; qDFW.hits = 0;
           if (fwResult) logs.elasticConnected = true;
           logs.networkConnections.push({ status: 'CLEAR', query: 'ip:"' + fip + '" (Firewall 7d)', result: 'No firewall events for ' + fip + (isPrivateFW ? ' (private IP)' : ''), ip: fip, count: 0, live: true });
         }
       }
+
+      // ── DEEP PIVOT: Query ALL collected dest IPs against DACTA TIP for maliciousness ──
+      var _destIPsArray = [..._deepDestIPs].filter(function(ip) {
+        // Only query IPs that are NOT already in the original iocs.ips (those are queried in Query 6 below)
+        return !(iocs.ips || []).includes(ip);
+      });
+      // Cap at 10 to avoid excessive queries
+      var _destIPsToQuery = _destIPsArray.slice(0, 10);
+      if (_destIPsToQuery.length > 0) {
+        console.log('[Investigation] Deep pivot: querying ' + _destIPsToQuery.length + ' destination IPs against DACTA TIP');
+        for (var dti = 0; dti < _destIPsToQuery.length; dti++) {
+          var dtip = _destIPsToQuery[dti];
+          var qDTIP = { name: 'DACTA TIP Dest IP: ' + dtip, index: 'DACTA TIP', query: 'search("' + dtip + '")', status: 'running' };
+          logs.queryDetails.push(qDTIP); logs.queriesRun++;
+          var dtipR = await queryOpenCTI('{ stixCyberObservables(first: 5, search: "' + dtip + '") { edges { node { id entity_type observable_value objectLabel { value } createdBy { name } } } } }');
+          if (dtipR && dtipR.data && dtipR.data.stixCyberObservables) {
+            logs.openctiConnected = true;
+            var dtEdges = dtipR.data.stixCyberObservables.edges || [];
+            qDTIP.status = 'success'; qDTIP.hits = dtEdges.length;
+            var dtLabels = [];
+            dtEdges.forEach(function(e) { (e.node.objectLabel || []).forEach(function(l) { if (!dtLabels.includes(l.value)) dtLabels.push(l.value); }); });
+            logs.destTipResults.push({ type: 'IP', value: dtip, found: dtEdges.length > 0, labels: dtLabels, source: dtEdges.length > 0 ? ((dtEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '', pivotOrigin: 'firewall_dest_ip' });
+            // Also add to main openctiResults for unified display
+            logs.openctiResults.push({ type: 'IP (Dest Pivot)', value: dtip, found: dtEdges.length > 0, labels: dtLabels, source: dtEdges.length > 0 ? ((dtEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '', pivotOrigin: 'firewall_dest_ip' });
+          } else { qDTIP.status = 'error'; }
+        }
+      }
+
     } else {
       logs.networkConnections.push({ status: 'INFO', query: 'No IPs extracted', result: 'No IPs in alert for firewall correlation. Check alert details manually.', ip: 'N/A', count: 0, live: true });
     }
+
+    // Merge device names and MAC addresses from iocs into logs
+    (iocs.devices || []).forEach(function(d) { if (!logs.deviceNames.includes(d)) logs.deviceNames.push(d); });
+    (iocs.macs || []).forEach(function(m) { if (!logs.macAddresses.includes(m)) logs.macAddresses.push(m); });
 
     // No host info or alert history from EDR
 
@@ -53456,6 +53631,10 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       logs.openctiResults.push({ type: 'Hash', value: lh, found: hEdges.length > 0, labels: hLbls, source: hEdges.length > 0 ? ((hEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '' });
     } else { qDH.status = 'error'; }
   }
+
+  // ── Global: merge device names and MAC addresses from IOCs into logs (applies to all paths) ──
+  (iocs.devices || []).forEach(function(d) { if (!logs.deviceNames.includes(d)) logs.deviceNames.push(d); });
+  (iocs.macs || []).forEach(function(m) { if (!logs.macAddresses.includes(m)) logs.macAddresses.push(m); });
 
   return logs;
 }
@@ -53675,6 +53854,36 @@ function generateExculpatoryEvidence(summary, desc, techniques, iocs, cmdCtx, el
   // Ollama is a known SOC/security tool
   if (lower.includes('ollama')) {
     evidence.push({ title: 'Ollama is a legitimate AI/ML tool', severity: 'moderate', detail: 'ollama.exe is a widely-used open-source local LLM runtime (github.com/ollama). It is commonly used by security teams for log analysis, threat hunting queries, and SOC automation. Its presence alone is not indicative of malicious activity.' });
+  }
+
+  // ── Deep Investigation Evidence: Bytes, Geo, Temporal, TIP ──
+  if (elasticLogs) {
+    // Zero-byte transfer = no actual data exfiltration
+    (elasticLogs.bytesAnalysis || []).forEach(function(b) {
+      if (b.zeroByteEvents || b.assessment === 'ZERO_TRANSFER') {
+        evidence.push({ title: 'Zero bytes transferred for ' + b.ip + ' (SIEM-verified)', severity: 'strong', source: 'SIEM_CONFIRMED', detail: 'Firewall logs show ' + b.eventCount + ' events for ' + b.ip + ' but 0 bytes transferred (network.bytes=0). No actual data exchange occurred — connections may have been rejected, timed out, or never completed. This strongly indicates no data exfiltration or C2 communication.' });
+      } else if (b.assessment === 'MINIMAL') {
+        evidence.push({ title: 'Minimal bytes transferred for ' + b.ip + ' (' + b.totalNetworkBytes + 'B)', severity: 'moderate', source: 'SIEM_CONFIRMED', detail: 'Only ' + b.totalNetworkBytes + ' bytes transferred across ' + b.eventCount + ' events (avg ' + b.avgBytesPerEvent + 'B/event). This is consistent with DNS lookups, TCP handshakes, or connection resets — not indicative of sustained malicious communication or data exfiltration.' });
+      }
+    });
+    // Clean TIP results = destination IPs are not known malicious
+    var _cleanTIPCount = 0;
+    (elasticLogs.destTipResults || []).forEach(function(t) {
+      if (!t.found) _cleanTIPCount++;
+    });
+    if (_cleanTIPCount > 0 && (elasticLogs.destTipResults || []).length > 0) {
+      var _totalTIPChecked = (elasticLogs.destTipResults || []).length;
+      var _malTIPCount = _totalTIPChecked - _cleanTIPCount;
+      if (_malTIPCount === 0) {
+        evidence.push({ title: 'All ' + _cleanTIPCount + ' destination IPs clean in DACTA TIP', severity: 'moderate', source: 'TIP_CHECKED', detail: _cleanTIPCount + ' unique destination IP(s) extracted from firewall logs were queried against DACTA TIP (Threat Intelligence Platform). None were found in any threat intelligence feeds or abuse databases. No known malicious indicators associated with these destinations.' });
+      }
+    }
+    // Work-hours traffic pattern = likely legitimate user activity
+    (elasticLogs.temporalAnalysis || []).forEach(function(ta) {
+      if (ta.assessment === 'WORK_HOURS') {
+        evidence.push({ title: 'Traffic pattern during work hours for ' + ta.ip, severity: 'moderate', source: 'SIEM_CONFIRMED', detail: 'Temporal analysis of ' + ta.ip + ' shows traffic concentrated during business hours (peak: ' + ta.peakHours.map(function(h) { return h.hour + ':00 UTC'; }).join(', ') + '). This is consistent with normal user browsing activity rather than automated C2 beaconing (which typically occurs 24/7).' });
+      }
+    });
   }
 
   return evidence;
@@ -54235,7 +54444,18 @@ async function runAIInvestigation(ticketKey, issueData) {
     labels: labels,
     use_case: useCase,
     iocs: iocs,
-    techniques: techniques.map(function(t) { return { id: t.id, name: t.name, tactic: t.tactic }; })
+    techniques: techniques.map(function(t) { return { id: t.id, name: t.name, tactic: t.tactic }; }),
+    // Deep investigation enrichments for LLM context
+    deep_investigation: {
+      dest_geo: elasticLogs.destGeoData || [],
+      bytes_analysis: elasticLogs.bytesAnalysis || [],
+      temporal_analysis: elasticLogs.temporalAnalysis || [],
+      dest_tip_results: elasticLogs.destTipResults || [],
+      device_names: elasticLogs.deviceNames || [],
+      mac_addresses: elasticLogs.macAddresses || [],
+      has_edr: _hasCSCapableEDR,
+      investigation_mode: _hasCSCapableEDR ? 'edr_full' : 'firewall_only'
+    }
   };
   var _llmNamespace = invNamespace;
   var _llmPhaseResults = {};  // Stores results from each LLM phase
@@ -54332,10 +54552,45 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (csMediumConfirmCount > 0) tpWeight += csMediumConfirmCount * 18;
   if (csEnrichment.actors.length > 0) tpWeight += 15; // Named adversary attribution = significant TP signal
 
+  // ── TELEMETRY DEPTH CHECK: Detect if verdict is based on lack of evidence rather than confirmed malicious activity ──
+  // If the only inculpatory evidence comes from TICKET_TEXT (no SIEM-confirmed threat indicators),
+  // and there are no SIEM_CONFIRMED malicious findings, cap the verdict at SUSPICIOUS.
+  var _hasSIEMConfirmedThreat = false;
+  inculpatory.forEach(function(e) {
+    if (e.source && (e.source === 'SIEM_CONFIRMED' || e.source === 'TIP_CONFIRMED' || e.source === 'EDR_CONFIRMED')) _hasSIEMConfirmedThreat = true;
+    // CrowdStrike Intel counts as confirmed
+    if (e.title && (e.title.indexOf('CrowdStrike Intel') !== -1 || e.title.indexOf('MALICIOUS') !== -1)) _hasSIEMConfirmedThreat = true;
+  });
+  var _noEDRTelemetry = !_hasCSCapableEDR;
+  var _allExculpatoryStrong = exculpatory.length > 0 && exculpatory.every(function(e) { return e.severity === 'strong' || e.severity === 'moderate'; });
+  // Check if zero-byte transfer was found (strong FP indicator for firewall-only)
+  var _hasZeroByteTransfer = (elasticLogs.bytesAnalysis || []).some(function(b) { return b.zeroByteEvents || b.assessment === 'ZERO_TRANSFER'; });
+  // Check if all TIP lookups came back clean
+  var _allTIPClean = (elasticLogs.destTipResults || []).length > 0 && (elasticLogs.destTipResults || []).every(function(t) { return !t.found; });
+  var _isLackOfTelemetryVerdict = !_hasSIEMConfirmedThreat && _noEDRTelemetry;
+
+  // If verdict would be TP but is driven by lack of telemetry (not confirmed malicious evidence),
+  // downgrade to SUSPICIOUS to avoid unwanted alarms
+  var _forceSuspiciousCap = false;
+  if (_isLackOfTelemetryVerdict && tpWeight > fpWeight * 1.5) {
+    console.warn('[Verdict Sensitivity] TP verdict based on lack of telemetry (no EDR + no SIEM-confirmed threats). Capping at SUSPICIOUS.');
+    _forceSuspiciousCap = true;
+  }
+  // Additional downgrade: if we have zero bytes + all TIP clean + no EDR, this is strongly benign
+  if (_hasZeroByteTransfer && _allTIPClean && _noEDRTelemetry) {
+    fpWeight += 20; // Boost FP weight significantly for zero-byte + clean TIP
+  }
+
   var verdict, confidence, verdictIcon, verdictColor, verdictBg, verdictBorder, actionLabel;
   var tpRatio = tpWeight / Math.max(tpWeight + fpWeight, 1);
 
-  if (fpWeight > tpWeight * 1.3) {
+  if (_forceSuspiciousCap) {
+    // Forced SUSPICIOUS: lack of telemetry means we cannot confirm TP
+    verdict = 'SUSPICIOUS \u2014 Insufficient Telemetry';
+    confidence = Math.min(40 + Math.round(Math.max(tpRatio, 1 - tpRatio) * 25), 65);
+    verdictIcon = dIcon('warning',14) + ''; verdictColor = 'var(--amber)'; verdictBg = 'rgba(245,158,11,0.05)'; verdictBorder = 'rgba(245,158,11,0.3)';
+    actionLabel = 'Analyst review required \u2014 no endpoint telemetry to confirm threat';
+  } else if (fpWeight > tpWeight * 1.3) {
     verdict = 'FALSE POSITIVE \u2014 Business Justified';
     confidence = Math.min(55 + Math.round((fpWeight / (tpWeight + fpWeight)) * 40), 95);
     verdictIcon = dIcon('checkCircle',14); verdictColor = 'var(--green)'; verdictBg = 'rgba(16,185,129,0.05)'; verdictBorder = 'rgba(16,185,129,0.3)';
@@ -54560,6 +54815,12 @@ async function runAIInvestigation(ticketKey, issueData) {
               // If LLM says FALSE_POSITIVE but threat evidence greatly outweighs benign (3:1+), upgrade to SUSPICIOUS
               else if (_fv === 'FALSE_POSITIVE' && _p2Threat > 0 && (_p2Benign === 0 || _p2Threat >= _p2Benign * 3)) {
                 console.warn('[Verdict Coherence] LLM Phase 3 said FALSE_POSITIVE but evidence heavily threatening (' + _p2Threat + ' threat / ' + _p2Benign + ' benign). Upgrading to SUSPICIOUS.');
+                _fv = 'SUSPICIOUS';
+              }
+              // ── Telemetry depth check for LLM verdict ──
+              // If LLM says TRUE_POSITIVE but no EDR and no SIEM-confirmed malicious indicators, cap at SUSPICIOUS
+              if (_fv === 'TRUE_POSITIVE' && _forceSuspiciousCap) {
+                console.warn('[Verdict Coherence] LLM Phase 3 said TRUE_POSITIVE but telemetry is insufficient (no EDR + no SIEM-confirmed threats). Downgrading to SUSPICIOUS.');
                 _fv = 'SUSPICIOUS';
               }
 
