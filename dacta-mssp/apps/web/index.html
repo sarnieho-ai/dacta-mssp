@@ -56230,6 +56230,8 @@ async function submitEscalationToJira(ticketKey) {
 
 // ── Round 1 HTML: Classification + Elastic Log Query ──
 function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment) {
+  // Derive CrowdStrike EDR flag from csEnrichment (passed from runAIInvestigation)
+  var _invHasCSEDR = csEnrichment && !csEnrichment.skippedNoCS;
   var html = '';
 
   // Classification grid
