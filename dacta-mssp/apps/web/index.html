@@ -9171,6 +9171,7 @@ function dIcon(name, size, color) {
         <div class="user-chip" id="topbarUserChip" style="cursor:pointer;" onclick="toggleUserMenu()">
           <div class="user-avatar" id="topbarUserAvatar">JL</div>
           <span class="user-name" id="topbarUserName">John Lim</span>
+          <span id="topbarRoleBadge" style="display:none;font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.25);color:var(--cyan);font-weight:600;margin-left:4px;"></span>
         </div>
         <div id="userMenu" style="display:none;position:absolute;top:48px;right:12px;background:var(--bg-card);border:1px solid var(--border-card);border-radius:8px;min-width:180px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.5);overflow:hidden;">
           <div style="padding:12px 14px 8px;border-bottom:1px solid var(--border-subtle);">
@@ -37171,6 +37172,127 @@ function _renderAICharts(byModel, byDay) {
 // ============================================================
 
 // ============================================================
+//  RBAC PERMISSION ENGINE (Live Enforcement)
+// ============================================================
+// Page-to-permission mapping: which RBAC_PERMISSIONS group/action is needed for each page
+var _RBAC_PAGE_PERMS = {
+  'dashboard':      null,                             // everyone can see dashboard
+  'triage':         { group: 'Alert Handling', perm: 'View Alerts' },
+  'investigation':  { group: 'Investigation', perm: 'Log Search' },
+  'copilot':        null,                             // copilot for all
+  'response':       { group: 'Response Actions', perm: 'Execute Playbooks' },
+  'handover':       null,                             // shift handover for SOC
+  'irdfir':         { group: 'Response Actions', perm: 'Execute Playbooks' },
+  'detection':      { group: 'Detection Rules', perm: 'View Rules' },
+  'rule-testing':   { group: 'Detection Rules', perm: 'View Rules' },
+  'log-sources':    { group: 'Detection Rules', perm: 'View Rules' },
+  'log-parser':     { group: 'Detection Rules', perm: 'View Rules' },
+  'hunting':        { group: 'Investigation', perm: 'Threat Intelligence' },
+  'threat-intel':   { group: 'Investigation', perm: 'Threat Intelligence' },
+  'entity-explorer':{ group: 'Investigation', perm: 'View Assets' },
+  'privacy':        { group: 'Platform Settings', perm: 'View Settings' },
+  'asset-mgmt':     { group: 'Investigation', perm: 'View Assets' },
+  'vuln-mgmt':      { group: 'Investigation', perm: 'View Assets' },
+  'clients':        { group: 'User Management', perm: 'View Users' },
+  'reporting':      { group: 'Reports & Dashboards', perm: 'View Reports' },
+  'compliance':     { group: 'Reports & Dashboards', perm: 'View Reports' },
+  'client-portal':  null,                             // portal access for clients
+  'integrations':   { group: 'Platform Settings', perm: 'Edit Integrations' },
+  'ai-usage':       { group: 'Platform Settings', perm: 'View Settings' },
+  'data-arch':      { group: 'Platform Settings', perm: 'View Settings' },
+  'users':          { group: 'User Management', perm: 'View Users' },
+  'onboarding':     { group: 'User Management', perm: 'Add / Edit Users' },
+  'settings':       { group: 'Platform Settings', perm: 'Edit Integrations' },
+  'audit':          { group: 'Platform Settings', perm: 'View Audit Logs' }
+};
+
+// Check if current user has a specific permission
+function _rbacHasPermission(group, permName) {
+  var role = (window._currentUser && window._currentUser.role) || 'admin';
+  // Admin always has full access
+  if (role === 'admin') return true;
+  // Look up permission from the RBAC_PERMISSIONS table (defined in loadUserManagement but also cached)
+  var perms = window._RBAC_PERMISSIONS_CACHE;
+  if (!perms) return role === 'admin'; // Not loaded yet, only admin passes
+  var grp = perms[group];
+  if (!grp) return false;
+  var perm = grp[permName];
+  if (!perm) return false;
+  var val = perm[role];
+  // 'yes', 'read', 'limited', 'own', 'team' all count as "has access"
+  return val && val !== 'no';
+}
+
+// Check if current user can access a page
+function _rbacCanAccessPage(pageName) {
+  var role = (window._currentUser && window._currentUser.role) || 'admin';
+  if (role === 'admin') return true;
+  var req = _RBAC_PAGE_PERMS[pageName];
+  if (!req) return true; // No restriction
+  return _rbacHasPermission(req.group, req.perm);
+}
+
+// Apply RBAC nav visibility: dim + disable nav items the user cannot access
+function _applyRBACNav(role) {
+  if (!role) role = (window._currentUser && window._currentUser.role) || 'admin';
+  Object.keys(_RBAC_PAGE_PERMS).forEach(function(pageName) {
+    var navItem = document.querySelector('[data-page="' + pageName + '"]');
+    if (!navItem) return;
+    var canAccess = _rbacCanAccessPage(pageName);
+    if (canAccess) {
+      navItem.style.opacity = '';
+      navItem.style.pointerEvents = '';
+      navItem.title = '';
+    } else {
+      navItem.style.opacity = '0.3';
+      navItem.style.pointerEvents = 'none';
+      navItem.title = 'Access restricted for your role';
+    }
+  });
+}
+
+// Default RBAC permission cache — used before loadUserManagement runs.
+// loadUserManagement overrides this with the live (potentially user-edited) matrix.
+window._RBAC_PERMISSIONS_CACHE = {
+  'Alert Handling': {
+    'View Alerts':     { soc_l1:'yes',  soc_l2:'yes',  soc_l3:'yes',  det_eng:'read', soc_mgr:'yes', admin:'yes', client:'own'  },
+    'Triage & Update': { soc_l1:'yes',  soc_l2:'yes',  soc_l3:'yes',  det_eng:'no',   soc_mgr:'yes', admin:'yes', client:'no'   },
+    'Escalate':        { soc_l1:'yes',  soc_l2:'yes',  soc_l3:'yes',  det_eng:'no',   soc_mgr:'yes', admin:'yes', client:'no'   },
+    'Close Incidents': { soc_l1:'no',   soc_l2:'yes',  soc_l3:'yes',  det_eng:'no',   soc_mgr:'yes', admin:'yes', client:'no'   }
+  },
+  'Investigation': {
+    'Log Search':         { soc_l1:'limited', soc_l2:'yes',  soc_l3:'yes',  det_eng:'yes', soc_mgr:'yes', admin:'yes', client:'no'  },
+    'View Assets':        { soc_l1:'yes',     soc_l2:'yes',  soc_l3:'yes',  det_eng:'read',soc_mgr:'yes', admin:'yes', client:'no'  },
+    'Threat Intelligence':{ soc_l1:'read',    soc_l2:'yes',  soc_l3:'yes',  det_eng:'yes', soc_mgr:'yes', admin:'yes', client:'no'  }
+  },
+  'Response Actions': {
+    'Execute Playbooks': { soc_l1:'no', soc_l2:'yes', soc_l3:'yes', det_eng:'no', soc_mgr:'yes', admin:'yes', client:'no' },
+    'Host Isolation':    { soc_l1:'no', soc_l2:'yes', soc_l3:'yes', det_eng:'no', soc_mgr:'yes', admin:'yes', client:'no' },
+    'Block IPs / IOCs':  { soc_l1:'no', soc_l2:'yes', soc_l3:'yes', det_eng:'no', soc_mgr:'yes', admin:'yes', client:'no' }
+  },
+  'Detection Rules': {
+    'View Rules':          { soc_l1:'read', soc_l2:'read', soc_l3:'yes', det_eng:'yes', soc_mgr:'yes', admin:'yes', client:'no' },
+    'Create / Edit':       { soc_l1:'no',   soc_l2:'no',   soc_l3:'yes', det_eng:'yes', soc_mgr:'yes', admin:'yes', client:'no' },
+    'Deploy to Production':{ soc_l1:'no',   soc_l2:'no',   soc_l3:'no',  det_eng:'no',  soc_mgr:'yes', admin:'yes', client:'no' }
+  },
+  'Reports & Dashboards': {
+    'View Reports':     { soc_l1:'yes', soc_l2:'yes', soc_l3:'yes', det_eng:'read', soc_mgr:'yes', admin:'yes', client:'own' },
+    'Generate Reports': { soc_l1:'no',  soc_l2:'yes', soc_l3:'yes', det_eng:'no',   soc_mgr:'yes', admin:'yes', client:'no'  },
+    'Schedule Reports': { soc_l1:'no',  soc_l2:'no',  soc_l3:'yes', det_eng:'no',   soc_mgr:'yes', admin:'yes', client:'no'  }
+  },
+  'User Management': {
+    'View Users':       { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'team', admin:'yes', client:'no' },
+    'Add / Edit Users': { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'no',   admin:'yes', client:'no' },
+    'Manage Roles':     { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'no',   admin:'yes', client:'no' }
+  },
+  'Platform Settings': {
+    'View Settings':     { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'limited', admin:'yes', client:'no' },
+    'Edit Integrations': { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'no',      admin:'yes', client:'no' },
+    'View Audit Logs':   { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'team',    admin:'yes', client:'no' }
+  }
+};
+
+// ============================================================
 //  USER MANAGEMENT — LIVE DATA FROM JIRA
 // ============================================================
 async function loadUserManagement() {
@@ -37228,6 +37350,9 @@ async function loadUserManagement() {
       'View Audit Logs':   { soc_l1:'no', soc_l2:'no', soc_l3:'no', det_eng:'no', soc_mgr:'team',    admin:'yes', client:'no' }
     }
   };
+
+  // Cache permissions globally so RBAC engine can access them outside this scope
+  window._RBAC_PERMISSIONS_CACHE = RBAC_PERMISSIONS;
 
   var SEED_USERS = [
     { id: 'u1', email: 'admin@dacta.sg',                display_name: 'Admin',                    role: 'admin',   assigned_orgs: ['all'],                                                                                                                    status: 'active', last_login: new Date().toISOString(),                    mfa_enabled: true  },
@@ -38973,6 +39098,52 @@ async function loadUserManagement() {
 
   // Load auth status on page init
   _umLoadAuthStatus();
+
+  // ============================================================
+  //  RBAC: Hide admin-only actions for non-admin users
+  // ============================================================
+  var _umRole = (window._currentUser && window._currentUser.role) || 'admin';
+  var _umCanEdit = _rbacHasPermission('User Management', 'Add / Edit Users');
+  var _umCanManageRoles = _rbacHasPermission('User Management', 'Manage Roles');
+
+  // Hide Invite, Provision, Sync, Edit Roles buttons for non-admins
+  if (!_umCanEdit) {
+    ['um-invite-btn', 'um-provision-all-btn', 'um-jira-sync-btn'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+  }
+  if (!_umCanManageRoles) {
+    var editRolesBtn2 = document.getElementById('um-edit-roles-btn');
+    if (editRolesBtn2) editRolesBtn2.style.display = 'none';
+  }
+
+  // Override umRenderUsers to hide Edit/Disable/Delete actions for non-admins
+  if (!_umCanEdit) {
+    var _origRenderUsers = umRenderUsers;
+    umRenderUsers = function(list) {
+      _origRenderUsers(list);
+      // After render, remove action buttons
+      var tbody = document.getElementById('um-users-tbody');
+      if (tbody) {
+        tbody.querySelectorAll('.um-edit-btn, .um-toggle-btn, .um-delete-btn').forEach(function(btn) {
+          btn.style.display = 'none';
+        });
+        // Also hide role dropdown triggers (prevent role changes)
+        tbody.querySelectorAll('.um-role-trigger').forEach(function(btn) {
+          btn.style.pointerEvents = 'none';
+          btn.style.cursor = 'default';
+          // Remove the dropdown chevron
+          var svg = btn.querySelector('svg');
+          if (svg) svg.style.display = 'none';
+        });
+      }
+    };
+    // Re-render to apply
+    if (_users.length > 0) umRenderUsers(_users);
+  }
+
+  console.log('[RBAC] User Management: role=' + _umRole + ' canEdit=' + _umCanEdit + ' canManageRoles=' + _umCanManageRoles);
 }
 
 // ============================================================
@@ -39467,35 +39638,14 @@ function navigate(page) {
 
 
 
-  // ── DEF-002: RBAC Nav Enforcement ──
-  var _currentUserRole = (window._currentUser && window._currentUser.role) || 'admin';
-  var _rbacAdminOnlyPages = ['users', 'integrations', 'onboarding', 'settings'];
-  var _rbacManagerPages = ['users', 'reporting', 'handover', 'audit'];
-  if (_currentUserRole !== 'admin') {
-    _rbacAdminOnlyPages.forEach(function(p) {
-      var navItem = document.querySelector('[data-page="' + p + '"]');
-      if (navItem) {
-        if (_currentUserRole === 'soc_mgr' && _rbacManagerPages.indexOf(p) !== -1) {
-          navItem.style.display = '';
-          navItem.style.opacity = '';
-        } else {
-          navItem.style.opacity = '0.3';
-          navItem.style.pointerEvents = 'none';
-        }
-      }
-    });
-    // If trying to access admin-only page, redirect
-    if (_rbacAdminOnlyPages.indexOf(page) !== -1 && _currentUserRole !== 'soc_mgr') {
-      showToast('Access denied. Admin privileges required.', 'error');
-      navigate('dashboard');
-      return;
-    }
-  } else {
-    // Admin — ensure all nav items visible
-    _rbacAdminOnlyPages.forEach(function(p) {
-      var navItem = document.querySelector('[data-page="' + p + '"]');
-      if (navItem) { navItem.style.opacity = ''; navItem.style.pointerEvents = ''; }
-    });
+  // ── DEF-002: RBAC Nav + Page Access Enforcement ──
+  _applyRBACNav(); // Update nav item visibility
+  // Block access to restricted pages
+  if (!_rbacCanAccessPage(page)) {
+    var roleLabel = (window._currentUser && window._currentUser.role) || 'unknown';
+    showToast('Access denied. Your role (' + roleLabel + ') does not have permission for this page.', 'error');
+    navigate('dashboard');
+    return;
   }
 
   // Scroll to top
@@ -40666,6 +40816,15 @@ async function loadOrgsFromSupabase() {
 
 
   // Wait for DB SDK to load, then initialize auth
+  // Restore _currentUser from sessionStorage immediately (before async DB lookup completes)
+  try {
+    var _cachedProfile = sessionStorage.getItem('dacta_current_user');
+    if (_cachedProfile) {
+      window._currentUser = JSON.parse(_cachedProfile);
+      console.log('[RBAC] Restored cached profile:', window._currentUser.email, window._currentUser.role);
+    }
+  } catch(e) {}
+
   function initSupabaseAuth() {
     if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
       setTimeout(initSupabaseAuth, 100);
@@ -40706,9 +40865,58 @@ async function loadOrgsFromSupabase() {
     }
 
     // Show app (hide overlay, call init once)
+    // ── RBAC: Look up current user's role from platform_users ──
+    async function _resolveCurrentUserRole(authUser) {
+      if (!authUser || !authUser.email) return null;
+      try {
+        if (window._supabaseRef) {
+          var resp = await window._supabaseRef.from('platform_users')
+            .select('*')
+            .ilike('email', authUser.email)
+            .maybeSingle();
+          if (resp.data) {
+            return {
+              id: resp.data.id,
+              email: resp.data.email,
+              display_name: resp.data.name || resp.data.display_name || authUser.email.split('@')[0],
+              role: resp.data.role || 'soc_l1',
+              assigned_orgs: resp.data.assigned_orgs || ['all'],
+              mfa_enabled: resp.data.mfa_enabled || false
+            };
+          }
+        }
+      } catch(e) { console.warn('[RBAC] Role lookup failed:', e); }
+      // Fallback: if email is admin@dacta.sg → admin, else soc_l1
+      return {
+        id: 'unknown',
+        email: authUser.email,
+        display_name: authUser.email.split('@')[0],
+        role: (authUser.email === 'admin@dacta.sg') ? 'admin' : 'soc_l1',
+        assigned_orgs: ['all'],
+        mfa_enabled: false
+      };
+    }
+
     function showApp(user) {
       setTopbarUser(user);
       if (overlay) overlay.style.display = 'none';
+
+      // Resolve user role from DB (async, non-blocking for initial load)
+      _resolveCurrentUserRole(user).then(function(profile) {
+        window._currentUser = profile;
+        console.log('[RBAC] Current user:', profile.email, 'role:', profile.role);
+        // Store in sessionStorage for page refresh
+        try { sessionStorage.setItem('dacta_current_user', JSON.stringify(profile)); } catch(e) {}
+        // Re-apply RBAC nav enforcement now that we know the role
+        _applyRBACNav(profile.role);
+        // Show role badge in topbar
+        var roleBadge = document.getElementById('topbarRoleBadge');
+        if (roleBadge) {
+          var roleNames = { admin:'Admin', soc_mgr:'SOC Manager', soc_l3:'SOC L3', soc_l2:'SOC L2', soc_l1:'SOC L1', det_eng:'Det. Eng', client:'Client' };
+          roleBadge.textContent = roleNames[profile.role] || profile.role;
+          roleBadge.style.display = 'inline-block';
+        }
+      }).catch(function(e) { console.warn('[RBAC] Role resolve failed:', e); });
       
       // Determine mode based on user + any view override
       var isAdmin = (user.email === 'admin@dacta.sg');
@@ -40929,6 +41137,9 @@ async function loadOrgsFromSupabase() {
     window.handleLogout = function() {
       var menu = document.getElementById('userMenu');
       if (menu) menu.style.display = 'none';
+      // Clear RBAC session state
+      window._currentUser = null;
+      try { sessionStorage.removeItem('dacta_current_user'); } catch(e) {}
       _supabase.auth.signOut().then(function() {
         showLogin();
       });
