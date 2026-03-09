@@ -39373,8 +39373,11 @@ async function loadOrgConnectorsFromDB() {
           c.metadata = c.metadata || {};
           c.metadata.index_pattern = matchingLS.index_pattern;
           if (matchingLS.source_type === 'edr') {
-            var ns = ID_TO_NAMESPACE[org.id] || '';
-            c.metadata.host_index = '.ds-logs-crowdstrike.host-' + ns + '-*';
+            var edrVendorLC = (matchingLS.vendor || c.vendor || '').toLowerCase();
+            if (edrVendorLC.includes('crowdstrike') || edrVendorLC.includes('falcon')) {
+              var ns = ID_TO_NAMESPACE[org.id] || '';
+              c.metadata.host_index = '.ds-logs-crowdstrike.host-' + ns + '-*';
+            }
           }
           c.metadata.namespace = ID_TO_NAMESPACE[org.id] || '';
         }
@@ -52881,11 +52884,15 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   var _edrConnector = getOrgConnector(namespace, 'edr');
   var _fwConnector = getOrgConnector(namespace, 'firewall');
   var _allFwConnectors = getOrgConnectors(namespace, 'firewall'); // ALL firewall connectors (Palo Alto + FortiGate + etc)
-  console.log('[Investigation] Org: ' + namespace + ' | EDR: ' + _hasEDR + ' | Firewall: ' + _hasFirewall);
+  // Determine if this is a CrowdStrike EDR (vs Microsoft/other identity-only EDR)
+  var _edrVendorLower = _edrConnector ? (_edrConnector.vendor || '').toLowerCase() : '';
+  var _isCrowdStrikeEDR = _edrVendorLower.includes('crowdstrike') || _edrVendorLower.includes('falcon');
+  // If EDR connector exists but is NOT CrowdStrike (e.g. Microsoft M365/Entra ID), treat as no CS-capable EDR
+  var _hasCSCapableEDR = _hasEDR && _isCrowdStrikeEDR;
+  console.log('[Investigation] Org: ' + namespace + ' | EDR: ' + _hasEDR + ' | CS-capable: ' + _hasCSCapableEDR + ' | EDR vendor: ' + _edrVendorLower + ' | Firewall: ' + _hasFirewall);
 
   // ── Direct Vendor API Queries (when connector has api_endpoint configured) ──
   // If the EDR connector has a direct API endpoint, query the vendor API in addition to Elastic
-  var _edrVendorLower = _edrConnector ? (_edrConnector.vendor || '').toLowerCase() : '';
   var _edrHasDirectAPI = _edrConnector && _edrConnector.api_endpoint;
   if (_edrHasDirectAPI) {
     var _edrOrgId = _orgConfig ? _orgConfig.id : null;
@@ -53027,8 +53034,10 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   }
 
   // ── QUERY 1: EDR Alert Correlation (connector-aware) ──
-  if (_hasEDR) {
-    // Client has EDR — proceed with CrowdStrike/EDR queries via Elastic
+  // Only enter CrowdStrike query path if EDR vendor is CrowdStrike/Falcon
+  // Non-CS EDR vendors (e.g. Microsoft M365/Entra ID) don't have CS alert indices
+  if (_hasCSCapableEDR) {
+    // Client has CrowdStrike EDR — proceed with CS-specific queries via Elastic
     var edrMeta = _edrConnector ? _edrConnector.metadata : {};
     var alertIndex = edrMeta.index_pattern || ('.ds-logs-crowdstrike.alert-' + namespace + '-*');
     var alertQuery = { size: 5, sort: [{ '@timestamp': 'desc' }], _source: true };
@@ -53197,14 +53206,21 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       logs.fileEvents.push({ status: 'UNCLEAR', query: 'N/A', result: 'No Elastic data for file correlation', count: 0, live: false });
     }
   } else {
-    // ── NO EDR: Skip CrowdStrike, go to firewall-only investigation ──
-    var noEdrMsg = _orgConfig ? (_orgConfig.name + ' has no EDR deployed — firewall-only MDR model') : ('No EDR configured for namespace: ' + namespace);
+    // ── NO CrowdStrike EDR: Skip CS-specific queries, go to firewall-only investigation ──
+    var noEdrMsg;
+    if (_hasEDR && !_isCrowdStrikeEDR) {
+      // EDR connector exists but is NOT CrowdStrike (e.g. Microsoft M365/Entra ID)
+      var edrVendorName = _edrConnector ? (_edrConnector.display_name || _edrConnector.vendor || 'Unknown') : 'Unknown';
+      noEdrMsg = (_orgConfig ? _orgConfig.name : namespace) + ' uses ' + edrVendorName + ' (identity/cloud) — no endpoint agent deployed. Firewall-only investigation.';
+    } else {
+      noEdrMsg = _orgConfig ? (_orgConfig.name + ' has no EDR deployed — firewall-only MDR model') : ('No EDR configured for namespace: ' + namespace);
+    }
     console.log('[Investigation] ' + noEdrMsg);
-    logs.queryDetails.push({ name: 'EDR Check', index: 'ORG_CONNECTORS', query: 'orgHasConnector("' + namespace + '", "edr")', status: 'skipped', hits: 0, note: noEdrMsg });
+    logs.queryDetails.push({ name: 'EDR Check', index: 'ORG_CONNECTORS', query: 'orgHasConnector("' + namespace + '", "edr") + vendor check', status: 'skipped', hits: 0, note: noEdrMsg });
 
-    logs.childProcesses.push({ status: 'INFO', query: 'EDR not available', result: noEdrMsg + '. Process tree analysis requires endpoint telemetry.', count: 0, live: true });
-    logs.edrActions.push({ status: 'INFO', action: 'No EDR', result: 'EDR containment not available. Containment actions limited to firewall block rules.', engine: 'N/A' });
-    logs.fileEvents.push({ status: 'INFO', query: 'EDR not available', result: 'File-level analysis unavailable without EDR. Review firewall logs for data exfil indicators.', count: 0, live: true });
+    logs.childProcesses.push({ status: 'INFO', query: 'Endpoint agent not available', result: noEdrMsg + ' Process tree analysis requires endpoint telemetry.', count: 0, live: true });
+    logs.edrActions.push({ status: 'INFO', action: 'No Endpoint Agent', result: 'Endpoint containment not available. Containment actions limited to firewall block rules.', engine: 'N/A' });
+    logs.fileEvents.push({ status: 'INFO', query: 'Endpoint agent not available', result: 'File-level analysis unavailable without endpoint agent. Review firewall logs for data exfil indicators.', count: 0, live: true });
 
     // Still query firewall logs for network connections
     var allIPs = (iocs.ips || []);
@@ -54094,18 +54110,24 @@ async function runAIInvestigation(ticketKey, issueData) {
   var _invHasFirewall = orgHasConnector(invNamespace, 'firewall');
   var _invEdrConn = getOrgConnector(invNamespace, 'edr');
   var _invFwConn = getOrgConnector(invNamespace, 'firewall');
+  // Check if EDR vendor is actually CrowdStrike (not just Microsoft M365/identity-only)
+  var _invEdrVendorLC = _invEdrConn ? (_invEdrConn.vendor || '').toLowerCase() : '';
+  var _invHasCSEDR = _invHasEDR && (_invEdrVendorLC.includes('crowdstrike') || _invEdrVendorLC.includes('falcon'));
 
   // Build dynamic tool label for pipeline display
   var invToolsList = ['Elastic SIEM'];
-  if (_invHasEDR && _invEdrConn) {
-    invToolsList.push(_invEdrConn.vendor || 'EDR');
+  if (_invHasCSEDR && _invEdrConn) {
+    invToolsList.push(_invEdrConn.vendor || 'CrowdStrike');
+  } else if (_invHasEDR && _invEdrConn) {
+    // Non-CS EDR (e.g. Microsoft M365) — show vendor but don't imply endpoint agent
+    invToolsList.push((_invEdrConn.display_name || _invEdrConn.vendor || 'Identity') + ' (Cloud)');
   }
   if (_invHasFirewall && _invFwConn) {
     invToolsList.push((_invFwConn.vendor || 'Firewall') + ' Logs');
   }
   invToolsList.push('DACTA TIP');
   var invToolsLabel = invToolsList.join(' + ');
-  console.log('[AI Investigation] Org: ' + org + ' | Namespace: ' + invNamespace + ' | EDR: ' + _invHasEDR + ' | Firewall: ' + _invHasFirewall + ' | Tools: ' + invToolsLabel);
+  console.log('[AI Investigation] Org: ' + org + ' | Namespace: ' + invNamespace + ' | EDR: ' + _invHasEDR + ' | CS-EDR: ' + _invHasCSEDR + ' | Firewall: ' + _invHasFirewall + ' | Tools: ' + invToolsLabel);
 
   // Determine number of rounds based on priority/severity
   var totalRounds = 3;
@@ -54141,10 +54163,9 @@ async function runAIInvestigation(ticketKey, issueData) {
   var cmdCtx = analyzeCommandContext(fullText);
 
   // ── CrowdStrike Falcon Intel enrichment (parallel with Elastic) ──
-  // Only enrich with CS if the org actually has CrowdStrike as EDR connector
-  var _orgHasCrowdStrike = _invEdrConn && _invEdrConn.vendor && _invEdrConn.vendor.toLowerCase().includes('crowdstrike');
-  var csEnrichment = { lookup: {}, total: 0, queried: 0, actors: [], error: null, skippedNoCS: !_orgHasCrowdStrike };
-  var csAllIOCs = _orgHasCrowdStrike ? [].concat(
+  // Only enrich with CS if the org actually has CrowdStrike as EDR connector (not Microsoft M365 etc)
+  var csEnrichment = { lookup: {}, total: 0, queried: 0, actors: [], error: null, skippedNoCS: !_invHasCSEDR };
+  var csAllIOCs = _invHasCSEDR ? [].concat(
     iocs.ips || [], iocs.domains || [], iocs.hashes || [], iocs.urls || []
   ).filter(Boolean).slice(0, 100) : []; // Skip CS enrichment for non-CS orgs
 
@@ -54178,7 +54199,7 @@ async function runAIInvestigation(ticketKey, issueData) {
   // Update spinner to show SIEM step is active
   try {
     var _sl = document.getElementById('invSpinnerLabel'); if (_sl) _sl.textContent = 'Querying SIEM + Threat Intel';
-    var _ss = document.getElementById('invSpinnerSub'); if (_ss) _ss.textContent = 'Running 6 log queries \u00B7 CrowdStrike Falcon \u00B7 DACTA TIP...';
+    var _ss = document.getElementById('invSpinnerSub'); if (_ss) _ss.textContent = 'Running log queries \u00B7 ' + invToolsLabel + '...';
     var _sp1 = document.getElementById('invPipeStep1'); if (_sp1) { _sp1.style.color = 'var(--cyan)'; var d=_sp1.querySelector('span'); if(d){d.style.background='var(--cyan)';d.style.border='none';} }
     var _sp2 = document.getElementById('invPipeStep2'); if (_sp2) { _sp2.style.color = 'var(--amber)'; var d=_sp2.querySelector('span'); if(d){d.style.background='var(--amber)';d.style.border='none';} }
   } catch(e) {}
@@ -54356,7 +54377,7 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   // Classifier (Haiku) stage — routes alerts to domain handlers
   var classifierDomains = ['SIEM'];
-  if (_invHasEDR) classifierDomains.push('EDR');
+  if (_invHasCSEDR) classifierDomains.push('EDR');
   if (_invHasFirewall) classifierDomains.push('Firewall');
   classifierDomains.push('TI');
   pipelineHTML += '<div class="inv-pipeline-stage stage-classifier" id="pipeClassifier">' +
@@ -55990,7 +56011,7 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
   html += '</div>'; // end elastic section
 
   // ── THREAT INTELLIGENCE (CrowdStrike Falcon + DACTA TIP — unified card) ──
-  var _hasCsData = !!csEnrichment;
+  var _hasCsData = !!csEnrichment && !csEnrichment.skippedNoCS;
   var _hasTipData = elasticLogs.openctiResults && elasticLogs.openctiResults.length > 0;
   if (_hasCsData || _hasTipData) {
     // Determine overall TI status for header badge
@@ -56012,7 +56033,7 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
       '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:'+_tiHeaderColor+';">' +
         dIcon('target',13) + ' THREAT INTELLIGENCE</div>' +
       '<div style="display:flex;align-items:center;gap:6px;">' +
-        '<span style="font-size:7px;color:var(--text-muted);opacity:0.7;">CrowdStrike Falcon &middot; DACTA TIP</span>' +
+        '<span style="font-size:7px;color:var(--text-muted);opacity:0.7;">' + (_invHasCSEDR ? 'CrowdStrike Falcon &middot; ' : '') + 'DACTA TIP</span>' +
         '<span style="font-size:8px;font-weight:700;padding:1px 7px;border-radius:8px;background:'+_tiHeaderColor+'18;color:'+_tiHeaderColor+';border:1px solid '+_tiHeaderColor+'30;">'+_tiStatusText+'</span>' +
       '</div></div>';
 
