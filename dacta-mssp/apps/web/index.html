@@ -54453,8 +54453,8 @@ async function runAIInvestigation(ticketKey, issueData) {
       dest_tip_results: elasticLogs.destTipResults || [],
       device_names: elasticLogs.deviceNames || [],
       mac_addresses: elasticLogs.macAddresses || [],
-      has_edr: _hasCSCapableEDR,
-      investigation_mode: _hasCSCapableEDR ? 'edr_full' : 'firewall_only'
+      has_edr: _invHasCSEDR,
+      investigation_mode: _invHasCSEDR ? 'edr_full' : 'firewall_only'
     }
   };
   var _llmNamespace = invNamespace;
@@ -54561,7 +54561,7 @@ async function runAIInvestigation(ticketKey, issueData) {
     // CrowdStrike Intel counts as confirmed
     if (e.title && (e.title.indexOf('CrowdStrike Intel') !== -1 || e.title.indexOf('MALICIOUS') !== -1)) _hasSIEMConfirmedThreat = true;
   });
-  var _noEDRTelemetry = !_hasCSCapableEDR;
+  var _noEDRTelemetry = !_invHasCSEDR;
   var _allExculpatoryStrong = exculpatory.length > 0 && exculpatory.every(function(e) { return e.severity === 'strong' || e.severity === 'moderate'; });
   // Check if zero-byte transfer was found (strong FP indicator for firewall-only)
   var _hasZeroByteTransfer = (elasticLogs.bytesAnalysis || []).some(function(b) { return b.zeroByteEvents || b.assessment === 'ZERO_TRANSFER'; });
