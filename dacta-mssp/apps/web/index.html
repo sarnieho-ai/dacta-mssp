@@ -39254,7 +39254,7 @@ var ORG_CONNECTORS = {
     connectors: [
       { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'foxwood', index_pattern: 'foxwood-*' } },
       { connector_type: 'edr', vendor: 'None', display_name: 'No EDR Deployed', is_enabled: false, health_status: 'not_configured', metadata: { notes: 'Client does not have EDR. Firewall logs only sent to Elastic SIEM.' } },
-      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'foxwood', index_pattern: 'logs-panw.panos-foxwood-*' } },
+      { connector_type: 'firewall', vendor: 'Fortinet', display_name: 'FortiGate Firewall', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'foxwood', index_pattern: 'logs-fortinet_fortigate.log-foxwood' } },
       { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
       { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } },
       { connector_type: 'identity', vendor: 'Microsoft', display_name: 'Azure AD / Entra ID', is_enabled: true, health_status: 'healthy', metadata: { type: 'identity_provider', protocol: 'SAML/OIDC' } },
@@ -39395,6 +39395,27 @@ async function loadOrgConnectorsFromDB() {
   } catch(e) {
     console.warn('[OrgConn] DB load failed, keeping hardcoded data:', e.message);
   }
+}
+
+// ── Helper: Resolve firewall index pattern(s) for a namespace from connector data ──
+// Returns comma-separated index patterns. Never falls back to hardcoded PANW.
+function resolveFirewallIndexes(namespace, fwConnectors) {
+  // fwConnectors: array of firewall connector objects (from getOrgConnectors or _allFwConnectors)
+  if (fwConnectors && fwConnectors.length > 0) {
+    return fwConnectors.map(function(fc) {
+      var m = fc.metadata || {};
+      if (m.index_pattern) return m.index_pattern;
+      var v = (fc.vendor || '').toLowerCase();
+      if (v.includes('fortinet') || v.includes('fortigate')) return 'logs-fortinet_fortigate.log-' + namespace + '-*';
+      if (v.includes('palo') || v.includes('panw')) return 'logs-panw.panos-' + namespace + '-*';
+      if (v.includes('checkpoint') || v.includes('check point')) return 'logs-checkpoint.firewall-' + namespace + '-*';
+      if (v.includes('sophos')) return 'logs-sophos.xg-' + namespace + '-*';
+      // Generic: use vendor name in pattern
+      return 'logs-' + v.replace(/[^a-z0-9]/g, '_') + '-' + namespace + '-*';
+    }).join(',');
+  }
+  // No connectors configured: query common patterns as a best-effort wildcard
+  return 'logs-fortinet_fortigate.log-' + namespace + '-*,logs-panw.panos-' + namespace + '-*';
 }
 
 // ── DB-backed client_log_sources cache ──
@@ -41200,9 +41221,10 @@ document.addEventListener('keydown', (e) => {
           });
         }
 
-        // Query 2: Firewall/Palo Alto index
+        // Query 2: Firewall index (connector-aware)
         if (isIP) {
-          var fwIdx = ns ? 'logs-panw.panos-' + ns + '-*,logs-fortinet_fortigate.log-' + ns + '-*' : 'logs-panw.panos-*,logs-fortinet_fortigate.log-*';
+          var fwConns = ns ? getOrgConnectors(ns, 'firewall') : [];
+          var fwIdx = ns ? resolveFirewallIndexes(ns, fwConns) : 'logs-fortinet_fortigate.log-*,logs-panw.panos-*';
           var fwQuery = { bool: { should: [ { term: { 'source.ip': term } }, { term: { 'destination.ip': term } }, { term: { 'network.forwarded_ip': term } } ], minimum_should_match: 1 } };
           var r2 = await fetch('/api/elastic', { method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ action: 'search', index: fwIdx, body: { size: 3, query: fwQuery, sort: [{'@timestamp': 'desc'}] } }) });
@@ -41956,11 +41978,10 @@ document.addEventListener('keydown', (e) => {
       }
     } catch(e) { console.warn('[EE Enrich] SIEM error:', e.message); }
 
-    // ── 3. Elastic: Firewall events ──
+    // ── 3. Elastic: Firewall events (connector-aware) ──
     try {
-      var fwIdx = ns
-        ? 'logs-panw.panos-' + ns + '-*,logs-fortinet_fortigate.log-' + ns + '-*'
-        : 'logs-panw.panos-*,logs-fortinet_fortigate.log-*';
+      var fwConnsEE = ns ? getOrgConnectors(ns, 'firewall') : [];
+      var fwIdx = ns ? resolveFirewallIndexes(ns, fwConnsEE) : 'logs-fortinet_fortigate.log-*,logs-panw.panos-*';
       if (isIP) {
         var fr = await fetch('/api/elastic', { method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({ action:'search', index: fwIdx, body: {
@@ -42691,7 +42712,7 @@ document.addEventListener('keydown', (e) => {
   }
 
 
-  // -- Live Data: Load IPs from firewall (Palo Alto) deny/drop events --
+  // -- Live Data: Load IPs from firewall deny/drop events (all vendors) --
   async function loadFirewallIPs() {
     try {
       var results = await fetch('/api/elastic', {
@@ -42699,7 +42720,7 @@ document.addEventListener('keydown', (e) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'search',
-          index: 'logs-panw.panos-*,logs-paloaltonetworks.*,logs-checkpoint.*',
+          index: 'logs-fortinet_fortigate.log-*,logs-panw.panos-*,logs-paloaltonetworks.*,logs-checkpoint.*,logs-sophos.*',
           body: {
             size: 0,
             query: {
@@ -53087,20 +53108,10 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         for (var ni = 0; ni < alertIPs.length; ni++) {
           var ip = alertIPs[ni];
           var isPrivate = ip.startsWith('10.') || ip.startsWith('172.') || ip.startsWith('192.168.') || ip.startsWith('127.');
-          // Connector-aware firewall index resolution
-          var netIndex;
-          if (_allFwConnectors.length > 0) {
-            netIndex = _allFwConnectors.map(function(fc) {
-              var m = fc.metadata || {};
-              if (m.index_pattern) return m.index_pattern;
-              if (fc.vendor && fc.vendor.toLowerCase().includes('fortinet')) return 'logs-fortinet_fortigate.log-' + namespace + '-*';
-              return 'logs-panw.panos-' + namespace + '-*';
-            }).join(',');
-          } else {
-            netIndex = 'logs-fortinet_fortigate.log-' + namespace + '-*,logs-panw.panos-' + namespace + '-*';
-          }
+          // Connector-aware firewall index resolution (uses resolveFirewallIndexes helper)
+          var netIndex = resolveFirewallIndexes(namespace, _allFwConnectors);
           var netQ = { size: 5, query: { bool: { must: [{ range: { '@timestamp': { gte: timeFrom, lte: timeTo } } }], should: [{ match: { 'destination.ip': ip } }, { match: { 'source.ip': ip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
-          var qD3 = { name: 'Network: ' + ip, index: 'Firewall logs', query: 'dst.ip:"' + ip + '" ±5min', status: 'running' };
+          var qD3 = { name: 'Network: ' + ip, index: netIndex, query: 'dst.ip:"' + ip + '" ±5min', status: 'running' };
           logs.queryDetails.push(qD3); logs.queriesRun++;
 
           var netResult = await queryElastic('search', netIndex, netQ);
@@ -53176,12 +53187,9 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     // Still query firewall logs for network connections
     var allIPs = (iocs.ips || []);
     if (allIPs.length > 0) {
-      var fwMeta = _fwConnector ? _fwConnector.metadata : {};
-      var fwIndex = fwMeta.index_pattern || ('logs-panw.panos-' + namespace + '-*');
-      // Also try fortinet pattern
-      if (_fwConnector && _fwConnector.vendor === 'Fortinet') {
-        fwIndex = fwMeta.index_pattern || ('logs-fortinet_fortigate.log-' + namespace + '-*');
-      }
+      // Use resolveFirewallIndexes to get correct index from actual connector data
+      var fwConnsForResolve = _allFwConnectors && _allFwConnectors.length > 0 ? _allFwConnectors : (_fwConnector ? [_fwConnector] : []);
+      var fwIndex = resolveFirewallIndexes(namespace, fwConnsForResolve);
       for (var fi = 0; fi < allIPs.length; fi++) {
         var fip = allIPs[fi];
         var isPrivateFW = fip.startsWith('10.') || fip.startsWith('172.') || fip.startsWith('192.168.') || fip.startsWith('127.');
@@ -53270,13 +53278,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         var fwConn = fwConnectorsToQuery[fwci];
         var fwMeta = fwConn.metadata || {};
         var fwIdx;
-        if (fwMeta.index_pattern) {
-          fwIdx = fwMeta.index_pattern;
-        } else if (fwConn.vendor && fwConn.vendor.toLowerCase().includes('fortinet')) {
-          fwIdx = 'logs-fortinet_fortigate.log-' + namespace + '-*';
-        } else {
-          fwIdx = 'logs-panw.panos-' + namespace + '-*';
-        }
+        fwIdx = resolveFirewallIndexes(namespace, [fwConn]);
         queriedIndexes.push(fwIdx);
         var vendorLabel = (fwConn.vendor || fwConn.display_name || fwIdx).replace('logs-', '').split('.')[0];
 
@@ -56080,12 +56082,24 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
       '<details style="cursor:pointer;"><summary style="font-size:9px;font-weight:600;color:var(--text-muted);letter-spacing:0.05em;">\u25B6 QUERY EXECUTION LOG (' + elasticLogs.queryDetails.length + ' queries)</summary>' +
       '<div style="margin-top:6px;">';
     elasticLogs.queryDetails.forEach(function(qd, qi) {
-      var sc = qd.status === 'success' ? '#10b981' : (qd.status === 'error' ? '#ef4444' : 'var(--text-muted)');
-      html += '<div style="font-size:9px;padding:2px 0;display:flex;gap:6px;align-items:baseline;border-bottom:1px solid var(--border-subtle);">' +
+      var sc = qd.status === 'success' ? '#10b981' : (qd.status === 'error' ? '#ef4444' : (qd.status === 'skipped' ? '#64748b' : 'var(--text-muted)'));
+      var detailId = 'qryDetail_' + qi;
+      html += '<div style="cursor:pointer;" onclick="var el=document.getElementById(\'' + detailId + '\');if(el)el.style.display=el.style.display===\'none\'?\'block\':\'none\';">' +
+        '<div style="font-size:9px;padding:3px 0;display:flex;gap:6px;align-items:center;border-bottom:1px solid var(--border-subtle);">' +
         '<span style="color:var(--text-muted);min-width:16px;">' + (qi + 1) + '.</span>' +
-        '<span style="color:var(--text-secondary);flex:1;">' + qd.name + '</span>' +
-        '<span style="font-family:var(--font-mono);color:var(--cyan);font-size:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (qd.query || '') + '</span>' +
-        '<span style="color:' + sc + ';font-weight:600;font-size:8px;min-width:60px;text-align:right;text-transform:uppercase;">' + qd.status + (qd.hits !== undefined ? '(' + qd.hits + ')' : '') + '</span></div>';
+        '<span style="color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(qd.name || '') + '</span>' +
+        '<span style="font-family:var(--font-mono);color:var(--cyan);font-size:8px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(qd.query || '') + '</span>' +
+        '<span style="color:' + sc + ';font-weight:600;font-size:8px;min-width:70px;text-align:right;text-transform:uppercase;">' + escapeHtml(qd.status || '') + (qd.hits !== undefined ? '(' + qd.hits + ')' : '') + '</span>' +
+        '<span style="color:var(--text-muted);font-size:8px;margin-left:2px;">\u25BC</span></div></div>';
+      // Drill-down: show full query details
+      var queryDetail = '';
+      if (qd.index) queryDetail += '<div style="margin-bottom:4px;"><span style="color:var(--text-secondary);font-weight:600;font-size:8px;">INDEX:</span> <span style="font-family:var(--font-mono);font-size:9px;color:var(--cyan);">' + escapeHtml(qd.index) + '</span></div>';
+      if (qd.query) queryDetail += '<div style="margin-bottom:4px;"><span style="color:var(--text-secondary);font-weight:600;font-size:8px;">QUERY:</span><pre style="font-size:9px;color:var(--text-secondary);font-family:var(--font-mono);margin:2px 0 0 0;white-space:pre-wrap;word-break:break-all;max-height:150px;overflow-y:auto;background:rgba(0,0,0,0.2);padding:6px;border-radius:3px;">' + escapeHtml(qd.query) + '</pre></div>';
+      if (qd.dsl) queryDetail += '<div style="margin-bottom:4px;"><span style="color:var(--text-secondary);font-weight:600;font-size:8px;">ES DSL:</span><pre style="font-size:9px;color:var(--text-secondary);font-family:var(--font-mono);margin:2px 0 0 0;white-space:pre-wrap;word-break:break-all;max-height:150px;overflow-y:auto;background:rgba(0,0,0,0.2);padding:6px;border-radius:3px;">' + escapeHtml(typeof qd.dsl === 'string' ? qd.dsl : JSON.stringify(qd.dsl, null, 2)) + '</pre></div>';
+      if (qd.result_summary) queryDetail += '<div><span style="color:var(--text-secondary);font-weight:600;font-size:8px;">RESULT:</span> <span style="font-size:9px;color:var(--text-muted);">' + escapeHtml(qd.result_summary) + '</span></div>';
+      if (!queryDetail && qd.raw) queryDetail = '<pre style="font-size:9px;color:var(--text-secondary);font-family:var(--font-mono);margin:0;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;">' + escapeHtml(typeof qd.raw === 'string' ? qd.raw : JSON.stringify(qd.raw, null, 2)) + '</pre>';
+      if (!queryDetail) queryDetail = '<span style="font-size:9px;color:var(--text-muted);">No additional details available</span>';
+      html += '<div id="' + detailId + '" style="display:none;margin:2px 0 6px 22px;padding:8px;background:var(--surface-0);border:1px solid var(--border-subtle);border-radius:4px;border-left:3px solid var(--cyan);">' + queryDetail + '</div>';
     });
     html += '</div></details></div>';
   }
