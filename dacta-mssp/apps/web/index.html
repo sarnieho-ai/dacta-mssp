@@ -49282,6 +49282,27 @@ async function doTransition(ticketKey, transitionId, toName) {
     var issue = _triageCurrentIssues.find(function(t) { return t.key === ticketKey; });
     if (issue) issue.status = toName;
     rerenderTriageTable();
+
+    // Update investigation workspace header status if this ticket is currently open
+    if (_currentInvestigationKey === ticketKey) {
+      var invPanel = document.querySelector('.prod-investigation-live');
+      if (invPanel) {
+        // Update Status: <strong> in the header metadata row
+        var metaSpans = invPanel.querySelectorAll('.r-ws-header span');
+        for (var si = 0; si < metaSpans.length; si++) {
+          if (metaSpans[si].textContent.indexOf('Status:') === 0) {
+            metaSpans[si].innerHTML = 'Status: <strong style="color:#CBD5E1;">' + escapeHtml(toName) + '</strong>';
+            break;
+          }
+        }
+        // Also update the subtitle
+        var invPage = document.getElementById('page-investigation');
+        if (invPage) {
+          var invSubtitle = invPage.querySelector('.page-subtitle');
+          if (invSubtitle) invSubtitle.innerHTML = ticketKey + ' · ' + escapeHtml(toName) + ' ' + jiraLiveBadge();
+        }
+      }
+    }
   } catch(e) { showToast('Failed: ' + e.message, 'error'); }
 }
 
@@ -50541,6 +50562,7 @@ async function openInvestigation(ticketKey) {
               (orgs.length>0?'<span>Org: <strong style="color:#CBD5E1;">' + escapeHtml(orgs.join(', ')) + '</strong></span>':'') +
               '<div style="margin-left:auto;display:flex;gap:8px;align-items:center;">' +
                 '<button onclick="var w=document.querySelector(\'.r-ws\');if(w){w.classList.toggle(\'r-light\');this.textContent=w.classList.contains(\'r-light\')?\'☼ Dark\':\'☾ Light\';}" style="font-size:10px;padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#94A3B8;border-radius:6px;cursor:pointer;">☾ Light</button>' +
+                '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:#6366F1;border:1px solid #818CF8;color:#fff;border-radius:6px;font-weight:600;" onclick="openEscalateModal(\'' + ticketKey + '\',\'' + escapeHtml(status) + '\')">' + dIcon('repeat',11) + ' Transition ▾</button>' +
                 '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#CBD5E1;border-radius:6px;" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-investigate</button>' +
                 '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#CBD5E1;border-radius:6px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\',\'_blank\')">Open in Jira \u2197</button>' +
               '</div>' +
