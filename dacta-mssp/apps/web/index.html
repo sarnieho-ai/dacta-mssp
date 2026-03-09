@@ -50538,8 +50538,11 @@ async function openInvestigation(ticketKey) {
               '<div id="rRootCause" style="display:none;"></div>' +
               '<h3 style="font-size:16px;font-weight:700;color:#E2E8F0;margin:0 0 12px;">Impact</h3>' +
               '<div id="summaryImpactContainer" style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:16px;margin-bottom:16px;">' +
-                '<div id="summaryAttackGraph" style="display:none;"></div>' +
-                '<div id="summaryImpactFallback">' + _rImpHTML + '</div>' +
+                '<div id="summaryAttackGraph" style="display:none;margin-bottom:14px;"></div>' +
+                '<div id="summaryImpactFallback">' +
+                  '<div style="font-size:11px;font-weight:700;color:var(--rws-text-muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;">Affected Entities</div>' +
+                  _rImpHTML +
+                '</div>' +
                 '<div id="summaryTopFindings" style="margin-top:14px;">' +
                   '<div style="font-size:13px;font-weight:600;color:var(--rws-text-primary);margin-bottom:8px;">Top Findings</div>' +
                   '<div id="summaryTopFindingsContent" style="font-size:12px;color:var(--rws-text-muted);font-style:italic;">Findings will appear after AI investigation completes...</div>' +
@@ -51513,13 +51516,13 @@ function updateInvPipelineStatus(text, color) {
 // ── Populate Attack Graph in Summary Tab Impact section ──
 function populateSummaryAttackGraph(ticketKey, techniques, summary) {
   var graphContainer = document.getElementById('summaryAttackGraph');
-  var fallback = document.getElementById('summaryImpactFallback');
   if (!graphContainer) return;
   var html = buildAttackPathHTML(ticketKey, techniques, summary);
   if (html) {
     graphContainer.innerHTML = html;
     graphContainer.style.display = 'block';
-    if (fallback) fallback.style.display = 'none';
+    // Impact entities (Identities/Devices/Data Objects/Applications) always remain visible
+    // Attack Path is shown ABOVE the entity cards, not replacing them
   }
 }
 
