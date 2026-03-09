@@ -49512,7 +49512,7 @@ function highlightEntities(text) {
   });
   // SHA256 hashes (64 hex chars)
   text = text.replace(/\b([a-fA-F0-9]{64})\b/g, function(m, hash) {
-    return '<a href="#" onclick="openEntityExplorer(\'' + hash + '\', \'hash\');return false;" style="color:var(--purple);text-decoration:underline;text-underline-offset:2px;cursor:pointer;" title="Investigate hash in Entity Explorer">' + hash.substring(0, 16) + '\u2026</a>';
+    return '<a href="#" onclick="openEntityExplorer(\'' + hash + '\', \'hash\');return false;" style="color:var(--purple);text-decoration:underline;text-underline-offset:2px;cursor:pointer;word-break:break-all;" title="Investigate hash in Entity Explorer">' + hash + '</a>';
   });
   // Email addresses
   text = text.replace(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/g, function(email) {
@@ -50462,7 +50462,7 @@ async function openInvestigation(ticketKey) {
       var count = items.length;
       var countColor = count > 0 ? color : 'rgba(255,255,255,0.25)';
       var itemsHtml = count > 0
-        ? items.slice(0,3).map(function(v) { return '<div style="font-size:10px;color:var(--rws-text-secondary);padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;" title="' + escapeHtml(v) + '">' + escapeHtml(v) + '</div>'; }).join('')
+        ? items.slice(0,3).map(function(v) { return '<div style="font-size:10px;color:var(--rws-text-secondary);padding:2px 0;word-break:break-all;line-height:1.4;" title="' + escapeHtml(v) + '">' + escapeHtml(v) + '</div>'; }).join('')
         : '<div style="font-size:10px;color:var(--rws-text-muted);font-style:italic;">None detected</div>';
       return '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px;text-align:center;min-width:0;">'
         + '<div style="font-size:20px;margin-bottom:4px;">' + icon + '</div>'
@@ -51070,7 +51070,7 @@ async function openInvestigation(ticketKey) {
           entities.push({type:'File', icon:'&#128196;', value:fi});
         });
         (iocs.hashes || []).forEach(function(h) {
-          entities.push({type:'Hash', icon:'&#128274;', value:h.length > 16 ? h.substring(0,16) + '\u2026' : h});
+          entities.push({type:'Hash', icon:'&#128274;', value:h});
         });
 
         if (entCount) entCount.textContent = entities.length;
@@ -51079,7 +51079,7 @@ async function openInvestigation(ticketKey) {
             return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
               '<span style="font-size:13px;width:20px;text-align:center;">' + e.icon + '</span>' +
               '<div><div style="font-size:9px;color:var(--rws-text-muted);text-transform:uppercase;letter-spacing:0.05em;">' + e.type + '</div>' +
-              '<div style="font-size:11px;color:var(--rws-text-primary);font-family:monospace;background:rgba(255,255,255,0.04);padding:1px 6px;border-radius:3px;margin-top:1px;">' + escapeHtml(e.value) + '</div></div></div>';
+              '<div style="font-size:11px;color:var(--rws-text-primary);font-family:monospace;background:rgba(255,255,255,0.04);padding:1px 6px;border-radius:3px;margin-top:1px;word-break:break-all;">' + escapeHtml(e.value) + '</div></div></div>';
           }).join('');
         } else {
           entContent.innerHTML = '<div style="font-size:11px;color:var(--rws-text-muted);">No entities extracted from this ticket.</div>';
@@ -51383,7 +51383,7 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
       .replace(/Regards[,.]?\s*(?:Dacta\s*)?SOC\s*Team.*/gi, '')
       .replace(/https?:\/\/[^\s]*/g, '')
       .replace(/\s+/g, ' ').trim();
-    if (fallback.length > 200) fallback = fallback.substring(0, 200) + '\u2026';
+    // No hard truncation — show full description text, allow natural wrapping
     if (fallback.length > 10) parts.push(escapeHtml(fallback));
   }
 
@@ -51394,15 +51394,15 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   var iocItems = [];
   (iocs.ips || []).slice(0, 4).forEach(function(ip) { iocItems.push({type:'IP', val:ip, col:'#A78BFA'}); });
   (iocs.hosts || []).slice(0, 3).forEach(function(h) { iocItems.push({type:'Host', val:h, col:'#60A5FA'}); });
-  (iocs.hashes || []).slice(0, 2).forEach(function(h) { iocItems.push({type:'Hash', val:h.length > 20 ? h.substring(0,20) + '\u2026' : h, col:'#F59E0B'}); });
+  (iocs.hashes || []).slice(0, 2).forEach(function(h) { iocItems.push({type:'Hash', val:h, col:'#F59E0B'}); });
   (iocs.files || []).slice(0, 2).forEach(function(fi) { iocItems.push({type:'File', val:fi, col:'#EF4444'}); });
   var iocHTML = '';
   if (iocItems.length > 0) {
     iocHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">';
     iocItems.forEach(function(ioc) {
-      iocHTML += '<div style="display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:3px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:5px;">' +
-        '<span style="color:var(--rws-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;font-size:9px;">' + ioc.type + '</span>' +
-        '<code style="color:' + ioc.col + ';font-family:monospace;font-size:11px;">' + escapeHtml(ioc.val) + '</code></div>';
+      iocHTML += '<div style="display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:3px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:5px;max-width:100%;">' +
+        '<span style="color:var(--rws-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;font-size:9px;flex-shrink:0;">' + ioc.type + '</span>' +
+        '<code style="color:' + ioc.col + ';font-family:monospace;font-size:11px;word-break:break-all;">' + escapeHtml(ioc.val) + '</code></div>';
     });
     iocHTML += '</div>';
   }
@@ -51510,7 +51510,7 @@ function initInvestigationSnapshot(ticketKey, ticketData) {
   if ((iocs.ips||[]).length)   entitySections.push({ label: 'IPs',   icon: '🌐', items: iocs.ips,   color: '#8b5cf6', hint: 'IP addresses to query in SIEM & TI' });
   if ((iocs.users||[]).length) entitySections.push({ label: 'Users', icon: '👤', items: iocs.users, color: '#10b981', hint: 'User accounts referenced' });
   if ((iocs.files||[]).length) entitySections.push({ label: 'Files', icon: '📄', items: iocs.files, color: '#f97316', hint: 'Executables and scripts' });
-  if ((iocs.hashes||[]).length) entitySections.push({ label: 'Hashes', icon: '#', items: iocs.hashes.map(function(h){return h.substring(0,20)+'\u2026';}), color: '#f59e0b', hint: 'File hashes for TI lookup' });
+  if ((iocs.hashes||[]).length) entitySections.push({ label: 'Hashes', icon: '#', items: iocs.hashes, color: '#f59e0b', hint: 'File hashes for TI lookup' });
 
   var entitiesHTML = '';
   if (entitySections.length > 0) {
@@ -51522,7 +51522,7 @@ function initInvestigationSnapshot(ticketKey, ticketData) {
           '<div style="font-size:9px;font-weight:700;color:' + sec.color + ';min-width:40px;flex-shrink:0;margin-top:1px;">' + sec.label + '<br><span style="font-size:8px;color:var(--text-muted);font-weight:400;">' + sec.items.length + ' item' + (sec.items.length === 1 ? '' : 's') + '</span></div>' +
           '<div style="flex:1;min-width:0;">' +
           sec.items.slice(0, 5).map(function(v) {
-            return '<span style="display:inline-block;font-size:9px;font-family:var(--font-mono);color:var(--text-primary);background:rgba(255,255,255,0.04);padding:1px 5px;border-radius:3px;margin:1px 2px 1px 0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(v) + '</span>';
+            return '<span style="display:inline-block;font-size:9px;font-family:var(--font-mono);color:var(--text-primary);background:rgba(255,255,255,0.04);padding:1px 5px;border-radius:3px;margin:1px 2px 1px 0;word-break:break-all;">' + escapeHtml(v) + '</span>';
           }).join('') +
           (sec.items.length > 5 ? '<span style="font-size:8px;color:var(--text-muted);margin-left:2px;">+' + (sec.items.length - 5) + ' more</span>' : '') +
           '<div style="font-size:8px;color:var(--text-muted);margin-top:3px;">' + sec.hint + '</div>' +
