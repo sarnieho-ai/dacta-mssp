@@ -48570,36 +48570,20 @@ async function _bgRunInvestigation(ticketKey) {
     '</div>';
   shadow.innerHTML = innerHTML;
 
-  // Swap page-investigation ID temporarily so runAIInvestigation finds the shadow
-  var realPage = document.getElementById('page-investigation');
-  if (realPage) realPage.setAttribute('id', '_real_inv_page_bg');
-  shadow.setAttribute('id', 'page-investigation');
-  document.body.appendChild(shadow);
-
-  try {
-    var issueData = await DactaJira.fetchIssue(ticketKey);
-    _currentInvestigationKey = ticketKey;
-    await runAIInvestigation(ticketKey, issueData);
-    _currentInvestigationKey = null;
-    // Update triage badge
-    var aiStatusEl = document.querySelector('[data-ai-status="' + ticketKey + '"]');
-    if (aiStatusEl) {
-      var cached = _investigationCache && _investigationCache[ticketKey];
-      var verd = cached ? (cached.verdict || '') : '';
-      var isTP = verd.includes('TRUE POSITIVE');
-      var isFP = verd.includes('FALSE POSITIVE');
-      var bgColor = isTP ? 'rgba(239,68,68,0.15)' : isFP ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)';
-      var textColor = isTP ? '#EF4444' : isFP ? '#10B981' : '#F59E0B';
-      var label = isTP ? '⚠ TP' : isFP ? '✓ FP' : '◑ TBD';
-      aiStatusEl.innerHTML = '<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:4px;background:' + bgColor + ';border:1px solid ' + textColor + '40;color:' + textColor + ';">' + label + '</span>';
-    }
-  } catch(e) {
-    console.warn('[AutoInv]', ticketKey, e.message);
-  } finally {
-    shadow.removeAttribute('id');
-    if (realPage) realPage.setAttribute('id', 'page-investigation');
-    shadow.remove();
-  }
+  // ── DISABLED: Background auto-investigation is disabled due to fundamental
+  // DOM isolation issues. The old approach swapped page-investigation IDs which
+  // broke the real investigation page. Overriding getElementById has unavoidable
+  // race conditions with foreground user interactions in single-threaded JS.
+  // 
+  // Investigation now runs on-demand when a ticket is opened. The incomplete-cache
+  // detection in openInvestigation() auto-triggers re-investigation for tickets
+  // that had broken cache entries from the old background system.
+  // 
+  // TODO: Refactor runAIInvestigation to accept a root container parameter
+  // instead of using document.getElementById, then re-enable background processing.
+  console.log('[AutoInv] Background investigation disabled for ' + ticketKey + ' — will run on-demand when ticket is opened');
+  shadow.remove();
+  return;
 }
 
 async function _processAutoInvQueue() {
