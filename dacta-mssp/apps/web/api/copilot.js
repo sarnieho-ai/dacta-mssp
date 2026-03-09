@@ -32,6 +32,60 @@ function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
 const OPENCTI_URL = process.env.OPENCTI_URL || _d('aHR0cDovLzYxLjEzLjIxNC4xOTg6ODA4MA==');
 const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || _d('NjE4OTZjMTQtNWM0OS00NDQ2LTllMDEtYTI4MWRmNTNmY2Qz');
 
+// ── Load org-specific log sources from DB ──
+async function loadOrgLogSources(orgName) {
+  if (!SUPABASE_SERVICE_KEY || !orgName) return { orgId: null, logSources: [], indexPatterns: [], connectors: [] };
+  const headers = {
+    'apikey': SUPABASE_SERVICE_KEY,
+    'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+    'Accept': 'application/json'
+  };
+  try {
+    // Resolve org name to org_id
+    const orgResp = await fetch(`${SUPABASE_URL}/rest/v1/organizations?select=id,name,short_name`, { headers });
+    if (!orgResp.ok) return { orgId: null, logSources: [], indexPatterns: [], connectors: [] };
+    const orgs = await orgResp.json();
+    const nameLower = orgName.toLowerCase().trim();
+    let org = orgs.find(o => o.name.toLowerCase() === nameLower);
+    if (!org) org = orgs.find(o => {
+      const dbName = o.name.toLowerCase();
+      return (nameLower.includes(dbName) && dbName.length > 3) ||
+             (dbName.includes(nameLower) && nameLower.length > 3);
+    });
+    if (!org) org = orgs.find(o =>
+      o.short_name && o.short_name.length >= 3 && nameLower.includes(o.short_name.toLowerCase())
+    );
+    if (!org) {
+      console.log('[Copilot] Could not resolve org_id for:', orgName);
+      return { orgId: null, logSources: [], indexPatterns: [], connectors: [] };
+    }
+
+    // Load log sources and connectors in parallel
+    const [lsResp, connResp] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/client_log_sources?org_id=eq.${org.id}&select=source_name,vendor,source_type,index_pattern,status`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/org_connectors?org_id=eq.${org.id}&is_enabled=eq.true&select=connector_type,vendor,health_status`, { headers })
+    ]);
+    const logSources = lsResp.ok ? await lsResp.json() : [];
+    const connectors = connResp.ok ? await connResp.json() : [];
+
+    // Extract index patterns
+    const indexPatterns = [];
+    logSources.forEach(ls => {
+      if (ls.index_pattern) {
+        ls.index_pattern.split(/\s+/).forEach(idx => {
+          if (idx && !indexPatterns.includes(idx)) indexPatterns.push(idx);
+        });
+      }
+    });
+
+    console.log(`[Copilot] Org context loaded: ${org.name}, logSources=${logSources.length}, indices=${indexPatterns.length}`);
+    return { orgId: org.id, logSources, indexPatterns, connectors };
+  } catch (err) {
+    console.error('[Copilot] Failed to load org log sources:', err.message);
+    return { orgId: null, logSources: [], indexPatterns: [], connectors: [] };
+  }
+}
+
 // ── System Prompt for SOC Copilot ──
 const SYSTEM_PROMPT = `You are DACTA Copilot, an AI-powered SOC investigation assistant built into the DACTA SIEMLess MSSP platform. You help SOC analysts investigate security incidents, search SIEM logs, enrich IOCs, look up MITRE ATT&CK techniques, and query Jira tickets.
 
@@ -58,14 +112,7 @@ const SYSTEM_PROMPT = `You are DACTA Copilot, an AI-powered SOC investigation as
 - **Jira Service Management**: Incident tickets, alert history, and escalation records. Project key is DAC.
 
 ## Client Context
-When a client is selected, scope your SIEM queries to that client's namespace. Available clients and their namespaces:
-- Dacta Global (namespace: dacta) — Internal, has EDR + Firewall
-- Naga World (namespace: nagaworld) — SOCaaS, has EDR + Firewall
-- EM Services (namespace: emservices) — SOCaaS, has EDR + Firewall
-- SP Telecom (namespace: sptelecom) — SOCaaS, has EDR + Firewall
-- Toyota Financial (namespace: toyotafinancial) — SOCaaS, has EDR + Firewall
-- Foxwood Technology (namespace: foxwood) — SOCaaS, Firewall only (NO EDR)
-- SPMT (namespace: spmt) — SOCaaS, has EDR + Firewall
+When a client is selected, the system will provide you with that client's ACTUAL configured log sources and Elasticsearch index patterns loaded from the database. You MUST use ONLY those specific index patterns — never assume or guess index patterns based on vendor names.
 
 ## Important Rules
 1. ALWAYS use tools to verify claims. Never say "this IP is malicious" without checking DACTA TIP and Elastic first.
@@ -86,7 +133,7 @@ const TOOLS = [
       properties: {
         index: {
           type: "string",
-          description: "Elasticsearch index pattern. Use 'logs-*' for all logs, or scope to a client like 'logs-*' with a namespace filter. For CrowdStrike alerts use '.ds-logs-crowdstrike.alert-{namespace}-*'. For firewall logs use 'logs-panw.panos-{namespace}-*'. Default: 'logs-*'"
+          description: "Elasticsearch index pattern. Use the EXACT index patterns provided in the session context for the selected client. Do NOT guess index patterns based on vendor names — each client has different log source vendors. For unscoped searches use 'logs-*'. Default: 'logs-*'"
         },
         query: {
           type: "object",
@@ -660,12 +707,42 @@ export default async function handler(req, res) {
       'SilverKey', 'Silver Key', 'ADV Partners', 'Dacta Training', 'Dacta Global'];
     vault.registerClientNames(KNOWN_CLIENTS);
 
-    // Build system prompt with client context
+    // Build system prompt with client context + real log sources from DB
     let systemPrompt = SYSTEM_PROMPT;
     if (client_context) {
-      systemPrompt += `\n\n## Current Session Context\n- Selected client: ${client_context.name || 'All Clients'}\n- Client namespace: ${client_context.namespace || 'all'}\n- Client type: ${client_context.type || 'unknown'}\n- Available connectors: ${(client_context.connectors || []).map(c => c.display_name + ' (' + c.connector_type + ')').join(', ') || 'unknown'}`;
+      // Load actual log sources from DB for this org
+      const orgCtx = await loadOrgLogSources(client_context.name);
+
+      systemPrompt += `\n\n## Current Session Context\n- Selected client: ${client_context.name || 'All Clients'}\n- Client namespace: ${client_context.namespace || 'all'}\n- Client type: ${client_context.type || 'unknown'}`;
+
+      // Inject real log sources and index patterns from DB
+      if (orgCtx.logSources.length > 0) {
+        systemPrompt += `\n\n### Configured Log Sources for ${client_context.name}\n` +
+          orgCtx.logSources.map(ls =>
+            `- **${ls.source_name}** (vendor: ${ls.vendor}, type: ${ls.source_type}, status: ${ls.status})${ls.index_pattern ? '\n  Index patterns: ' + ls.index_pattern.split(/\s+/).map(p => '`' + p + '`').join(', ') : ''}`
+          ).join('\n');
+      }
+      if (orgCtx.indexPatterns.length > 0) {
+        systemPrompt += `\n\n### EXACT Elasticsearch Index Patterns for ${client_context.name}\nYou MUST use ONLY these index patterns when querying SIEM for this client:\n` +
+          orgCtx.indexPatterns.map(idx => `  - \`${idx}\``).join('\n') +
+          `\n\n**CRITICAL: Do NOT use generic patterns like 'logs-panw.*' or guess vendor-specific index names. Use ONLY the patterns listed above.**`;
+      }
+
+      // Add connector info from DB (overrides frontend-provided connector list)
+      if (orgCtx.connectors.length > 0) {
+        systemPrompt += `\n\n### Active Connectors\n` +
+          orgCtx.connectors.map(c => `- ${c.vendor} (${c.connector_type}) — ${c.health_status}`).join('\n');
+      } else if (client_context.connectors && client_context.connectors.length > 0) {
+        // Fallback to frontend-provided connectors if DB returned none
+        systemPrompt += `\n- Available connectors: ${client_context.connectors.map(c => c.display_name + ' (' + c.connector_type + ')').join(', ')}`;
+      }
+
       if (client_context.namespace && client_context.namespace !== 'all') {
-        systemPrompt += `\n\n**CRITICAL: A specific client is selected. You MUST scope ALL Elastic SIEM queries to namespace "${client_context.namespace}" by adding a filter on data_stream.namespace. Use index pattern "logs-*-${client_context.namespace}-*" or add {"term":{"data_stream.namespace":"${client_context.namespace}"}} to your query filter. Do NOT return results from other clients. For Jira queries, filter by organization "${client_context.name}".`;
+        systemPrompt += `\n\n**CRITICAL: A specific client is selected. You MUST scope ALL Elastic SIEM queries to this client only.` +
+          (orgCtx.indexPatterns.length > 0
+            ? ` Use the exact index patterns listed above. Do NOT use generic wildcard patterns.`
+            : ` Use index pattern "logs-*-${client_context.namespace}-*" or add {"term":{"data_stream.namespace":"${client_context.namespace}"}} to your query filter.`) +
+          ` Do NOT return results from other clients. For Jira queries, filter by organization "${client_context.name}".`;
       }
     }
     // Tokenize system prompt (protects client names in context)
