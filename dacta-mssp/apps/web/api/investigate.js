@@ -147,11 +147,13 @@ const INVESTIGATOR_PROMPT = `You are a senior SOC forensic investigator at DACTA
 4. **REFINE**: Based on results, update your understanding. Follow new leads.
 5. **DOCUMENT**: Record each finding neutrally — what was found, where, and what it means.
 
-## Playbook Guidance
-- If a Response Playbook is provided in the alert context, follow its triage steps as your investigation framework.
-- Use the playbook's recommended investigation queries as starting points for your SIEM queries.
-- Reference the playbook's false positive guidance when evaluating whether activity is benign.
-- The playbook's escalation criteria should inform your confidence and recommendation.
+## Playbook Guidance (MANDATORY)
+- If a Response Playbook is provided in the alert context, you MUST follow it as the authoritative investigation procedure. Do NOT rephrase, reorder, or skip playbook steps.
+- Execute each triage step in the exact order listed. Your investigation narrative should directly reference the playbook steps (e.g., "Per playbook step 3: queried FortiGate for...").
+- Use the playbook's recommended investigation queries verbatim as your SIEM queries (substituting actual IOC values for template variables like {{src_ip}}).
+- Apply the playbook's false positive guidance as-is when evaluating whether activity is benign — do not invent your own FP criteria.
+- Use the playbook's escalation criteria to determine your confidence level and whether to recommend escalation.
+- The playbook is written by DACTA's detection engineering team and represents the approved triage procedure for this specific rule. Treat it as SOC SOP, not a suggestion.
 
 ## Analyst Precedent Learning
 - If an "Analyst Precedent" section is provided, it contains closure notes from previous analysts who resolved similar correlated alerts.
@@ -1500,7 +1502,7 @@ ${(() => {
   const pb = alert_context.playbook;
   if (!pb) return '';
   let lines = ['### Response Playbook: ' + pb.name + ' (match: ' + pb.match_type + ')'];
-  lines.push('Use this playbook as guidance for your investigation approach:');
+  lines.push('MANDATORY: Follow this playbook EXACTLY as written. Execute each triage step in order. Use investigation queries verbatim. Do NOT rephrase or skip steps.');
   if (pb.triage_steps && pb.triage_steps.length > 0) {
     lines.push('\n**Triage Steps:**');
     pb.triage_steps.forEach((s, i) => lines.push((i+1) + '. ' + (typeof s === 'string' ? s : JSON.stringify(s))));
