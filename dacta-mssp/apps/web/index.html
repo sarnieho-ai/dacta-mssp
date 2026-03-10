@@ -57977,7 +57977,7 @@ function matchDetectionPlaybook(alertTitle, useCaseName, techniques) {
       ]
     },
     {
-      keywords: ['data exfiltration', 'exfil', 'data leak', 'sensitive', 'upload', 'transfer'],
+      keywords: ['data exfiltration', 'exfil', 'data leak', 'data transfer', 'upload to external'],
       ruleName: 'Data Exfiltration Response',
       ruleId: 'DR-006',
       steps: [
@@ -59328,12 +59328,13 @@ async function runAIInvestigation(ticketKey, issueData) {
       pbHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic;">No matching built-in playbook</div>';
     }
 
-    // Fetch DB playbooks asynchronously and append
+    // Fetch DB playbooks asynchronously — DB playbook is authoritative, replaces hardcoded fallback
     (async function() {
       try {
         var dbPbs = (_cachedPlaybooks && _cachedPlaybooks.length > 0) ? _cachedPlaybooks : await fetchRelevantPlaybooks(techniques, alertTitle, useCaseName);
         if (dbPbs.length > 0) {
-          var dbHTML = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-subtle);">' +
+          // DB playbook is the authoritative source — replace the entire card content (hardcoded fallback was only a placeholder)
+          var dbHTML = '<div>' +
             '<div style="font-size:9px;font-weight:600;color:var(--cyan);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">' + dIcon('book',14) + ' SIEMLess DB Playbooks (' + dbPbs.length + ' matched)</div>';
           dbPbs.forEach(function(pb) {
             // Match type badge
@@ -59381,7 +59382,8 @@ async function runAIInvestigation(ticketKey, issueData) {
           });
           dbHTML += '</div>';
           var pbBodyEl = playbookCard.querySelector('.inv-collapsible-body');
-          if (pbBodyEl) pbBodyEl.innerHTML += dbHTML;
+          // Replace entire card content with DB playbook (authoritative source replaces hardcoded fallback)
+          if (pbBodyEl) pbBodyEl.innerHTML = dbHTML;
         }
       } catch(e) { console.warn('[Investigation] DB playbook fetch error:', e); }
     })();
