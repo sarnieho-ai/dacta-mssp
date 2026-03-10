@@ -42640,8 +42640,8 @@ function resolveFirewallIndexes(namespace, fwConnectors) {
       return 'logs-' + v.replace(/[^a-z0-9]/g, '_') + '-' + namespace + '-*';
     }).join(',');
   }
-  // No connectors configured: query common patterns as a best-effort wildcard
-  return 'logs-fortinet_fortigate.log-' + namespace + '-*,logs-panw.panos-' + namespace + '-*';
+  // No scoped connectors configured: return empty so callers can surface an analyst-confirmation path
+  return '';
 }
 
 // ── DB-backed client_log_sources cache ──
@@ -56911,7 +56911,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     // Still query firewall logs for network connections — ENHANCED: deep investigation with geo, bytes, temporal, TIP pivot
     var allIPs = (iocs.ips || []);
     var _deepDestIPs = new Set(); // Collect unique dest IPs for TIP pivot later
-    if (allIPs.length > 0) {
+    if (allIPs.length > 0 && _scopedFwConnectors.length > 0) {
       // Use resolveFirewallIndexes to get correct index from actual connector data
       var fwConnsForResolve = _scopedFwConnectors;
       var fwIndex = resolveFirewallIndexes(namespace, fwConnsForResolve);
@@ -57073,6 +57073,8 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         }
       }
 
+    } else if (allIPs.length > 0) {
+      console.log('[Investigation] Skipping deep firewall query — no scoped firewall connector for this ticket context');
     } else {
       logs.networkConnections.push({ status: 'INFO', query: 'No IPs extracted', result: 'No IPs in alert for firewall correlation. Check alert details manually.', ip: 'N/A', count: 0, live: true });
     }
@@ -58076,8 +58078,8 @@ async function runAIInvestigation(ticketKey, issueData) {
   var invToolsList = ['Elastic SIEM'];
   if (_invHasCSEDR && _invEdrConn) {
     invToolsList.push(_invEdrConn.vendor || 'CrowdStrike');
-  } else if (_invHasEDR && _invEdrConn) {
-    // Non-CS EDR (e.g. Microsoft M365) — show vendor but don't imply endpoint agent
+  } else if (_invSourceRelevance.endpoint && _invHasEDR && _invEdrConn) {
+    // Non-CS endpoint-relevant source (for example cloud identity telemetry) — only show when endpoint context is relevant
     invToolsList.push((_invEdrConn.display_name || _invEdrConn.vendor || 'Identity') + ' (Cloud)');
   }
   if (_invPrimaryFwConn) {
