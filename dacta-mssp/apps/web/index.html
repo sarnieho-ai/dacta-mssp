@@ -570,6 +570,217 @@ html:not([data-theme="light"]) .theme-toggle-btn .theme-icon-sun { display: bloc
   border: 1px solid rgba(0,0,0,0.08);
 }
 
+/* ---- Radiant Investigation Workspace (.r-ws) light mode overrides ---- */
+/* Override all hardcoded dark backgrounds in the live investigation panel */
+[data-theme="light"] .r-ws {
+  --rws-bg: #F8F9FA !important;
+  --rws-card: #FFFFFF !important;
+  --rws-card-alt: #F9FAFB !important;
+  --rws-border: #E5E7EB !important;
+  --rws-border-card: #E5E7EB !important;
+  --rws-text-primary: #111827 !important;
+  --rws-text-secondary: #374151 !important;
+  --rws-text-muted: #9CA3AF !important;
+  --rws-accent: #4F46E5 !important;
+  --rws-accent-dim: rgba(79,70,229,0.08) !important;
+  --rws-surface: #F3F4F6 !important;
+  --rws-surface-hover: #F9FAFB !important;
+}
+/* Override inline background:#0D1526 on header, tabs, sidebar */
+[data-theme="light"] .r-ws [style*="background:#0D1526"] {
+  background: #FFFFFF !important;
+  border-color: #E5E7EB !important;
+}
+[data-theme="light"] .r-ws [style*="background:#111827"] {
+  background: #F3F4F6 !important;
+  border-color: #E5E7EB !important;
+}
+[data-theme="light"] .r-ws [style*="background:#1E293B"] {
+  background: #FFFFFF !important;
+  border-color: #E5E7EB !important;
+}
+/* Override rgba(255,255,255,*) borders and dividers in investigation */
+[data-theme="light"] .r-ws [style*="border-bottom:1px solid rgba(255,255,255"] {
+  border-bottom-color: #E5E7EB !important;
+}
+[data-theme="light"] .r-ws [style*="border-top:1px solid rgba(255,255,255"] {
+  border-top-color: #E5E7EB !important;
+}
+[data-theme="light"] .r-ws [style*="border-right:1px solid rgba(255,255,255"] {
+  border-right-color: #E5E7EB !important;
+}
+[data-theme="light"] .r-ws [style*="border-left:2px solid rgba(255,255,255"] {
+  border-left-color: #E5E7EB !important;
+}
+[data-theme="light"] .r-ws [style*="border:1px solid rgba(255,255,255"] {
+  border-color: #E5E7EB !important;
+}
+/* Override rgba(255,255,255,0.06) divider backgrounds */
+[data-theme="light"] .r-ws [style*="background:rgba(255,255,255,0.0"] {
+  background: #E5E7EB !important;
+}
+/* Override light-on-dark text colors */
+[data-theme="light"] .r-ws [style*="color:#E2E8F0"] {
+  color: #111827 !important;
+}
+[data-theme="light"] .r-ws [style*="color:#CBD5E1"] {
+  color: #374151 !important;
+}
+[data-theme="light"] .r-ws [style*="color:#94A3B8"] {
+  color: #6B7280 !important;
+}
+[data-theme="light"] .r-ws [style*="color:#64748B"] {
+  color: #9CA3AF !important;
+}
+/* Buttons in investigation header */
+[data-theme="light"] .r-ws button[style*="background:rgba(255,255,255,0.06)"] {
+  background: #F3F4F6 !important;
+  border-color: #D1D5DB !important;
+  color: #374151 !important;
+}
+/* Impact container entities cards */
+[data-theme="light"] .r-ws [style*="background:rgba(255,255,255,0.03)"] {
+  background: #F9FAFB !important;
+  border-color: #E5E7EB !important;
+}
+/* Count colors in impact cards - keep the same */
+[data-theme="light"] .r-ws [style*="color:rgba(255,255,255,0.25)"] {
+  color: #D1D5DB !important;
+}
+/* Tab bar styling */
+[data-theme="light"] .r-ws .r-tab {
+  color: #6B7280;
+}
+[data-theme="light"] .r-ws .r-tab.active {
+  color: #111827;
+  border-bottom-color: #4F46E5;
+}
+[data-theme="light"] .r-ws .r-tab:hover:not(.active) {
+  color: #374151;
+  background: #F3F4F6;
+}
+/* Collapsible headers */
+[data-theme="light"] .r-ws .inv-collapsible-header {
+  background: #FFFFFF !important;
+}
+[data-theme="light"] .r-ws .inv-collapsible-header:hover {
+  background: #F9FAFB !important;
+}
+/* Card overrides within r-ws */
+[data-theme="light"] .r-ws .card {
+  background: #FFFFFF !important;
+  border: 1px solid #E5E7EB !important;
+}
+[data-theme="light"] .r-ws .card-header {
+  border-bottom-color: #E5E7EB !important;
+}
+/* Investigation sidebar sections dividers */
+[data-theme="light"] .r-ws [style*="height:1px;background:rgba(255,255,255"] {
+  background: #E5E7EB !important;
+}
+/* Timeline comment borders */
+[data-theme="light"] .r-ws [style*="border-left:2px solid rgba(0,212,255"] {
+  border-left-color: rgba(79,70,229,0.3) !important;
+}
+[data-theme="light"] .r-ws [style*="border-left:1px solid rgba(255,255,255"] {
+  border-left-color: #E5E7EB !important;
+}
+/* Right sidebar panel */
+[data-theme="light"] .r-ws [style*="background:var(--rws-card)"] {
+  background: #FFFFFF !important;
+}
+/* Pipeline panel and stages */
+[data-theme="light"] .inv-pipeline-panel {
+  background: #FFFFFF;
+  border-color: #E5E7EB;
+}
+[data-theme="light"] .inv-pipeline-stage {
+  background: #F9FAFB;
+  border-color: #E5E7EB;
+}
+[data-theme="light"] .inv-pipeline-summary {
+  background: rgba(79,70,229,0.04);
+  border-color: rgba(79,70,229,0.12);
+}
+[data-theme="light"] .inv-pipeline-summary-sep {
+  color: rgba(0,0,0,0.2);
+}
+[data-theme="light"] .inv-pipeline-shield {
+  background: rgba(16,185,129,0.06);
+}
+/* Feedback panel */
+[data-theme="light"] .inv-feedback-panel {
+  background: #FFFFFF;
+  border-color: #E5E7EB;
+}
+[data-theme="light"] .inv-feedback-panel textarea {
+  background: #F9FAFB;
+  border-color: #E5E7EB;
+  color: #111827;
+}
+[data-theme="light"] .inv-feedback-panel textarea::placeholder {
+  color: rgba(0,0,0,0.3);
+}
+/* Evidence header */
+[data-theme="light"] .inv-evidence-header {
+  background: #F3F4F6;
+  border-bottom-color: #E5E7EB;
+}
+/* SIEM details toggle */
+[data-theme="light"] .inv-siem-details-toggle {
+  background: rgba(79,70,229,0.04);
+  border-color: rgba(79,70,229,0.12);
+}
+/* Action checkboxes */
+[data-theme="light"] .action-checkbox {
+  background: #F9FAFB;
+  border-color: #E5E7EB;
+}
+[data-theme="light"] .action-checkbox:hover {
+  background: #F3F4F6;
+  border-color: #D1D5DB;
+}
+[data-theme="light"] .action-check {
+  border-color: #D1D5DB;
+}
+/* Chain link cards */
+[data-theme="light"] .chain-link {
+  background: #FFFFFF;
+  border-color: #E5E7EB;
+}
+/* Attack path section */
+[data-theme="light"] .attack-path-section {
+  background: #FFFFFF;
+  border-color: rgba(79,70,229,0.15);
+}
+/* Verdict banner — keep red tint */
+[data-theme="light"] .verdict-banner {
+  background: rgba(239,68,68,0.05);
+  border-color: rgba(239,68,68,0.2);
+}
+[data-theme="light"] .inv-verdict-stats {
+  border-top-color: rgba(0,0,0,0.06);
+}
+/* Cache banner */
+[data-theme="light"] .inv-cache-banner {
+  background: rgba(16,185,129,0.04);
+  border-color: rgba(16,185,129,0.15);
+}
+/* Reinvestigate button */
+[data-theme="light"] .inv-reinvestigate-btn {
+  background: rgba(79,70,229,0.06);
+  border-color: rgba(79,70,229,0.2);
+}
+/* Raw alert code block in sidebar */
+[data-theme="light"] .r-ws [style*="background:var(--bg-base)"] {
+  background: #F3F4F6 !important;
+  border-color: #E5E7EB !important;
+}
+/* Inline border-left on timeline dots */
+[data-theme="light"] .r-ws [style*="border-left:2px solid var(--border-subtle)"] {
+  border-left-color: #E5E7EB !important;
+}
+
 /* ---- Fix glow effects (remove in light) ---- */
 [data-theme="light"] .cc-brand-mark {
   box-shadow: none;
@@ -9704,6 +9915,21 @@ function toggleTheme() {
 
   // Update Canvas elements (SNOC topology, geo map, etc.)
   _themeUpdateCanvases();
+
+  // Sync radiant investigation workspace light class
+  var rwsEl = document.querySelector('.r-ws');
+  if (rwsEl) {
+    if (_currentTheme === 'light') {
+      rwsEl.classList.add('r-light');
+    } else {
+      rwsEl.classList.remove('r-light');
+    }
+    // Update internal light/dark toggle button text
+    var rwsToggleBtn = rwsEl.querySelector('button[onclick*="r-light"]');
+    if (rwsToggleBtn) {
+      rwsToggleBtn.textContent = _currentTheme === 'light' ? '\u263C Dark' : '\u263E Light';
+    }
+  }
 
   // Remove transition class after animation completes
   setTimeout(function() {
@@ -53496,7 +53722,7 @@ async function openInvestigation(ticketKey) {
         '@keyframes spin{to{transform:rotate(360deg)}}' +
         '@keyframes invProgressBar{0%{width:0%}60%{width:70%}90%{width:88%}100%{width:92%}}' +
       '</style>' +
-      '<div class="r-ws">' +
+      '<div class="r-ws' + (_themeIsLight() ? ' r-light' : '') + '">' +
 
         // ─── WHITE HEADER ───
         '<div style="background:#0D1526;border-bottom:1px solid rgba(255,255,255,0.08);border-radius:8px 8px 0 0;">' +
@@ -53527,7 +53753,7 @@ async function openInvestigation(ticketKey) {
               '<span>Assignee: <strong style="color:' + (assignee==='Unassigned'?'#64748B':'#6366F1') + ';">' + escapeHtml(assignee) + '</strong></span>' +
               (orgs.length>0?'<span>Org: <strong style="color:#CBD5E1;">' + escapeHtml(orgs.join(', ')) + '</strong></span>':'') +
               '<div style="margin-left:auto;display:flex;gap:8px;align-items:center;">' +
-                '<button onclick="var w=document.querySelector(\'.r-ws\');if(w){w.classList.toggle(\'r-light\');this.textContent=w.classList.contains(\'r-light\')?\'☼ Dark\':\'☾ Light\';}" style="font-size:10px;padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#94A3B8;border-radius:6px;cursor:pointer;">☾ Light</button>' +
+                '<button onclick="var w=document.querySelector(\'.r-ws\');if(w){w.classList.toggle(\'r-light\');this.textContent=w.classList.contains(\'r-light\')?\'☼ Dark\':\'☾ Light\';}" style="font-size:10px;padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#94A3B8;border-radius:6px;cursor:pointer;">' + (_themeIsLight() ? '\u263C Dark' : '\u263E Light') + '</button>' +
                 '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:#6366F1;border:1px solid #818CF8;color:#fff;border-radius:6px;font-weight:600;" onclick="openEscalateModal(\'' + ticketKey + '\',\'' + escapeHtml(status) + '\')">' + dIcon('repeat',11) + ' Transition ▾</button>' +
                 '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#CBD5E1;border-radius:6px;" onclick="reInvestigate(\'' + ticketKey + '\')">' + dIcon('refresh',11) + ' Re-investigate</button>' +
                 '<button class="btn btn-sm" style="font-size:11px;padding:5px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#CBD5E1;border-radius:6px;" onclick="window.open(\'https://dactaglobal-sg.atlassian.net/browse/' + ticketKey + '\',\'_blank\')">Open in Jira \u2197</button>' +
