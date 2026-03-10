@@ -147,6 +147,12 @@ const INVESTIGATOR_PROMPT = `You are a senior SOC forensic investigator at DACTA
 4. **REFINE**: Based on results, update your understanding. Follow new leads.
 5. **DOCUMENT**: Record each finding neutrally — what was found, where, and what it means.
 
+## Playbook Guidance
+- If a Response Playbook is provided in the alert context, follow its triage steps as your investigation framework.
+- Use the playbook's recommended investigation queries as starting points for your SIEM queries.
+- Reference the playbook's false positive guidance when evaluating whether activity is benign.
+- The playbook's escalation criteria should inform your confidence and recommendation.
+
 ## Tool Usage Strategy
 - Start with the alert context and extract IOCs (IPs, hashes, domains, hostnames, processes)
 - Query Elastic SIEM using the SPECIFIC INDEX PATTERNS provided in the alert context (never use generic "logs-*")
@@ -1420,6 +1426,9 @@ ${(() => {
   if (di.investigation_mode === 'firewall_only') {
     sections.push('### Investigation Mode: FIREWALL-ONLY (No EDR endpoint agent)');
     sections.push('IMPORTANT: This org has NO EDR telemetry. Rely on firewall logs, geo-location, bytes transferred, temporal patterns, and TIP lookups. Do NOT assert TRUE POSITIVE without SIEM-confirmed evidence. Default to SUSPICIOUS when evidence is insufficient.');
+  } else if (di.investigation_mode === 'edr_full' && di.edr_vendor) {
+    sections.push('### Investigation Mode: EDR FULL (' + di.edr_vendor + ')');
+    sections.push('This org has ' + di.edr_vendor + ' EDR/XDR deployed. Endpoint telemetry is available via direct API. Use search_edr tool when endpoint context is relevant.');
   }
   if (di.dest_geo && di.dest_geo.length > 0) {
     sections.push('### Destination Geo-Location Analysis');
@@ -1477,6 +1486,38 @@ ${(() => {
 ${vg.instruction}
 Failed/Empty queries: ${[...(vg.failed_queries || []), ...(vg.empty_queries || [])].join(', ')}
 You MUST label your verdict as SUSPICIOUS and list which queries the analyst needs to re-run manually.`;
+})()}
+
+${(() => {
+  const pb = alert_context.playbook;
+  if (!pb) return '';
+  let lines = ['### Response Playbook: ' + pb.name + ' (match: ' + pb.match_type + ')'];
+  lines.push('Use this playbook as guidance for your investigation approach:');
+  if (pb.triage_steps && pb.triage_steps.length > 0) {
+    lines.push('\n**Triage Steps:**');
+    pb.triage_steps.forEach((s, i) => lines.push((i+1) + '. ' + (typeof s === 'string' ? s : JSON.stringify(s))));
+  }
+  if (pb.investigation_queries && pb.investigation_queries.length > 0) {
+    lines.push('\n**Recommended Investigation Queries:**');
+    pb.investigation_queries.forEach(q => {
+      if (typeof q === 'object') {
+        lines.push('- [' + (q.platform || 'elastic') + '] ' + q.query + (q.description ? ' — ' + q.description : ''));
+      } else {
+        lines.push('- ' + q);
+      }
+    });
+  }
+  if (pb.false_positive_guidance) {
+    lines.push('\n**False Positive Guidance:** ' + pb.false_positive_guidance);
+  }
+  if (pb.escalation_criteria) {
+    lines.push('\n**Escalation Criteria:** ' + (typeof pb.escalation_criteria === 'string' ? pb.escalation_criteria : JSON.stringify(pb.escalation_criteria)));
+  }
+  if (pb.containment_steps && pb.containment_steps.length > 0) {
+    lines.push('\n**Containment Steps (if confirmed threat):**');
+    pb.containment_steps.forEach((s, i) => lines.push((i+1) + '. ' + (typeof s === 'string' ? s : JSON.stringify(s))));
+  }
+  return lines.join('\n');
 })()}
 
 ${indexContext}

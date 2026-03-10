@@ -58653,6 +58653,22 @@ async function runAIInvestigation(ticketKey, issueData) {
           }];
           _r1AutoSteps = _r1Playbooks[0].triage_steps;
         }
+        // Inject playbook context into LLM alert context for all investigation phases
+        if (_r1Playbooks.length > 0) {
+          var _pbForLLM = _r1Playbooks[0];
+          _llmAlertContext.playbook = {
+            name: _pbForLLM.playbook_name || _pbForLLM.rule_name || 'Matched Playbook',
+            match_type: _pbForLLM._matchType || _pbForLLM.match_type || 'auto',
+            triage_steps: _pbForLLM.triage_steps || [],
+            investigation_queries: _pbForLLM.investigation_queries || [],
+            containment_steps: _pbForLLM.containment_steps || [],
+            false_positive_guidance: _pbForLLM.false_positive_guidance || '',
+            escalation_criteria: _pbForLLM.escalation_criteria || '',
+            auto_response_actions: _pbForLLM.auto_response_actions || [],
+            evidence_collection: _pbForLLM.evidence_collection || []
+          };
+          console.log('[LLM Investigation] Playbook injected: ' + _llmAlertContext.playbook.name + ' (' + _llmAlertContext.playbook.match_type + ')');
+        }
       } catch (e) { console.warn('[R1Playbook] error:', e.message); }
     }
 
