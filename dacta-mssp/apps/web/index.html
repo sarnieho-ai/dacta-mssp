@@ -592,6 +592,237 @@ html:not([data-theme="light"]) .theme-toggle-btn .theme-icon-sun { display: bloc
   border-left-color: rgba(0,0,0,0.08) !important;
 }
 
+
+/* ---- LIGHT MODE POLISH (v2) ---- */
+
+/* Fix sidebar logo image visibility - invert for light backgrounds */
+[data-theme="light"] .sidebar-logo img {
+  filter: brightness(0.15) contrast(1.2) !important;
+}
+
+/* Fix login page logo visibility */
+[data-theme="light"] .login-brand img,
+[data-theme="light"] #loginLogoImg {
+  filter: brightness(0.15) contrast(1.2) !important;
+}
+
+/* ---- Dashboard Mission Control Center ---- */
+[data-theme="light"] .cc-canvas-wrapper {
+  background: linear-gradient(180deg, #f5f7fa 0%, #edf0f4 100%) !important;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+[data-theme="light"] .cc-canvas-grid-bg {
+  background-image:
+    linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px) !important;
+}
+
+/* Dashboard KPI metric cards */
+[data-theme="light"] .cc-metric-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  backdrop-filter: none !important;
+}
+[data-theme="light"] .cc-metric-card:hover {
+  border-color: rgba(0,136,179,0.25) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important;
+}
+
+/* ---- Generic dark card backgrounds -> light ---- */
+/* These target elements with rgba(15,23,42,x) backgrounds used across pages */
+[data-theme="light"] .dr-stat-card,
+[data-theme="light"] .bd-summary-card,
+[data-theme="light"] .ops-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="light"] .dr-filter-bar {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="light"] .dr-ide-toolbar {
+  background: rgba(0,0,0,0.03) !important;
+  border-bottom: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="light"] .dr-ide-lines {
+  background: rgba(0,0,0,0.02) !important;
+  border-right: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="light"] .dr-ide-status {
+  background: rgba(0,0,0,0.02) !important;
+  border-top: 1px solid rgba(0,0,0,0.06) !important;
+}
+
+[data-theme="light"] .dr-translate-panel {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="light"] .dr-translate-header {
+  background: rgba(0,0,0,0.03) !important;
+  border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+}
+
+[data-theme="light"] .dr-create-sidebar {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+/* ---- Threat Hunting KPI cards ---- */
+[data-theme="light"] .hunt-kpi-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+}
+[data-theme="light"] .hunt-kpi-card:hover {
+  border-color: rgba(0,136,179,0.25) !important;
+}
+/* Hunt stats use inline styles with dark gradients - override with !important */
+[data-theme="light"] [style*="linear-gradient(160deg, #111827"],
+[data-theme="light"] [style*="linear-gradient(160deg, #0e1524"],
+[data-theme="light"] [style*="linear-gradient(160deg, #0e1730"] {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+}
+
+/* ---- Dashboard summary cards (bottom KPI row) ---- */
+[data-theme="light"] .summary-card,
+[data-theme="light"] .summary-cards .summary-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+}
+[data-theme="light"] .summary-card:hover {
+  border-color: rgba(0,136,179,0.25) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important;
+}
+
+/* ---- Rule Lab simulation cards ---- */
+[data-theme="light"] .rl-sim-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="light"] .rl-chain-step {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="light"] .rvq-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+/* ---- SNOC KPI header cards ---- */
+[data-theme="light"] .snoc-kpi-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+}
+
+/* ---- Settings / Log Source KPI cards ---- */
+[data-theme="light"] [style*="background:rgba(15,23,42"] {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+/* ---- Data Architecture page dark backgrounds ---- */
+[data-theme="light"] .da-card,
+[data-theme="light"] .da-stat-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+/* ---- Generic metric cards (used on Triage, Settings, etc.) ---- */
+[data-theme="light"] .metric-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+}
+[data-theme="light"] .metric-card:hover {
+  border-color: rgba(0,136,179,0.25) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important;
+}
+
+/* ---- Reporting KPI cards ---- */
+[data-theme="light"] .rpt-kpi-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+[data-theme="light"] .rpt-kpi-card:hover {
+  border-color: rgba(0,136,179,0.25) !important;
+}
+
+/* ---- Copilot summary card ---- */
+[data-theme="light"] .cp-summary-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+/* ---- War Room stat cards ---- */
+[data-theme="light"] .wr-stat-card,
+[data-theme="light"] .wr2-kpi-row > div {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+/* ---- SPL/KQL Preview code blocks (keep slightly dark for readability) ---- */
+[data-theme="light"] [style*="background:rgba(15,23,42,0.97)"],
+[data-theme="light"] [style*="background: rgba(15,23,42,0.97)"] {
+  background: #1e293b !important;
+}
+
+/* ---- Pagination bar ---- */
+[data-theme="light"] #drRepoPagination {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  border-top: none !important;
+}
+
+/* ---- Alert Activity Heat Map section ---- */
+[data-theme="light"] #heatmapContainer,
+[data-theme="light"] [id*="heatmap"] {
+  background: #ffffff !important;
+}
+
+/* ---- Fix text colors that might be too light on white cards ---- */
+[data-theme="light"] .summary-card .sc-num {
+  color: var(--text-primary) !important;
+}
+[data-theme="light"] .summary-card .sc-label {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="light"] .dr-stat-card .lbl {
+  color: var(--text-secondary) !important;
+}
+
+/* ---- Ensure stat values remain colored ---- */
+[data-theme="light"] .dr-stat-card.cyan .val { color: var(--cyan) !important; }
+[data-theme="light"] .dr-stat-card.green .val { color: var(--green) !important; }
+[data-theme="light"] .dr-stat-card.amber .val { color: var(--amber) !important; }
+[data-theme="light"] .dr-stat-card.red .val { color: var(--red) !important; }
+[data-theme="light"] .dr-stat-card.purple .val { color: var(--purple) !important; }
+[data-theme="light"] .dr-stat-card.blue .val { color: #2563eb !important; }
+
+/* ---- Text muted needs to be visible in light mode ---- */
+[data-theme="light"] .card-title,
+[data-theme="light"] [class*="-label"],
+[data-theme="light"] [class*="-sublabel"] {
+  color: var(--text-secondary);
+}
+
+/* ---- Ensure borders look good in light ---- */
+[data-theme="light"] .summary-cards {
+  gap: 10px;
+}
+
+
 /* ---- Smooth transition for theme switch ---- */
 html.theme-transitioning,
 html.theme-transitioning *,
