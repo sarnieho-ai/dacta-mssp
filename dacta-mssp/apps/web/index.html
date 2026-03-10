@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+/* Theme FOUC prevention — apply saved theme before paint */
+(function(){var t=localStorage.getItem('dacta-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');})();
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DACTA SIEMLess | For Blue Team, By Blue Team</title>
@@ -58,7 +63,544 @@
   --topbar-height: 56px;
   --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
   --transition-slow: 0.4s cubic-bezier(0.4,0,0.2,1);
+  --bg-overlay-mask: rgba(8,12,24,0.82);
 }
+
+
+/* ============================================================
+   LIGHT MODE THEME
+   Activated by data-theme="light" on <html>
+   ============================================================ */
+[data-theme="light"] {
+  /* ---- Backgrounds ---- */
+  --bg-base: #f0f2f5;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f7f8fa;
+  --bg-elevated: #edf0f4;
+  --bg-input: #f5f6f8;
+
+  /* ---- Borders ---- */
+  --border-subtle: rgba(0,0,0,0.08);
+  --border-card: rgba(0,0,0,0.12);
+  --border-accent: rgba(0, 140, 200, 0.35);
+
+  /* ---- Accent colors (slightly deeper for readability on white) ---- */
+  --cyan: #0088b3;
+  --cyan-dim: rgba(0, 136, 179, 0.08);
+  --cyan-glow: rgba(0, 136, 179, 0.15);
+  --cyan-bright: #006d91;
+
+  --amber: #d97706;
+  --amber-dim: rgba(217, 119, 6, 0.08);
+  --red: #dc2626;
+  --red-dim: rgba(220, 38, 38, 0.08);
+  --red-bright: #b91c1c;
+  --green: #059669;
+  --green-dim: rgba(5, 150, 105, 0.08);
+  --orange: #ea580c;
+  --orange-dim: rgba(234, 88, 12, 0.08);
+  --purple: #7c3aed;
+  --purple-dim: rgba(124, 58, 237, 0.08);
+  --blue: #2563eb;
+  --blue-dim: rgba(37, 99, 235, 0.08);
+
+  /* ---- Text ---- */
+  --text-primary: #1a202c;
+  --text-secondary: #4a5568;
+  --text-muted: #9ca3af;
+  --text-accent: #0077a3;
+  --bg-overlay-mask: rgba(255,255,255,0.85);
+}
+
+/* ---- Global color inversion for overlays ---- */
+[data-theme="light"] body {
+  color-scheme: light;
+}
+
+/* ---- Scrollbar ---- */
+[data-theme="light"] ::-webkit-scrollbar-track { background: transparent; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 6px; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,136,179,0.25); box-shadow: 0 0 6px rgba(0,136,179,0.1); }
+
+/* ---- Sidebar ---- */
+[data-theme="light"] #sidebar {
+  background: #ffffff;
+  border-right: 1px solid rgba(0,0,0,0.1);
+}
+[data-theme="light"] .sidebar-brand .tagline {
+  color: var(--text-muted);
+}
+[data-theme="light"] .nav-section-label {
+  color: var(--text-muted);
+}
+[data-theme="light"] .nav-item {
+  color: var(--text-secondary);
+}
+[data-theme="light"] .nav-item:hover {
+  background: rgba(0,0,0,0.04);
+  color: var(--text-primary);
+}
+[data-theme="light"] .nav-item.active {
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  border-left: 2px solid var(--cyan);
+}
+[data-theme="light"] .nav-item.active .nav-icon { color: var(--cyan); }
+[data-theme="light"] .nav-item.active .nav-icon svg { stroke: var(--cyan); }
+[data-theme="light"] .sidebar-toggle { border-top: 1px solid rgba(0,0,0,0.08); color: var(--text-muted); }
+[data-theme="light"] .sidebar-toggle:hover { background: rgba(0,0,0,0.04); color: var(--text-primary); }
+[data-theme="light"] .admin-section .nav-section-label { color: var(--text-muted); }
+[data-theme="light"] .admin-section .nav-section-label:hover { color: var(--text-secondary); }
+
+/* ---- Topbar ---- */
+[data-theme="light"] #topbar {
+  background: rgba(255,255,255,0.92);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  backdrop-filter: blur(12px);
+}
+[data-theme="light"] .topbar-sep { background: rgba(0,0,0,0.1); }
+[data-theme="light"] .org-select {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  color: var(--text-secondary);
+}
+[data-theme="light"] .org-select:hover { border-color: var(--border-accent); color: var(--text-primary); }
+[data-theme="light"] .prod-badge {
+  background: rgba(5, 150, 105, 0.08);
+  color: var(--green);
+  border: 1px solid rgba(5,150,105,0.25);
+}
+[data-theme="light"] .topbar-time { color: var(--text-secondary); }
+[data-theme="light"] .topbar-icon-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  color: var(--text-secondary);
+}
+[data-theme="light"] .topbar-icon-btn:hover {
+  border-color: var(--border-accent);
+  color: var(--text-primary);
+  box-shadow: 0 0 12px rgba(0,136,179,0.08);
+}
+[data-theme="light"] .user-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+}
+[data-theme="light"] .user-avatar {
+  background: linear-gradient(135deg, #0088b3, #7c3aed);
+}
+[data-theme="light"] .user-name { color: var(--text-secondary); }
+
+/* ---- Main content area ---- */
+[data-theme="light"] .main-content,
+[data-theme="light"] #content-area {
+  background: var(--bg-base);
+}
+[data-theme="light"] .page-title {
+  color: var(--text-primary);
+  text-shadow: none;
+}
+
+/* ---- Cards ---- */
+[data-theme="light"] .card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+[data-theme="light"] .card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+[data-theme="light"] .card-header {
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+[data-theme="light"] .card-title {
+  color: var(--text-muted);
+}
+
+/* ---- Buttons ---- */
+[data-theme="light"] .btn-secondary {
+  background: #ffffff;
+  color: var(--text-secondary);
+  border: 1px solid rgba(0,0,0,0.12);
+}
+[data-theme="light"] .btn-secondary:hover {
+  border-color: var(--border-accent);
+  color: var(--text-primary);
+  box-shadow: 0 0 12px rgba(0,136,179,0.06);
+}
+[data-theme="light"] .btn-icon {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.12);
+  color: var(--text-secondary);
+}
+[data-theme="light"] .btn-icon:hover {
+  border-color: var(--border-accent);
+  color: var(--cyan);
+}
+
+/* ---- Inputs, Selects ---- */
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(0,0,0,0.12) !important;
+}
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+  border-color: var(--border-accent) !important;
+  box-shadow: 0 0 0 3px rgba(0,136,179,0.1) !important;
+}
+
+/* ---- Badges ---- */
+[data-theme="light"] .badge-p1 { background: rgba(220,38,38,0.1); color: #b91c1c; border: 1px solid rgba(220,38,38,0.2); box-shadow: none; }
+[data-theme="light"] .badge-p2 { background: rgba(217,119,6,0.1); color: #b45309; border: 1px solid rgba(217,119,6,0.2); box-shadow: none; }
+[data-theme="light"] .badge-p3 { background: rgba(37,99,235,0.08); color: #1d4ed8; border: 1px solid rgba(37,99,235,0.15); }
+[data-theme="light"] .badge-p4 { background: rgba(0,0,0,0.05); color: var(--text-secondary); border: 1px solid rgba(0,0,0,0.1); }
+
+/* ---- Login page ---- */
+[data-theme="light"] .login-screen {
+  background: linear-gradient(135deg, #e8f4f8 0%, #f0f2f5 50%, #eef2ff 100%);
+}
+[data-theme="light"] .login-grid-bg {
+  background-image: linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+}
+[data-theme="light"] .login-grid-bg::after {
+  background: radial-gradient(ellipse at center, rgba(0,136,179,0.06) 0%, transparent 70%);
+}
+[data-theme="light"] .login-card {
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.08);
+}
+[data-theme="light"] .login-card .login-subtitle {
+  color: var(--text-secondary);
+}
+
+/* ---- Triage Queue ---- */
+[data-theme="light"] .tq-row { border-bottom: 1px solid rgba(0,0,0,0.06); }
+[data-theme="light"] .tq-row:hover { background: rgba(0,136,179,0.03); }
+
+/* ---- Investigation ---- */
+[data-theme="light"] [contenteditable] {
+  background: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(0,0,0,0.12) !important;
+}
+
+/* ---- Modals ---- */
+[data-theme="light"] .bd-modal,
+[data-theme="light"] [style*="background:var(--bg-surface)"],
+[data-theme="light"] [style*="background: #0d1424"] {
+  background: #ffffff !important;
+  border-color: rgba(0,0,0,0.12) !important;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.12) !important;
+}
+
+/* ---- Tables ---- */
+[data-theme="light"] table th {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+[data-theme="light"] table td {
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+[data-theme="light"] table tr:hover td {
+  background: rgba(0,136,179,0.03);
+}
+
+/* ---- Code/Mono blocks ---- */
+[data-theme="light"] pre,
+[data-theme="light"] code,
+[data-theme="light"] .mono {
+  background: var(--bg-elevated) !important;
+}
+
+/* ---- Command bar / search ---- */
+[data-theme="light"] .cc-command-bar {
+  background: var(--bg-base);
+}
+
+/* ---- Tabs ---- */
+[data-theme="light"] .settings-tab,
+[data-theme="light"] .tab-btn {
+  color: var(--text-secondary);
+}
+[data-theme="light"] .settings-tab:hover,
+[data-theme="light"] .tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(0,0,0,0.03);
+}
+[data-theme="light"] .settings-tab.active,
+[data-theme="light"] .tab-btn.active {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan);
+}
+
+/* ---- User menu dropdown ---- */
+[data-theme="light"] #userMenu {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.12) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1) !important;
+}
+
+/* ---- Org select dropdown ---- */
+[data-theme="light"] .org-dropdown {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.12);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+}
+[data-theme="light"] .org-dropdown-item:hover {
+  background: rgba(0,0,0,0.04);
+}
+
+/* ---- Selection highlight ---- */
+[data-theme="light"] ::selection {
+  background: rgba(0,136,179,0.2);
+  color: var(--text-primary);
+}
+
+/* ---- Generic overrides for white-on-dark overlays ---- */
+/* These handle the ~528 rgba(255,255,255,x) instances used as hover/active states */
+[data-theme="light"] [style*="rgba(255,255,255,0.02)"],
+[data-theme="light"] [style*="rgba(255,255,255,0.03)"],
+[data-theme="light"] [style*="rgba(255,255,255,0.04)"],
+[data-theme="light"] [style*="rgba(255,255,255,0.05)"],
+[data-theme="light"] [style*="rgba(255,255,255,0.06)"],
+[data-theme="light"] [style*="rgba(255,255,255,0.07)"],
+[data-theme="light"] [style*="rgba(255,255,255,0.08)"] {
+  /* Can't override inline styles without !important, handled by JS theme switcher */
+}
+
+/* ---- SNOC page ---- */
+[data-theme="light"] #page-snoc {
+  background: var(--bg-base);
+}
+[data-theme="light"] .snoc-kpi-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Detection Rules ---- */
+[data-theme="light"] .dr-rule-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+[data-theme="light"] .dr-rule-card:hover {
+  border-color: var(--border-accent);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+/* ---- MITRE ATT&CK Matrix cells ---- */
+[data-theme="light"] .mitre-cell {
+  background: var(--bg-card);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+/* ---- Charts axis text ---- */
+[data-theme="light"] .ct-label,
+[data-theme="light"] .ct-grid {
+  color: var(--text-muted);
+  stroke: rgba(0,0,0,0.1);
+}
+
+/* ---- War Room chat ---- */
+[data-theme="light"] .wr-chat-msg-user .wr-chat-msg-bubble {
+  background: var(--cyan-dim);
+  color: var(--text-primary);
+  border: 1px solid rgba(0,136,179,0.15);
+}
+[data-theme="light"] .wr-chat-msg-ai .wr-chat-msg-bubble {
+  background: #f5f6f8;
+  color: var(--text-primary);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+/* ---- Command bar modal ---- */
+[data-theme="light"] #cmdbarOverlay,
+[data-theme="light"] .cmdbar-modal {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.12);
+  box-shadow: 0 16px 64px rgba(0,0,0,0.12);
+}
+
+/* ---- Privacy Engine ---- */
+[data-theme="light"] .priv-card,
+[data-theme="light"] .ep-panel,
+[data-theme="light"] .rl-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Response Center ---- */
+[data-theme="light"] .resp-playbook-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Shift handover ---- */
+[data-theme="light"] .sh-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Log Source Catalog ---- */
+[data-theme="light"] .lsc-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Entity Explorer ---- */
+[data-theme="light"] .ee-entity-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Threat Intel ---- */
+[data-theme="light"] .tip-panel,
+[data-theme="light"] .tip-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Threat Hunting ---- */
+[data-theme="light"] .hunt-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Asset & Vuln Management ---- */
+[data-theme="light"] .avm-card,
+[data-theme="light"] .am-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Reporting ---- */
+[data-theme="light"] .rpt-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Client / Org cards ---- */
+[data-theme="light"] .client-card,
+[data-theme="light"] .org-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+[data-theme="light"] .client-card:hover,
+[data-theme="light"] .org-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  border-color: var(--border-accent);
+}
+
+/* ---- Notification badge stays red ---- */
+[data-theme="light"] .notif-badge {
+  background: var(--red);
+  color: #fff;
+}
+
+/* ---- Toast / snackbar ---- */
+[data-theme="light"] .toast,
+[data-theme="light"] [class*="toast"] {
+  background: #ffffff;
+  color: var(--text-primary);
+  border: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+}
+
+/* ---- Data Architecture ---- */
+[data-theme="light"] .da-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Theme Toggle Button ---- */
+.theme-toggle-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+.theme-toggle-btn:hover {
+  border-color: var(--border-accent);
+  color: var(--cyan);
+  box-shadow: 0 0 12px rgba(0,136,179,0.1);
+}
+.theme-toggle-btn svg { display: block; }
+[data-theme="light"] .theme-toggle-btn .theme-icon-moon { display: block; }
+[data-theme="light"] .theme-toggle-btn .theme-icon-sun { display: none; }
+:root .theme-toggle-btn .theme-icon-moon { display: none; }
+:root .theme-toggle-btn .theme-icon-sun { display: block; }
+html:not([data-theme="light"]) .theme-toggle-btn .theme-icon-moon { display: none; }
+html:not([data-theme="light"]) .theme-toggle-btn .theme-icon-sun { display: block; }
+
+/* ---- Escalation modal ---- */
+[data-theme="light"] .esc-modal {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.12);
+}
+
+/* ---- Copilot chat ---- */
+[data-theme="light"] .copilot-panel {
+  background: #ffffff;
+  border-left: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- AI Investigation workspace ---- */
+[data-theme="light"] .inv-panel,
+[data-theme="light"] .inv-timeline-panel {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ---- Fix glow effects (remove in light) ---- */
+[data-theme="light"] .cc-brand-mark {
+  box-shadow: none;
+}
+[data-theme="light"] [style*="text-shadow: 0 0"] {
+  text-shadow: none !important;
+}
+
+/* ---- Generic rgba(255,255,255) -> rgba(0,0,0) in CSS ---- */
+[data-theme="light"] .card::before {
+  background: repeating-conic-gradient(rgba(0,0,0,0.01) 0% 25%, transparent 0% 50%) 0 0 / 3px 3px;
+}
+
+/* ---- Links inside content ---- */
+[data-theme="light"] a { color: var(--cyan); }
+[data-theme="light"] a:hover { color: var(--cyan-bright); }
+
+/* ---- Demo toggle area ---- */
+[data-theme="light"] #demoToggleWrap {
+  border-left-color: rgba(0,0,0,0.08) !important;
+}
+
+/* ---- Smooth transition for theme switch ---- */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+
 
 /* ============================================================
    RESET & BASE
@@ -8893,7 +9435,138 @@ function dIcon(name, size, color) {
 
 </script>
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.supabase.co https://*.atlassian.net https://*.atlassian.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.atlassian.net https://*.atlassian.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com http://61.13.214.198:*;">
-    </head>
+    <script>
+
+/* ============================================================
+   GLOBAL THEME TOGGLE — Light / Dark Mode
+   ============================================================ */
+var _currentTheme = localStorage.getItem('dacta-theme') || 'dark';
+
+function initTheme() {
+  // Apply saved theme on page load (before paint)
+  if (_currentTheme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+}
+// Run immediately
+initTheme();
+
+function toggleTheme() {
+  var html = document.documentElement;
+  // Add transition class for smooth switch
+  html.classList.add('theme-transitioning');
+
+  if (_currentTheme === 'dark') {
+    _currentTheme = 'light';
+    html.setAttribute('data-theme', 'light');
+  } else {
+    _currentTheme = 'dark';
+    html.removeAttribute('data-theme');
+  }
+
+  localStorage.setItem('dacta-theme', _currentTheme);
+
+  // Update any live Chart.js instances
+  _themeUpdateCharts();
+
+  // Update Canvas elements (SNOC topology, geo map, etc.)
+  _themeUpdateCanvases();
+
+  // Remove transition class after animation completes
+  setTimeout(function() {
+    html.classList.remove('theme-transitioning');
+  }, 350);
+}
+
+function _themeIsLight() {
+  return _currentTheme === 'light';
+}
+
+/* ---- Helper: get theme-aware colors ---- */
+function _themeColor(darkVal, lightVal) {
+  return _themeIsLight() ? lightVal : darkVal;
+}
+
+/* ---- Update Chart.js instances ---- */
+function _themeUpdateCharts() {
+  if (typeof Chart === 'undefined') return;
+  var isLight = _themeIsLight();
+
+  // Chart.js default overrides
+  Chart.defaults.color = isLight ? '#4a5568' : '#8892a4';
+  Chart.defaults.borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+
+  // Update tooltip defaults
+  var ttBg = isLight ? '#ffffff' : '#1a2235';
+  var ttTitle = isLight ? '#1a202c' : '#e8edf5';
+  var ttBody = isLight ? '#4a5568' : '#8892a4';
+  var ttBorder = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)';
+
+  // Iterate all active Chart.js instances and update
+  Object.keys(Chart.instances || {}).forEach(function(key) {
+    var chart = Chart.instances[key];
+    if (!chart) return;
+    try {
+      if (chart.options && chart.options.plugins && chart.options.plugins.tooltip) {
+        chart.options.plugins.tooltip.backgroundColor = ttBg;
+        chart.options.plugins.tooltip.titleColor = ttTitle;
+        chart.options.plugins.tooltip.bodyColor = ttBody;
+        chart.options.plugins.tooltip.borderColor = ttBorder;
+      }
+      if (chart.options && chart.options.scales) {
+        var gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+        var tickColor = isLight ? '#4a5568' : '#8892a4';
+        ['x', 'y', 'y1'].forEach(function(axis) {
+          if (chart.options.scales[axis]) {
+            if (chart.options.scales[axis].grid) {
+              chart.options.scales[axis].grid.color = gridColor;
+            }
+            if (chart.options.scales[axis].ticks) {
+              chart.options.scales[axis].ticks.color = tickColor;
+            }
+          }
+        });
+      }
+      chart.update('none');
+    } catch(e) { /* skip charts that error */ }
+  });
+}
+
+/* ---- Update Canvas-based visuals ---- */
+function _themeUpdateCanvases() {
+  // Re-initialize SNOC canvases if on SNOC page
+  if (typeof _snocInitTopoCanvas === 'function') {
+    try { _snocInitTopoCanvas(); } catch(e) {}
+  }
+  if (typeof _snocInitGeoCanvas === 'function') {
+    try { _snocInitGeoCanvas(); } catch(e) {}
+  }
+}
+
+/* ---- Theme-aware tooltip config (for new chart creation) ---- */
+function getThemeTooltipConfig() {
+  var isLight = _themeIsLight();
+  return {
+    backgroundColor: isLight ? '#ffffff' : '#1a2235',
+    titleColor: isLight ? '#1a202c' : '#e8edf5',
+    bodyColor: isLight ? '#4a5568' : '#8892a4',
+    borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)',
+    borderWidth: 1
+  };
+}
+
+function getThemeGridColor() {
+  return _themeIsLight() ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+}
+
+function getThemeTickColor() {
+  return _themeIsLight() ? '#4a5568' : '#8892a4';
+}
+
+</script>
+</head>
 <body>
 
 <!-- ============================================================
@@ -8901,6 +9574,13 @@ function dIcon(name, size, color) {
      ============================================================ -->
 <div id="loginOverlay">
   <div class="login-grid-bg"></div>
+<div style="position:absolute;top:16px;right:16px;z-index:10;">
+        <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Light/Dark Mode" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);">
+          <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+
   <div class="login-card">
     <div class="login-brand">
       <img src="" id="loginLogoImg" alt="DACTA SIEMLess" style="height:48px;width:auto;filter:drop-shadow(0 0 12px rgba(0,212,255,0.3));">
@@ -9163,6 +9843,10 @@ function dIcon(name, size, color) {
       <div class="prod-badge">PRODUCTION</div>
       <div class="topbar-right">
         <div class="topbar-time" id="topbarTime">00:00:00 SGT</div>
+        <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle Light/Dark Mode">
+          <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
         <div class="topbar-icon-btn" data-tooltip="Notifications">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           <span class="notif-badge">3</span>
@@ -10916,7 +11600,7 @@ function dIcon(name, size, color) {
 
           /* ── Bulk Deploy + Create Rule Modal Styles ────────────── */
           .bd-modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.65); backdrop-filter:blur(6px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px; }
-          .bd-modal { background:#0d1424; border:1px solid var(--border-card); border-radius:14px; width:100%; max-width:720px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.5); }
+          .bd-modal { background:var(--bg-surface); border:1px solid var(--border-card); border-radius:14px; width:100%; max-width:720px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.5); }
           .bd-modal-header { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--border-subtle); }
           .bd-modal-close { background:none; border:none; color:var(--text-muted); font-size:22px; cursor:pointer; padding:4px 8px; border-radius:6px; transition:all .15s; }
           .bd-modal-close:hover { color:var(--text-primary); background:rgba(255,255,255,0.06); }
@@ -11202,7 +11886,7 @@ function dIcon(name, size, color) {
 
                 <div class="dr-panel" id="dr-panel-builder" style="position:relative;">
           <!-- Grey overlay when no rule is loaded -->
-          <div id="drBuilderGreyMask" style="position:absolute;inset:0;background:rgba(8,12,24,0.82);backdrop-filter:blur(3px);z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;border-radius:8px;min-height:500px;">
+          <div id="drBuilderGreyMask" style="position:absolute;inset:0;background:var(--bg-overlay-mask, rgba(8,12,24,0.82));backdrop-filter:blur(3px);z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;border-radius:8px;min-height:500px;">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.25)" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
             <div style="font-size:16px;font-weight:700;color:var(--text-secondary);text-align:center;">No rule loaded in editor</div>
             <div style="font-size:12px;color:var(--text-muted);max-width:340px;text-align:center;line-height:1.6;">Click "Edit" on a rule in the Repository tab, or create a new rule to get started.</div>
@@ -11376,7 +12060,7 @@ function dIcon(name, size, color) {
                 <div class="dr-field-label">Target Client</div>
                 <div style="position:relative;">
                   <input class="filter-input" id="rbClientInput" placeholder="Type to search clients..." oninput="filterRBClients(this.value)" autocomplete="off" style="width:100%;">
-                  <div id="rbClientSuggestions" style="position:absolute;top:100%;left:0;right:0;z-index:100;background:#0d1424;border:1px solid var(--border-card);border-radius:0 0 8px 8px;display:none;max-height:200px;overflow-y:auto;"></div>
+                  <div id="rbClientSuggestions" style="position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--bg-surface);border:1px solid var(--border-card);border-radius:0 0 8px 8px;display:none;max-height:200px;overflow-y:auto;"></div>
                 </div>
                 <div id="rbSelectedClients" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"></div>
               </div>
@@ -11966,7 +12650,7 @@ function dIcon(name, size, color) {
              MODAL: BULK IMPORT RULES
              ══════════════════════════════════════════════════════════ -->
         <div id="bulkImportOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this)closeBulkImport()">
-          <div style="background:#0d1424;border:1px solid var(--border-card);border-radius:14px;width:640px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+          <div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:14px;width:640px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.5);">
             <div style="padding:18px 22px;border-bottom:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;">
               <div><div style="font-size:15px;font-weight:600;color:var(--text-primary);">Bulk Import Rules</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Import YARA or Sigma rule files</div></div>
               <button onclick="closeBulkImport()" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;">&times;</button>
@@ -24433,7 +25117,7 @@ Analyst: K. Rasmussen | 2026-02-28
           .um-matrix-edit-bar { display:none; gap:8px; align-items:center; padding:8px 0 4px 0; }
           .um-matrix-edit-bar.visible { display:flex; }
           /* Edit user modal & confirm modal shared overlay */
-          .um-overlay { display:none; position:fixed; inset:0; z-index:9000; background:rgba(8,12,24,0.82); backdrop-filter:blur(6px); align-items:center; justify-content:center; }
+          .um-overlay { display:none; position:fixed; inset:0; z-index:9000; background:var(--bg-overlay-mask, rgba(8,12,24,0.82)); backdrop-filter:blur(6px); align-items:center; justify-content:center; }
           .um-overlay.open { display:flex; }
           .um-modal-box { background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:14px; padding:28px; width:480px; max-width:95vw; max-height:88vh; overflow-y:auto; position:relative; }
           .um-confirm-box { background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:12px; padding:24px; width:380px; max-width:92vw; }
@@ -25552,7 +26236,7 @@ body.snoc-fullscreen #page-snoc {
         </div>
 
         <!-- Invite User Modal -->
-        <div id="um-invite-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(8,12,24,0.82);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+        <div id="um-invite-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--bg-overlay-mask, rgba(8,12,24,0.82));backdrop-filter:blur(6px);align-items:center;justify-content:center;">
           <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:14px;padding:28px;width:480px;max-width:95vw;max-height:88vh;overflow-y:auto;position:relative;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
               <div style="font-size:15px;font-weight:600;color:var(--text-primary);font-family:var(--font-body);">Invite User</div>
@@ -31564,7 +32248,7 @@ function openRegisterAssetModal() {
   var modal = document.createElement('div');
   modal.id = 'registerAssetModal';
   modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-  modal.innerHTML = '<div style="background:#0d1424;border:1px solid var(--border-card);border-radius:14px;width:100%;max-width:520px;box-shadow:0 24px 80px rgba(0,0,0,0.5);">' +
+  modal.innerHTML = '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:14px;width:100%;max-width:520px;box-shadow:0 24px 80px rgba(0,0,0,0.5);">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border-subtle);">' +
     '<span style="font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--text-primary);">Register New Asset</span>' +
     '<button onclick="document.getElementById(\'registerAssetModal\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;">\u00d7</button>' +
@@ -38406,7 +39090,7 @@ function initDashboardCharts() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a2235', titleColor: '#e8edf5', bodyColor: '#8892a4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 } },
+      plugins: { legend: { display: false }, tooltip: getThemeTooltipConfig() },
       scales: {
         x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9, family: "'IBM Plex Mono'" }, maxRotation: 0 } },
         y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 }, stepSize: 1 }, beginAtZero: true }
@@ -38436,7 +39120,7 @@ function initDashboardCharts() {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: true, position: 'bottom', labels: { color: '#8892a4', font: { size: 10, family: "'IBM Plex Sans'" }, boxWidth: 10, padding: 10 } },
-        tooltip: { backgroundColor: '#1a2235', titleColor: '#e8edf5', bodyColor: '#8892a4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
+        tooltip: getThemeTooltipConfig()
       },
       cutout: '68%'
     }
@@ -38539,7 +39223,7 @@ function _renderAICharts(byModel, byDay) {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { backgroundColor: '#1a2235', titleColor: '#e8edf5', bodyColor: '#8892a4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
+          tooltip: getThemeTooltipConfig()
         }, cutout: '70%'
       }
     });
@@ -38572,7 +39256,7 @@ function _renderAICharts(byModel, byDay) {
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a2235', titleColor: '#e8edf5', bodyColor: '#8892a4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 } },
+        plugins: { legend: { display: false }, tooltip: getThemeTooltipConfig() },
         scales: {
           x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 } } },
           y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 } }, beginAtZero: true }
@@ -43860,7 +44544,7 @@ document.addEventListener('keydown', (e) => {
         ctx.save();
         ctx.beginPath();
         ctx.arc(node.x, node.y, spinR, spinStart, spinEnd);
-        ctx.strokeStyle = 'rgba(0,212,255,0.25)';
+        ctx.strokeStyle = _snocCanvasLine();
         ctx.lineWidth = 4;
         ctx.lineCap = 'round';
         ctx.stroke();
@@ -47016,7 +47700,7 @@ function initClassicCharts() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a2235', titleColor: '#e8edf5', bodyColor: '#8892a4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 } },
+        plugins: { legend: { display: false }, tooltip: getThemeTooltipConfig() },
         scales: {
           x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9, family: "'IBM Plex Mono'" }, maxRotation: 0 } },
           y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 }, stepSize: 1 }, beginAtZero: true }
@@ -47049,7 +47733,7 @@ function initClassicCharts() {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: true, position: 'bottom', labels: { color: '#8892a4', font: { size: 10, family: "'IBM Plex Sans'" }, boxWidth: 10, padding: 10 } },
-          tooltip: { backgroundColor: '#1a2235', titleColor: '#e8edf5', bodyColor: '#8892a4', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
+          tooltip: getThemeTooltipConfig()
         },
         cutout: '68%'
       }
@@ -48142,7 +48826,7 @@ function wr2OpenNewEng() {
   var modal = document.createElement('div');
   modal.id = 'wrNewEngModal';
   modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-  modal.innerHTML = '<div style="background:#0d1424;border:1px solid var(--border-card);border-radius:14px;width:100%;max-width:600px;box-shadow:0 24px 80px rgba(0,0,0,0.5);">' +
+  modal.innerHTML = '<div style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:14px;width:100%;max-width:600px;box-shadow:0 24px 80px rgba(0,0,0,0.5);">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border-subtle);">' +
     '<span style="font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--text-primary);">New War Room Engagement</span>' +
     '<button onclick="document.getElementById(\'wrNewEngModal\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;padding:4px 8px;border-radius:6px;">\u00d7</button>' +
@@ -60905,6 +61589,17 @@ function _snocBuildTopoLayout(w, h) {
   return { nodes: nodes, edges: edges };
 }
 
+
+/* ---- SNOC Canvas Theme Helpers ---- */
+function _snocCanvasBg() { return _themeIsLight() ? '#f0f2f5' : '#0a0f1c'; }
+function _snocCanvasLine() { return _themeIsLight() ? 'rgba(0,136,179,0.35)' : 'rgba(0,212,255,0.25)'; }
+function _snocCanvasNodeBg() { return _themeIsLight() ? '#ffffff' : '#111827'; }
+function _snocCanvasNodeBorder() { return _themeIsLight() ? 'rgba(0,136,179,0.4)' : 'rgba(0,212,255,0.4)'; }
+function _snocCanvasText() { return _themeIsLight() ? '#1a202c' : '#e8edf5'; }
+function _snocCanvasSubtext() { return _themeIsLight() ? '#4a5568' : '#8892a4'; }
+function _snocGeoLand() { return _themeIsLight() ? '#d1d5db' : '#1a2235'; }
+function _snocGeoBorder() { return _themeIsLight() ? '#9ca3af' : '#2a3550'; }
+
 function _snocInitTopoCanvas() {
   var canvas = document.getElementById('snocTopoCanvas');
   if (!canvas) return;
@@ -61516,7 +62211,7 @@ function _snocCleanup() {
 
 <!-- GLOBAL: Add/Edit Log Source Modal (shared by Settings + Log Sources pages) -->
 <div class="lsc-modal-overlay" id="lscModalOverlayGlobal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:10000;align-items:center;justify-content:center;" onclick="if(event.target===this)lscCloseModal()">
-  <div class="lsc-modal" style="background:#0d1424;border:1px solid var(--border-card);border-radius:14px;width:520px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+  <div class="lsc-modal" style="background:var(--bg-surface);border:1px solid var(--border-card);border-radius:14px;width:520px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.5);">
     <div class="lsc-modal-header" style="padding:18px 22px;border-bottom:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;">
       <span id="lscModalTitleG" style="font-size:13px;font-weight:700;color:var(--text-primary);">Add Log Source</span>
       <button onclick="lscCloseModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px;">&times;</button>
