@@ -56515,6 +56515,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     deviceNames: [],       // device names extracted from logs (e.g. iphone, accounta)
     macAddresses: [],      // MAC addresses found in logs
     jiraCorrelation: [],   // Jira cross-ticket correlation (same rule + same host/IP + same org)
+    analystPrecedent: [],   // Closure notes/comments from resolved correlated tickets (analyst learning)
     elasticConnected: false, openctiConnected: false,
     queriesRun: 0, queryDetails: []
   };
@@ -57393,6 +57394,55 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       qDJC.status = 'error'; qDJC.hits = 0;
       console.warn('[Investigation] Jira correlation query failed: ' + _jiraResp.status);
     }
+
+    // ── Analyst Closure Text Learning: fetch comments from RESOLVED correlated tickets ──
+    var _resolvedTickets = (logs.jiraCorrelation || []).filter(function(jt) {
+      var s = (jt.status || '').toLowerCase();
+      return s === 'done' || s === 'closed' || s === 'resolved';
+    });
+    if (_resolvedTickets.length > 0) {
+      console.log('[Investigation] Fetching analyst closure notes from ' + _resolvedTickets.length + ' resolved ticket(s)...');
+      // Fetch comments from up to 5 resolved tickets in parallel (limit to avoid latency)
+      var _closurePromises = _resolvedTickets.slice(0, 5).map(function(rt) {
+        return fetch('/api/jira?action=comments&key=' + encodeURIComponent(rt.key))
+          .then(function(r) { return r.ok ? r.json() : { comments: [] }; })
+          .then(function(data) {
+            var comments = (data.comments || []);
+            // Extract meaningful closure text from comments (last 3 comments per ticket, likely resolution notes)
+            var relevantComments = comments.slice(-3).map(function(c) {
+              var body = '';
+              if (c.body && typeof c.body === 'string') {
+                body = c.body;
+              } else if (c.body && c.body.content) {
+                // ADF (Atlassian Document Format) — extract text nodes
+                body = (c.body.content || []).map(function(block) {
+                  return (block.content || []).map(function(node) {
+                    return node.text || '';
+                  }).join('');
+                }).join('\n');
+              }
+              return {
+                ticket: rt.key,
+                author: (c.author && c.author.displayName) || 'Unknown',
+                created: c.created || '',
+                text: body.substring(0, 500) // Truncate to avoid token bloat
+              };
+            }).filter(function(c) { return c.text.trim().length > 10; }); // Skip empty/trivial comments
+            return relevantComments;
+          })
+          .catch(function() { return []; });
+      });
+      try {
+        var _allClosureComments = await Promise.all(_closurePromises);
+        _allClosureComments.forEach(function(comments) {
+          comments.forEach(function(c) { logs.analystPrecedent.push(c); });
+        });
+        console.log('[Investigation] Analyst precedent: ' + logs.analystPrecedent.length + ' closure note(s) from resolved tickets');
+      } catch (apErr) {
+        console.warn('[Investigation] Analyst precedent fetch error:', apErr.message);
+      }
+    }
+
   } catch (jcErr) {
     console.warn('[Investigation] Jira correlation error:', jcErr.message);
   }
@@ -58592,6 +58642,22 @@ async function runAIInvestigation(ticketKey, issueData) {
   }
   if ((elasticLogs.jiraCorrelation || []).length > 0) {
     _llmAlertContext.jira_correlated_ticket_count = elasticLogs.jiraCorrelation.length;
+  }
+
+  // Inject analyst precedent from resolved correlated tickets
+  if ((elasticLogs.analystPrecedent || []).length > 0) {
+    _llmAlertContext.analyst_precedent = {
+      source: 'Resolved correlated Jira tickets',
+      count: elasticLogs.analystPrecedent.length,
+      notes: elasticLogs.analystPrecedent.map(function(ap) {
+        return {
+          ticket: ap.ticket,
+          analyst: ap.author,
+          note: ap.text
+        };
+      })
+    };
+    console.log('[LLM Investigation] Analyst precedent injected: ' + elasticLogs.analystPrecedent.length + ' closure note(s) from resolved tickets');
   }
 
   // Process each round

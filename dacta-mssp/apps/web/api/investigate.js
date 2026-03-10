@@ -153,6 +153,14 @@ const INVESTIGATOR_PROMPT = `You are a senior SOC forensic investigator at DACTA
 - Reference the playbook's false positive guidance when evaluating whether activity is benign.
 - The playbook's escalation criteria should inform your confidence and recommendation.
 
+## Analyst Precedent Learning
+- If an "Analyst Precedent" section is provided, it contains closure notes from previous analysts who resolved similar correlated alerts.
+- These notes reveal how experienced analysts handled the same detection rule on the same host/IP — pay close attention to their reasoning.
+- If multiple prior analysts concluded a similar alert was a false positive (e.g., scheduled scan, expected admin activity), weight your verdict accordingly but still verify the current instance.
+- If prior closures indicate this is a known recurring true positive, escalate with higher confidence.
+- Reference specific analyst notes in your findings when they are relevant to your verdict (e.g., "Previous analyst [ticket] noted this is a scheduled scan — current activity matches the same pattern").
+- Never copy-paste analyst notes as your own findings — synthesize them into your investigation narrative.
+
 ## Tool Usage Strategy
 - Start with the alert context and extract IOCs (IPs, hashes, domains, hostnames, processes)
 - Query Elastic SIEM using the SPECIFIC INDEX PATTERNS provided in the alert context (never use generic "logs-*")
@@ -1517,6 +1525,21 @@ ${(() => {
     lines.push('\n**Containment Steps (if confirmed threat):**');
     pb.containment_steps.forEach((s, i) => lines.push((i+1) + '. ' + (typeof s === 'string' ? s : JSON.stringify(s))));
   }
+  return lines.join('\n');
+})()}
+
+${(() => {
+  const ap = alert_context.analyst_precedent;
+  if (!ap || !ap.notes || ap.notes.length === 0) return '';
+  let lines = ['### Analyst Precedent (from ' + ap.count + ' resolved correlated ticket(s))'];
+  lines.push('Previous analysts have resolved similar alerts. Use their closure notes as context — they may reveal known false positives, expected behavior, or established remediation patterns:');
+  ap.notes.forEach((n, i) => {
+    lines.push('');
+    lines.push('**[' + n.ticket + ']** (analyst: ' + n.analyst + ')');
+    lines.push(n.note);
+  });
+  lines.push('');
+  lines.push('IMPORTANT: Analyst precedent is informational context. If prior analysts closed similar alerts as false positives, strongly consider whether the current alert matches the same pattern. However, do NOT blindly follow precedent — always verify against current evidence.');
   return lines.join('\n');
 })()}
 
