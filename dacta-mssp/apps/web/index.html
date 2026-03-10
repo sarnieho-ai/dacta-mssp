@@ -51846,6 +51846,9 @@ function _inferInvestigationSourceRelevance(issueData, iocs, techniques) {
   if (/palo alto|pan-os|panw|\bpan\b/.test(lc)) addVendor('paloalto');
   if (/imperva|incapsula|\bwaf\b/.test(lc)) addVendor('imperva');
   if (/crowdstrike|falcon/.test(lc)) addVendor('crowdstrike');
+  if (/heimdal/.test(lc)) addVendor('heimdal');
+  if (/sophos/.test(lc)) addVendor('sophos');
+  if (/sentinelone|sentinel one/.test(lc)) addVendor('sentinelone');
 
   var techIds = (techniques || []).map(function(t) { return ((t && t.id) || '').toUpperCase(); }).join(' ');
   var privateIpRegex = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.)/;
@@ -56554,7 +56557,10 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   var _hasCSCapableEDR = _hasEDR && _isCrowdStrikeEDR;
   var _effectiveHasCSCapableEDR = _hasCSCapableEDR && !!_sourceRelevance.endpoint;
   // Any real EDR vendor — enables EDR telemetry recognition in verdicts
-  var _effectiveHasRealEDR = _isRealEDRVendor && !!_sourceRelevance.endpoint;
+  // Note: _effectiveHasRealEDR is NOT gated by _sourceRelevance.endpoint because
+  // an org with real EDR has endpoint capability regardless of the alert type.
+  // Endpoint-specific queries are still gated by _sourceRelevance.endpoint below.
+  var _effectiveHasRealEDR = _isRealEDRVendor;
   var _edrVendorLabel = _edrConnector ? (_edrConnector.vendor || _edrConnector.display_name || 'EDR') : 'EDR';
   console.log('[Investigation] Org: ' + namespace + ' | mode=' + _sourceRelevance.mode + ' | EDR: ' + _hasEDR + ' | RealEDR: ' + _effectiveHasRealEDR + ' | Vendor: ' + _edrVendorLabel + ' | CS-capable: ' + _effectiveHasCSCapableEDR + ' | Firewall: ' + _hasFirewall + ' | Relevant firewall connectors: ' + (_scopedFwConnectors.map(function(c) { return c.vendor || c.display_name || 'firewall'; }).join(', ') || 'none'));
 
@@ -58088,7 +58094,7 @@ async function runAIInvestigation(ticketKey, issueData) {
   var _invEdrVendorLC = _invEdrConn ? (_invEdrConn.vendor || '').toLowerCase() : '';
   // Known EDR vendors that provide endpoint telemetry (add new vendors here)
   var _knownEDRVendors = ['crowdstrike', 'falcon', 'heimdal', 'sophos', 'sentinelone', 'carbon black', 'cylance', 'cortex', 'trellix', 'trend micro', 'kaspersky', 'eset', 'bitdefender', 'malwarebytes', 'cybereason', 'elastic defend', 'microsoft defender', 'withsecure'];
-  var _invIsRealEDR = _invHasEDR && _knownEDRVendors.some(function(v) { return _invEdrVendorLC.includes(v); }) && !!_invSourceRelevance.endpoint;
+  var _invIsRealEDR = _invHasEDR && _knownEDRVendors.some(function(v) { return _invEdrVendorLC.includes(v); });
   var _invHasCSEDR = _invHasEDR && (_invEdrVendorLC.includes('crowdstrike') || _invEdrVendorLC.includes('falcon')) && !!_invSourceRelevance.endpoint;
   var _invEdrVendorLabel = _invEdrConn ? (_invEdrConn.vendor || _invEdrConn.display_name || 'EDR') : 'EDR';
 
