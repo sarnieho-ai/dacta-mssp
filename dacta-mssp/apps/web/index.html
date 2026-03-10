@@ -42155,6 +42155,11 @@ async function deleteClient(id) {
 }
 
 function navigate(page) {
+  if (page !== 'investigation' && window._currentInvestigationKey) {
+    console.log('[Investigation] Clearing active investigation context:', window._currentInvestigationKey, '→ page', page);
+    window._currentInvestigationKey = null;
+  }
+
   // Cancel running canvas animations when leaving dashboard
   if (typeof ccAnimId !== 'undefined' && ccAnimId) { cancelAnimationFrame(ccAnimId); ccAnimId = null; }
   if (typeof geoMapAnimFrames !== 'undefined') { Object.keys(geoMapAnimFrames).forEach(function(k) { if (geoMapAnimFrames[k]) { cancelAnimationFrame(geoMapAnimFrames[k]); geoMapAnimFrames[k] = null; } }); }
@@ -50425,19 +50430,20 @@ function escToggleSource() {
    ============================================================== */
 function sendToCopilot() {
   if (!_currentInvestigationKey) { showToast('No investigation open', 'warn'); return; }
+  var ticketKey = _currentInvestigationKey;
   // Store ticket context for copilot
   window._copilotContext = {
-    ticketKey: _currentInvestigationKey,
+    ticketKey: ticketKey,
     fromInvestigation: true
   };
-  showToast('Sending ' + _currentInvestigationKey + ' context to Copilot...', 'info');
+  showToast('Sending ' + ticketKey + ' context to Copilot...', 'info');
   setTimeout(function() {
     navigate('copilot');
     // Pre-fill copilot input with context
     setTimeout(function() {
       var input = document.querySelector('#page-copilot textarea, #page-copilot input[type="text"], .copilot-input');
       if (input) {
-        input.value = 'Investigate ' + _currentInvestigationKey + ' — provide additional analysis on the AI investigation findings.';
+        input.value = 'Investigate ' + ticketKey + ' — provide additional analysis on the AI investigation findings.';
         input.focus();
         input.dispatchEvent(new Event('input', { bubbles: true }));
       }
@@ -51831,7 +51837,7 @@ function _normalizeInvestigationVendor(name) {
 }
 
 function _inferInvestigationSourceRelevance(issueData, iocs, techniques) {
-  var text = _extractIssueInvestigationText(issueData);
+  var text = _extractIssueInvestigationText(issueData).replace(/https?:\/\/\S+/gi, ' ');
   var lc = text.toLowerCase();
   var preferredVendors = [];
   function addVendor(v) { if (preferredVendors.indexOf(v) === -1) preferredVendors.push(v); }
@@ -51846,13 +51852,13 @@ function _inferInvestigationSourceRelevance(issueData, iocs, techniques) {
   var hasPrivateIps = (iocs && iocs.ips || []).some(function(ip) { return privateIpRegex.test(ip || ''); });
   var hasPublicIps = (iocs && iocs.ips || []).some(function(ip) { return ip && !privateIpRegex.test(ip); });
 
-  var endpoint = /\bedr\b|endpoint|process|powershell|cmd\.exe|rundll32|wscript|mshta|registry|quarantine|sha256|hash|child process|parent process|hostname|host\.hostname|file write|execution|lateral movement|credential|logon|login/i.test(lc) || /(T1059|T1055|T1547|T1110|T1003|T1021|T1105|T1562|T1053)/.test(techIds);
-  var web = /\bwaf\b|imperva|http |https |url|uri|web attack|sql injection|sqli|xss|path traversal|user-agent|referrer|cdn|reverse proxy|web server|nginx|apache|origin request/i.test(lc);
-  var network = /firewall|fortigate|fortinet|palo alto|network|traffic|connection|port\b|dns|proxy|allow|deny|drop|blocked|source ip|destination ip|delivery optimization|7680|east-west/i.test(lc) || ((hasPrivateIps || hasPublicIps) && !web && !endpoint);
+  var endpoint = /\bedr\b|endpoint|process|powershell|cmd\.exe|rundll32|wscript|mshta|registry|quarantine|sha256|hash|child process|parent process|host\.hostname|file write|execution|lateral movement|credential|logon|login/i.test(lc) || /(T1059|T1055|T1547|T1110|T1003|T1021|T1105|T1562|T1053)/.test(techIds);
+  var web = /\bwaf\b|imperva|web attack|sql injection|sqli|xss|path traversal|user-agent|referrer|cdn|reverse proxy|web server|nginx|apache|origin request/i.test(lc);
+  var network = /firewall|fortigate|fortinet|palo alto|network|traffic|connection|port\b|port scan|horizontal port scan|dns|proxy|allow|deny|drop|blocked|fully blocked|source ip|destination ip|observer hostname|delivery optimization|7680|east-west/i.test(lc) || ((hasPrivateIps || hasPublicIps) && !web && !endpoint);
 
-  if (preferredVendors.indexOf('crowdstrike') !== -1) endpoint = true;
-  if (preferredVendors.indexOf('imperva') !== -1) web = true;
-  if (preferredVendors.indexOf('fortinet') !== -1 || preferredVendors.indexOf('paloalto') !== -1) network = true;
+  if (preferredVendors.indexOf('crowdstrike') !== -1) { endpoint = true; web = false; }
+  if (preferredVendors.indexOf('imperva') !== -1) { web = true; endpoint = false; }
+  if (preferredVendors.indexOf('fortinet') !== -1 || preferredVendors.indexOf('paloalto') !== -1) { network = true; web = false; }
   if (web) endpoint = false;
 
   var mode = web ? 'web' : endpoint ? 'endpoint' : network ? 'network' : 'generic';
@@ -56536,14 +56542,38 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   var _allFwConnectors = getOrgConnectors(namespace, 'firewall'); // ALL firewall connectors (Palo Alto + FortiGate + etc)
   var _relevantFwConnectors = _getRelevantOrgConnectors(namespace, 'firewall', _sourceRelevance);
   var _effectiveFwConnectors = _relevantFwConnectors.length > 0 ? _relevantFwConnectors : (_sourceRelevance.generic ? _allFwConnectors : []);
-  var _effectiveFwConnector = _effectiveFwConnectors[0] || _fwConnector || null;
+  var _scopedFwConnectors = _effectiveFwConnectors.length > 0 ? _effectiveFwConnectors : (_sourceRelevance.generic && _fwConnector ? [_fwConnector] : []);
+  var _effectiveFwConnector = _scopedFwConnectors[0] || null;
   // Determine if this is a CrowdStrike EDR (vs Microsoft/other identity-only EDR)
   var _edrVendorLower = _edrConnector ? (_edrConnector.vendor || '').toLowerCase() : '';
   var _isCrowdStrikeEDR = _edrVendorLower.includes('crowdstrike') || _edrVendorLower.includes('falcon');
   // If EDR connector exists but is NOT CrowdStrike (e.g. Microsoft M365/Entra ID), treat as no CS-capable EDR
   var _hasCSCapableEDR = _hasEDR && _isCrowdStrikeEDR;
   var _effectiveHasCSCapableEDR = _hasCSCapableEDR && !!_sourceRelevance.endpoint;
-  console.log('[Investigation] Org: ' + namespace + ' | mode=' + _sourceRelevance.mode + ' | EDR: ' + _hasEDR + ' | CS-capable: ' + _effectiveHasCSCapableEDR + ' | EDR vendor: ' + _edrVendorLower + ' | Firewall: ' + _hasFirewall + ' | Relevant firewall connectors: ' + (_effectiveFwConnectors.map(function(c) { return c.vendor || c.display_name || 'firewall'; }).join(', ') || 'none'));
+  console.log('[Investigation] Org: ' + namespace + ' | mode=' + _sourceRelevance.mode + ' | EDR: ' + _hasEDR + ' | CS-capable: ' + _effectiveHasCSCapableEDR + ' | EDR vendor: ' + _edrVendorLower + ' | Firewall: ' + _hasFirewall + ' | Relevant firewall connectors: ' + (_scopedFwConnectors.map(function(c) { return c.vendor || c.display_name || 'firewall'; }).join(', ') || 'none'));
+
+  var _preferredFirewallVendors = (_sourceRelevance.preferredVendors || []).filter(function(v) { return v === 'fortinet' || v === 'paloalto' || v === 'imperva'; });
+  if ((_sourceRelevance.network || _sourceRelevance.web) && _preferredFirewallVendors.length > 0 && _scopedFwConnectors.length === 0) {
+    var _expectedFirewall = _preferredFirewallVendors.join(', ');
+    logs.queryDetails.push({
+      name: 'Relevant Firewall Scope Check',
+      index: 'ORG_CONNECTORS',
+      query: 'preferred vendor=' + _expectedFirewall,
+      status: 'unclear',
+      hits: 0,
+      note: 'No matching enabled firewall connector found. Skipping unrelated vendors to avoid skewing the verdict.'
+    });
+    logs.networkConnections.push({
+      status: 'UNCLEAR',
+      query: 'Relevant firewall source unavailable',
+      result: 'Ticket context points to ' + _expectedFirewall + ' telemetry, but no matching enabled firewall connector or index is configured for this org. Unrelated firewall vendors were intentionally skipped. Analyst should confirm the correct log source.',
+      ip: (iocs.ips || []).join(', ') || 'N/A',
+      count: 0,
+      live: true,
+      actionType: 'RELEVANT_FIREWALL_SOURCE_MISSING',
+      evidenceSource: 'UNCLEAR'
+    });
+  }
 
   // ── Direct Vendor API Queries (when connector has api_endpoint configured) ──
   // If the EDR connector has a direct API endpoint, query the vendor API in addition to Elastic
@@ -56636,15 +56666,15 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
 
   // ── Direct Firewall API Queries ──
   var _fwHasDirectAPI = false;
-  if (_effectiveFwConnectors && _effectiveFwConnectors.length) {
-    _effectiveFwConnectors.forEach(function(fwc) {
+  if (_scopedFwConnectors && _scopedFwConnectors.length) {
+    _scopedFwConnectors.forEach(function(fwc) {
       if (fwc.api_endpoint) _fwHasDirectAPI = true;
     });
   }
   if (_fwHasDirectAPI) {
     try {
-      for (var fwi = 0; fwi < _effectiveFwConnectors.length; fwi++) {
-        var fwc = _effectiveFwConnectors[fwi];
+      for (var fwi = 0; fwi < _scopedFwConnectors.length; fwi++) {
+        var fwc = _scopedFwConnectors[fwi];
         if (!fwc.api_endpoint) continue;
         var fwVendor = (fwc.vendor || '').toLowerCase();
         var fwOrgId = _orgConfig ? _orgConfig.id : null;
@@ -56794,7 +56824,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
           var ip = alertIPs[ni];
           var isPrivate = ip.startsWith('10.') || ip.startsWith('172.') || ip.startsWith('192.168.') || ip.startsWith('127.');
           // Connector-aware firewall index resolution (uses resolveFirewallIndexes helper)
-          var netIndex = resolveFirewallIndexes(namespace, _effectiveFwConnectors.length > 0 ? _effectiveFwConnectors : (_fwConnector ? [_fwConnector] : []));
+          var netIndex = resolveFirewallIndexes(namespace, _scopedFwConnectors);
           var netQ = { size: 5, query: { bool: { must: [{ range: { '@timestamp': { gte: timeFrom, lte: timeTo } } }], should: [{ match: { 'destination.ip': ip } }, { match: { 'source.ip': ip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
           var qD3 = { name: 'Network: ' + ip, index: netIndex, query: 'dst.ip:"' + ip + '" ±5min', status: 'running' };
           logs.queryDetails.push(qD3); logs.queriesRun++;
@@ -56883,7 +56913,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     var _deepDestIPs = new Set(); // Collect unique dest IPs for TIP pivot later
     if (allIPs.length > 0) {
       // Use resolveFirewallIndexes to get correct index from actual connector data
-      var fwConnsForResolve = _effectiveFwConnectors && _effectiveFwConnectors.length > 0 ? _effectiveFwConnectors : (_fwConnector ? [_fwConnector] : []);
+      var fwConnsForResolve = _scopedFwConnectors;
       var fwIndex = resolveFirewallIndexes(namespace, fwConnsForResolve);
       for (var fi = 0; fi < allIPs.length; fi++) {
         var fip = allIPs[fi];
@@ -57106,7 +57136,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   // index is actively ingesting (health check) before drawing any conclusions from zero results.
   if (_hasFirewall) {
     var allTicketIPs = (iocs.ips || []);
-    var fwConnectorsToQuery = _effectiveFwConnectors.length > 0 ? _effectiveFwConnectors : (_fwConnector ? [_fwConnector] : []);
+    var fwConnectorsToQuery = _scopedFwConnectors;
     var totalFwBlocksFound = 0;
     var queriedIndexes = [];
     var healthyIndexes = []; // indexes that have data (connector is ingesting)
