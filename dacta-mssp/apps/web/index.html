@@ -56516,9 +56516,22 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     macAddresses: [],      // MAC addresses found in logs
     jiraCorrelation: [],   // Jira cross-ticket correlation (same rule + same host/IP + same org)
     analystPrecedent: [],   // Closure notes/comments from resolved correlated tickets (analyst learning)
+    analystLearnings: [],   // structured learning from closed Jira tickets for LLM context
     elasticConnected: false, openctiConnected: false,
     queriesRun: 0, queryDetails: []
   };
+
+  function markQueryResult(qd, state, hits, summary, meta) {
+    if (!qd) return qd;
+    qd.status = state;
+    if (hits !== undefined) qd.hits = hits;
+    if (summary !== undefined) qd.result_summary = summary;
+    qd.result_state = state;
+    if (meta && typeof meta === 'object') {
+      Object.keys(meta).forEach(function(k) { qd[k] = meta[k]; });
+    }
+    return qd;
+  }
 
   var f = issueData.fields || {};
   var org = '';
@@ -57084,13 +57097,18 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
           if (dtipR && dtipR.data && dtipR.data.stixCyberObservables) {
             logs.openctiConnected = true;
             var dtEdges = dtipR.data.stixCyberObservables.edges || [];
-            qDTIP.status = 'success'; qDTIP.hits = dtEdges.length;
+            var dtFound = dtEdges.length > 0;
+            markQueryResult(qDTIP, dtFound ? 'success' : 'clean', dtEdges.length, dtFound ? ('Threat intel match found for ' + dtip) : ('Lookup completed — no threat intel match for ' + dtip), {
+              evidenceType: 'THREAT_INTEL',
+              semanticOutcome: dtFound ? 'positive_match' : 'clean_negative',
+              dataCoverage: 'checked'
+            });
             var dtLabels = [];
             dtEdges.forEach(function(e) { (e.node.objectLabel || []).forEach(function(l) { if (!dtLabels.includes(l.value)) dtLabels.push(l.value); }); });
-            logs.destTipResults.push({ type: 'IP', value: dtip, found: dtEdges.length > 0, labels: dtLabels, source: dtEdges.length > 0 ? ((dtEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '', pivotOrigin: 'firewall_dest_ip' });
+            logs.destTipResults.push({ type: 'IP', value: dtip, found: dtFound, labels: dtLabels, source: dtFound ? ((dtEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '', pivotOrigin: 'firewall_dest_ip' });
             // Also add to main openctiResults for unified display
-            logs.openctiResults.push({ type: 'IP (Dest Pivot)', value: dtip, found: dtEdges.length > 0, labels: dtLabels, source: dtEdges.length > 0 ? ((dtEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '', pivotOrigin: 'firewall_dest_ip' });
-          } else { qDTIP.status = 'error'; }
+            logs.openctiResults.push({ type: 'IP (Dest Pivot)', value: dtip, found: dtFound, labels: dtLabels, source: dtFound ? ((dtEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '', pivotOrigin: 'firewall_dest_ip' });
+          } else { markQueryResult(qDTIP, 'error', 0, 'Threat intel lookup failed — verify DACTA TIP connectivity', { evidenceType: 'THREAT_INTEL', semanticOutcome: 'query_failed', dataCoverage: 'unknown' }); }
         }
       }
 
@@ -57204,9 +57222,12 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         var fwBlockResult = await queryElastic('search', fwIdx, fwBlockQ);
         if (fwBlockResult && fwBlockResult.hits) {
           logs.elasticConnected = true;
-          qDFBlock.status = indexHealthy ? 'success' : 'unclear';
-          qDFBlock.hits = fwBlockResult.hits.total ? fwBlockResult.hits.total.value : 0;
           var blockHits = fwBlockResult.hits.hits || [];
+          markQueryResult(qDFBlock, blockHits.length > 0 ? 'success' : (indexHealthy ? 'checked_clear' : 'unclear'), fwBlockResult.hits.total ? fwBlockResult.hits.total.value : 0, blockHits.length > 0 ? ('Firewall block/deny hits found in ' + vendorLabel) : (indexHealthy ? ('Firewall connector checked — no block/deny hits in ' + vendorLabel) : ('Firewall connector has no telemetry in ' + vendorLabel)), {
+            evidenceType: 'FIREWALL_BLOCK',
+            semanticOutcome: blockHits.length > 0 ? 'positive_match' : (indexHealthy ? 'checked_clear' : 'telemetry_unavailable'),
+            dataCoverage: indexHealthy ? 'checked' : 'unavailable'
+          });
           if (blockHits.length > 0) {
             totalFwBlocksFound += blockHits.length;
             blockHits.forEach(function(hit) {
@@ -57249,6 +57270,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
           } else {
             // Index is empty/offline — zero results are MEANINGLESS
             qDFBlock.note = 'Index has 0 total documents in 7-day window — connector may be offline or log ingestion not configured for this org';
+            qDFBlock.result_summary = 'Firewall connector has no telemetry in the selected window — analyst verification required';
             logs.networkConnections.push({
               status: 'UNCLEAR',
               query: 'Firewall BLOCK/DENY [' + vendorLabel + ']: (7d)',
@@ -57261,7 +57283,11 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
             });
           }
         } else {
-          qDFBlock.status = 'error';
+          markQueryResult(qDFBlock, 'error', 0, 'Firewall query failed — connector unreachable or index missing', {
+            evidenceType: 'FIREWALL_BLOCK',
+            semanticOutcome: 'query_failed',
+            dataCoverage: 'unknown'
+          });
           qDFBlock.note = 'Query failed — ' + fwIdx + ' may not exist or is unreachable';
           offlineIndexes.push(vendorLabel + ' (query error)');
         }
@@ -57283,11 +57309,16 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     if (ocR && ocR.data && ocR.data.stixCyberObservables) {
       logs.openctiConnected = true;
       var oEdges = ocR.data.stixCyberObservables.edges || [];
-      qDO.status = 'success'; qDO.hits = oEdges.length;
+      var oFound = oEdges.length > 0;
+      markQueryResult(qDO, oFound ? 'success' : 'clean', oEdges.length, oFound ? ('Threat intel match found for ' + lip) : ('Lookup completed — no threat intel match for ' + lip), {
+        evidenceType: 'THREAT_INTEL',
+        semanticOutcome: oFound ? 'positive_match' : 'clean_negative',
+        dataCoverage: 'checked'
+      });
       var oLabels = [];
       oEdges.forEach(function(e) { (e.node.objectLabel || []).forEach(function(l) { if (!oLabels.includes(l.value)) oLabels.push(l.value); }); });
-      logs.openctiResults.push({ type: 'IP', value: lip, found: oEdges.length > 0, labels: oLabels, source: oEdges.length > 0 ? ((oEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '' });
-    } else { qDO.status = 'error'; }
+      logs.openctiResults.push({ type: 'IP', value: lip, found: oFound, labels: oLabels, source: oFound ? ((oEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '' });
+    } else { markQueryResult(qDO, 'error', 0, 'Threat intel lookup failed — verify DACTA TIP connectivity', { evidenceType: 'THREAT_INTEL', semanticOutcome: 'query_failed', dataCoverage: 'unknown' }); }
   }
 
   // Hash lookups in DACTA TIP
@@ -57301,11 +57332,16 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     if (hcR && hcR.data && hcR.data.stixCyberObservables) {
       logs.openctiConnected = true;
       var hEdges = hcR.data.stixCyberObservables.edges || [];
-      qDH.status = 'success'; qDH.hits = hEdges.length;
+      var hFound = hEdges.length > 0;
+      markQueryResult(qDH, hFound ? 'success' : 'clean', hEdges.length, hFound ? ('Threat intel hash match found for ' + lh.substring(0, 12) + '...') : 'Lookup completed — no threat intel match for hash', {
+        evidenceType: 'THREAT_INTEL',
+        semanticOutcome: hFound ? 'positive_match' : 'clean_negative',
+        dataCoverage: 'checked'
+      });
       var hLbls = [];
       hEdges.forEach(function(e) { (e.node.objectLabel || []).forEach(function(l) { if (!hLbls.includes(l.value)) hLbls.push(l.value); }); });
-      logs.openctiResults.push({ type: 'Hash', value: lh, found: hEdges.length > 0, labels: hLbls, source: hEdges.length > 0 ? ((hEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '' });
-    } else { qDH.status = 'error'; }
+      logs.openctiResults.push({ type: 'Hash', value: lh, found: hFound, labels: hLbls, source: hFound ? ((hEdges[0].node.createdBy || {}).name || 'DACTA TIP') : '' });
+    } else { markQueryResult(qDH, 'error', 0, 'Threat intel hash lookup failed — verify DACTA TIP connectivity', { evidenceType: 'THREAT_INTEL', semanticOutcome: 'query_failed', dataCoverage: 'unknown' }); }
   }
 
   // ── Global: merge device names and MAC addresses from IOCs into logs (applies to all paths) ──
@@ -57362,13 +57398,18 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     logs.queryDetails.push(qDJC); logs.queriesRun++;
     console.log('[Investigation] Jira correlation JQL: ' + _corrJQL);
 
-    var _jiraResp = await fetch('/api/jira?action=search&jql=' + encodeURIComponent(_corrJQL) + '&maxResults=20&fields=key,summary,priority,status,created,updated,customfield_10002,assignee');
+    var _jiraResp = await fetch('/api/jira?action=search&jql=' + encodeURIComponent(_corrJQL) + '&maxResults=20&fields=key,summary,priority,status,created,updated,resolution,resolutiondate,customfield_10002,assignee');
     if (_jiraResp.ok) {
       var _jiraData = await _jiraResp.json();
       var _jiraIssues = (_jiraData.issues || []);
-      qDJC.status = 'success'; qDJC.hits = _jiraIssues.length;
+      markQueryResult(qDJC, 'success', _jiraIssues.length, _jiraIssues.length > 0 ? ('Found ' + _jiraIssues.length + ' related Jira tickets') : 'No related Jira tickets found', {
+        evidenceType: 'JIRA_CORRELATION',
+        semanticOutcome: _jiraIssues.length > 0 ? 'positive_match' : 'checked_clear',
+        dataCoverage: 'checked'
+      });
       console.log('[Investigation] Jira correlation found ' + _jiraIssues.length + ' related tickets');
 
+      var _learningCandidates = [];
       // Filter: ensure tickets actually share an org (via customfield_10002) if possible
       _jiraIssues.forEach(function(iss) {
         var issFields = iss.fields || {};
@@ -57378,69 +57419,108 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         }
         // Only include if same org (or org couldn't be determined)
         if (!_orgField || !issOrg || issOrg.toLowerCase() === _orgField.toLowerCase()) {
-          logs.jiraCorrelation.push({
+          var _jtEntry = {
             key: iss.key,
             summary: issFields.summary || '',
             status: issFields.status ? issFields.status.name : 'Unknown',
             priority: issFields.priority ? issFields.priority.name : 'Unknown',
             created: issFields.created || '',
             updated: issFields.updated || '',
+            resolution: issFields.resolution ? issFields.resolution.name : '',
+            resolutionDate: issFields.resolutiondate || '',
             assignee: issFields.assignee ? issFields.assignee.displayName : 'Unassigned',
             org: issOrg
-          });
+          };
+          logs.jiraCorrelation.push(_jtEntry);
+          if (/closed|resolved|done|completed/i.test(_jtEntry.status) || _jtEntry.resolution) {
+            _learningCandidates.push(_jtEntry);
+          }
         }
       });
-    } else {
-      qDJC.status = 'error'; qDJC.hits = 0;
-      console.warn('[Investigation] Jira correlation query failed: ' + _jiraResp.status);
-    }
 
-    // ── Analyst Closure Text Learning: fetch comments from RESOLVED correlated tickets ──
-    var _resolvedTickets = (logs.jiraCorrelation || []).filter(function(jt) {
-      var s = (jt.status || '').toLowerCase();
-      return s === 'done' || s === 'closed' || s === 'resolved';
-    });
-    if (_resolvedTickets.length > 0) {
-      console.log('[Investigation] Fetching analyst closure notes from ' + _resolvedTickets.length + ' resolved ticket(s)...');
-      // Fetch comments from up to 5 resolved tickets in parallel (limit to avoid latency)
-      var _closurePromises = _resolvedTickets.slice(0, 5).map(function(rt) {
-        return fetch('/api/jira?action=comments&key=' + encodeURIComponent(rt.key))
-          .then(function(r) { return r.ok ? r.json() : { comments: [] }; })
-          .then(function(data) {
-            var comments = (data.comments || []);
-            // Extract meaningful closure text from comments (last 3 comments per ticket, likely resolution notes)
-            var relevantComments = comments.slice(-3).map(function(c) {
-              var body = '';
-              if (c.body && typeof c.body === 'string') {
-                body = c.body;
-              } else if (c.body && c.body.content) {
-                // ADF (Atlassian Document Format) — extract text nodes
-                body = (c.body.content || []).map(function(block) {
-                  return (block.content || []).map(function(node) {
-                    return node.text || '';
-                  }).join('');
-                }).join('\n');
-              }
-              return {
-                ticket: rt.key,
-                author: (c.author && c.author.displayName) || 'Unknown',
-                created: c.created || '',
-                text: body.substring(0, 500) // Truncate to avoid token bloat
-              };
-            }).filter(function(c) { return c.text.trim().length > 10; }); // Skip empty/trivial comments
-            return relevantComments;
-          })
-          .catch(function() { return []; });
-      });
-      try {
-        var _allClosureComments = await Promise.all(_closurePromises);
-        _allClosureComments.forEach(function(comments) {
-          comments.forEach(function(c) { logs.analystPrecedent.push(c); });
-        });
-        console.log('[Investigation] Analyst precedent: ' + logs.analystPrecedent.length + ' closure note(s) from resolved tickets');
-      } catch (apErr) {
-        console.warn('[Investigation] Analyst precedent fetch error:', apErr.message);
+      if (_learningCandidates.length > 0) {
+        var _learnKeys = _learningCandidates.slice(0, 6).map(function(jt) { return jt.key; });
+        var qDJL = { name: 'Jira Analyst Learning', index: 'Jira (DAC)', query: _learnKeys.join(', '), status: 'running' };
+        logs.queryDetails.push(qDJL); logs.queriesRun++;
+        try {
+          var _learningResp = await fetch('/api/jira?action=learning&keys=' + encodeURIComponent(_learnKeys.join(',')));
+          if (_learningResp.ok) {
+            var _learningData = await _learningResp.json();
+            var _learned = _learningData.learning || [];
+            logs.analystLearnings = _learned;
+            markQueryResult(qDJL, 'success', _learned.length, _learned.length > 0 ? ('Loaded analyst learnings from ' + _learned.length + ' closed tickets') : 'No analyst learning notes found in related closed tickets', {
+              evidenceType: 'JIRA_ANALYST_LEARNING',
+              semanticOutcome: _learned.length > 0 ? 'positive_match' : 'checked_clear',
+              dataCoverage: 'checked'
+            });
+          } else {
+            markQueryResult(qDJL, 'error', 0, 'Failed to load analyst learnings from closed Jira tickets', {
+              evidenceType: 'JIRA_ANALYST_LEARNING',
+              semanticOutcome: 'query_failed',
+              dataCoverage: 'unknown'
+            });
+          }
+        } catch (_learnErr) {
+          console.warn('[Investigation] Jira analyst learning error:', _learnErr.message);
+          markQueryResult(qDJL, 'error', 0, 'Failed to load analyst learnings from closed Jira tickets', {
+            evidenceType: 'JIRA_ANALYST_LEARNING',
+            semanticOutcome: 'query_failed',
+            dataCoverage: 'unknown'
+          });
+        }
       }
+
+      // Keep analyst precedent comments for the existing precedent UI/LLM path
+      var _resolvedTickets = (logs.jiraCorrelation || []).filter(function(jt) {
+        var s = (jt.status || '').toLowerCase();
+        return s === 'done' || s === 'closed' || s === 'resolved';
+      });
+      if (_resolvedTickets.length > 0) {
+        console.log('[Investigation] Fetching analyst closure notes from ' + _resolvedTickets.length + ' resolved ticket(s)...');
+        var _closurePromises = _resolvedTickets.slice(0, 5).map(function(rt) {
+          return fetch('/api/jira?action=comments&key=' + encodeURIComponent(rt.key))
+            .then(function(r) { return r.ok ? r.json() : { comments: [] }; })
+            .then(function(data) {
+              var comments = (data.comments || []);
+              var relevantComments = comments.slice(-3).map(function(c) {
+                var body = '';
+                if (c.body && typeof c.body === 'string') {
+                  body = c.body;
+                } else if (c.body && c.body.content) {
+                  body = (c.body.content || []).map(function(block) {
+                    return (block.content || []).map(function(node) {
+                      return node.text || '';
+                    }).join('');
+                  }).join('\n');
+                }
+                return {
+                  ticket: rt.key,
+                  author: (c.author && c.author.displayName) || 'Unknown',
+                  created: c.created || '',
+                  text: body.substring(0, 500)
+                };
+              }).filter(function(c) { return c.text.trim().length > 10; });
+              return relevantComments;
+            })
+            .catch(function() { return []; });
+        });
+        try {
+          var _allClosureComments = await Promise.all(_closurePromises);
+          _allClosureComments.forEach(function(comments) {
+            comments.forEach(function(c) { logs.analystPrecedent.push(c); });
+          });
+          console.log('[Investigation] Analyst precedent: ' + logs.analystPrecedent.length + ' closure note(s) from resolved tickets');
+        } catch (apErr) {
+          console.warn('[Investigation] Analyst precedent fetch error:', apErr.message);
+        }
+      }
+    } else {
+      markQueryResult(qDJC, 'error', 0, 'Jira correlation query failed', {
+        evidenceType: 'JIRA_CORRELATION',
+        semanticOutcome: 'query_failed',
+        dataCoverage: 'unknown'
+      });
+      console.warn('[Investigation] Jira correlation query failed: ' + _jiraResp.status);
     }
 
   } catch (jcErr) {
@@ -58440,36 +58520,43 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   // ═══════════════════════════════════════════════
   // FAILED QUERIES GUARDRAIL
-  // If critical investigation queries failed or returned no data,
+  // If critical investigation queries failed or lacked telemetry,
   // NEVER allow TRUE_POSITIVE — force SUSPICIOUS with explicit
   // list of failed queries for analyst verification.
+  // Clean negative results are excluded from this guardrail.
   // ═══════════════════════════════════════════════
   var _failedQueries = [];
-  var _emptyQueries = [];
+  var _telemetryGapQueries = [];
+  var _cleanQueries = [];
   (elasticLogs.queryDetails || []).forEach(function(qd) {
-    if (qd.status === 'error') {
+    var _state = qd.result_state || qd.status;
+    if (_state === 'error') {
       _failedQueries.push(qd.name);
-    } else if (qd.status === 'success' && (qd.hits === 0 || qd.hits === undefined)) {
-      _emptyQueries.push(qd.name);
+    } else if (_state === 'unclear' || _state === 'telemetry_gap') {
+      _telemetryGapQueries.push(qd.name);
+    } else if (_state === 'clean' || _state === 'checked_clear') {
+      _cleanQueries.push(qd.name);
+    } else if (_state === 'success' && (qd.hits === undefined || qd.hits === null)) {
+      _telemetryGapQueries.push(qd.name);
     }
   });
   // Critical query categories: SIEM alert lookup, network connections, alert history, TIP
-  var _criticalQueryNames = ['CrowdStrike Alert', 'Alert History', 'Alert Correlation', 'DACTA TIP', 'Firewall', 'Network', 'Host Inventory'];
+  var _criticalQueryNames = ['CrowdStrike Alert', 'Alert History', 'Alert Correlation', 'DACTA TIP', 'Firewall', 'Network', 'Host Inventory', 'Jira Analyst Learning'];
   var _failedCritical = _failedQueries.filter(function(q) {
     return _criticalQueryNames.some(function(cn) { return q.indexOf(cn) !== -1; });
   });
-  var _emptyCritical = _emptyQueries.filter(function(q) {
+  var _emptyCritical = _telemetryGapQueries.filter(function(q) {
     return _criticalQueryNames.some(function(cn) { return q.indexOf(cn) !== -1; });
   });
-  // Count how many critical query areas had failures or empty results
+  // Count how many critical query areas had failures or telemetry gaps
   var _critFailCount = _failedCritical.length;
   var _critEmptyCount = _emptyCritical.length;
   var _totalCritIssues = _critFailCount + _critEmptyCount;
-  // If 3+ critical queries failed/empty, this is insufficient evidence — cap at SUSPICIOUS
+  // If 3+ critical queries failed/had telemetry gaps, this is insufficient evidence — cap at SUSPICIOUS
   var _failedQueriesGuardrail = false;
   var _failedQueryList = _failedCritical.concat(_emptyCritical);
   if (_totalCritIssues >= 3) {
-    console.warn('[Verdict Guardrail] ' + _critFailCount + ' critical queries FAILED, ' + _critEmptyCount + ' returned EMPTY. Queries: ' + _failedQueryList.join(', ') + '. Forcing SUSPICIOUS.');
+    console.warn('[Verdict Guardrail] ' + _critFailCount + ' critical queries FAILED, ' + _critEmptyCount + ' lacked telemetry. Queries: ' + _failedQueryList.join(', ') + '. Forcing SUSPICIOUS.');
     _failedQueriesGuardrail = true;
     _forceSuspiciousCap = true; // Also set this so LLM verdict check below catches it
   }
@@ -58479,9 +58566,10 @@ async function runAIInvestigation(ticketKey, issueData) {
     active: _failedQueriesGuardrail,
     failedQueries: _failedCritical,
     emptyQueries: _emptyCritical,
+    cleanQueries: _cleanQueries,
     totalIssues: _totalCritIssues,
     message: _failedQueriesGuardrail
-      ? 'GUARDRAIL ACTIVE: ' + _totalCritIssues + ' critical queries had no results or failed. Analyst must verify: ' + _failedQueryList.join(', ') + '.'
+      ? 'GUARDRAIL ACTIVE: ' + _totalCritIssues + ' critical queries failed or lacked telemetry. Analyst must verify: ' + _failedQueryList.join(', ') + '.'
       : ''
   };
 
@@ -58492,7 +58580,7 @@ async function runAIInvestigation(ticketKey, issueData) {
     // Forced SUSPICIOUS: lack of telemetry or failed queries means we cannot confirm TP
     if (_failedQueriesGuardrail) {
       verdict = 'SUSPICIOUS \u2014 Incomplete Investigation';
-      actionLabel = 'Analyst verification required \u2014 ' + _totalCritIssues + ' critical queries returned no data';
+      actionLabel = 'Analyst verification required \u2014 ' + _totalCritIssues + ' critical queries failed or lacked telemetry';
     } else {
       verdict = 'SUSPICIOUS \u2014 Insufficient Telemetry';
       actionLabel = 'Analyst review required \u2014 no endpoint telemetry to confirm threat';
@@ -58637,7 +58725,7 @@ async function runAIInvestigation(ticketKey, issueData) {
       active: true,
       failed_queries: _failedCritical,
       empty_queries: _emptyCritical,
-      instruction: 'CRITICAL: ' + _totalCritIssues + ' investigation queries failed or returned no data (' + _failedQueryList.join(', ') + '). You MUST NOT conclude TRUE_POSITIVE without confirmed evidence. Default to SUSPICIOUS and explicitly list which queries need analyst verification.'
+      instruction: 'CRITICAL: ' + _totalCritIssues + ' investigation queries failed or lacked telemetry (' + _failedQueryList.join(', ') + '). Clean negative results are excluded. You MUST NOT conclude TRUE_POSITIVE without confirmed evidence. Default to SUSPICIOUS and explicitly list which queries need analyst verification.'
     };
   }
   if ((elasticLogs.jiraCorrelation || []).length > 0) {
@@ -58658,6 +58746,23 @@ async function runAIInvestigation(ticketKey, issueData) {
       })
     };
     console.log('[LLM Investigation] Analyst precedent injected: ' + elasticLogs.analystPrecedent.length + ' closure note(s) from resolved tickets');
+  }
+  if ((elasticLogs.analystLearnings || []).length > 0) {
+    _llmAlertContext.analyst_learning = elasticLogs.analystLearnings.map(function(item) {
+      return {
+        key: item.key,
+        summary: item.summary,
+        status: item.status,
+        resolution: item.resolution,
+        resolution_date: item.resolution_date,
+        priority: item.priority,
+        analyst_notes: item.analyst_notes,
+        closure_reasoning: item.closure_reasoning,
+        learned_entities: item.learned_entities,
+        org: item.org
+      };
+    });
+    console.log('[LLM Investigation] Analyst learning injected: ' + elasticLogs.analystLearnings.length + ' historical closed-ticket examples');
   }
 
   // Process each round
@@ -58805,7 +58910,7 @@ async function runAIInvestigation(ticketKey, issueData) {
               // ── Failed queries guardrail for LLM verdict ──
               // If LLM says TRUE_POSITIVE but critical queries failed/returned empty, cap at SUSPICIOUS
               if (_fv === 'TRUE_POSITIVE' && _failedQueriesGuardrail) {
-                console.warn('[Verdict Guardrail] LLM said TRUE_POSITIVE but ' + _totalCritIssues + ' critical queries had no data. Downgrading to SUSPICIOUS.');
+                console.warn('[Verdict Guardrail] LLM said TRUE_POSITIVE but ' + _totalCritIssues + ' critical queries failed or lacked telemetry. Downgrading to SUSPICIOUS.');
                 _fv = 'SUSPICIOUS';
               }
 
@@ -58821,7 +58926,7 @@ async function runAIInvestigation(ticketKey, issueData) {
                 // Apply guardrail-specific message if applicable
                 if (_failedQueriesGuardrail) {
                   verdict = 'SUSPICIOUS \u2014 Incomplete Investigation';
-                  actionLabel = 'Analyst verification required \u2014 ' + _totalCritIssues + ' critical queries returned no data';
+                  actionLabel = 'Analyst verification required \u2014 ' + _totalCritIssues + ' critical queries failed or lacked telemetry';
                 } else {
                   verdict = 'SUSPICIOUS \u2014 Requires Analyst Review';
                   actionLabel = 'Manual investigation recommended';
@@ -59030,7 +59135,7 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (_failedQueriesGuardrail) {
     verdictBannerHTML += '<div style="margin-top:8px;padding:8px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:6px;">' +
       '<div style="font-size:10px;font-weight:600;color:var(--amber);margin-bottom:4px;">' + dIcon('warning',12) + ' Investigation Incomplete \u2014 Analyst Verification Required</div>' +
-      '<div style="font-size:9px;color:var(--text-muted);">The following queries returned no data or failed. Analyst must verify these manually before confirming verdict:</div>' +
+      '<div style="font-size:9px;color:var(--text-muted);">The following queries failed or lacked telemetry. Clean negative checks are excluded. Analyst must verify these manually before confirming verdict:</div>' +
       '<div style="font-size:9px;color:var(--text-secondary);margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;">';
     _failedQueryList.forEach(function(fq) {
       verdictBannerHTML += '<span style="padding:2px 6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:4px;font-family:var(--font-mono);font-size:8px;">' + fq + '</span>';
@@ -60483,14 +60588,15 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
       '<details style="cursor:pointer;"><summary style="font-size:9px;font-weight:600;color:var(--text-muted);letter-spacing:0.05em;">\u25B6 QUERY EXECUTION LOG (' + elasticLogs.queryDetails.length + ' queries)</summary>' +
       '<div style="margin-top:6px;">';
     elasticLogs.queryDetails.forEach(function(qd, qi) {
-      var sc = qd.status === 'success' ? '#10b981' : (qd.status === 'error' ? '#ef4444' : (qd.status === 'skipped' ? '#64748b' : 'var(--text-muted)'));
+      var _displayState = qd.result_state || qd.status;
+      var sc = (_displayState === 'success' || _displayState === 'clean' || _displayState === 'checked_clear') ? '#10b981' : (_displayState === 'error' ? '#ef4444' : (_displayState === 'unclear' || _displayState === 'telemetry_gap' ? '#f59e0b' : (qd.status === 'skipped' ? '#64748b' : 'var(--text-muted)')));
       var detailId = 'qryDetail_' + qi;
       html += '<div style="cursor:pointer;" onclick="var el=document.getElementById(\'' + detailId + '\');if(el)el.style.display=el.style.display===\'none\'?\'block\':\'none\';">' +
         '<div style="font-size:9px;padding:3px 0;display:flex;gap:6px;align-items:center;border-bottom:1px solid var(--border-subtle);">' +
         '<span style="color:var(--text-muted);min-width:16px;">' + (qi + 1) + '.</span>' +
         '<span style="color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(qd.name || '') + '</span>' +
         '<span style="font-family:var(--font-mono);color:var(--cyan);font-size:8px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(qd.query || '') + '</span>' +
-        '<span style="color:' + sc + ';font-weight:600;font-size:8px;min-width:70px;text-align:right;text-transform:uppercase;">' + escapeHtml(qd.status || '') + (qd.hits !== undefined ? '(' + qd.hits + ')' : '') + '</span>' +
+        '<span style="color:' + sc + ';font-weight:600;font-size:8px;min-width:70px;text-align:right;text-transform:uppercase;">' + escapeHtml(_displayState || qd.status || '') + (qd.hits !== undefined ? '(' + qd.hits + ')' : '') + '</span>' +
         '<span style="color:var(--text-muted);font-size:8px;margin-left:2px;">\u25BC</span></div></div>';
       // Drill-down: show full query details
       var queryDetail = '';

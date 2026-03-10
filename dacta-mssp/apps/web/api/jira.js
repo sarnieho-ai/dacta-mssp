@@ -128,6 +128,20 @@ export default async function handler(req, res) {
     return r.json();
   }
 
+  function _extractCommentText(comment) {
+    if (!comment) return '';
+    if (comment.renderedBody) return String(comment.renderedBody).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (typeof comment.body === 'string') return comment.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    function walkADF(node) {
+      if (!node) return '';
+      if (Array.isArray(node)) return node.map(walkADF).join(' ');
+      if (node.type === 'text') return node.text || '';
+      if (node.content) return walkADF(node.content);
+      return '';
+    }
+    return walkADF(comment.body).replace(/\s+/g, ' ').trim();
+  }
+
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     let { action } = req.query;
@@ -348,6 +362,50 @@ export default async function handler(req, res) {
         body.nextPageToken
       );
       return res.status(200).json(data);
+    }
+
+    // ─── ACTION: learning (closed ticket analyst feedback) ─────────────────────
+    if (action === 'learning') {
+      const keysRaw = String(req.query.keys || body.keys || '');
+      const keys = keysRaw.split(',').map(k => k.trim()).filter(Boolean).slice(0, 10);
+      if (keys.length === 0) return res.status(400).json({ error: 'Missing keys parameter' });
+      const learning = [];
+      for (const key of keys) {
+        try {
+          const [issueResp, commentResp] = await Promise.all([
+            fetch(`${baseUrl}/rest/api/3/issue/${key}?fields=summary,status,resolution,resolutiondate,created,updated,customfield_10002,priority`, {
+              headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+            }),
+            fetch(`${baseUrl}/rest/api/3/issue/${key}/comment`, {
+              headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+            })
+          ]);
+          if (!issueResp.ok) continue;
+          const issueData = await issueResp.json();
+          const commentsData = commentResp.ok ? await commentResp.json() : { comments: [] };
+          const fields = issueData.fields || {};
+          const comments = commentsData.comments || commentsData.values || [];
+          const cleanedComments = comments.map(_extractCommentText).filter(Boolean);
+          const analystNotes = cleanedComments.slice(0, 3).join(' | ');
+          const closureReasoning = cleanedComments.length > 0 ? cleanedComments[cleanedComments.length - 1] : '';
+          const learnedEntities = Array.from(new Set((analystNotes.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[a-f0-9]{32,64}\b|\b[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\b/gi) || []).slice(0, 10)));
+          learning.push({
+            key,
+            summary: fields.summary || '',
+            status: fields.status ? fields.status.name : '',
+            resolution: fields.resolution ? fields.resolution.name : '',
+            resolution_date: fields.resolutiondate || '',
+            priority: fields.priority ? fields.priority.name : '',
+            analyst_notes: analystNotes,
+            closure_reasoning: closureReasoning,
+            learned_entities: learnedEntities,
+            org: Array.isArray(fields.customfield_10002) && fields.customfield_10002[0] ? (fields.customfield_10002[0].name || '') : ''
+          });
+        } catch (e) {
+          console.warn('[Jira learning] failed for', key, e.message);
+        }
+      }
+      return res.status(200).json({ learning });
     }
 
     // ─── ACTION: counts (batch) ───────────────────────────────

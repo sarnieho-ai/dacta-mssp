@@ -226,8 +226,9 @@ You have been given the raw investigation findings from Phase 1. Your job is to:
 - Call out any contradictions in the evidence
 - Consider alternative explanations for each finding
 - Weight evidence by source reliability: SIEM-confirmed > Threat Intel > Ticket text inference
-- If a VERDICT GUARDRAIL section is present in the alert context, multiple critical queries returned no data. You MUST NOT output TRUE_POSITIVE in this case — use SUSPICIOUS instead and note which queries failed.
+- If a VERDICT GUARDRAIL section is present in the alert context, multiple critical queries failed or lacked telemetry coverage. Clean negative results are excluded from this guardrail. You MUST NOT output TRUE_POSITIVE in this case — use SUSPICIOUS instead and note which queries failed or lacked telemetry.
 - If Jira cross-ticket correlation shows related tickets, factor the pattern (recurring rule firings on same host/IP) into your assessment.
+- If analyst learning from closed tickets is provided, use it as historical context to refine hypotheses, compare patterns, and identify likely benign workflows or recurring threat behaviors — but do not treat historical analyst comments as stronger evidence than current-ticket SIEM or threat-intel findings.
 
 ## Output Format
 You MUST respond with a valid JSON object (no markdown, no code fences):
@@ -279,10 +280,11 @@ You have been given the investigation findings (Phase 1) and the synthesis/verdi
 7. Check if Jira cross-ticket correlation reveals a recurring pattern that changes the assessment
 
 ## ABSOLUTE RULE — Failed/Empty Query Guardrail
-If the alert context contains a VERDICT GUARDRAIL section or notes that critical queries failed or returned no results:
+If the alert context contains a VERDICT GUARDRAIL section or notes that critical queries failed or lacked telemetry coverage:
 - You MUST NOT conclude TRUE_POSITIVE. The evidence base is incomplete.
 - Default to SUSPICIOUS with an explicit list of which queries the analyst needs to verify manually.
-- State clearly: "Verdict cannot be confirmed as TRUE POSITIVE because the following queries returned no data: [list]"
+- State clearly: "Verdict cannot be confirmed as TRUE POSITIVE because the following queries failed or lacked telemetry: [list]"
+- Clean negative results are excluded from this guardrail.
 - This rule overrides ALL other reasoning. Even if the remaining evidence looks malicious, incomplete investigation = SUSPICIOUS.
 
 ## Output Format
