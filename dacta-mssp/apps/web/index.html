@@ -51808,51 +51808,282 @@ var _triageClientSearch = ''; // client-side search term for instant filtering
 window._autoInvQueue = window._autoInvQueue || [];
 window._autoInvActive = false;
 
+function _extractIssueInvestigationText(issueData) {
+  var f = (issueData && issueData.fields) || {};
+  var summary = f.summary || '';
+  var description = '';
+  if (f.description && f.description.content) description = extractADFText(f.description);
+  else if (typeof f.description === 'string') description = f.description;
+  if (issueData && issueData.renderedFields && issueData.renderedFields.description) description = issueData.renderedFields.description;
+  var useCase = f.customfield_10072 || '';
+  return (summary + ' ' + description.replace(/<[^>]+>/g, ' ') + ' ' + useCase).replace(/\s+/g, ' ').trim();
+}
+
+function _normalizeInvestigationVendor(name) {
+  var lc = (name || '').toLowerCase();
+  if (lc.includes('fortinet') || lc.includes('fortigate')) return 'fortinet';
+  if (lc.includes('palo alto') || lc.includes('panw') || lc.includes('pan-os') || lc.includes('panos')) return 'paloalto';
+  if (lc.includes('imperva') || lc.includes('incapsula') || lc.includes('waf')) return 'imperva';
+  if (lc.includes('crowdstrike') || lc.includes('falcon')) return 'crowdstrike';
+  if (lc.includes('trend') || lc.includes('vision one')) return 'trendmicro';
+  if (lc.includes('microsoft') || lc.includes('defender') || lc.includes('m365') || lc.includes('entra')) return 'microsoft';
+  return lc.replace(/[^a-z0-9]/g, '');
+}
+
+function _inferInvestigationSourceRelevance(issueData, iocs, techniques) {
+  var text = _extractIssueInvestigationText(issueData);
+  var lc = text.toLowerCase();
+  var preferredVendors = [];
+  function addVendor(v) { if (preferredVendors.indexOf(v) === -1) preferredVendors.push(v); }
+
+  if (/fortinet|fortigate/.test(lc)) addVendor('fortinet');
+  if (/palo alto|pan-os|panw|\bpan\b/.test(lc)) addVendor('paloalto');
+  if (/imperva|incapsula|\bwaf\b/.test(lc)) addVendor('imperva');
+  if (/crowdstrike|falcon/.test(lc)) addVendor('crowdstrike');
+
+  var techIds = (techniques || []).map(function(t) { return ((t && t.id) || '').toUpperCase(); }).join(' ');
+  var privateIpRegex = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.)/;
+  var hasPrivateIps = (iocs && iocs.ips || []).some(function(ip) { return privateIpRegex.test(ip || ''); });
+  var hasPublicIps = (iocs && iocs.ips || []).some(function(ip) { return ip && !privateIpRegex.test(ip); });
+
+  var endpoint = /\bedr\b|endpoint|process|powershell|cmd\.exe|rundll32|wscript|mshta|registry|quarantine|sha256|hash|child process|parent process|hostname|host\.hostname|file write|execution|lateral movement|credential|logon|login/i.test(lc) || /(T1059|T1055|T1547|T1110|T1003|T1021|T1105|T1562|T1053)/.test(techIds);
+  var web = /\bwaf\b|imperva|http |https |url|uri|web attack|sql injection|sqli|xss|path traversal|user-agent|referrer|cdn|reverse proxy|web server|nginx|apache|origin request/i.test(lc);
+  var network = /firewall|fortigate|fortinet|palo alto|network|traffic|connection|port\b|dns|proxy|allow|deny|drop|blocked|source ip|destination ip|delivery optimization|7680|east-west/i.test(lc) || ((hasPrivateIps || hasPublicIps) && !web && !endpoint);
+
+  if (preferredVendors.indexOf('crowdstrike') !== -1) endpoint = true;
+  if (preferredVendors.indexOf('imperva') !== -1) web = true;
+  if (preferredVendors.indexOf('fortinet') !== -1 || preferredVendors.indexOf('paloalto') !== -1) network = true;
+  if (web) endpoint = false;
+
+  var mode = web ? 'web' : endpoint ? 'endpoint' : network ? 'network' : 'generic';
+  return {
+    mode: mode,
+    generic: mode === 'generic',
+    endpoint: mode === 'endpoint',
+    web: mode === 'web',
+    network: mode === 'network' || mode === 'generic',
+    preferredVendors: preferredVendors
+  };
+}
+
+function _connectorMatchesSourceRelevance(connector, sourceRelevance, connType) {
+  if (!connector) return false;
+  var sr = sourceRelevance || { mode: 'generic', generic: true, network: true };
+  var vendor = _normalizeInvestigationVendor((connector.vendor || '') + ' ' + (connector.display_name || ''));
+  var preferred = sr.preferredVendors || [];
+
+  if (connType === 'edr') {
+    if (!sr.endpoint) return false;
+    var edrPreferred = preferred.filter(function(v) { return v === 'crowdstrike' || v === 'trendmicro' || v === 'microsoft'; });
+    return edrPreferred.length ? edrPreferred.indexOf(vendor) !== -1 : true;
+  }
+
+  if (connType === 'firewall') {
+    if (!(sr.network || sr.web || sr.generic)) return false;
+    var fwPreferred = preferred.filter(function(v) { return v === 'fortinet' || v === 'paloalto' || v === 'imperva'; });
+    if (fwPreferred.length) return fwPreferred.indexOf(vendor) !== -1;
+    if (sr.web) return vendor === 'imperva';
+    if (sr.network) return vendor !== 'imperva';
+    return true;
+  }
+
+  return true;
+}
+
+function _getRelevantOrgConnectors(namespace, connType, sourceRelevance) {
+  var all = getOrgConnectors(namespace, connType) || [];
+  var matched = all.filter(function(conn) { return _connectorMatchesSourceRelevance(conn, sourceRelevance, connType); });
+  if (matched.length > 0) return matched;
+  return sourceRelevance && sourceRelevance.generic ? all : [];
+}
+
+async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
+  var f = issueData.fields || {};
+  var summary = f.summary || '';
+  var description = '';
+  if (f.description && f.description.content) description = extractADFText(f.description);
+  else if (typeof f.description === 'string') description = f.description;
+  if (issueData.renderedFields && issueData.renderedFields.description) description = issueData.renderedFields.description;
+
+  var priority = f.priority ? f.priority.name : 'Unknown';
+  var labels = (f.labels || []).join(', ');
+  var useCase = f.customfield_10072 || '';
+  var status = f.status ? f.status.name : 'Unknown';
+  var org = '';
+  if (f.customfield_10002 && f.customfield_10002.length > 0) org = f.customfield_10002[0].name || '';
+  var pShort = (priority.split(' - ')[0] || 'P3').toUpperCase();
+
+  var orgLower = org.toLowerCase();
+  var invNamespace = 'default';
+  if (orgLower.includes('naga')) invNamespace = 'nagaworld';
+  else if (orgLower.includes('dacta') && !orgLower.includes('training')) invNamespace = 'dacta';
+  else if (orgLower.includes('foxwood')) invNamespace = 'foxwood';
+  else if (orgLower.includes('silver')) invNamespace = 'silverkey';
+  else if (orgLower.includes('spmt') || orgLower.includes('sp media')) invNamespace = 'spmt';
+  else if (orgLower.includes('em ') || orgLower.includes('em service')) invNamespace = 'emservices';
+  else if (orgLower.includes('sp tele') || orgLower.includes('sptele')) invNamespace = 'sptelecom';
+  else if (orgLower.includes('toyota')) invNamespace = 'toyotafinancial';
+  else if (orgLower.includes('training')) invNamespace = 'dactatraining';
+  else if (orgLower.includes('adv')) invNamespace = 'advpartners';
+
+  var totalRounds = 3;
+  if (pShort === 'P4') totalRounds = 1;
+  else if (pShort === 'P3') totalRounds = 2;
+
+  var cleanDesc = description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000);
+  var fullText = summary + ' ' + cleanDesc;
+  var iocs = extractIOCs(fullText);
+  var techniques = detectTechniques(fullText);
+  var cmdCtx = analyzeCommandContext(fullText);
+
+  var elasticLogs;
+  try {
+    elasticLogs = await realElasticLookup(ticketKey, iocs, techniques, issueData);
+  } catch (elErr) {
+    console.warn('[AutoInv] Elastic lookup failed for ' + ticketKey + ':', elErr.message);
+    elasticLogs = simulateElasticLookup(summary, cleanDesc, iocs, techniques);
+  }
+
+  var inculpatory = generateInculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx);
+  var exculpatory = generateExculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs);
+
+  var llmAlertContext = {
+    summary: summary,
+    description: cleanDesc,
+    priority: priority,
+    organization: org,
+    status: status,
+    labels: labels,
+    use_case: useCase,
+    iocs: iocs,
+    techniques: techniques.map(function(t) { return { id: t.id, name: t.name, tactic: t.tactic }; }),
+    deep_investigation: {
+      dest_geo: elasticLogs.destGeoData || [],
+      bytes_analysis: elasticLogs.bytesAnalysis || [],
+      temporal_analysis: elasticLogs.temporalAnalysis || [],
+      dest_tip_results: elasticLogs.destTipResults || [],
+      device_names: elasticLogs.deviceNames || [],
+      mac_addresses: elasticLogs.macAddresses || []
+    },
+    jira_correlation: (elasticLogs.jiraCorrelation || []).map(function(jt) {
+      return { key: jt.key, summary: jt.summary, status: jt.status, priority: jt.priority, created: jt.created, assignee: jt.assignee };
+    })
+  };
+
+  var phaseResults = {};
+  var phase1Calls = [];
+  var phase3Calls = [];
+
+  for (var rnd = 1; rnd <= totalRounds; rnd++) {
+    try {
+      var phase = 'phase' + rnd;
+      var previous = {};
+      if (rnd >= 2 && phaseResults.phase1) previous.phase1 = phaseResults.phase1;
+      if (rnd >= 3 && phaseResults.phase2) previous.phase2 = phaseResults.phase2;
+      var resp = await callInvestigateAPI(ticketKey, llmAlertContext, invNamespace, phase, previous);
+      phaseResults[phase] = resp.result || {};
+      if (rnd === 1) phase1Calls = resp.tool_calls || [];
+      if (rnd === 3) phase3Calls = resp.tool_calls || [];
+    } catch (phaseErr) {
+      console.warn('[AutoInv] Phase ' + rnd + ' failed for ' + ticketKey + ':', phaseErr.message);
+      break;
+    }
+  }
+
+  var roundsHTML = '';
+  if (phaseResults.phase1) roundsHTML += buildRoundHTML(1, totalRounds, 'LLM Investigation', 'done', buildLLMRound1HTML(phaseResults.phase1, phase1Calls));
+  else roundsHTML += buildRoundHTML(1, totalRounds, 'LLM Investigation', 'done', '<div style="font-size:10px;color:var(--text-secondary);">Background telemetry collection completed. Analyst should open the ticket for a fresh review.</div>');
+  if (totalRounds >= 2) {
+    if (phaseResults.phase2) roundsHTML += buildRoundHTML(2, totalRounds, 'Evidence Synthesis', 'done', buildLLMRound2HTML(phaseResults.phase2));
+    else roundsHTML += buildRoundHTML(2, totalRounds, 'Evidence Synthesis', 'done', '<div style="font-size:10px;color:var(--text-secondary);">Evidence was collected, but synthesis was inconclusive in the background run.</div>');
+  }
+  if (totalRounds >= 3) {
+    if (phaseResults.phase3) roundsHTML += buildRoundHTML(3, totalRounds, 'Adversarial Challenge', 'done', buildLLMRound3HTML(phaseResults.phase3, phase3Calls));
+    else roundsHTML += buildRoundHTML(3, totalRounds, 'Adversarial Challenge', 'done', '<div style="font-size:10px;color:var(--text-secondary);">Adversarial challenge did not complete in the background run.</div>');
+  }
+
+  var finalVerdict = (phaseResults.phase3 && phaseResults.phase3.final_verdict) || (phaseResults.phase2 && phaseResults.phase2.preliminary_verdict) || 'SUSPICIOUS';
+  var confidence = (phaseResults.phase3 && phaseResults.phase3.final_confidence) || (phaseResults.phase2 && phaseResults.phase2.confidence) || (phaseResults.phase1 && phaseResults.phase1.confidence) || 45;
+  var verdict = 'SUSPICIOUS — Requires Analyst Review';
+  var verdictColor = 'var(--amber)';
+  var verdictBg = 'rgba(245,158,11,0.05)';
+  var verdictBorder = 'rgba(245,158,11,0.3)';
+  var actionLabel = 'Manual investigation recommended';
+  var verdictIcon = dIcon('warning', 14);
+
+  if (finalVerdict === 'TRUE_POSITIVE') {
+    verdict = 'TRUE POSITIVE — Confirmed Threat';
+    verdictColor = 'var(--red-bright)';
+    verdictBg = 'rgba(239,68,68,0.05)';
+    verdictBorder = 'rgba(239,68,68,0.3)';
+    actionLabel = 'Immediate action required';
+    verdictIcon = dIcon('siren', 14);
+  } else if (finalVerdict === 'FALSE_POSITIVE') {
+    verdict = 'FALSE POSITIVE — Business Justified';
+    verdictColor = 'var(--green)';
+    verdictBg = 'rgba(16,185,129,0.05)';
+    verdictBorder = 'rgba(16,185,129,0.3)';
+    actionLabel = 'Close as false positive';
+    verdictIcon = dIcon('checkCircle', 14);
+  }
+
+  var verdictBannerHTML = '<div class="verdict-banner" style="margin-top:12px;border-color:' + verdictBorder + ';background:' + verdictBg + ';">' +
+    '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+      '<div>' +
+        '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:' + verdictColor + ';margin-bottom:4px;opacity:0.7;">Background Auto-Investigation</div>' +
+        '<div class="verdict-title" style="color:' + verdictColor + ';">' + verdictIcon + ' ' + verdict + '</div>' +
+        '<div class="confidence-pill" style="background:' + verdictColor + '20;color:' + verdictColor + ';border-color:' + verdictColor + '40;">' + confidence + '% CONFIDENCE</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-top:8px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">' +
+      '<span>' + dIcon('dot',14) + ' Inculpatory: ' + inculpatory.length + ' finding' + (inculpatory.length !== 1 ? 's' : '') + '</span>' +
+      '<span>' + dIcon('dot',14) + ' Exculpatory: ' + exculpatory.length + ' finding' + (exculpatory.length !== 1 ? 's' : '') + '</span>' +
+      '<span>' + actionLabel + '</span>' +
+    '</div>' +
+  '</div>';
+
+  return {
+    html: roundsHTML + verdictBannerHTML,
+    verdict: verdict,
+    confidence: confidence,
+    timestamp: new Date().toISOString(),
+    escalationData: { org: org, summary: summary, ticketData: f },
+    inculpatoryEvidence: (inculpatory || []).slice(0, 5),
+    exculpatoryEvidence: (exculpatory || []).slice(0, 5),
+    metadata: {
+      totalRounds: totalRounds,
+      org: org,
+      priority: pShort,
+      techniquesCount: techniques.length,
+      inculpatoryCount: inculpatory.length,
+      exculpatoryCount: exculpatory.length
+    },
+    sidebarPanels: {},
+    elasticLogs: elasticLogs,
+    iocs: iocs
+  };
+}
+
 async function _bgRunInvestigation(ticketKey) {
-  if (_investigationCache && _investigationCache[ticketKey]) return;
+  if (_investigationCache && _investigationCache[ticketKey] && _investigationCache[ticketKey].html) return;
   if (window._currentInvestigationKey === ticketKey) return;
 
-  // Create a hidden shadow environment for runAIInvestigation
-  // IMPORTANT: Do NOT include aiRoundsContainer here — runAIInvestigation creates it
-  // inside aiInvestigationPanel. Having a duplicate here causes getElementById to find
-  // the wrong one, resulting in round content being placed outside aiInvestigationPanel
-  // and the cached HTML missing all investigation findings.
-  var shadow = document.createElement('div');
-  shadow.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;';
-  var innerHTML = '<div class="prod-investigation-live">' +
-    '<div id="invMainContent"></div>' +
-    '<div id="invLoadingSpinner" style="display:none;"></div>' +
-    '<div id="invSpinnerLabel"></div><div id="invSpinnerSub"></div>' +
-    '<div id="invProgressFill"></div>' +
-    '<div id="invPipeStep1"></div><div id="invPipeStep2"></div><div id="invPipeStep3"></div>' +
-    '<div id="invSnapshotResults"></div><div id="invSnapshotBadge"></div>' +
-    '<div id="invSnapshotMetrics"></div><div id="invSnapshotEntities"></div>' +
-    '<div id="alertGraphCard"></div><div id="snapshotPipelineWrap"></div>' +
-    '<div id="invVerdictArea"></div>' +
-    '<div id="enrichmentSummaryCard"><div class="inv-collapsible-body"></div></div>' +
-    '<div id="correlatedAlertsCard"><div class="inv-collapsible-body"></div></div>' +
-    '<div id="recommendedActionsCard"><div class="inv-collapsible-body"></div></div>' +
-    '<div id="playbookActionsCard"><div class="inv-collapsible-body"></div></div>' +
-    '<div id="clientEscalationCard"></div><div id="escalationDraftContent"></div>' +
-    '<div id="invSLAPanel"></div><div id="invSLAContent"></div>' +
-    '<div id="invReInvestigateBar"></div><div id="rRootCause"></div>' +
-    '</div>';
-  shadow.innerHTML = innerHTML;
-
-  // ── DISABLED: Background auto-investigation is disabled due to fundamental
-  // DOM isolation issues. The old approach swapped page-investigation IDs which
-  // broke the real investigation page. Overriding getElementById has unavoidable
-  // race conditions with foreground user interactions in single-threaded JS.
-  // 
-  // Investigation now runs on-demand when a ticket is opened. The incomplete-cache
-  // detection in openInvestigation() auto-triggers re-investigation for tickets
-  // that had broken cache entries from the old background system.
-  // 
-  // TODO: Refactor runAIInvestigation to accept a root container parameter
-  // instead of using document.getElementById, then re-enable background processing.
-  console.log('[AutoInv] Background investigation disabled for ' + ticketKey + ' — will run on-demand when ticket is opened');
-  shadow.remove();
-  return;
+  markInvestigationStarted(ticketKey);
+  try {
+    var issueData = await DactaJira.fetchIssue(ticketKey);
+    if (!issueData || !issueData.fields) throw new Error('Issue data unavailable');
+    var cacheEntry = await _buildBackgroundInvestigationCache(ticketKey, issueData);
+    if (window._currentInvestigationKey === ticketKey) {
+      console.log('[AutoInv] ' + ticketKey + ' opened during background run — skipping background cache write');
+      return;
+    }
+    await saveInvestigationCache(ticketKey, cacheEntry);
+    console.log('[AutoInv] Background investigation cached for ' + ticketKey);
+  } catch (bgErr) {
+    console.warn('[AutoInv] Background investigation failed for ' + ticketKey + ':', bgErr.message);
+  } finally {
+    markInvestigationCompleted(ticketKey);
+  }
 }
 
 async function _processAutoInvQueue() {
@@ -55251,6 +55482,8 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
       sidebarPanels: cacheEntry.sidebarPanels || null,
       escalationData: cacheEntry.escalationData || null
     };
+    if (cacheEntry.elasticLogs) lsCacheAll[ticketKey].elasticLogs = cacheEntry.elasticLogs;
+    if (cacheEntry.iocs) lsCacheAll[ticketKey].iocs = cacheEntry.iocs;
     localStorage.setItem('investigationCache', JSON.stringify(lsCacheAll));
   } catch(lsErr) { console.warn('[InvCache] localStorage save failed:', lsErr.message); }
   try {
@@ -55268,7 +55501,7 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
       prompt_notes: cacheEntry.promptNotes || null,
       feedback_rating: cacheEntry.feedbackRating || null,
       feedback_text: cacheEntry.feedbackText || null,
-      metadata: Object.assign({}, cacheEntry.metadata || {}, cacheEntry.sidebarPanels ? { sidebarPanels: cacheEntry.sidebarPanels } : {}, cacheEntry.escalationData ? { escalationData: cacheEntry.escalationData } : {}, cacheEntry.inculpatoryEvidence ? { inculpatoryEvidence: (cacheEntry.inculpatoryEvidence || []).slice(0, 5) } : {}, cacheEntry.exculpatoryEvidence ? { exculpatoryEvidence: (cacheEntry.exculpatoryEvidence || []).slice(0, 5) } : {})
+      metadata: Object.assign({}, cacheEntry.metadata || {}, cacheEntry.sidebarPanels ? { sidebarPanels: cacheEntry.sidebarPanels } : {}, cacheEntry.escalationData ? { escalationData: cacheEntry.escalationData } : {}, cacheEntry.inculpatoryEvidence ? { inculpatoryEvidence: (cacheEntry.inculpatoryEvidence || []).slice(0, 5) } : {}, cacheEntry.exculpatoryEvidence ? { exculpatoryEvidence: (cacheEntry.exculpatoryEvidence || []).slice(0, 5) } : {}, cacheEntry.elasticLogs ? { elasticLogs: cacheEntry.elasticLogs } : {}, cacheEntry.iocs ? { iocs: cacheEntry.iocs } : {})
     }, { onConflict: 'ticket_key' });
     if (resp.error) console.warn('[InvCache] SIEMLess DB upsert error:', resp.error.message);
     else console.log('[InvCache] Saved to SIEMLess DB:', ticketKey);
@@ -55312,7 +55545,9 @@ async function loadInvestigationCache(ticketKey) {
         sidebarPanels: dbMeta.sidebarPanels || null,
         escalationData: dbMeta.escalationData || null,
         inculpatoryEvidence: dbMeta.inculpatoryEvidence || [],
-        exculpatoryEvidence: dbMeta.exculpatoryEvidence || []
+        exculpatoryEvidence: dbMeta.exculpatoryEvidence || [],
+        elasticLogs: dbMeta.elasticLogs || null,
+        iocs: dbMeta.iocs || null
       };
       _investigationCache[ticketKey] = entry;
       return entry;
@@ -56293,21 +56528,26 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   // ── Connector-Aware Investigation ──
   // Check ORG_CONNECTORS to determine which data sources are available
   var _orgConfig = getOrgByNamespace(namespace);
+  var _sourceRelevance = _inferInvestigationSourceRelevance(issueData, iocs, techniques);
   var _hasEDR = orgHasConnector(namespace, 'edr');
   var _hasFirewall = orgHasConnector(namespace, 'firewall');
   var _edrConnector = getOrgConnector(namespace, 'edr');
   var _fwConnector = getOrgConnector(namespace, 'firewall');
   var _allFwConnectors = getOrgConnectors(namespace, 'firewall'); // ALL firewall connectors (Palo Alto + FortiGate + etc)
+  var _relevantFwConnectors = _getRelevantOrgConnectors(namespace, 'firewall', _sourceRelevance);
+  var _effectiveFwConnectors = _relevantFwConnectors.length > 0 ? _relevantFwConnectors : (_sourceRelevance.generic ? _allFwConnectors : []);
+  var _effectiveFwConnector = _effectiveFwConnectors[0] || _fwConnector || null;
   // Determine if this is a CrowdStrike EDR (vs Microsoft/other identity-only EDR)
   var _edrVendorLower = _edrConnector ? (_edrConnector.vendor || '').toLowerCase() : '';
   var _isCrowdStrikeEDR = _edrVendorLower.includes('crowdstrike') || _edrVendorLower.includes('falcon');
   // If EDR connector exists but is NOT CrowdStrike (e.g. Microsoft M365/Entra ID), treat as no CS-capable EDR
   var _hasCSCapableEDR = _hasEDR && _isCrowdStrikeEDR;
-  console.log('[Investigation] Org: ' + namespace + ' | EDR: ' + _hasEDR + ' | CS-capable: ' + _hasCSCapableEDR + ' | EDR vendor: ' + _edrVendorLower + ' | Firewall: ' + _hasFirewall);
+  var _effectiveHasCSCapableEDR = _hasCSCapableEDR && !!_sourceRelevance.endpoint;
+  console.log('[Investigation] Org: ' + namespace + ' | mode=' + _sourceRelevance.mode + ' | EDR: ' + _hasEDR + ' | CS-capable: ' + _effectiveHasCSCapableEDR + ' | EDR vendor: ' + _edrVendorLower + ' | Firewall: ' + _hasFirewall + ' | Relevant firewall connectors: ' + (_effectiveFwConnectors.map(function(c) { return c.vendor || c.display_name || 'firewall'; }).join(', ') || 'none'));
 
   // ── Direct Vendor API Queries (when connector has api_endpoint configured) ──
   // If the EDR connector has a direct API endpoint, query the vendor API in addition to Elastic
-  var _edrHasDirectAPI = _edrConnector && _edrConnector.api_endpoint;
+  var _edrHasDirectAPI = _sourceRelevance.endpoint && _edrConnector && _edrConnector.api_endpoint;
   if (_edrHasDirectAPI) {
     var _edrOrgId = _orgConfig ? _orgConfig.id : null;
     try {
@@ -56396,15 +56636,15 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
 
   // ── Direct Firewall API Queries ──
   var _fwHasDirectAPI = false;
-  if (_allFwConnectors && _allFwConnectors.length) {
-    _allFwConnectors.forEach(function(fwc) {
+  if (_effectiveFwConnectors && _effectiveFwConnectors.length) {
+    _effectiveFwConnectors.forEach(function(fwc) {
       if (fwc.api_endpoint) _fwHasDirectAPI = true;
     });
   }
   if (_fwHasDirectAPI) {
     try {
-      for (var fwi = 0; fwi < _allFwConnectors.length; fwi++) {
-        var fwc = _allFwConnectors[fwi];
+      for (var fwi = 0; fwi < _effectiveFwConnectors.length; fwi++) {
+        var fwc = _effectiveFwConnectors[fwi];
         if (!fwc.api_endpoint) continue;
         var fwVendor = (fwc.vendor || '').toLowerCase();
         var fwOrgId = _orgConfig ? _orgConfig.id : null;
@@ -56450,7 +56690,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   // ── QUERY 1: EDR Alert Correlation (connector-aware) ──
   // Only enter CrowdStrike query path if EDR vendor is CrowdStrike/Falcon
   // Non-CS EDR vendors (e.g. Microsoft M365/Entra ID) don't have CS alert indices
-  if (_hasCSCapableEDR) {
+  if (_effectiveHasCSCapableEDR) {
     // Client has CrowdStrike EDR — proceed with CS-specific queries via Elastic
     var edrMeta = _edrConnector ? _edrConnector.metadata : {};
     var alertIndex = edrMeta.index_pattern || ('.ds-logs-crowdstrike.alert-' + namespace + '-*');
@@ -56554,7 +56794,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
           var ip = alertIPs[ni];
           var isPrivate = ip.startsWith('10.') || ip.startsWith('172.') || ip.startsWith('192.168.') || ip.startsWith('127.');
           // Connector-aware firewall index resolution (uses resolveFirewallIndexes helper)
-          var netIndex = resolveFirewallIndexes(namespace, _allFwConnectors);
+          var netIndex = resolveFirewallIndexes(namespace, _effectiveFwConnectors.length > 0 ? _effectiveFwConnectors : (_fwConnector ? [_fwConnector] : []));
           var netQ = { size: 5, query: { bool: { must: [{ range: { '@timestamp': { gte: timeFrom, lte: timeTo } } }], should: [{ match: { 'destination.ip': ip } }, { match: { 'source.ip': ip } }], minimum_should_match: 1 } }, sort: [{ '@timestamp': 'desc' }] };
           var qD3 = { name: 'Network: ' + ip, index: netIndex, query: 'dst.ip:"' + ip + '" ±5min', status: 'running' };
           logs.queryDetails.push(qD3); logs.queriesRun++;
@@ -56622,7 +56862,9 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   } else {
     // ── NO CrowdStrike EDR: Skip CS-specific queries, go to firewall-only investigation ──
     var noEdrMsg;
-    if (_hasEDR && !_isCrowdStrikeEDR) {
+    if (!_sourceRelevance.endpoint) {
+      noEdrMsg = 'Alert context is network/web oriented — endpoint telemetry is not relevant for this investigation.';
+    } else if (_hasEDR && !_isCrowdStrikeEDR) {
       // EDR connector exists but is NOT CrowdStrike (e.g. Microsoft M365/Entra ID)
       var edrVendorName = _edrConnector ? (_edrConnector.display_name || _edrConnector.vendor || 'Unknown') : 'Unknown';
       noEdrMsg = (_orgConfig ? _orgConfig.name : namespace) + ' uses ' + edrVendorName + ' (identity/cloud) — no endpoint agent deployed. Firewall-only investigation.';
@@ -56641,7 +56883,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     var _deepDestIPs = new Set(); // Collect unique dest IPs for TIP pivot later
     if (allIPs.length > 0) {
       // Use resolveFirewallIndexes to get correct index from actual connector data
-      var fwConnsForResolve = _allFwConnectors && _allFwConnectors.length > 0 ? _allFwConnectors : (_fwConnector ? [_fwConnector] : []);
+      var fwConnsForResolve = _effectiveFwConnectors && _effectiveFwConnectors.length > 0 ? _effectiveFwConnectors : (_fwConnector ? [_fwConnector] : []);
       var fwIndex = resolveFirewallIndexes(namespace, fwConnsForResolve);
       for (var fi = 0; fi < allIPs.length; fi++) {
         var fip = allIPs[fi];
@@ -56864,7 +57106,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   // index is actively ingesting (health check) before drawing any conclusions from zero results.
   if (_hasFirewall) {
     var allTicketIPs = (iocs.ips || []);
-    var fwConnectorsToQuery = _allFwConnectors.length > 0 ? _allFwConnectors : (_fwConnector ? [_fwConnector] : []);
+    var fwConnectorsToQuery = _effectiveFwConnectors.length > 0 ? _effectiveFwConnectors : (_fwConnector ? [_fwConnector] : []);
     var totalFwBlocksFound = 0;
     var queriedIndexes = [];
     var healthyIndexes = []; // indexes that have data (connector is ingesting)

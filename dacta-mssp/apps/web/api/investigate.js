@@ -137,7 +137,7 @@ const INVESTIGATOR_PROMPT = `You are a senior SOC forensic investigator at DACTA
 ## Your Mandate
 - You are an UNBIASED investigator. You have NO agenda — not to prove true positive, not to prove false positive.
 - Follow the evidence wherever it leads. Observe, hypothesize, test, refine.
-- Use your tools aggressively. Query SIEM logs, check threat intel, look up IOCs. Don't theorize — VERIFY.
+- Use your tools selectively and only when they are relevant to this alert. Do NOT treat every available connector or tool as relevant evidence. Query only the sources that match the alert context, relevant log sources, and permitted tools listed in the alert context. Don't theorize — VERIFY.
 - Document every finding as a neutral observation with its source and significance.
 
 ## Investigation Methodology
@@ -152,10 +152,11 @@ const INVESTIGATOR_PROMPT = `You are a senior SOC forensic investigator at DACTA
 - Query Elastic SIEM using the SPECIFIC INDEX PATTERNS provided in the alert context (never use generic "logs-*")
 - **CRITICAL**: Use ONLY the exact field names from the 'ACTUAL Elasticsearch Field Names' section in the alert context. Do NOT guess field names — wrong field names return 0 hits.
 - If field mappings are not available, start with a small match_all query (size 1-2) on the target index to discover the actual document structure before constructing targeted queries.
-- If an EDR tool (search_edr) is available, query it for endpoint detections, device status, and security events
-- Check DACTA TIP for IOC reputation and MITRE technique context
-- Look at alert history on the same host — is this a recurring pattern?
-- Search for lateral movement indicators across the environment
+- Use ONLY the relevant index patterns listed in the alert context. If the context says some vendors or log sources are not relevant, do NOT query them
+- Use search_edr ONLY when the alert context explicitly says endpoint telemetry is relevant and permitted
+- If a query is unsuccessful or returns no meaningful data, treat it as inconclusive or suspicious — never as confirmation of a true positive
+- Check DACTA TIP for IOC reputation and MITRE technique context when the alert contains applicable IOCs or techniques
+- Look at alert history on the same host or entity only when that entity is relevant to the alert
 - IMPORTANT: Use the exact index patterns listed in the alert context. These are org-specific and different per client.
 
 ## Output Format
@@ -366,6 +367,188 @@ const INVESTIGATION_TOOLS = [
     }
   }
 ];
+
+function normalizeRelevanceVendor(vendor = '') {
+  const value = String(vendor || '').toLowerCase();
+  if (value.includes('fortinet') || value.includes('fortigate')) return 'fortinet';
+  if (value.includes('palo') || value.includes('panw') || value.includes('pan-os')) return 'paloalto';
+  if (value.includes('imperva') || value.includes('incapsula')) return 'imperva';
+  if (value.includes('crowdstrike') || value.includes('falcon')) return 'crowdstrike';
+  if (value.includes('checkpoint') || value.includes('check point')) return 'checkpoint';
+  if (value.includes('sophos')) return 'sophos';
+  return value.replace(/[^a-z0-9]/g, '');
+}
+
+function inferAlertSourceRelevance(alertContext = {}) {
+  const iocs = alertContext.iocs || {};
+  const text = [
+    alertContext.summary || '',
+    alertContext.description || '',
+    Array.isArray(alertContext.labels) ? alertContext.labels.join(' ') : (alertContext.labels || ''),
+    alertContext.use_case || '',
+    (alertContext.techniques || []).map(t => [t.id || '', t.name || '', t.tactic || ''].join(' ')).join(' ')
+  ].join(' ').toLowerCase();
+
+  const hasIPs = Array.isArray(iocs.ips) && iocs.ips.length > 0;
+  const hasPorts = Array.isArray(iocs.ports) && iocs.ports.length > 0;
+  const hasWebIOCs = (Array.isArray(iocs.domains) && iocs.domains.length > 0) || (Array.isArray(iocs.urls) && iocs.urls.length > 0);
+  const endpointHints = /(powershell|cmd\.exe|rundll32|wscript|cscript|mshta|regsvr32|schtasks|service|registry|hash|sha256|malware|ransom|trojan|process|command\s*line|child process|parent process|execution|endpoint|crowdstrike|falcon|quarantine|kill_process|logon|signin)/i.test(text);
+  const webHints = /(waf|imperva|incapsula|http|https|url|uri|web attack|sqli|sql injection|xss|webshell|application attack|path traversal|owasp|user-agent|referer|cookie)/i.test(text) || hasWebIOCs;
+  const networkHints = /(firewall|fortigate|fortinet|palo alto|pan-os|panw|network|traffic|srcip|dstip|source ip|destination ip|internal|outbound|inbound|port\s*\d+|deny|drop|blocked|connection|delivery optimization|vpn)/i.test(text) || hasIPs || hasPorts;
+
+  const vendorMentions = [];
+  if (/forti(net|gate)/i.test(text)) vendorMentions.push('fortinet');
+  if (/palo alto|pan-os|panw/i.test(text)) vendorMentions.push('paloalto');
+  if (/imperva|incapsula/i.test(text)) vendorMentions.push('imperva');
+  if (/crowdstrike|falcon/i.test(text)) vendorMentions.push('crowdstrike');
+
+  let mode = 'generic';
+  if (webHints && !endpointHints) mode = 'web';
+  else if (networkHints && !endpointHints) mode = 'network';
+  else if (endpointHints) mode = 'endpoint';
+
+  const preferredFirewallVendors = vendorMentions.filter(v => ['fortinet', 'paloalto', 'imperva', 'checkpoint', 'sophos'].includes(v));
+  const allowEDR = endpointHints && mode !== 'web' && !(networkHints && !endpointHints);
+
+  return {
+    mode,
+    allowEDR,
+    vendorMentions,
+    preferredFirewallVendors,
+    hasIPs,
+    hasPorts,
+    hasWebIOCs,
+    reason: mode === 'web'
+      ? 'Web/WAF indicators detected in alert context'
+      : mode === 'network'
+        ? 'Network/firewall indicators detected in alert context'
+        : mode === 'endpoint'
+          ? 'Endpoint/process indicators detected in alert context'
+          : 'No strong telemetry bias detected from alert context'
+  };
+}
+
+async function indexHasTicketSignal(indexPattern, alertContext = {}) {
+  if (!ELASTIC_URL || !ELASTIC_API_KEY || !indexPattern) return false;
+  const iocs = alertContext.iocs || {};
+  const should = [];
+
+  (iocs.ips || []).slice(0, 6).forEach(ip => {
+    should.push({ term: { 'source.ip': ip } });
+    should.push({ term: { 'destination.ip': ip } });
+    should.push({ term: { 'related.ip': ip } });
+  });
+  (iocs.hosts || []).slice(0, 4).forEach(host => {
+    should.push({ match_phrase: { 'host.hostname': host } });
+    should.push({ match_phrase: { 'host.name': host } });
+    should.push({ match_phrase: { 'observer.hostname': host } });
+  });
+  (iocs.domains || []).slice(0, 4).forEach(domain => {
+    should.push({ match_phrase: { 'destination.domain': domain } });
+    should.push({ match_phrase: { 'url.domain': domain } });
+    should.push({ match_phrase: { 'host.name': domain } });
+  });
+
+  if (should.length === 0) return false;
+
+  const body = {
+    size: 1,
+    query: {
+      bool: {
+        must: [{ range: { '@timestamp': { gte: 'now-7d' } } }],
+        should,
+        minimum_should_match: 1
+      }
+    },
+    _source: ['@timestamp']
+  };
+
+  try {
+    const resp = await fetch(`${ELASTIC_URL}/${indexPattern}/_search`, elasticFetchOptions({
+      method: 'POST',
+      headers: {
+        'Authorization': `ApiKey ${ELASTIC_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    }));
+    if (!resp.ok) return false;
+    const data = await resp.json();
+    return (data.hits?.total?.value || 0) > 0;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function selectRelevantOrgContext(alertContext = {}, namespace, orgCtx = {}) {
+  const base = inferAlertSourceRelevance(alertContext);
+  const allLogSources = Array.isArray(orgCtx.logSources) ? orgCtx.logSources.slice() : [];
+  const allConnectors = Array.isArray(orgCtx.connectors) ? orgCtx.connectors.slice() : [];
+  let filteredLogSources = allLogSources.filter(ls => (ls.status || '').toLowerCase() !== 'disabled');
+  let filteredConnectors = allConnectors.slice();
+
+  const isFirewallLike = (item) => {
+    const vendor = normalizeRelevanceVendor(item.vendor || item.display_name || '');
+    const type = String(item.source_type || item.connector_type || '').toLowerCase();
+    return type.includes('firewall') || type.includes('network') || type.includes('waf') || ['fortinet', 'paloalto', 'imperva', 'checkpoint', 'sophos'].includes(vendor);
+  };
+
+  if (base.mode === 'web') {
+    filteredLogSources = filteredLogSources.filter(ls => normalizeRelevanceVendor(ls.vendor) === 'imperva' || String(ls.source_type || '').toLowerCase().includes('waf'));
+    filteredConnectors = filteredConnectors.filter(c => c.connector_type !== 'firewall' || normalizeRelevanceVendor(c.vendor || c.display_name || '') === 'imperva');
+  } else if (base.mode === 'network') {
+    filteredLogSources = filteredLogSources.filter(ls => isFirewallLike(ls) && normalizeRelevanceVendor(ls.vendor) !== 'imperva');
+    filteredConnectors = filteredConnectors.filter(c => c.connector_type !== 'firewall' || normalizeRelevanceVendor(c.vendor || c.display_name || '') !== 'imperva');
+  }
+
+  if (base.preferredFirewallVendors.length > 0) {
+    filteredLogSources = filteredLogSources.filter(ls => !isFirewallLike(ls) || base.preferredFirewallVendors.includes(normalizeRelevanceVendor(ls.vendor)));
+    filteredConnectors = filteredConnectors.filter(c => c.connector_type !== 'firewall' || base.preferredFirewallVendors.includes(normalizeRelevanceVendor(c.vendor || c.display_name || '')));
+  }
+
+  if (filteredLogSources.length > 1 && base.hasIPs) {
+    const matchedSources = [];
+    for (const ls of filteredLogSources.slice(0, 8)) {
+      if (ls.index_pattern && await indexHasTicketSignal(ls.index_pattern, alertContext)) {
+        matchedSources.push(ls);
+      }
+    }
+    if (matchedSources.length > 0) filteredLogSources = matchedSources;
+  }
+
+  if (filteredLogSources.length === 0) filteredLogSources = allLogSources.slice();
+
+  const relevantIndexPatterns = [...new Set(filteredLogSources.map(ls => ls.index_pattern).filter(Boolean))];
+  const allowedFirewallVendors = new Set(filteredLogSources.filter(isFirewallLike).map(ls => normalizeRelevanceVendor(ls.vendor)));
+
+  filteredConnectors = filteredConnectors.filter(c => {
+    if (c.connector_type === 'edr') return base.allowEDR;
+    if (c.connector_type === 'firewall' && allowedFirewallVendors.size > 0) {
+      return allowedFirewallVendors.has(normalizeRelevanceVendor(c.vendor || c.display_name || ''));
+    }
+    return true;
+  });
+
+  const suppressedLogSources = allLogSources
+    .filter(ls => !filteredLogSources.includes(ls))
+    .map(ls => ({ source_name: ls.source_name, vendor: ls.vendor, source_type: ls.source_type }));
+
+  return {
+    ...base,
+    relevantLogSources: filteredLogSources,
+    relevantConnectors: filteredConnectors,
+    relevantIndexPatterns
+      : relevantIndexPatterns,
+    suppressedLogSources
+  };
+}
+
+function buildRelevantInvestigationToolset(sourceRelevance, edrContext) {
+  return INVESTIGATION_TOOLS.filter(tool => {
+    if (tool.name !== 'search_edr') return true;
+    return !!(sourceRelevance && sourceRelevance.allowEDR && edrContext);
+  });
+}
 
 // ═══════════════════════════════════════════════
 // Elastic Field Mapping Discovery
@@ -893,7 +1076,7 @@ function normalizeOpenAIResponse(oaiResp) {
 // Runs LLM with tools, loops until text response
 // ═══════════════════════════════════════════════
 // Unified agentic phase runner — works with both Claude and OpenAI
-async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds = 6, provider = 'claude') {
+async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds = 6, provider = 'claude', toolDefs = INVESTIGATION_TOOLS) {
   // Dual-model strategy: Haiku for tool-use rounds (fast, cheap), Sonnet for final synthesis (quality)
   const CLAUDE_TOOL_MODEL = 'claude-haiku-4-5-20251001';
   const CLAUDE_SYNTH_MODEL = 'claude-sonnet-4-20250514';
@@ -927,7 +1110,7 @@ async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds =
           : systemPrompt,
         messages
       };
-      if (!isLast) callBody.tools = INVESTIGATION_TOOLS;
+      if (!isLast) callBody.tools = toolDefs;
       result = await callClaude(callBody);
     } else {
       // OpenAI path
@@ -936,7 +1119,7 @@ async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds =
         max_tokens: isLast ? 4096 : 2048,
         messages
       };
-      if (!isLast) oaiBody.tools = claudeToolsToOpenAI(INVESTIGATION_TOOLS);
+      if (!isLast) oaiBody.tools = claudeToolsToOpenAI(toolDefs);
       if (isLast) {
         // Update system prompt for final call
         oaiBody.messages = oaiBody.messages.map(m =>
@@ -1017,20 +1200,20 @@ async function runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds =
 }
 
 // Run a phase with the assigned primary model, falling back to alternate on failure
-async function runPhaseWithFallback(phase, systemPrompt, userMessage, vault, maxToolRounds) {
+async function runPhaseWithFallback(phase, systemPrompt, userMessage, vault, maxToolRounds, toolDefs = INVESTIGATION_TOOLS) {
   const routing = MODEL_ROUTING[phase] || { primary: 'claude', fallback: 'openai' };
   let provider = routing.primary;
   let fallbackUsed = false;
 
   try {
-    const result = await runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds, provider);
+    const result = await runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds, provider, toolDefs);
     return { ...result, model: provider === 'claude' ? 'claude-haiku/sonnet-4' : 'gpt-4o', fallback_used: false };
   } catch (primaryErr) {
     console.warn(`[Investigate] ${phase} primary (${provider}) failed: ${primaryErr.message}. Falling back to ${routing.fallback}`);
     provider = routing.fallback;
     fallbackUsed = true;
     try {
-      const result = await runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds, provider);
+      const result = await runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds, provider, toolDefs);
       return { ...result, model: provider === 'claude' ? 'claude-haiku/sonnet-4' : 'gpt-4o', fallback_used: true };
     } catch (fallbackErr) {
       console.error(`[Investigate] ${phase} fallback (${provider}) also failed: ${fallbackErr.message}`);
@@ -1160,11 +1343,12 @@ export default async function handler(req, res) {
         console.log('[Investigate] EDR fallback to Heimdal env vars (no org EDR connector)');
       }
     }
-    _currentEDRContext = edrAuth ? { auth: edrAuth, vendor: edrAuth.vendor } : null;
+    const sourceRelevance = await selectRelevantOrgContext(alert_context, namespace, orgCtx);
+    _currentEDRContext = (sourceRelevance.allowEDR && edrAuth) ? { auth: edrAuth, vendor: edrAuth.vendor } : null;
 
     // ── Discover actual Elastic field mappings for accurate queries ──
-    const effectivePatterns = orgCtx.indexPatterns.length > 0 ? orgCtx.indexPatterns
-      : (namespace ? [`logs-*-${namespace}`] : []);
+    const effectivePatterns = sourceRelevance.relevantIndexPatterns.length > 0 ? sourceRelevance.relevantIndexPatterns
+      : (orgCtx.indexPatterns.length > 0 ? orgCtx.indexPatterns : (namespace ? [`logs-*-${namespace}`] : []));
     const fieldMappings = await fetchElasticFieldMappings(effectivePatterns);
 
     // ── Build index pattern context for LLM ──
@@ -1185,27 +1369,28 @@ export default async function handler(req, res) {
     }
 
     // ── Build log source summary ──
+    const contextLogSources = (sourceRelevance.relevantLogSources && sourceRelevance.relevantLogSources.length > 0) ? sourceRelevance.relevantLogSources : orgCtx.logSources;
     let logSourceSummary = '';
-    if (orgCtx.logSources.length > 0) {
-      logSourceSummary = '\n### Configured Log Sources\n' + orgCtx.logSources.map(ls =>
+    if (contextLogSources.length > 0) {
+      logSourceSummary = '\n### Relevant Log Sources for This Alert\n' + contextLogSources.map(ls =>
         `- **${ls.source_name}** (${ls.vendor}, type: ${ls.source_type}, status: ${ls.status})${ls.index_pattern ? ' — indices: ' + ls.index_pattern : ''}`
       ).join('\n');
     }
 
     // ── Build connector/tools summary ──
     let connectorSummary = '';
-    const activeConnectors = orgCtx.connectors.filter(c => c.health_status === 'healthy' || c.health_status === 'degraded');
+    const scopedConnectors = (sourceRelevance.relevantConnectors && sourceRelevance.relevantConnectors.length > 0) ? sourceRelevance.relevantConnectors : orgCtx.connectors;
+    const activeConnectors = scopedConnectors.filter(c => c.health_status === 'healthy' || c.health_status === 'degraded');
     if (activeConnectors.length > 0) {
       connectorSummary = '\n### Available Security Tools for This Organization\n' + activeConnectors.map(c =>
         `- **${c.vendor}** (${c.connector_type}) — status: ${c.health_status}`
       ).join('\n');
       if (_currentEDRContext) {
-        connectorSummary += `\n\n**EDR Available**: ${_currentEDRContext.vendor}. Use the search_edr tool to query endpoint detections, device info, and security events from ${_currentEDRContext.vendor}.`;
+        connectorSummary += `\n\n**EDR Available For This Alert**: ${_currentEDRContext.vendor}. Use the search_edr tool only for endpoint-relevant hypotheses.`;
       }
     }
 
-    // Build the context message for the LLM
-    const alertBrief = `## Alert Under Investigation: ${ticket_key}
+    const relevanceSummary = `\n### Source Relevance Guardrails\n- Primary telemetry focus: ${sourceRelevance.mode}\n- Endpoint telemetry allowed: ${sourceRelevance.allowEDR ? 'YES' : 'NO'}\n- Reason: ${sourceRelevance.reason}\n${sourceRelevance.suppressedLogSources && sourceRelevance.suppressedLogSources.length > 0 ? '- Suppress these non-relevant sources unless new evidence makes them relevant: ' + sourceRelevance.suppressedLogSources.map(ls => `${ls.vendor || 'Unknown'} (${ls.source_type || 'unknown'})`).join(', ') : '- No source suppressions identified'}\n- IMPORTANT: Do not count failed or empty irrelevant queries as evidence. Treat unanswered questions as inconclusive and escalate to the analyst for confirmation.`;\n\n    const relevantToolset = buildRelevantInvestigationToolset(sourceRelevance, _currentEDRContext);\n\n    // Build the context message for the LLM\n    const alertBrief = `## Alert Under Investigation: ${ticket_key}
 **Summary**: ${alert_context.summary || 'N/A'}
 **Priority**: ${alert_context.priority || 'Unknown'}
 **Organization**: ${alert_context.organization || 'Unknown'}
@@ -1297,7 +1482,8 @@ You MUST label your verdict as SUSPICIOUS and list which queries the analyst nee
 ${indexContext}
 ${fieldMappingContext}
 ${logSourceSummary}
-${connectorSummary}`;
+${connectorSummary}
+${relevanceSummary}`;
 
     const tokenizedBrief = vault.tokenize(alertBrief);
 
@@ -1312,7 +1498,8 @@ ${connectorSummary}`;
         vault.tokenize(INVESTIGATOR_PROMPT),
         tokenizedBrief,
         vault,
-        6 // Allow up to 6 tool rounds for thorough investigation
+        6, // Allow up to 6 tool rounds for thorough investigation
+        relevantToolset
       );
 
       const parsed = parsePhaseJSON(phaseResult.text);
@@ -1436,7 +1623,8 @@ ${connectorSummary}`;
         vault.tokenize(ADVERSARIAL_PROMPT),
         adversarialInput,
         vault,
-        4 // Fewer tool rounds — focused challenge
+        4, // Fewer tool rounds — focused challenge
+        relevantToolset
       );
 
       const parsed = parsePhaseJSON(phaseResult.text);
