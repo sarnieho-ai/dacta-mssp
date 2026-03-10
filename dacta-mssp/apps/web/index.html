@@ -56270,6 +56270,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     destTipResults: [],    // DACTA TIP lookups for dest IPs from firewall logs
     deviceNames: [],       // device names extracted from logs (e.g. iphone, accounta)
     macAddresses: [],      // MAC addresses found in logs
+    jiraCorrelation: [],   // Jira cross-ticket correlation (same rule + same host/IP + same org)
     elasticConnected: false, openctiConnected: false,
     queriesRun: 0, queryDetails: []
   };
@@ -57015,6 +57016,92 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
   // ── Global: merge device names and MAC addresses from IOCs into logs (applies to all paths) ──
   (iocs.devices || []).forEach(function(d) { if (!logs.deviceNames.includes(d)) logs.deviceNames.push(d); });
   (iocs.macs || []).forEach(function(m) { if (!logs.macAddresses.includes(m)) logs.macAddresses.push(m); });
+
+  // ═══════════════════════════════════════════════
+  // JIRA CROSS-TICKET CORRELATION
+  // Query Jira for tickets with the same rule/summary AND same host/IP AND same org
+  // (excluding the current ticket). Jira is the single source of truth.
+  // ═══════════════════════════════════════════════
+  try {
+    var jiraSummary = (issueData.fields || {}).summary || '';
+    // Extract the detection rule name from the summary (e.g. "DACTA Horizontal Port Scan Detected")
+    // Jira summaries follow pattern: "[OrgName] - [Rule Name] - [entity]" or just the rule name
+    var _jiraRuleName = jiraSummary;
+    // Try to extract rule name by splitting on common delimiters
+    var _summaryParts = jiraSummary.split(' - ');
+    if (_summaryParts.length >= 2) {
+      // Usually format: "OrgName - Rule Name - entity" or "Rule Name - entity"
+      _jiraRuleName = _summaryParts.length >= 3 ? _summaryParts[1].trim() : _summaryParts[0].trim();
+    }
+    // Also prepare host/IP entities for narrowing
+    var _corrHosts = (iocs.hosts || []).slice(0, 3);
+    var _corrIPs = (iocs.ips || []).slice(0, 5);
+    var _corrEntities = _corrHosts.concat(_corrIPs).filter(function(e) { return e && e.length > 1; });
+
+    // Build JQL: same org + summary contains the rule name, exclude current ticket
+    var _orgField = '';
+    if (f.customfield_10002 && f.customfield_10002.length > 0) {
+      _orgField = f.customfield_10002[0].name || '';
+    }
+    // Build text search clause — escape JQL special chars in rule name
+    var _escapedRule = _jiraRuleName.replace(/[\[\]\(\)\{\}"\\]/g, ' ').replace(/\s+/g, ' ').trim();
+    // Truncate to first 60 chars to avoid overly specific matching
+    if (_escapedRule.length > 60) _escapedRule = _escapedRule.substring(0, 60).trim();
+    var _jqlParts = ['project = DAC'];
+    _jqlParts.push('key != "' + ticketKey + '"');
+    if (_escapedRule) {
+      _jqlParts.push('summary ~ "' + _escapedRule + '"');
+    }
+    // Add entity text search — look for tickets mentioning the same host/IP in summary or description
+    if (_corrEntities.length > 0) {
+      var _entityClauses = _corrEntities.map(function(ent) {
+        return 'text ~ "' + ent.replace(/"/g, '') + '"';
+      });
+      _jqlParts.push('(' + _entityClauses.join(' OR ') + ')');
+    }
+    _jqlParts.push('created >= -90d');
+    _jqlParts.push('ORDER BY created DESC');
+    var _corrJQL = _jqlParts.join(' AND ');
+
+    var qDJC = { name: 'Jira Cross-Ticket Correlation', index: 'Jira (DAC)', query: _corrJQL.substring(0, 80) + '...', status: 'running' };
+    logs.queryDetails.push(qDJC); logs.queriesRun++;
+    console.log('[Investigation] Jira correlation JQL: ' + _corrJQL);
+
+    var _jiraResp = await fetch('/api/jira?action=search&jql=' + encodeURIComponent(_corrJQL) + '&maxResults=20&fields=key,summary,priority,status,created,updated,customfield_10002,assignee');
+    if (_jiraResp.ok) {
+      var _jiraData = await _jiraResp.json();
+      var _jiraIssues = (_jiraData.issues || []);
+      qDJC.status = 'success'; qDJC.hits = _jiraIssues.length;
+      console.log('[Investigation] Jira correlation found ' + _jiraIssues.length + ' related tickets');
+
+      // Filter: ensure tickets actually share an org (via customfield_10002) if possible
+      _jiraIssues.forEach(function(iss) {
+        var issFields = iss.fields || {};
+        var issOrg = '';
+        if (issFields.customfield_10002 && issFields.customfield_10002.length > 0) {
+          issOrg = issFields.customfield_10002[0].name || '';
+        }
+        // Only include if same org (or org couldn't be determined)
+        if (!_orgField || !issOrg || issOrg.toLowerCase() === _orgField.toLowerCase()) {
+          logs.jiraCorrelation.push({
+            key: iss.key,
+            summary: issFields.summary || '',
+            status: issFields.status ? issFields.status.name : 'Unknown',
+            priority: issFields.priority ? issFields.priority.name : 'Unknown',
+            created: issFields.created || '',
+            updated: issFields.updated || '',
+            assignee: issFields.assignee ? issFields.assignee.displayName : 'Unassigned',
+            org: issOrg
+          });
+        }
+      });
+    } else {
+      qDJC.status = 'error'; qDJC.hits = 0;
+      console.warn('[Investigation] Jira correlation query failed: ' + _jiraResp.status);
+    }
+  } catch (jcErr) {
+    console.warn('[Investigation] Jira correlation error:', jcErr.message);
+  }
 
   return logs;
 }
@@ -57835,7 +57922,18 @@ async function runAIInvestigation(ticketKey, issueData) {
       mac_addresses: elasticLogs.macAddresses || [],
       has_edr: _invHasCSEDR,
       investigation_mode: _invHasCSEDR ? 'edr_full' : 'firewall_only'
-    }
+    },
+    // Jira cross-ticket correlation (same rule + same host/IP + same org)
+    jira_correlation: (elasticLogs.jiraCorrelation || []).map(function(jt) {
+      return {
+        key: jt.key,
+        summary: jt.summary,
+        status: jt.status,
+        priority: jt.priority,
+        created: jt.created,
+        assignee: jt.assignee
+      };
+    })
   };
   var _llmNamespace = invNamespace;
   var _llmPhaseResults = {};  // Stores results from each LLM phase
@@ -57914,6 +58012,24 @@ async function runAIInvestigation(ticketKey, issueData) {
     });
   }
 
+  // Inject Jira cross-ticket correlation as evidence
+  var _jcLen = (elasticLogs.jiraCorrelation || []).length;
+  if (_jcLen >= 3) {
+    inculpatory.push({
+      title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets with same rule + entity (last 90d)',
+      severity: 'high',
+      source: 'JIRA_CORRELATION',
+      detail: _jcLen + ' other Jira tickets match the same detection rule on the same host/IP for this org. This recurring pattern suggests either a persistent threat or a noisy rule. Keys: ' + elasticLogs.jiraCorrelation.slice(0, 5).map(function(j) { return j.key; }).join(', ')
+    });
+  } else if (_jcLen >= 1) {
+    inculpatory.push({
+      title: 'Jira Cross-Ticket: ' + _jcLen + ' related ticket(s) found (same rule + entity)',
+      severity: 'medium',
+      source: 'JIRA_CORRELATION',
+      detail: 'Found ' + _jcLen + ' related Jira ticket(s) with the same detection rule and entities. Keys: ' + elasticLogs.jiraCorrelation.map(function(j) { return j.key; }).join(', ')
+    });
+  }
+
   // ── Compute balanced verdict ──
   var tpWeight = 0, fpWeight = 0;
   inculpatory.forEach(function(e) { tpWeight += e.severity === 'critical' ? 30 : e.severity === 'high' ? 20 : 10; });
@@ -57931,6 +58047,11 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (csHighConfirmCount > 0) tpWeight += csHighConfirmCount * 35; // High CS confidence = very strong TP signal
   if (csMediumConfirmCount > 0) tpWeight += csMediumConfirmCount * 18;
   if (csEnrichment.actors.length > 0) tpWeight += 15; // Named adversary attribution = significant TP signal
+  // ── Jira cross-ticket correlation weight ──
+  // Multiple related tickets (same rule + same entity + same org) indicate a recurring pattern
+  var _jiraCorrCount = (elasticLogs.jiraCorrelation || []).length;
+  if (_jiraCorrCount >= 3) tpWeight += 15; // Strong recurring pattern
+  else if (_jiraCorrCount >= 1) tpWeight += 8; // Some recurrence
 
   // ── TELEMETRY DEPTH CHECK: Detect if verdict is based on lack of evidence rather than confirmed malicious activity ──
   // If the only inculpatory evidence comes from TICKET_TEXT (no SIEM-confirmed threat indicators),
@@ -57961,15 +58082,67 @@ async function runAIInvestigation(ticketKey, issueData) {
     fpWeight += 20; // Boost FP weight significantly for zero-byte + clean TIP
   }
 
+  // ═══════════════════════════════════════════════
+  // FAILED QUERIES GUARDRAIL
+  // If critical investigation queries failed or returned no data,
+  // NEVER allow TRUE_POSITIVE — force SUSPICIOUS with explicit
+  // list of failed queries for analyst verification.
+  // ═══════════════════════════════════════════════
+  var _failedQueries = [];
+  var _emptyQueries = [];
+  (elasticLogs.queryDetails || []).forEach(function(qd) {
+    if (qd.status === 'error') {
+      _failedQueries.push(qd.name);
+    } else if (qd.status === 'success' && (qd.hits === 0 || qd.hits === undefined)) {
+      _emptyQueries.push(qd.name);
+    }
+  });
+  // Critical query categories: SIEM alert lookup, network connections, alert history, TIP
+  var _criticalQueryNames = ['CrowdStrike Alert', 'Alert History', 'Alert Correlation', 'DACTA TIP', 'Firewall', 'Network', 'Host Inventory'];
+  var _failedCritical = _failedQueries.filter(function(q) {
+    return _criticalQueryNames.some(function(cn) { return q.indexOf(cn) !== -1; });
+  });
+  var _emptyCritical = _emptyQueries.filter(function(q) {
+    return _criticalQueryNames.some(function(cn) { return q.indexOf(cn) !== -1; });
+  });
+  // Count how many critical query areas had failures or empty results
+  var _critFailCount = _failedCritical.length;
+  var _critEmptyCount = _emptyCritical.length;
+  var _totalCritIssues = _critFailCount + _critEmptyCount;
+  // If 3+ critical queries failed/empty, this is insufficient evidence — cap at SUSPICIOUS
+  var _failedQueriesGuardrail = false;
+  var _failedQueryList = _failedCritical.concat(_emptyCritical);
+  if (_totalCritIssues >= 3) {
+    console.warn('[Verdict Guardrail] ' + _critFailCount + ' critical queries FAILED, ' + _critEmptyCount + ' returned EMPTY. Queries: ' + _failedQueryList.join(', ') + '. Forcing SUSPICIOUS.');
+    _failedQueriesGuardrail = true;
+    _forceSuspiciousCap = true; // Also set this so LLM verdict check below catches it
+  }
+
+  // Store guardrail data for LLM context and UI display
+  var _guardrailInfo = {
+    active: _failedQueriesGuardrail,
+    failedQueries: _failedCritical,
+    emptyQueries: _emptyCritical,
+    totalIssues: _totalCritIssues,
+    message: _failedQueriesGuardrail
+      ? 'GUARDRAIL ACTIVE: ' + _totalCritIssues + ' critical queries had no results or failed. Analyst must verify: ' + _failedQueryList.join(', ') + '.'
+      : ''
+  };
+
   var verdict, confidence, verdictIcon, verdictColor, verdictBg, verdictBorder, actionLabel;
   var tpRatio = tpWeight / Math.max(tpWeight + fpWeight, 1);
 
   if (_forceSuspiciousCap) {
-    // Forced SUSPICIOUS: lack of telemetry means we cannot confirm TP
-    verdict = 'SUSPICIOUS \u2014 Insufficient Telemetry';
+    // Forced SUSPICIOUS: lack of telemetry or failed queries means we cannot confirm TP
+    if (_failedQueriesGuardrail) {
+      verdict = 'SUSPICIOUS \u2014 Incomplete Investigation';
+      actionLabel = 'Analyst verification required \u2014 ' + _totalCritIssues + ' critical queries returned no data';
+    } else {
+      verdict = 'SUSPICIOUS \u2014 Insufficient Telemetry';
+      actionLabel = 'Analyst review required \u2014 no endpoint telemetry to confirm threat';
+    }
     confidence = Math.min(40 + Math.round(Math.max(tpRatio, 1 - tpRatio) * 25), 65);
     verdictIcon = dIcon('warning',14) + ''; verdictColor = 'var(--amber)'; verdictBg = 'rgba(245,158,11,0.05)'; verdictBorder = 'rgba(245,158,11,0.3)';
-    actionLabel = 'Analyst review required \u2014 no endpoint telemetry to confirm threat';
   } else if (fpWeight > tpWeight * 1.3) {
     verdict = 'FALSE POSITIVE \u2014 Business Justified';
     confidence = Math.min(55 + Math.round((fpWeight / (tpWeight + fpWeight)) * 40), 95);
@@ -58102,6 +58275,19 @@ async function runAIInvestigation(ticketKey, issueData) {
   var roundLabels = ['LLM Investigation + Tool Queries', 'Evidence Synthesis & Narrative', 'Adversarial Challenge & Final Verdict'];
   var roundSubtitles = ['AI investigator querying ' + invToolsLabel, 'Synthesizing findings into assessment', 'Devil\'s advocate challenging the verdict'];
 
+  // Inject guardrail + Jira correlation context into LLM alert context before LLM rounds
+  if (_failedQueriesGuardrail) {
+    _llmAlertContext.verdict_guardrail = {
+      active: true,
+      failed_queries: _failedCritical,
+      empty_queries: _emptyCritical,
+      instruction: 'CRITICAL: ' + _totalCritIssues + ' investigation queries failed or returned no data (' + _failedQueryList.join(', ') + '). You MUST NOT conclude TRUE_POSITIVE without confirmed evidence. Default to SUSPICIOUS and explicitly list which queries need analyst verification.'
+    };
+  }
+  if ((elasticLogs.jiraCorrelation || []).length > 0) {
+    _llmAlertContext.jira_correlated_ticket_count = elasticLogs.jiraCorrelation.length;
+  }
+
   // Process each round
   for (var rnd = 1; rnd <= totalRounds; rnd++) {
     // Update pipeline stage to "Processing"
@@ -58228,6 +58414,12 @@ async function runAIInvestigation(ticketKey, issueData) {
                 console.warn('[Verdict Coherence] TRUE_POSITIVE but telemetry is insufficient (no EDR + no SIEM-confirmed threats). Downgrading to SUSPICIOUS.');
                 _fv = 'SUSPICIOUS';
               }
+              // ── Failed queries guardrail for LLM verdict ──
+              // If LLM says TRUE_POSITIVE but critical queries failed/returned empty, cap at SUSPICIOUS
+              if (_fv === 'TRUE_POSITIVE' && _failedQueriesGuardrail) {
+                console.warn('[Verdict Guardrail] LLM said TRUE_POSITIVE but ' + _totalCritIssues + ' critical queries had no data. Downgrading to SUSPICIOUS.');
+                _fv = 'SUSPICIOUS';
+              }
 
               if (_fv === 'TRUE_POSITIVE') {
                 verdict = 'TRUE POSITIVE \u2014 Confirmed Threat';
@@ -58238,9 +58430,15 @@ async function runAIInvestigation(ticketKey, issueData) {
                 verdictColor = 'var(--green)'; verdictBg = 'rgba(16,185,129,0.05)'; verdictBorder = 'rgba(16,185,129,0.3)';
                 actionLabel = 'Close as false positive';
               } else {
-                verdict = 'SUSPICIOUS \u2014 Requires Analyst Review';
+                // Apply guardrail-specific message if applicable
+                if (_failedQueriesGuardrail) {
+                  verdict = 'SUSPICIOUS \u2014 Incomplete Investigation';
+                  actionLabel = 'Analyst verification required \u2014 ' + _totalCritIssues + ' critical queries returned no data';
+                } else {
+                  verdict = 'SUSPICIOUS \u2014 Requires Analyst Review';
+                  actionLabel = 'Manual investigation recommended';
+                }
                 verdictColor = 'var(--amber)'; verdictBg = 'rgba(245,158,11,0.05)'; verdictBorder = 'rgba(245,158,11,0.3)';
-                actionLabel = 'Manual investigation recommended';
               }
               confidence = _llmResp.result.final_confidence || confidence;
               // Cap confidence if verdict was overridden by coherence check
@@ -58438,7 +58636,25 @@ async function runAIInvestigation(ticketKey, issueData) {
       '<span>' + dIcon('dot',14) + ' Inculpatory: ' + _summIncul + ' finding' + (_summIncul !== 1 ? 's' : '') + '</span>' +
       '<span>' + dIcon('dot',14) + ' Exculpatory: ' + _summExcul + ' finding' + (_summExcul !== 1 ? 's' : '') + '</span>' +
       (_llmModeActive ? '' : '<span>' + dIcon('barChart',14) + ' TP weight: ' + tpWeight + ' / FP weight: ' + fpWeight + '</span>') +
-      '<span>' + actionLabel + '</span></div></div>';
+      '<span>' + actionLabel + '</span></div>';
+
+  // Add guardrail warning if active
+  if (_failedQueriesGuardrail) {
+    verdictBannerHTML += '<div style="margin-top:8px;padding:8px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:6px;">' +
+      '<div style="font-size:10px;font-weight:600;color:var(--amber);margin-bottom:4px;">' + dIcon('warning',12) + ' Investigation Incomplete \u2014 Analyst Verification Required</div>' +
+      '<div style="font-size:9px;color:var(--text-muted);">The following queries returned no data or failed. Analyst must verify these manually before confirming verdict:</div>' +
+      '<div style="font-size:9px;color:var(--text-secondary);margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;">';
+    _failedQueryList.forEach(function(fq) {
+      verdictBannerHTML += '<span style="padding:2px 6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:4px;font-family:var(--font-mono);font-size:8px;">' + fq + '</span>';
+    });
+    verdictBannerHTML += '</div></div>';
+  }
+  // Add Jira correlation summary if found
+  if ((elasticLogs.jiraCorrelation || []).length > 0) {
+    verdictBannerHTML += '<div style="margin-top:6px;font-size:9px;color:var(--text-muted);">' +
+      dIcon('clipboard',12) + ' ' + elasticLogs.jiraCorrelation.length + ' related Jira ticket(s) found with same rule + entity. See Correlated Alerts for details.</div>';
+  }
+  verdictBannerHTML += '</div>';
 
   roundsContainer.innerHTML += verdictBannerHTML;
 
@@ -58554,51 +58770,96 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   // Populate Correlated Alerts card
   var corrCard = document.getElementById('correlatedAlertsCard');
-  if (corrCard && elasticLogs && elasticLogs.alertHistory) {
-    var ah = elasticLogs.alertHistory;
-    var isIPMode = ah.correlationMode === 'ip';
-    var isSimulated = ah.correlationMode === 'simulated';
-    var scopeLabel = isIPMode
-      ? 'correlated alerts matching IPs: ' + (ah.correlatedIPs || []).join(', ')
-      : isSimulated
-        ? 'results — Elastic SIEM unavailable (simulated)'
-        : 'historical alerts on this host';
-    var cHTML = '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' +
-      (ah.totalAlerts || 0) + ' ' + scopeLabel + (isSimulated ? '' : ' (last 30d)') + '</div>';
+  if (corrCard && elasticLogs) {
+    var cHTML = '';
 
-    if (ah.byName && ah.byName.length > 0) {
-      ah.byName.slice(0, 8).forEach(function(b) {
-        cHTML += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border-subtle);">' +
-          '<span style="font-size:10px;color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + b.key + '</span>' +
-          '<span style="font-size:10px;font-weight:600;color:var(--text-primary);min-width:30px;text-align:right;">' + b.doc_count + '</span>' +
+    // ── SECTION 1: Jira Cross-Ticket Correlation (primary — Jira is single source of truth) ──
+    var _jiraCorr = elasticLogs.jiraCorrelation || [];
+    if (_jiraCorr.length > 0) {
+      cHTML += '<div style="margin-bottom:10px;">';
+      cHTML += '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px;">' +
+        dIcon('clipboard',12) + ' Jira Cross-Ticket Correlation (' + _jiraCorr.length + ' related)</div>';
+      _jiraCorr.slice(0, 10).forEach(function(jt) {
+        var _jtAge = '';
+        if (jt.created) {
+          var _jtDays = Math.floor((Date.now() - new Date(jt.created).getTime()) / 86400000);
+          _jtAge = _jtDays === 0 ? 'today' : _jtDays + 'd ago';
+        }
+        var _jtPri = (jt.priority || '').split(' - ')[0] || '';
+        var _jtPriColor = _jtPri === 'P1' ? '#ef4444' : _jtPri === 'P2' ? '#f59e0b' : '#00d4ff';
+        var _jtStatusColor = (jt.status || '').toLowerCase().includes('closed') || (jt.status || '').toLowerCase().includes('resolved')
+          ? '#10b981' : (jt.status || '').toLowerCase().includes('progress') ? '#3b82f6' : 'var(--text-muted)';
+        cHTML += '<div style="padding:6px 8px;background:var(--surface-secondary);border-radius:6px;border-left:3px solid #6366F1;margin-bottom:4px;cursor:pointer;" onclick="openTicket(\'' + jt.key + '\')">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<span style="font-size:10px;font-weight:600;color:var(--cyan);font-family:var(--font-mono);">' + jt.key + '</span>' +
+            '<div style="display:flex;gap:4px;align-items:center;">' +
+              '<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:' + _jtPriColor + '15;color:' + _jtPriColor + ';border:1px solid ' + _jtPriColor + '30;">' + _jtPri + '</span>' +
+              '<span style="font-size:8px;padding:1px 5px;border-radius:8px;color:' + _jtStatusColor + ';">' + jt.status + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="font-size:9px;color:var(--text-secondary);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(jt.summary) + '</div>' +
+          '<div style="font-size:8px;color:var(--text-muted);margin-top:2px;">' + _jtAge + (jt.assignee ? ' \u00B7 ' + jt.assignee : '') + '</div>' +
         '</div>';
       });
-    } else if (ah.totalAlerts === 0) {
-      cHTML += '<div style="font-size:10px;color:var(--text-muted);font-style:italic;padding:6px 0;">' +
-        (isIPMode ? 'No correlated alerts found for these IPs in the last 30 days.' : 'No historical alerts found for this host.') +
-        '</div>';
-    }
-
-    if (ah.bySeverity && ah.bySeverity.length > 0) {
-      cHTML += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">';
-      ah.bySeverity.forEach(function(s) {
-        var sk = (s.key || '').toLowerCase();
-        var sc = sk.includes('critical') ? '#ef4444' : sk.includes('high') ? '#f59e0b' : sk.includes('medium') ? '#00d4ff' : '#10b981';
-        cHTML += '<span style="font-size:9px;padding:2px 8px;background:' + sc + '15;border:1px solid ' + sc + '30;border-radius:10px;color:' + sc + ';">' + s.key + ': ' + s.doc_count + '</span>';
-      });
+      if (_jiraCorr.length > 10) {
+        cHTML += '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:4px 0;">+ ' + (_jiraCorr.length - 10) + ' more related tickets</div>';
+      }
       cHTML += '</div>';
+    } else {
+      cHTML += '<div style="font-size:10px;color:var(--text-muted);font-style:italic;padding:4px 0;margin-bottom:8px;">' +
+        dIcon('clipboard',12) + ' No correlated Jira tickets found (same rule + same entity in last 90d).</div>';
     }
 
-    // Show correlated destination IPs if available (from IP-mode query)
-    if (isIPMode && ah.byDest && ah.byDest.length > 0) {
-      cHTML += '<div style="margin-top:8px;">';
-      cHTML += '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Other Destination IPs in correlated alerts</div>';
-      ah.byDest.slice(0, 5).forEach(function(d) {
-        cHTML += '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border-subtle);">' +
-          '<span style="font-size:10px;font-family:var(--font-mono);color:var(--cyan);">' + d.key + '</span>' +
-          '<span style="font-size:10px;color:var(--text-muted);">' + d.doc_count + ' events</span>' +
-        '</div>';
-      });
+    // ── SECTION 2: SIEM-Based Alert History (secondary — from Elastic) ──
+    if (elasticLogs.alertHistory) {
+      var ah = elasticLogs.alertHistory;
+      var isIPMode = ah.correlationMode === 'ip';
+      var isSimulated = ah.correlationMode === 'simulated';
+      var scopeLabel = isIPMode
+        ? 'correlated alerts matching IPs: ' + (ah.correlatedIPs || []).join(', ')
+        : isSimulated
+          ? 'results \u2014 Elastic SIEM unavailable (simulated)'
+          : 'historical alerts on this host';
+      cHTML += '<div style="border-top:1px solid var(--border-subtle);padding-top:8px;margin-top:4px;">';
+      cHTML += '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">' + dIcon('search',12) + ' SIEM Alert History</div>';
+      cHTML += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' +
+        (ah.totalAlerts || 0) + ' ' + scopeLabel + (isSimulated ? '' : ' (last 30d)') + '</div>';
+
+      if (ah.byName && ah.byName.length > 0) {
+        ah.byName.slice(0, 8).forEach(function(b) {
+          cHTML += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border-subtle);">' +
+            '<span style="font-size:10px;color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + b.key + '</span>' +
+            '<span style="font-size:10px;font-weight:600;color:var(--text-primary);min-width:30px;text-align:right;">' + b.doc_count + '</span>' +
+          '</div>';
+        });
+      } else if (ah.totalAlerts === 0) {
+        cHTML += '<div style="font-size:10px;color:var(--text-muted);font-style:italic;padding:6px 0;">' +
+          (isIPMode ? 'No correlated alerts found for these IPs in the last 30 days.' : 'No historical alerts found for this host.') +
+          '</div>';
+      }
+
+      if (ah.bySeverity && ah.bySeverity.length > 0) {
+        cHTML += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">';
+        ah.bySeverity.forEach(function(s) {
+          var sk = (s.key || '').toLowerCase();
+          var sc = sk.includes('critical') ? '#ef4444' : sk.includes('high') ? '#f59e0b' : sk.includes('medium') ? '#00d4ff' : '#10b981';
+          cHTML += '<span style="font-size:9px;padding:2px 8px;background:' + sc + '15;border:1px solid ' + sc + '30;border-radius:10px;color:' + sc + ';">' + s.key + ': ' + s.doc_count + '</span>';
+        });
+        cHTML += '</div>';
+      }
+
+      // Show correlated destination IPs if available (from IP-mode query)
+      if (isIPMode && ah.byDest && ah.byDest.length > 0) {
+        cHTML += '<div style="margin-top:8px;">';
+        cHTML += '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Other Destination IPs in correlated alerts</div>';
+        ah.byDest.slice(0, 5).forEach(function(d) {
+          cHTML += '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border-subtle);">' +
+            '<span style="font-size:10px;font-family:var(--font-mono);color:var(--cyan);">' + d.key + '</span>' +
+            '<span style="font-size:10px;color:var(--text-muted);">' + d.doc_count + ' events</span>' +
+          '</div>';
+        });
+        cHTML += '</div>';
+      }
       cHTML += '</div>';
     }
     var corrBody = corrCard.querySelector('.inv-collapsible-body');

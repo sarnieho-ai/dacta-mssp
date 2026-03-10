@@ -209,6 +209,8 @@ You have been given the raw investigation findings from Phase 1. Your job is to:
 - Call out any contradictions in the evidence
 - Consider alternative explanations for each finding
 - Weight evidence by source reliability: SIEM-confirmed > Threat Intel > Ticket text inference
+- If a VERDICT GUARDRAIL section is present in the alert context, multiple critical queries returned no data. You MUST NOT output TRUE_POSITIVE in this case — use SUSPICIOUS instead and note which queries failed.
+- If Jira cross-ticket correlation shows related tickets, factor the pattern (recurring rule firings on same host/IP) into your assessment.
 
 ## Output Format
 You MUST respond with a valid JSON object (no markdown, no code fences):
@@ -257,6 +259,14 @@ You have been given the investigation findings (Phase 1) and the synthesis/verdi
 4. Consider legitimate workflows that could explain threatening-looking evidence
 5. Check for logical fallacies or confirmation bias in the Phase 2 analysis
 6. Use tools to search for additional evidence that could flip the verdict
+7. Check if Jira cross-ticket correlation reveals a recurring pattern that changes the assessment
+
+## ABSOLUTE RULE — Failed/Empty Query Guardrail
+If the alert context contains a VERDICT GUARDRAIL section or notes that critical queries failed or returned no results:
+- You MUST NOT conclude TRUE_POSITIVE. The evidence base is incomplete.
+- Default to SUSPICIOUS with an explicit list of which queries the analyst needs to verify manually.
+- State clearly: "Verdict cannot be confirmed as TRUE POSITIVE because the following queries returned no data: [list]"
+- This rule overrides ALL other reasoning. Even if the remaining evidence looks malicious, incomplete investigation = SUSPICIOUS.
 
 ## Output Format
 You MUST respond with a valid JSON object (no markdown, no code fences):
@@ -1259,6 +1269,29 @@ ${(() => {
     sections.push(`### Identified MAC Addresses: ${di.mac_addresses.join(', ')}`);
   }
   return sections.join('\n');
+})()}
+
+${(() => {
+  const jc = alert_context.jira_correlation;
+  if (!jc || jc.length === 0) return '';
+  let lines = ['### Jira Cross-Ticket Correlation (' + jc.length + ' related tickets found)'];
+  lines.push('These tickets share the same detection rule and host/IP entities within this organization:');
+  jc.slice(0, 10).forEach(t => {
+    lines.push(`- **${t.key}**: ${t.summary} [Status: ${t.status}, Priority: ${t.priority}, Created: ${t.created}, Assignee: ${t.assignee}]`);
+  });
+  if (jc.length > 1) {
+    lines.push('\nIMPORTANT: Multiple related tickets from the same rule on the same host/IP suggest a RECURRING pattern. Consider whether this represents a persistent threat, a noisy detection rule, or an ongoing campaign.');
+  }
+  return lines.join('\n');
+})()}
+
+${(() => {
+  const vg = alert_context.verdict_guardrail;
+  if (!vg || !vg.active) return '';
+  return `### ⚠️ VERDICT GUARDRAIL ACTIVE
+${vg.instruction}
+Failed/Empty queries: ${[...(vg.failed_queries || []), ...(vg.empty_queries || [])].join(', ')}
+You MUST label your verdict as SUSPICIOUS and list which queries the analyst needs to re-run manually.`;
 })()}
 
 ${indexContext}
