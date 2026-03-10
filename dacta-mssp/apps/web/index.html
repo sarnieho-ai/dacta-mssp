@@ -1001,6 +1001,40 @@ html:not([data-theme="light"]) .theme-toggle-btn .theme-icon-sun { display: bloc
   background: #ffffff !important;
 }
 
+/* ---- Dashboard Heatmap card ---- */
+[data-theme="light"] .cc-heatmap-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  backdrop-filter: none !important;
+}
+
+/* ---- Dashboard Geo/Threat Map cards ---- */
+[data-theme="light"] .cc-geomap-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  backdrop-filter: none !important;
+}
+[data-theme="light"] .cc-geomap-legend {
+  border-top-color: rgba(0,0,0,0.06) !important;
+}
+[data-theme="light"] .cc-geomap-tooltip,
+[data-theme="light"] #geoSvgTooltip {
+  background: rgba(255,255,255,0.95) !important;
+  border-color: rgba(0,0,0,0.12) !important;
+  color: #1a202c !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+}
+[data-theme="light"] #geoTipInfo {
+  color: #64748b !important;
+}
+/* ---- Dashboard incident breakdown row (Resolved, Escalated etc) ---- */
+[data-theme="light"] .cc-donut-card,
+[data-theme="light"] .dash-bottom .card,
+[data-theme="light"] .cc-breakdown-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
 /* ---- Fix text colors that might be too light on white cards ---- */
 [data-theme="light"] .summary-card .sc-num {
   color: var(--text-primary) !important;
@@ -1031,6 +1065,12 @@ html:not([data-theme="light"]) .theme-toggle-btn .theme-icon-sun { display: bloc
 /* ---- Ensure borders look good in light ---- */
 [data-theme="light"] .summary-cards {
   gap: 10px;
+}
+[data-theme="light"] .copilot-cmdbar-overlay {
+  background: rgba(255,255,255,0.75);
+}
+[data-theme="light"] .cc-sparkline-wrap {
+  border-color: rgba(0,0,0,0.06) !important;
 }
 
 
@@ -9999,6 +10039,20 @@ function _themeUpdateCanvases() {
   }
   if (typeof _snocInitGeoCanvas === 'function') {
     try { _snocInitGeoCanvas(); } catch(e) {}
+  }
+  // Re-initialize Command Center canvas if on dashboard
+  if (typeof initCommandCenter === 'function' && document.getElementById('commandCenterCanvas')) {
+    try { initCommandCenter(); } catch(e) {}
+  }
+  // Re-initialize heatmap and geo canvases if on dashboard
+  if (typeof initHeatMap === 'function' && document.getElementById('heatmapCanvas')) {
+    try { initHeatMap(); } catch(e) {}
+  }
+  if (typeof initGeoMap === 'function' && document.getElementById('geoMapCanvas')) {
+    try { initGeoMap(); } catch(e) {}
+  }
+  if (typeof initGeoHeatMap === 'function' && document.getElementById('geoHeatmapCanvas')) {
+    try { initGeoHeatMap(); } catch(e) {}
   }
 }
 
@@ -39549,8 +39603,8 @@ function initDashboardCharts() {
       maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: getThemeTooltipConfig() },
       scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9, family: "'IBM Plex Mono'" }, maxRotation: 0 } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 }, stepSize: 1 }, beginAtZero: true }
+        x: { grid: { color: getThemeGridColor() }, ticks: { color: getThemeTickColor(), font: { size: 9, family: "'IBM Plex Mono'" }, maxRotation: 0 } },
+        y: { grid: { color: getThemeGridColor() }, ticks: { color: getThemeTickColor(), font: { size: 9 }, stepSize: 1 }, beginAtZero: true }
       }
     }
   });
@@ -39576,7 +39630,7 @@ function initDashboardCharts() {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: true, position: 'bottom', labels: { color: '#8892a4', font: { size: 10, family: "'IBM Plex Sans'" }, boxWidth: 10, padding: 10 } },
+        legend: { display: true, position: 'bottom', labels: { color: getThemeTickColor(), font: { size: 10, family: "'IBM Plex Sans'" }, boxWidth: 10, padding: 10 } },
         tooltip: getThemeTooltipConfig()
       },
       cutout: '68%'
@@ -39620,8 +39674,8 @@ function initPrivacyCharts() {
         legend: { display: false },
         tooltip: {
           backgroundColor: '#1a2235',
-          titleColor: '#e8edf5',
-          bodyColor: '#8892a4',
+          titleColor: _themeIsLight() ? '#1a202c' : '#e8edf5',
+          bodyColor: _themeIsLight() ? '#4a5568' : '#8892a4',
           borderColor: 'rgba(255,255,255,0.1)',
           borderWidth: 1,
           callbacks: {
@@ -39715,8 +39769,8 @@ function _renderAICharts(byModel, byDay) {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false }, tooltip: getThemeTooltipConfig() },
         scales: {
-          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 } } },
-          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 } }, beginAtZero: true }
+          x: { grid: { color: getThemeGridColor() }, ticks: { color: getThemeTickColor(), font: { size: 9 } } },
+          y: { grid: { color: getThemeGridColor() }, ticks: { color: getThemeTickColor(), font: { size: 9 } }, beginAtZero: true }
         }
       }
     });
@@ -45033,7 +45087,7 @@ document.addEventListener('keydown', (e) => {
         const label = node.id.length > 22 ? node.id.substring(0, 20) + '..' : node.id;
         const tw = ctx.measureText(label).width;
         // Background pill
-        ctx.fillStyle = 'rgba(8,12,24,0.85)';
+        ctx.fillStyle = _themeIsLight() ? 'rgba(241,245,249,0.95)' : 'rgba(8,12,24,0.85)';
         const pillY = node.y + r + 6;
         const pillH = 16;
         const pillW = tw + 12;
@@ -47243,7 +47297,7 @@ function initCommandCenter() {
       MANUAL_END_X, MANUAL_END_Y
     ];
     for (var j = 0; j < 4; j++) {
-      manualParticles.push(new Particle(manualPath, '#4d5a6e', 0.002 + Math.random() * 0.003));
+      manualParticles.push(new Particle(manualPath, _themeIsLight() ? '#a0aec0' : '#4d5a6e', 0.002 + Math.random() * 0.003));
     }
 
     // Sub-branch endpoints
@@ -47350,7 +47404,7 @@ function initCommandCenter() {
     ctx.font = (font || ('700 ' + size + 'px Sora, sans-serif'));
     ctx.textAlign = align || 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowColor = _ccLight ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.5)';
     ctx.shadowBlur = 4;
     ctx.fillText(text, x, y);
     ctx.restore();
@@ -47358,10 +47412,28 @@ function initCommandCenter() {
 
   var frameCount = 0;
 
+  // Theme-aware canvas colors for command center
+  var _ccLight = false;
+  function _ccColors() {
+    _ccLight = _themeIsLight();
+    return {
+      textPrimary: _ccLight ? '#1a202c' : '#fff',
+      textSecondary: _ccLight ? '#4a5568' : '#8892a4',
+      textMuted: _ccLight ? '#718096' : '#4d5a6e',
+      ringBg: _ccLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.03)',
+      ringStroke: _ccLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',
+      textShadow: _ccLight ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.5)',
+      glowAlpha: _ccLight ? 0.12 : 0.3,
+      manualLine: _ccLight ? '#a0aec0' : '#4d5a6e',
+      manualParticle: _ccLight ? '#718096' : '#8892a4'
+    };
+  }
+
   function draw() {
     ccAnimId = requestAnimationFrame(draw);
     if (W <= 0 || H <= 0) return; // Skip frame when canvas is hidden/zero-size
     frameCount++;
+    var _cc = _ccColors();
     ctx.clearRect(0, 0, W, H);
 
     // === LEFT ZONE: Data Sources ===
@@ -47382,12 +47454,12 @@ function initCommandCenter() {
       ctx.fill();
       ctx.restore();
       // Label
-      drawText(src.name, leftX + 14, sy, 9, '#8892a4', 'left', '400 9px "IBM Plex Sans", sans-serif');
+      drawText(src.name, leftX + 14, sy, 9, _cc.textSecondary, 'left', '400 9px "IBM Plex Sans", sans-serif');
     });
 
     // +4 more label
     var lastY = srcStartY + (sources.length - 1) * srcSpacing;
-    drawText('+4 more', leftX + 14, lastY + srcSpacing * 0.6, 8, '#4d5a6e', 'left', '400 8px "IBM Plex Sans", sans-serif');
+    drawText('+4 more', leftX + 14, lastY + srcSpacing * 0.6, 8, _cc.textMuted, 'left', '400 8px "IBM Plex Sans", sans-serif');
 
     // Draw flow lines from sources to convergence
     sources.forEach(function(src, i) {
@@ -47419,8 +47491,8 @@ function initCommandCenter() {
     ctx.restore();
 
     // Convergence text
-    drawText(_ccLive.alerts ? _ccLive.alerts.toLocaleString() : '—', CONVERGE_X, CONVERGE_Y - 8, 28, '#fff', 'center', '800 28px Sora, sans-serif');
-    drawText('ALERTS', CONVERGE_X, CONVERGE_Y + 16, 10, '#4d5a6e', 'center', '500 10px "IBM Plex Sans", sans-serif');
+    drawText(_ccLive.alerts ? _ccLive.alerts.toLocaleString() : '—', CONVERGE_X, CONVERGE_Y - 8, 28, _cc.textPrimary, 'center', '800 28px Sora, sans-serif');
+    drawText('ALERTS', CONVERGE_X, CONVERGE_Y + 16, 10, _cc.textMuted, 'center', '500 10px "IBM Plex Sans", sans-serif');
 
     // DACTA SIEMLess Shield between convergence and spiral
     var connStartX = CONVERGE_X + 40;
@@ -47544,7 +47616,7 @@ function initCommandCenter() {
     ctx.save();
     ctx.beginPath();
     ctx.arc(SPIRAL_CX, SPIRAL_CY, maxR, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(4,10,25,0.82)';
+    ctx.fillStyle = _ccLight ? 'rgba(241,245,249,0.95)' : 'rgba(4,10,25,0.82)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(0,212,255,0.22)';
     ctx.lineWidth = 1;
@@ -47640,8 +47712,8 @@ function initCommandCenter() {
     ctx.restore();
 
     // Center incident text
-    drawText(_ccLive.incidents ? String(_ccLive.incidents) : '—', SPIRAL_CX, SPIRAL_CY - 8, 42, '#fff', 'center', '800 42px Sora, sans-serif');
-    drawText('TOTAL INCIDENTS', SPIRAL_CX, SPIRAL_CY + 20, 10, '#4d5a6e', 'center', '600 10px "IBM Plex Sans", sans-serif');
+    drawText(_ccLive.incidents ? String(_ccLive.incidents) : '—', SPIRAL_CX, SPIRAL_CY - 8, 42, _cc.textPrimary, 'center', '800 42px Sora, sans-serif');
+    drawText('TOTAL INCIDENTS', SPIRAL_CX, SPIRAL_CY + 20, 10, _cc.textMuted, 'center', '600 10px "IBM Plex Sans", sans-serif');
 
     // === RIGHT ZONE: Resolution Flow ===
     var pipeStartX = SPIRAL_CX + maxR + 20;
@@ -47663,7 +47735,7 @@ function initCommandCenter() {
       pipeStartX + (MANUAL_END_X - pipeStartX) * 0.6, MANUAL_END_Y - 20,
       MANUAL_END_X, MANUAL_END_Y
     ];
-    drawGlowLine(manualPath, '#4d5a6e', 1.2, 6);
+    drawGlowLine(manualPath, _cc.manualLine, 1.2, 6);
 
     // Update and draw resolution particles
     autoParticles.forEach(function(p) {
@@ -47674,7 +47746,7 @@ function initCommandCenter() {
     manualParticles.forEach(function(p) {
       p.path = manualPath;
       p.update();
-      drawParticle(p.getPos(), '#8892a4', p.size);
+      drawParticle(p.getPos(), _cc.manualParticle, p.size);
     });
 
     // Auto label box
@@ -47694,7 +47766,7 @@ function initCommandCenter() {
     ctx.restore();
     // Shield icon (simple)
     drawText('\u26A1', AUTO_END_X - 36, AUTO_END_Y, 13, '#00d4ff', 'center', '400 13px sans-serif');
-    drawText(String(_ccLive.automated), AUTO_END_X - 5, AUTO_END_Y - 6, 20, '#fff', 'center', '800 20px Sora, sans-serif');
+    drawText(String(_ccLive.automated), AUTO_END_X - 5, AUTO_END_Y - 6, 20, _cc.textPrimary, 'center', '800 20px Sora, sans-serif');
     drawText('AUTOMATED', AUTO_END_X - 5, AUTO_END_Y + 12, 8, '#00d4ff', 'center', '600 8px "IBM Plex Sans", sans-serif');
 
     // Manual label box
@@ -47710,9 +47782,9 @@ function initCommandCenter() {
     ctx.stroke();
     ctx.restore();
     // Person icon
-    drawText('\u{1F464}', MANUAL_END_X - 36, MANUAL_END_Y, 12, '#8892a4', 'center', '400 12px sans-serif');
-    drawText(String(_ccLive.manual), MANUAL_END_X - 5, MANUAL_END_Y - 6, 20, '#fff', 'center', '800 20px Sora, sans-serif');
-    drawText('MANUAL', MANUAL_END_X - 5, MANUAL_END_Y + 12, 8, '#8892a4', 'center', '600 8px "IBM Plex Sans", sans-serif');
+    drawText('\u{1F464}', MANUAL_END_X - 36, MANUAL_END_Y, 12, _cc.textSecondary, 'center', '400 12px sans-serif');
+    drawText(String(_ccLive.manual), MANUAL_END_X - 5, MANUAL_END_Y - 6, 20, _cc.textPrimary, 'center', '800 20px Sora, sans-serif');
+    drawText('MANUAL', MANUAL_END_X - 5, MANUAL_END_Y + 12, 8, _cc.textSecondary, 'center', '600 8px "IBM Plex Sans", sans-serif');
 
     // === SUB-BRANCHES ===
     var branchLen = Math.min(W * 0.10, 120);
@@ -47764,7 +47836,7 @@ function initCommandCenter() {
     var sevBX = SEVERITY_X - sevBoxW / 2;
     var sevBY = SEVERITY_Y - sevBoxH / 2;
     ctx.save();
-    ctx.fillStyle = 'rgba(8,12,24,0.85)';
+    ctx.fillStyle = _ccLight ? 'rgba(241,245,249,0.95)' : 'rgba(8,12,24,0.85)';
     ctx.strokeStyle = 'rgba(0,212,255,0.2)';
     ctx.lineWidth = 1;
     ctx.shadowColor = 'rgba(0,212,255,0.1)';
@@ -47788,7 +47860,7 @@ function initCommandCenter() {
       ctx.arc(sx, sevDotY, 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-      drawText(sevData[si].v, sx, sevDotY + 13, 9, '#e8edf5', 'center', '700 9px "IBM Plex Mono", monospace');
+      drawText(sevData[si].v, sx, sevDotY + 13, 9, _cc.textPrimary, 'center', '700 9px "IBM Plex Mono", monospace');
     }
 
     // --- Manual -> Open (right, amber) ---
@@ -47862,7 +47934,7 @@ function initCommandCenter() {
     var mSevBX = mSevX - mSevBoxW / 2;
     var mSevBY = mSevY - mSevBoxH / 2;
     ctx.save();
-    ctx.fillStyle = 'rgba(8,12,24,0.85)';
+    ctx.fillStyle = _ccLight ? 'rgba(241,245,249,0.95)' : 'rgba(8,12,24,0.85)';
     ctx.strokeStyle = 'rgba(77,90,110,0.2)';
     ctx.lineWidth = 1;
     ctx.shadowColor = 'rgba(77,90,110,0.1)';
@@ -47886,7 +47958,7 @@ function initCommandCenter() {
       ctx.arc(mx, mSevDotY, 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-      drawText(mSevData[mi].v, mx, mSevDotY + 13, 9, '#e8edf5', 'center', '700 9px "IBM Plex Mono", monospace');
+      drawText(mSevData[mi].v, mx, mSevDotY + 13, 9, _cc.textPrimary, 'center', '700 9px "IBM Plex Mono", monospace');
     }
 
     // Branch point glow
@@ -48020,7 +48092,7 @@ function initHeatMap() {
   var gap = 2;
 
   function getColor(val) {
-    if (val === 0) return 'rgba(15,28,50,0.6)';
+    if (val === 0) return _themeIsLight() ? 'rgba(0,0,0,0.04)' : 'rgba(15,28,50,0.6)';
     var t = val / maxVal;
     if (t < 0.33) {
       var lt = t / 0.33;
@@ -48037,7 +48109,7 @@ function initHeatMap() {
   ctx.clearRect(0, 0, W, H);
 
   ctx.font = '500 9px "IBM Plex Mono", monospace';
-  ctx.fillStyle = '#4d5a6e';
+  ctx.fillStyle = _themeIsLight() ? '#6b7280' : '#4d5a6e';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (var h = 0; h < 24; h += 3) {
@@ -48159,8 +48231,8 @@ function initClassicCharts() {
         maintainAspectRatio: false,
         plugins: { legend: { display: false }, tooltip: getThemeTooltipConfig() },
         scales: {
-          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9, family: "'IBM Plex Mono'" }, maxRotation: 0 } },
-          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4d5a6e', font: { size: 9 }, stepSize: 1 }, beginAtZero: true }
+          x: { grid: { color: getThemeGridColor() }, ticks: { color: getThemeTickColor(), font: { size: 9, family: "'IBM Plex Mono'" }, maxRotation: 0 } },
+          y: { grid: { color: getThemeGridColor() }, ticks: { color: getThemeTickColor(), font: { size: 9 }, stepSize: 1 }, beginAtZero: true }
         }
       }
     });
@@ -48189,7 +48261,7 @@ function initClassicCharts() {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: true, position: 'bottom', labels: { color: '#8892a4', font: { size: 10, family: "'IBM Plex Sans'" }, boxWidth: 10, padding: 10 } },
+          legend: { display: true, position: 'bottom', labels: { color: getThemeTickColor(), font: { size: 10, family: "'IBM Plex Sans'" }, boxWidth: 10, padding: 10 } },
           tooltip: getThemeTooltipConfig()
         },
         cutout: '68%'
@@ -48667,12 +48739,12 @@ function initGeoMapCanvas(canvasId, tooltipId, tipNameId, tipInfoId) {
 
   function drawFrame(t) {
     // Background
-    ctx.fillStyle = '#080d1a';
+    ctx.fillStyle = _themeIsLight() ? '#f8fafc' : '#080d1a';
     ctx.fillRect(0, 0, W, H);
 
     // Very faint longitude/latitude grid lines
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.018)';
+    ctx.strokeStyle = _themeIsLight() ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.018)';
     ctx.lineWidth = 0.5;
     for (var gi = 1; gi < 6; gi++) {
       ctx.beginPath(); ctx.moveTo(W * gi / 6, 0); ctx.lineTo(W * gi / 6, H); ctx.stroke();
@@ -48959,7 +49031,7 @@ function initGeoHeatMap() {
         ctx.restore();
       } else {
         // N/A regions — dim white/grey dots matching the picture
-        ctx.fillStyle = 'rgba(180,185,200,0.22)';
+        ctx.fillStyle = _themeIsLight() ? 'rgba(100,110,130,0.15)' : 'rgba(180,185,200,0.22)';
         ctx.beginPath();
         ctx.arc(cx, cy, r2, 0, Math.PI * 2);
         ctx.fill();
@@ -61816,8 +61888,8 @@ function _snocRenderLatencyChart() {
       animation: false,
       plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
       scales: {
-        x: { ticks: { font: { size: 8 }, color: '#4d5a6e', maxTicksLimit: 8 }, grid: { color: 'rgba(255,255,255,0.04)' } },
-        y: { position: 'left', ticks: { font: { size: 8 }, color: '#4d5a6e' }, grid: { color: 'rgba(255,255,255,0.04)' }, title: { display: false } },
+        x: { ticks: { font: { size: 8 }, color: getThemeTickColor(), maxTicksLimit: 8 }, grid: { color: getThemeGridColor() } },
+        y: { position: 'left', ticks: { font: { size: 8 }, color: getThemeTickColor() }, grid: { color: getThemeGridColor() }, title: { display: false } },
         y2: { position: 'right', ticks: { font: { size: 8 }, color: '#ef4444' }, grid: { display: false } }
       }
     }
