@@ -56517,6 +56517,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     jiraCorrelation: [],   // Jira cross-ticket correlation (same rule + same host/IP + same org)
     analystPrecedent: [],   // Closure notes/comments from resolved correlated tickets (analyst learning)
     analystLearnings: [],   // structured learning from closed Jira tickets for LLM context
+    analystCorpus: null,     // rule-based analyst corpus from query_analyst_corpus (for LLM injection)
     elasticConnected: false, openctiConnected: false,
     queriesRun: 0, queryDetails: []
   };
@@ -57525,6 +57526,54 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
 
   } catch (jcErr) {
     console.warn('[Investigation] Jira correlation error:', jcErr.message);
+  }
+
+  // ── Analyst Corpus Pre-Fetch: Query rule-specific investigation patterns from closed tickets ──
+  // This gives the LLM historical context BEFORE it starts its own investigation
+  try {
+    var _corpusSummary = (issueData && issueData.fields && issueData.fields.summary) || '';
+    // Extract detection rule name from summary (strip org/host suffixes)
+    var _corpusRuleMatch = _corpusSummary.match(/^(DACTA\s+.+?)(?:\s+on\s+|\s+from\s+|\s*[-–]\s*|$)/i);
+    var _corpusRuleName = _corpusRuleMatch ? _corpusRuleMatch[1].trim() : _corpusSummary.split(/\s*[-–]\s*/)[0].trim();
+    var _corpusOrg = '';
+    if (issueData && issueData.fields && issueData.fields.customfield_10002 && issueData.fields.customfield_10002.length > 0) {
+      _corpusOrg = issueData.fields.customfield_10002[0].name || '';
+    }
+    if (_corpusRuleName && _corpusRuleName.length > 5) {
+      var qCorpus = { name: 'Analyst Corpus Lookup', index: 'Analyst Corpus', query: _corpusRuleName, status: 'running' };
+      logs.queryDetails.push(qCorpus); logs.queriesRun++;
+      // Try live Jira query (works without DB table)
+      var _corpusUrl = '/api/jira?action=corpus_by_rule_live&rule=' + encodeURIComponent(_corpusRuleName) + '&limit=5';
+      if (_corpusOrg) _corpusUrl += '&org=' + encodeURIComponent(_corpusOrg);
+      var _corpusResp = await fetch(_corpusUrl);
+      if (_corpusResp.ok) {
+        var _corpusResult = await _corpusResp.json();
+        if (_corpusResult.corpus && _corpusResult.corpus.length > 0) {
+          logs.analystCorpus = _corpusResult;
+          markQueryResult(qCorpus, 'success', _corpusResult.corpus.length,
+            'Found ' + _corpusResult.corpus.length + ' historical analyst investigations for "' + _corpusRuleName + '"', {
+            evidenceType: 'ANALYST_CORPUS',
+            semanticOutcome: 'positive_match',
+            dataCoverage: 'checked'
+          });
+          console.log('[Investigation] Analyst corpus pre-fetch: ' + _corpusResult.corpus.length + ' historical investigations for rule "' + _corpusRuleName + '"');
+        } else {
+          markQueryResult(qCorpus, 'success', 0, 'No historical analyst investigations found for this rule', {
+            evidenceType: 'ANALYST_CORPUS',
+            semanticOutcome: 'checked_clear',
+            dataCoverage: 'checked'
+          });
+        }
+      } else {
+        markQueryResult(qCorpus, 'error', 0, 'Analyst corpus query failed', {
+          evidenceType: 'ANALYST_CORPUS',
+          semanticOutcome: 'query_failed',
+          dataCoverage: 'unknown'
+        });
+      }
+    }
+  } catch (_corpusErr) {
+    console.warn('[Investigation] Analyst corpus pre-fetch error:', _corpusErr.message);
   }
 
   return logs;
@@ -58766,6 +58815,28 @@ async function runAIInvestigation(ticketKey, issueData) {
       };
     });
     console.log('[LLM Investigation] Analyst learning injected: ' + elasticLogs.analystLearnings.length + ' historical closed-ticket examples');
+  }
+
+  // Inject analyst corpus (rule-specific investigation patterns from closed tickets)
+  if (elasticLogs.analystCorpus && elasticLogs.analystCorpus.corpus && elasticLogs.analystCorpus.corpus.length > 0) {
+    var _ac = elasticLogs.analystCorpus;
+    _llmAlertContext.analyst_corpus = {
+      source: 'Historical analyst investigation corpus (closed Jira tickets with same detection rule)',
+      rule_searched: _ac.rule || 'unknown',
+      total_matches: _ac.matches || _ac.corpus.length,
+      investigations: _ac.corpus.map(function(c) {
+        return {
+          ticket: c.ticket_key,
+          org: c.org || 'unknown',
+          resolution: c.resolution || 'unknown',
+          closure_reasoning: (c.closure_reasoning || '').substring(0, 1500),
+          key_comments: (c.comment_timeline || []).slice(0, 3).map(function(ct) {
+            return { analyst: ct.author, note: (ct.text || '').substring(0, 800) };
+          })
+        };
+      })
+    };
+    console.log('[LLM Investigation] Analyst corpus injected: ' + _ac.corpus.length + ' historical investigations for rule "' + (_ac.rule || 'unknown') + '"');
   }
 
   // Process each round

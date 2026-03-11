@@ -163,16 +163,35 @@ const INVESTIGATOR_PROMPT = `You are a senior SOC forensic investigator at DACTA
 - Reference specific analyst notes in your findings when they are relevant to your verdict (e.g., "Previous analyst [ticket] noted this is a scheduled scan — current activity matches the same pattern").
 - Never copy-paste analyst notes as your own findings — synthesize them into your investigation narrative.
 
-## Tool Usage Strategy
-- Start with the alert context and extract IOCs (IPs, hashes, domains, hostnames, processes)
+## Tool Usage Strategy — Analyst-Aligned Investigation Flow
+Think like a senior DACTA analyst. Follow this investigation order:
+
+### Step 1: Learn from the Analyst Corpus (ALWAYS DO THIS FIRST)
+- **Immediately** call query_analyst_corpus with the detection rule name from the alert summary.
+- This retrieves how DACTA's experienced analysts previously investigated and resolved the SAME type of alert.
+- Study their closure reasoning: What did they look for? What queries did they run? What made them conclude TP vs FP?
+- Use their investigation patterns as your starting framework — then verify against the CURRENT alert's specifics.
+- If the corpus shows this rule is historically 80%+ false positive (e.g., scheduled scans, known admin tools), still verify but calibrate your prior accordingly.
+- If the corpus shows mixed results, pay extra attention to the distinguishing factors analysts noted.
+
+### Step 2: Extract and Pivot on IOCs
+- Extract IOCs from the alert context (IPs, hashes, domains, hostnames, processes)
+- Identify pivot points: What entities connect this alert to broader activity?
+
+### Step 3: SIEM Evidence Gathering
 - Query Elastic SIEM using the SPECIFIC INDEX PATTERNS provided in the alert context (never use generic "logs-*")
 - **CRITICAL**: Use ONLY the exact field names from the 'ACTUAL Elasticsearch Field Names' section in the alert context. Do NOT guess field names — wrong field names return 0 hits.
 - If field mappings are not available, start with a small match_all query (size 1-2) on the target index to discover the actual document structure before constructing targeted queries.
 - Use ONLY the relevant index patterns listed in the alert context. If the context says some vendors or log sources are not relevant, do NOT query them
+- Follow the pivot chain: alert source IP → what else did it talk to? → were those targets compromised? → timeline correlation
+
+### Step 4: Corroborate with Threat Intel & EDR
 - Use search_edr ONLY when the alert context explicitly says endpoint telemetry is relevant and permitted
-- If a query is unsuccessful or returns no meaningful data, treat it as inconclusive or suspicious — never as confirmation of a true positive
 - Check DACTA TIP for IOC reputation and MITRE technique context when the alert contains applicable IOCs or techniques
 - Look at alert history on the same host or entity only when that entity is relevant to the alert
+
+### Evidence Quality Rules
+- If a query is unsuccessful or returns no meaningful data, treat it as inconclusive or suspicious — never as confirmation of a true positive
 - IMPORTANT: Use the exact index patterns listed in the alert context. These are org-specific and different per client.
 
 ## Output Format
@@ -196,11 +215,17 @@ You MUST respond with a valid JSON object (no markdown, no code fences) containi
   "preliminary_assessment": "Your current best understanding of the situation based on evidence gathered",
   "confidence": 0-100,
   "open_questions": ["Things that couldn't be answered with available tools"],
+  "analyst_corpus_insights": {
+    "corpus_queried": true,
+    "historical_pattern": "Summary of how analysts historically handled this rule (e.g., '4/5 closed as FP due to scheduled scans')",
+    "key_analyst_patterns": ["Pattern 1 from analyst corpus", "Pattern 2"]
+  },
   "tools_summary": {
     "total_queries": 0,
     "siem_queries": 0,
     "edr_queries": 0,
     "tip_lookups": 0,
+    "corpus_queries": 0,
     "findings_from_tools": 0
   }
 }
@@ -229,6 +254,7 @@ You have been given the raw investigation findings from Phase 1. Your job is to:
 - If a VERDICT GUARDRAIL section is present in the alert context, multiple critical queries failed or lacked telemetry coverage. Clean negative results are excluded from this guardrail. You MUST NOT output TRUE_POSITIVE in this case — use SUSPICIOUS instead and note which queries failed or lacked telemetry.
 - If Jira cross-ticket correlation shows related tickets, factor the pattern (recurring rule firings on same host/IP) into your assessment.
 - If analyst learning from closed tickets is provided, use it as historical context to refine hypotheses, compare patterns, and identify likely benign workflows or recurring threat behaviors — but do not treat historical analyst comments as stronger evidence than current-ticket SIEM or threat-intel findings.
+- If an analyst_corpus section is provided with historical investigation data for the same detection rule, reference the pattern summary (e.g., "4/5 prior instances closed as FP") and key analyst reasoning in your narrative. This is powerful context for calibrating your confidence.
 
 ## Output Format
 You MUST respond with a valid JSON object (no markdown, no code fences):
@@ -382,6 +408,19 @@ const INVESTIGATION_TOOLS = [
         limit: { type: "integer", description: "Max results (default 10)" }
       },
       required: ["action"]
+    }
+  },
+  {
+    name: "query_analyst_corpus",
+    description: "Query the analyst investigation corpus — a database of how DACTA's experienced analysts previously investigated and resolved similar alerts. Returns closure reasoning, investigation comments, and resolution patterns from past tickets with the same or similar detection rule. Use this EARLY in your investigation to understand how analysts typically handle this type of alert, what they look for, and what patterns indicate true/false positives.",
+    input_schema: {
+      type: "object",
+      properties: {
+        detection_rule: { type: "string", description: "The detection rule name to search for (e.g., 'DACTA Distributed Port Scan Detected', 'DACTA Unusual Host Communication')" },
+        org: { type: "string", description: "Organization name to prioritize same-org precedent (optional)" },
+        limit: { type: "integer", description: "Max results to return (default 5, max 20)" }
+      },
+      required: ["detection_rule"]
     }
   }
 ];
@@ -957,12 +996,96 @@ async function executeCrowdStrikeEDR(auth, action, params) {
 // Global EDR context — set per-investigation in handler
 let _currentEDRContext = null;
 
+async function executeQueryAnalystCorpus(input) {
+  const rule = input.detection_rule || '';
+  const org = input.org || '';
+  const limit = Math.min(input.limit || 5, 15);
+  if (!rule) return { error: 'Missing detection_rule parameter' };
+
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'https://dacta-siemless.vercel.app';
+  const params = new URLSearchParams({ action: 'corpus_by_rule', rule, limit: String(limit) });
+  if (org) params.set('org', org);
+
+  // Try SIEMLess DB first (fast, cached), fallback to live Jira
+  let corpusData = null;
+  let source = 'siemless_db';
+  try {
+    const resp = await fetch(`${baseUrl}/api/jira?${params.toString()}`);
+    if (resp.ok) {
+      corpusData = await resp.json();
+      // If DB returned empty or errored (table doesn't exist), try live Jira
+      if (!corpusData.corpus || corpusData.corpus.length === 0) {
+        corpusData = null;
+      }
+    }
+  } catch (e) {
+    console.warn('[query_analyst_corpus] DB query failed, trying live Jira:', e.message);
+  }
+
+  if (!corpusData) {
+    // Fallback: query Jira directly for closed tickets matching this rule
+    source = 'jira_live';
+    try {
+      const liveParams = new URLSearchParams({ action: 'corpus_by_rule_live', rule, limit: String(limit) });
+      if (org) liveParams.set('org', org);
+      const resp = await fetch(`${baseUrl}/api/jira?${liveParams.toString()}`);
+      if (resp.ok) {
+        corpusData = await resp.json();
+      }
+    } catch (e) {
+      console.warn('[query_analyst_corpus] Live Jira fallback also failed:', e.message);
+      return { error: `Failed to query analyst corpus: ${e.message}`, matches: 0, corpus: [] };
+    }
+  }
+
+  if (!corpusData || !corpusData.corpus || corpusData.corpus.length === 0) {
+    return {
+      rule,
+      matches: 0,
+      corpus: [],
+      source,
+      summary: `No prior analyst investigations found for rule "${rule}". This may be a new/rare detection rule — proceed with standard investigation methodology.`
+    };
+  }
+
+  // Summarize the corpus for the LLM: extract key patterns
+  const corpus = corpusData.corpus;
+  const resolutions = corpus.map(c => c.resolution).filter(Boolean);
+  const fpCount = resolutions.filter(r => /false.?pos|benign|whitel|suppress|duplicate|won.*t.*do/i.test(r)).length;
+  const tpCount = resolutions.filter(r => /done|reported|escalat|true.?pos|confirm/i.test(r)).length;
+
+  return {
+    rule,
+    matches: corpus.length,
+    source,
+    pattern_summary: {
+      total_historical_tickets: corpus.length,
+      likely_false_positive_closures: fpCount,
+      likely_true_positive_closures: tpCount,
+      other_closures: corpus.length - fpCount - tpCount
+    },
+    analyst_investigations: corpus.map(c => ({
+      ticket: c.ticket_key,
+      org: c.org || 'unknown',
+      resolution: c.resolution || 'unknown',
+      closure_reasoning: c.closure_reasoning || 'No closure reasoning recorded',
+      key_comments: (c.comment_timeline || []).slice(0, 3).map(ct => ({
+        analyst: ct.author,
+        note: ct.text
+      }))
+    }))
+  };
+}
+
 async function executeTool(name, input) {
   switch (name) {
     case 'search_siem': return await executeSearchSIEM(input);
     case 'lookup_threat_intel': return await executeLookupThreatIntel(input);
     case 'lookup_mitre': return await executeLookupMITRE(input);
     case 'search_edr': return await executeSearchEDR(input, _currentEDRContext);
+    case 'query_analyst_corpus': return await executeQueryAnalystCorpus(input);
     default: return { error: `Unknown tool: ${name}` };
   }
 }

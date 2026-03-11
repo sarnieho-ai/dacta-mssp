@@ -656,6 +656,99 @@ export default async function handler(req, res) {
       });
     }
 
+    // ─── ACTION: corpus_by_rule_live (query Jira directly for corpus by detection rule) ──
+    // Fallback when SIEMLess DB table doesn't exist yet — queries Jira live
+    if (action === 'corpus_by_rule_live') {
+      const rule = req.query.rule || '';
+      const org = req.query.org || '';
+      const limit = Math.min(parseInt(req.query.limit || '5', 10) || 5, 15);
+
+      if (!rule) return res.status(400).json({ error: 'Missing rule parameter' });
+
+      // Build JQL: search for closed/reported-to tickets matching the detection rule
+      // The summary field contains the detection rule name in most SOC alert tickets
+      const ruleEscaped = rule.replace(/"/g, '\\"');
+      let jql = `project = DAC AND status IN ("Closed", "Completed", "Reported To") AND summary ~ "${ruleEscaped}" ORDER BY resolved DESC`;
+      if (org) {
+        jql = `project = DAC AND status IN ("Closed", "Completed", "Reported To") AND summary ~ "${ruleEscaped}" AND "Organizations" = "${org.replace(/"/g, '\\"')}" ORDER BY resolved DESC`;
+      }
+
+      try {
+        const searchResp = await fetch(`${baseUrl}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=${limit}&fields=summary,status,resolution,resolutiondate,assignee,priority,comment,customfield_10002`, {
+          headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+        });
+        if (!searchResp.ok) {
+          return res.status(200).json({ rule, org: org || 'all', matches: 0, corpus: [], error: `Jira search failed: ${searchResp.status}` });
+        }
+        const searchData = await searchResp.json();
+        const issues = searchData.issues || [];
+
+        // Fetch comments for each matched ticket
+        const corpus = [];
+        const CONCURRENCY = 3;
+        for (let i = 0; i < issues.length; i += CONCURRENCY) {
+          const batch = issues.slice(i, i + CONCURRENCY);
+          const results = await Promise.allSettled(batch.map(async (issue) => {
+            const key = issue.key;
+            const fields = issue.fields || {};
+            const commentResp = await fetch(`${baseUrl}/rest/api/3/issue/${key}/comment?maxResults=20`, {
+              headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+            });
+            const commentsData = commentResp.ok ? await commentResp.json() : { comments: [] };
+            const comments = commentsData.comments || commentsData.values || [];
+            const cleanedComments = comments.map(_extractCommentText).filter(Boolean);
+            const meaningfulComments = cleanedComments.filter(c => c.length >= 30);
+
+            const commentTimeline = comments.map((c, idx) => {
+              const text = _extractCommentText(c);
+              if (!text || text.length < 30) return null;
+              return {
+                index: idx,
+                author: c.author ? (c.author.displayName || 'Unknown') : 'Unknown',
+                created: c.created || '',
+                text: text.substring(0, 1500)
+              };
+            }).filter(Boolean);
+
+            const closureReasoning = meaningfulComments.length > 0 ? meaningfulComments[meaningfulComments.length - 1] : '';
+            const summary = fields.summary || '';
+            let detectionRule = '';
+            const ruleMatch = summary.match(/^(DACTA\s+.+?)(?:\s+on\s+|\s+from\s+|\s*[-–]\s*|$)/i);
+            if (ruleMatch) detectionRule = ruleMatch[1].trim();
+            else detectionRule = summary.replace(/\s+/g, ' ').trim();
+
+            const ticketOrg = Array.isArray(fields.customfield_10002) && fields.customfield_10002[0]
+              ? (fields.customfield_10002[0].name || '') : '';
+
+            return {
+              ticket_key: key,
+              summary,
+              detection_rule: detectionRule,
+              org: ticketOrg,
+              resolution: fields.resolution ? fields.resolution.name : '',
+              closure_reasoning: closureReasoning.substring(0, 2000),
+              comment_timeline: commentTimeline.slice(0, 10),
+              entities: {}
+            };
+          }));
+          results.forEach(r => {
+            if (r.status === 'fulfilled' && r.value && r.value.closure_reasoning) corpus.push(r.value);
+          });
+        }
+
+        return res.status(200).json({
+          rule,
+          org: org || 'all',
+          matches: corpus.length,
+          corpus,
+          source: 'jira_live'
+        });
+      } catch (err) {
+        console.error('[corpus_by_rule_live] Error:', err.message);
+        return res.status(200).json({ rule, org: org || 'all', matches: 0, corpus: [], error: err.message });
+      }
+    }
+
     // ─── ACTION: counts (batch) ───────────────────────────────
     if (action === 'counts') {
       const body = req.body || {};
