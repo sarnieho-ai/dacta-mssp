@@ -58288,7 +58288,9 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (_invPrimaryFwConn) {
     invToolsList.push((_invPrimaryFwConn.vendor || 'Firewall') + ' Logs');
   }
-  invToolsList.push('CrowdStrike Intel'); // Global TI service — always available
+  invToolsList.push('VirusTotal'); // Multi-scanner IOC enrichment
+  invToolsList.push('AbuseIPDB');
+  invToolsList.push('CrowdStrike Intel');
   invToolsList.push('DACTA TIP');
   var invToolsLabel = invToolsList.join(' + ');
   console.log('[AI Investigation] Org: ' + org + ' | Namespace: ' + invNamespace + ' | mode=' + _invSourceRelevance.mode + ' | EDR: ' + _invHasEDR + ' | RealEDR: ' + _invIsRealEDR + ' | Vendor: ' + _invEdrVendorLabel + ' | CS-EDR: ' + _invHasCSEDR + ' | Firewall: ' + _invHasFirewall + ' | Scoped FW: ' + (_invScopedFwConns.map(function(c) { return c.vendor || c.display_name || 'firewall'; }).join(', ') || 'none') + ' | Tools: ' + invToolsLabel);
@@ -58326,33 +58328,66 @@ async function runAIInvestigation(ticketKey, issueData) {
   var techniques = detectTechniques(fullText);
   var cmdCtx = analyzeCommandContext(fullText);
 
-  // ── CrowdStrike Falcon Intel enrichment (parallel with Elastic) ──
-  // CS Falcon Intel is a GLOBAL threat intelligence service (API keys on Vercel env vars)
-  // It runs for ALL orgs regardless of their EDR vendor — it's threat intel, not EDR-specific.
-  // _invHasCSEDR only gates CS EDR telemetry queries (host lookups, alert correlation).
+  // ── Multi-Scanner IOC Enrichment (parallel with Elastic) ──
+  // Queries VirusTotal, AbuseIPDB, and CrowdStrike Falcon Intel in parallel
+  // via the /api/ioc-enrich aggregator endpoint. Results include per-scanner
+  // verdicts and a consensus-based overall verdict for each IOC.
   var csEnrichment = { lookup: {}, total: 0, queried: 0, actors: [], error: null, skippedNoCS: false, edrVendor: _invIsRealEDR ? _invEdrVendorLabel : null };
+  var multiScannerData = { results: {}, meta: {}, available: false, error: null };
   var csAllIOCs = [].concat(
     iocs.ips || [], iocs.domains || [], iocs.hashes || [], iocs.urls || []
-  ).filter(Boolean).slice(0, 100); // Always enrich IOCs via CS Falcon Intel (global service)
+  ).filter(Boolean).slice(0, 50); // Cap at 50 for multi-scanner rate limits
 
   var csEnrichPromise = (csAllIOCs.length > 0)
-    ? fetch('/api/crowdstrike', {
+    ? fetch('/api/ioc-enrich', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'enrich_iocs', indicators: csAllIOCs })
+        body: JSON.stringify({ indicators: csAllIOCs })
       })
       .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
       .then(function(data) {
-        csEnrichment = Object.assign(csEnrichment, data);
-        // Collect unique adversary actors attributed across all IOCs
-        var actorSet = {};
-        Object.values(csEnrichment.lookup || {}).forEach(function(ioc) {
-          (ioc.actors || []).forEach(function(a) { actorSet[a] = true; });
+        multiScannerData = Object.assign(multiScannerData, data, { available: true });
+        console.log('[Multi-Scanner] Enriched ' + Object.keys(data.results || {}).length + '/' + csAllIOCs.length + ' IOCs via ' + Object.keys((data.meta || {}).scanners || {}).filter(function(k) { return (data.meta.scanners[k] || {}).configured; }).join(', '));
+        // Back-fill csEnrichment from the CrowdStrike portion for backward compat
+        var csLookup = {}; var csActors = {}; var csTotal = 0; var csQueried = csAllIOCs.length;
+        Object.values(data.results || {}).forEach(function(iocResult) {
+          var csR = iocResult.scanners && iocResult.scanners.crowdstrike;
+          if (csR && csR.available && csR.details && csR.details.matched) {
+            csTotal++;
+            csLookup[iocResult.indicator] = {
+              malicious_confidence: csR.details.malicious_confidence || 'unverified',
+              actors: csR.details.actors || [],
+              malware_families: csR.details.malware_families || [],
+              labels: csR.details.labels || []
+            };
+            (csR.details.actors || []).forEach(function(a) { csActors[a] = true; });
+          }
         });
-        csEnrichment.actors = Object.keys(actorSet);
-        console.log('[CS Intel] Enriched ' + csEnrichment.total + '/' + csAllIOCs.length + ' IOCs. Actors: ' + (csEnrichment.actors.join(', ') || 'none'));
+        csEnrichment.lookup = csLookup;
+        csEnrichment.total = csTotal;
+        csEnrichment.queried = csQueried;
+        csEnrichment.actors = Object.keys(csActors);
       })
-      .catch(function(e) { csEnrichment.error = e; console.warn('[CS Intel] Enrichment failed:', e); })
+      .catch(function(e) {
+        multiScannerData.error = String(e);
+        csEnrichment.error = e;
+        console.warn('[Multi-Scanner] Enrichment failed, falling back to CS-only:', e);
+        // Fallback: try CS-only endpoint directly
+        return csAllIOCs.length > 0 ? fetch('/api/crowdstrike', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'enrich_iocs', indicators: csAllIOCs })
+        }).then(function(r) { return r.ok ? r.json() : Promise.reject('CS fallback HTTP ' + r.status); })
+        .then(function(csData) {
+          csEnrichment = Object.assign(csEnrichment, csData, { error: null });
+          var actorSet = {};
+          Object.values(csEnrichment.lookup || {}).forEach(function(ioc) {
+            (ioc.actors || []).forEach(function(a) { actorSet[a] = true; });
+          });
+          csEnrichment.actors = Object.keys(actorSet);
+          console.log('[CS Intel Fallback] Enriched ' + csEnrichment.total + '/' + csAllIOCs.length + ' IOCs');
+        }).catch(function(e2) { csEnrichment.error = e2; console.warn('[CS Intel Fallback] Also failed:', e2); }) : undefined;
+      })
     : Promise.resolve();
 
   // Fire playbook fetch NOW — runs in parallel with all SIEM queries, no extra wait
@@ -58377,12 +58412,21 @@ async function runAIInvestigation(ticketKey, issueData) {
   elasticLogs = elasticResult.value || simulateElasticLookup(summary, cleanDesc, iocs, techniques);
   console.log('[AI Investigation] Elastic lookup complete: ' + elasticLogs.queriesRun + ' queries, connected=' + elasticLogs.elasticConnected);
 
-  // ── Boost inculpatory weight if CrowdStrike confirms HIGH/MEDIUM malicious IOCs ──
+  // ── Boost inculpatory weight from multi-scanner consensus + CrowdStrike ──
   var csHighConfirmCount = 0, csMediumConfirmCount = 0;
-  Object.values(csEnrichment.lookup || {}).forEach(function(ioc) {
-    if (ioc.malicious_confidence === 'high') csHighConfirmCount++;
-    else if (ioc.malicious_confidence === 'medium') csMediumConfirmCount++;
+  // Count from multi-scanner consensus verdicts
+  Object.values(multiScannerData.results || {}).forEach(function(iocR) {
+    var cv = (iocR.consensus || {}).verdict;
+    if (cv === 'malicious') csHighConfirmCount++;
+    else if (cv === 'suspicious') csMediumConfirmCount++;
   });
+  // Fallback: also count from CS-only enrichment if multi-scanner not available
+  if (csHighConfirmCount === 0 && csMediumConfirmCount === 0) {
+    Object.values(csEnrichment.lookup || {}).forEach(function(ioc) {
+      if (ioc.malicious_confidence === 'high') csHighConfirmCount++;
+      else if (ioc.malicious_confidence === 'medium') csMediumConfirmCount++;
+    });
+  }
 
   // Legacy evidence generators kept for fallback if LLM API unavailable
   var inculpatory = generateInculpatoryEvidence(summary, cleanDesc, techniques, iocs, cmdCtx);
@@ -58411,6 +58455,13 @@ async function runAIInvestigation(ticketKey, issueData) {
       edr_vendor: _invIsRealEDR ? _invEdrVendorLabel : null,
       investigation_mode: _invIsRealEDR ? 'edr_full' : 'firewall_only'
     },
+    // Multi-scanner IOC enrichment results (VirusTotal, AbuseIPDB, CrowdStrike)
+    multi_scanner_results: Object.entries(multiScannerData.results || {}).map(function(entry) {
+      var ind = entry[0], r = entry[1];
+      var scannerSummary = {};
+      Object.entries(r.scanners || {}).forEach(function(se) { scannerSummary[se[0]] = { verdict: se[1].verdict, available: se[1].available }; });
+      return { indicator: ind, type: r.type, consensus: r.consensus || {}, scanners: scannerSummary };
+    }).slice(0, 20),
     // Jira cross-ticket correlation (same rule + same host/IP + same org)
     jira_correlation: (elasticLogs.jiraCorrelation || []).map(function(jt) {
       return {
@@ -59018,13 +59069,13 @@ async function runAIInvestigation(ticketKey, issueData) {
           console.warn('[LLM Investigation] Phase ' + rnd + ' failed, falling back to hardcoded:', _llmErr.message);
           _llmModeActive = false; // Disable LLM for remaining rounds
           // Fall through to hardcoded
-          if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment);
+          if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment, multiScannerData);
           else if (rnd === 2) roundHTML = buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs);
           else if (rnd === 3) roundHTML = buildRound3HTML(inculpatory, exculpatory, techniques, iocs, elasticLogs, cmdCtx, verdict, confidence, fullText);
         }
       } else {
         // Hardcoded fallback
-        if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment);
+        if (rnd === 1) roundHTML = buildRound1HTML(summary, cleanDesc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment, multiScannerData);
         else if (rnd === 2) roundHTML = buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs);
         else if (rnd === 3) roundHTML = buildRound3HTML(inculpatory, exculpatory, techniques, iocs, elasticLogs, cmdCtx, verdict, confidence, fullText);
       }
@@ -60390,7 +60441,7 @@ async function submitEscalationToJira(ticketKey) {
 }
 
 // ── Round 1 HTML: Classification + Elastic Log Query ──
-function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment) {
+function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, priority, csEnrichment, multiScannerData) {
   // Derive EDR flags from csEnrichment (passed from runAIInvestigation)
   var _invHasCSEDR = csEnrichment && !csEnrichment.skippedNoCS;
   // Generic EDR flag — true if csEnrichment indicates real EDR OR if csEnrichment has edr_vendor set
@@ -60563,95 +60614,212 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
 
   html += '</div>'; // end elastic section
 
-  // ── THREAT INTELLIGENCE (CrowdStrike Falcon + DACTA TIP — unified card) ──
+  // ── THREAT INTELLIGENCE — Multi-Scanner Aggregated Card ──
+  // Renders per-IOC results from VirusTotal, AbuseIPDB, CrowdStrike Falcon Intel, and DACTA TIP
+  // with a consensus-based verdict for each indicator.
+  var _msData = multiScannerData || { results: {}, meta: {}, available: false };
+  var _msResults = _msData.results || {};
+  var _msIOCs = Object.keys(_msResults);
   var _hasCsData = !!csEnrichment && !csEnrichment.skippedNoCS;
   var _hasTipData = elasticLogs.openctiResults && elasticLogs.openctiResults.length > 0;
-  if (_hasCsData || _hasTipData) {
-    // Determine overall TI status for header badge
-    var _csLookupU = (_hasCsData && csEnrichment.lookup) ? csEnrichment.lookup : {};
-    var _csKeysU = Object.keys(_csLookupU);
-    var _csHighU = _csKeysU.filter(function(k){return _csLookupU[k].malicious_confidence==='high';}).length;
-    var _csMedU  = _csKeysU.filter(function(k){return _csLookupU[k].malicious_confidence==='medium';}).length;
+  var _hasMultiScanner = _msData.available && _msIOCs.length > 0;
+  var _hasSomeData = _hasMultiScanner || _hasCsData || _hasTipData;
+
+  if (_hasSomeData) {
+    // Determine overall TI status from multi-scanner consensus
+    var _globalMalicious = 0, _globalSuspicious = 0, _globalClean = 0;
+    _msIOCs.forEach(function(k) {
+      var c = (_msResults[k].consensus || {}).verdict || 'clean';
+      if (c === 'malicious') _globalMalicious++;
+      else if (c === 'suspicious') _globalSuspicious++;
+      else _globalClean++;
+    });
+    // Also factor in DACTA TIP hits
     var _tipHitsU = _hasTipData ? elasticLogs.openctiResults.filter(function(r){return r.found;}).length : 0;
-    var _tiOverallThreat = _csHighU > 0 || _tipHitsU > 0;
-    var _tiOverallMed = _csMedU > 0;
+    if (_tipHitsU > 0) _globalMalicious += _tipHitsU;
+
+    var _tiOverallThreat = _globalMalicious > 0;
+    var _tiOverallMed = _globalSuspicious > 0;
     var _tiHeaderColor = _tiOverallThreat ? '#ef4444' : (_tiOverallMed ? '#f59e0b' : '#10b981');
     var _tiHeaderBg = _tiOverallThreat ? 'rgba(239,68,68,0.04)' : (_tiOverallMed ? 'rgba(245,158,11,0.04)' : 'rgba(16,185,129,0.03)');
     var _tiBorderColor = _tiOverallThreat ? 'rgba(239,68,68,0.2)' : (_tiOverallMed ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.15)');
     var _tiStatusText = _tiOverallThreat ? 'THREAT DETECTED' : (_tiOverallMed ? 'SUSPICIOUS' : 'CLEAN');
 
+    // List active scanners
+    var _scannerList = [];
+    var _msMeta = _msData.meta || {};
+    var _msScanners = _msMeta.scanners || {};
+    if (_msScanners.virustotal && _msScanners.virustotal.configured) _scannerList.push('VirusTotal');
+    if (_msScanners.abuseipdb && _msScanners.abuseipdb.configured) _scannerList.push('AbuseIPDB');
+    if (_msScanners.crowdstrike && _msScanners.crowdstrike.configured) _scannerList.push('CrowdStrike');
+    if (_hasTipData) _scannerList.push('DACTA TIP');
+    if (_scannerList.length === 0) _scannerList = ['CrowdStrike Intel', 'DACTA TIP'];
+
     html += '<div style="margin-top:8px;padding:10px 12px;background:'+_tiHeaderBg+';border:1px solid '+_tiBorderColor+';border-radius:6px;">';
-    // Unified header
+    // Unified header with scanner count
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
       '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:'+_tiHeaderColor+';">' +
         dIcon('target',13) + ' THREAT INTELLIGENCE</div>' +
       '<div style="display:flex;align-items:center;gap:6px;">' +
-        '<span style="font-size:7px;color:var(--text-muted);opacity:0.7;">' + (_invIsRealEDR ? _invEdrVendorLabel + ' &middot; ' : '') + (_invHasCSEDR ? 'CrowdStrike Intel &middot; ' : '') + 'DACTA TIP</span>' +
+        '<span style="font-size:7px;color:var(--text-muted);opacity:0.7;">' + _scannerList.join(' \u00B7 ') + '</span>' +
         '<span style="font-size:8px;font-weight:700;padding:1px 7px;border-radius:8px;background:'+_tiHeaderColor+'18;color:'+_tiHeaderColor+';border:1px solid '+_tiHeaderColor+'30;">'+_tiStatusText+'</span>' +
       '</div></div>';
 
-    // ── CrowdStrike Falcon sub-section ──
-    if (_hasCsData) {
+    // ── Per-IOC Multi-Scanner Results ──
+    if (_hasMultiScanner) {
+      _msIOCs.forEach(function(indicator) {
+        var iocResult = _msResults[indicator];
+        var consensus = iocResult.consensus || {};
+        var iocType = iocResult.type || 'unknown';
+        var cVerdict = consensus.verdict || 'clean';
+        var cConf = consensus.confidence || 0;
+        var vColor = cVerdict === 'malicious' ? '#ef4444' : (cVerdict === 'suspicious' ? '#f59e0b' : '#10b981');
+        var vBg = cVerdict === 'malicious' ? 'rgba(239,68,68,0.05)' : (cVerdict === 'suspicious' ? 'rgba(245,158,11,0.05)' : 'rgba(16,185,129,0.03)');
+
+        html += '<div style="margin-bottom:6px;padding:8px 10px;background:' + vBg + ';border-radius:5px;border-left:3px solid ' + vColor + ';">';
+        // IOC header with consensus verdict
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+          '<div style="display:flex;align-items:center;gap:6px;">' +
+            '<span style="font-size:7px;padding:1px 5px;border-radius:6px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);text-transform:uppercase;font-weight:600;">' + iocType + '</span>' +
+            '<span style="font-size:10px;font-family:var(--font-mono);color:var(--text-primary);font-weight:500;">' + indicator.substring(0, 42) + (indicator.length > 42 ? '\u2026' : '') + '</span></div>' +
+          '<div style="display:flex;align-items:center;gap:4px;">' +
+            '<span style="font-size:8px;font-weight:700;color:' + vColor + ';text-transform:uppercase;">' + cVerdict + '</span>' +
+            '<span style="font-size:7px;padding:1px 5px;border-radius:8px;background:' + vColor + '18;color:' + vColor + ';border:1px solid ' + vColor + '30;font-weight:600;">' + cConf + '%</span>' +
+          '</div></div>';
+
+        // Scanner results grid
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:4px;">';
+        var scanners = iocResult.scanners || {};
+
+        // VirusTotal
+        var vt = scanners.virustotal;
+        if (vt) {
+          var vtColor = !vt.available ? 'var(--text-muted)' : (vt.verdict === 'malicious' ? '#ef4444' : (vt.verdict === 'suspicious' ? '#f59e0b' : '#10b981'));
+          var vtBorder = !vt.available ? 'var(--border-subtle)' : vtColor;
+          html += '<div style="padding:5px 7px;background:var(--surface-0);border-radius:4px;border:1px solid ' + vtBorder + '30;">';
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">' +
+            '<span style="font-size:8px;font-weight:700;color:#4584fa;">VirusTotal</span>';
+          if (vt.available) {
+            html += '<span style="font-size:7px;font-weight:700;color:' + vtColor + ';text-transform:uppercase;">' + vt.verdict + '</span>';
+          } else {
+            html += '<span style="font-size:7px;color:var(--text-muted);">' + (vt.error || 'offline') + '</span>';
+          }
+          html += '</div>';
+          if (vt.available && vt.details) {
+            var vtD = vt.details;
+            html += '<div style="font-size:8px;color:var(--text-secondary);">';
+            if (vtD.malicious > 0 || vtD.suspicious > 0 || vtD.total > 0) {
+              html += '<span style="color:#ef4444;font-weight:600;">' + vtD.malicious + '</span>/' + vtD.total + ' vendors flagged';
+              if (vtD.suspicious > 0) html += ' \u00B7 <span style="color:#f59e0b;">' + vtD.suspicious + ' suspicious</span>';
+            } else {
+              html += 'No detections';
+            }
+            html += '</div>';
+            // Show top flagging vendors
+            if (vtD.flagged_vendors && vtD.flagged_vendors.length > 0) {
+              html += '<div style="display:flex;gap:2px;flex-wrap:wrap;margin-top:3px;">';
+              vtD.flagged_vendors.slice(0, 4).forEach(function(fv) {
+                var fvColor = fv.category === 'malicious' ? '#ef4444' : '#f59e0b';
+                html += '<span style="font-size:6px;padding:1px 4px;border-radius:4px;background:' + fvColor + '12;color:' + fvColor + ';border:1px solid ' + fvColor + '25;">' + fv.vendor + '</span>';
+              });
+              if (vtD.flagged_vendors.length > 4) html += '<span style="font-size:6px;color:var(--text-muted);">+' + (vtD.flagged_vendors.length - 4) + '</span>';
+              html += '</div>';
+            }
+            if (vtD.country) html += '<div style="font-size:7px;color:var(--text-muted);margin-top:2px;">GEO: ' + vtD.country + (vtD.as_owner ? ' \u00B7 ' + vtD.as_owner : '') + '</div>';
+          }
+          html += '</div>';
+        }
+
+        // AbuseIPDB
+        var ab = scanners.abuseipdb;
+        if (ab && ab.error !== 'IP only scanner') {
+          var abColor = !ab.available ? 'var(--text-muted)' : (ab.verdict === 'malicious' ? '#ef4444' : (ab.verdict === 'suspicious' ? '#f59e0b' : '#10b981'));
+          var abBorder = !ab.available ? 'var(--border-subtle)' : abColor;
+          html += '<div style="padding:5px 7px;background:var(--surface-0);border-radius:4px;border:1px solid ' + abBorder + '30;">';
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">' +
+            '<span style="font-size:8px;font-weight:700;color:#e63946;">AbuseIPDB</span>';
+          if (ab.available) {
+            html += '<span style="font-size:7px;font-weight:700;color:' + abColor + ';text-transform:uppercase;">' + ab.verdict + '</span>';
+          } else {
+            html += '<span style="font-size:7px;color:var(--text-muted);">' + (ab.error || 'offline') + '</span>';
+          }
+          html += '</div>';
+          if (ab.available && ab.details) {
+            var abD = ab.details;
+            html += '<div style="font-size:8px;color:var(--text-secondary);">';
+            html += 'Abuse Score: <span style="color:' + abColor + ';font-weight:700;">' + abD.abuse_confidence + '%</span>';
+            if (abD.total_reports > 0) html += ' \u00B7 ' + abD.total_reports + ' reports';
+            html += '</div>';
+            if (abD.isp) html += '<div style="font-size:7px;color:var(--text-muted);margin-top:1px;">ISP: ' + abD.isp + '</div>';
+            if (abD.top_categories && abD.top_categories.length > 0) {
+              html += '<div style="display:flex;gap:2px;flex-wrap:wrap;margin-top:3px;">';
+              abD.top_categories.slice(0, 3).forEach(function(cat) {
+                html += '<span style="font-size:6px;padding:1px 4px;border-radius:4px;background:rgba(230,57,70,0.1);color:#e63946;border:1px solid rgba(230,57,70,0.2);">' + cat.category + ' (' + cat.count + ')</span>';
+              });
+              html += '</div>';
+            }
+          }
+          html += '</div>';
+        }
+
+        // CrowdStrike
+        var cs = scanners.crowdstrike;
+        if (cs) {
+          var csColor = !cs.available ? 'var(--text-muted)' : (cs.verdict === 'malicious' ? '#ef4444' : (cs.verdict === 'suspicious' ? '#f59e0b' : '#10b981'));
+          var csBorder = !cs.available ? 'var(--border-subtle)' : csColor;
+          html += '<div style="padding:5px 7px;background:var(--surface-0);border-radius:4px;border:1px solid ' + csBorder + '30;">';
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">' +
+            '<span style="font-size:8px;font-weight:700;color:#ea580c;">CrowdStrike</span>';
+          if (cs.available) {
+            html += '<span style="font-size:7px;font-weight:700;color:' + csColor + ';text-transform:uppercase;">' + cs.verdict + '</span>';
+          } else {
+            html += '<span style="font-size:7px;color:var(--text-muted);">' + (cs.error || 'offline') + '</span>';
+          }
+          html += '</div>';
+          if (cs.available && cs.details) {
+            var csD = cs.details;
+            if (csD.matched) {
+              html += '<div style="font-size:8px;color:var(--text-secondary);">Confidence: <span style="color:' + csColor + ';font-weight:600;">' + (csD.malicious_confidence || 'unknown') + '</span></div>';
+              if (csD.actors && csD.actors.length > 0) html += '<div style="font-size:7px;color:var(--amber);margin-top:1px;">' + dIcon('target',10) + ' ' + csD.actors.slice(0, 2).join(', ') + '</div>';
+              if (csD.malware_families && csD.malware_families.length > 0) html += '<div style="font-size:7px;color:#ef4444;margin-top:1px;">Malware: ' + csD.malware_families.slice(0, 2).join(', ') + '</div>';
+            } else {
+              html += '<div style="font-size:8px;color:var(--text-muted);">Not found in Falcon Intel</div>';
+            }
+          }
+          html += '</div>';
+        }
+
+        html += '</div>'; // end scanner grid
+
+        // Consensus reason
+        if (consensus.reason) {
+          html += '<div style="font-size:7px;color:var(--text-muted);margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.04);">' +
+            dIcon('info',10) + ' ' + consensus.reason + '</div>';
+        }
+        html += '</div>'; // end IOC card
+      });
+    } else if (_hasCsData) {
+      // Fallback: CS-only rendering (multi-scanner endpoint not available)
       var csLookup = csEnrichment.lookup || {};
       var csKeys = Object.keys(csLookup);
-      var csHighIOCs = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'high'; });
-      var csMedIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'medium'; });
-      var csLowIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'low'; });
-      var csUnvIOCs  = csKeys.filter(function(k) { return csLookup[k].malicious_confidence === 'unverified'; });
       var csConnected = !csEnrichment.error && (csEnrichment.total !== undefined);
       html += '<div style="margin-bottom:8px;padding:8px 10px;background:rgba(234,88,12,0.04);border-radius:4px;border-left:2px solid rgba(234,88,12,0.35);">';
       html += '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#ea580c;margin-bottom:6px;">' +
         dIcon('target',12) + ' CrowdStrike Falcon Intel' +
-        '<span style="font-weight:400;margin-left:6px;opacity:0.7;">' + (csEnrichment.error ? '— error' : (csConnected ? '(live)' : '— offline')) + '</span></div>';
+        '<span style="font-weight:400;margin-left:6px;opacity:0.7;">' + (csEnrichment.error ? '\u2014 error' : (csConnected ? '(live)' : '\u2014 offline')) + '</span></div>';
       if (csEnrichment.error) {
         html += '<div style="font-size:9px;color:var(--text-muted);">Could not reach CrowdStrike API: ' + csEnrichment.error + '</div>';
-      } else if (csKeys.length === 0 && csEnrichment.queried === 0) {
-        html += '<div style="font-size:9px;color:var(--text-muted);">No IOCs extracted from ticket to enrich.</div>';
-      } else {
-        html += '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:6px;">';
-        if (csHighIOCs.length > 0) html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);font-weight:700;">\u25CF HIGH: ' + csHighIOCs.length + '</span>';
-        if (csMedIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-weight:700;">\u25CF MED: ' + csMedIOCs.length + '</span>';
-        if (csLowIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">LOW: ' + csLowIOCs.length + '</span>';
-        if (csUnvIOCs.length > 0)  html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">UNVERIFIED: ' + csUnvIOCs.length + '</span>';
-        if (csKeys.length === 0 && csEnrichment.queried > 0) html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">' + dIcon('checkCircle',12) + ' All ' + csEnrichment.queried + ' IOC(s) Clean</span>';
-        html += '<span style="font-size:8px;padding:2px 7px;border-radius:10px;background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border-subtle);">' + csEnrichment.queried + ' queried \u00B7 ' + csEnrichment.total + ' matched</span>';
-        html += '</div>';
-        csKeys.slice(0, 6).forEach(function(indicator) {
-          var ioc = csLookup[indicator];
-          var conf = ioc.malicious_confidence;
-          var confColor = conf === 'high' ? '#ef4444' : conf === 'medium' ? '#f59e0b' : conf === 'low' ? '#10b981' : 'var(--text-muted)';
-          var confBg    = conf === 'high' ? 'rgba(239,68,68,0.05)' : conf === 'medium' ? 'rgba(245,158,11,0.05)' : 'var(--surface-1)';
-          html += '<div style="margin-bottom:4px;padding:4px 7px;background:' + confBg + ';border-radius:4px;border-left:2px solid ' + confColor + ';">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-              '<span style="font-size:9px;font-family:var(--font-mono);color:var(--text-primary);">' + indicator.substring(0, 34) + (indicator.length > 34 ? '\u2026' : '') + '</span>' +
-              '<span style="font-size:8px;font-weight:700;color:' + confColor + ';text-transform:uppercase;">' + (conf || 'unverified') + '</span>' +
-            '</div>';
-          if (ioc.actors && ioc.actors.length > 0) html += '<div style="margin-top:2px;font-size:8px;color:var(--amber);">' + dIcon('user',11) + ' ' + ioc.actors.slice(0, 3).join(', ') + '</div>';
-          if (ioc.malware_families && ioc.malware_families.length > 0) html += '<div style="margin-top:1px;font-size:8px;color:var(--red-bright);">Malware: ' + ioc.malware_families.slice(0, 2).join(', ') + '</div>';
-          if (ioc.labels && ioc.labels.length > 0) {
-            html += '<div style="margin-top:2px;display:flex;gap:2px;flex-wrap:wrap;">';
-            ioc.labels.slice(0, 3).forEach(function(l) { html += '<span style="font-size:7px;padding:1px 4px;border-radius:6px;background:rgba(239,68,68,0.06);color:var(--red-bright);border:1px solid rgba(239,68,68,0.15);">' + l + '</span>'; });
-            html += '</div>';
-          }
-          html += '</div>';
-        });
-        if (csKeys.length > 6) html += '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:3px 0;">+ ' + (csKeys.length - 6) + ' more indicators</div>';
-        if (csEnrichment.actors && csEnrichment.actors.length > 0) {
-          html += '<div style="margin-top:6px;padding:5px 7px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);border-radius:4px;">' +
-            '<div style="font-size:8px;font-weight:700;color:var(--amber);margin-bottom:3px;">' + dIcon('target',11) + ' Adversary Attribution</div>' +
-            '<div style="display:flex;gap:3px;flex-wrap:wrap;">';
-          csEnrichment.actors.slice(0, 6).forEach(function(actor) {
-            html += '<span style="font-size:8px;padding:2px 7px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.22);border-radius:10px;color:var(--amber);font-weight:600;">' + actor + '</span>';
-          });
-          html += '</div></div>';
-        }
+      } else if (csKeys.length === 0 && csEnrichment.queried > 0) {
+        html += '<div style="font-size:9px;color:var(--text-muted);">' + dIcon('checkCircle',12) + ' All ' + csEnrichment.queried + ' IOC(s) clean</div>';
+      } else if (csKeys.length === 0) {
+        html += '<div style="font-size:9px;color:var(--text-muted);">No IOCs to enrich</div>';
       }
-      html += '</div>'; // end CS sub-section
+      html += '</div>';
     }
 
-    // ── DACTA TIP sub-section ──
+    // ── DACTA TIP sub-section (always from Elastic/OpenCTI) ──
     if (_hasTipData) {
-      if (_hasCsData) html += '<div style="height:1px;background:rgba(255,255,255,0.05);margin:0 0 8px;"></div>';
+      if (_hasMultiScanner || _hasCsData) html += '<div style="height:1px;background:rgba(255,255,255,0.05);margin:0 0 8px;"></div>';
       html += '<div style="padding:8px 10px;background:rgba(139,92,246,0.04);border-radius:4px;border-left:2px solid rgba(139,92,246,0.35);">';
       html += '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#8b5cf6;margin-bottom:6px;">' +
         dIcon('search',12) + ' DACTA TIP' +
@@ -60673,7 +60841,7 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
       html += '</div>'; // end TIP sub-section
     }
 
-    if (!_hasCsData && !_hasTipData) {
+    if (!_hasMultiScanner && !_hasCsData && !_hasTipData) {
       html += '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:12px 0;">No threat intelligence data available for this ticket.</div>';
     }
     html += '</div>'; // end unified TI card
