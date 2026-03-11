@@ -58239,6 +58239,7 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (_invPrimaryFwConn) {
     invToolsList.push((_invPrimaryFwConn.vendor || 'Firewall') + ' Logs');
   }
+  invToolsList.push('CrowdStrike Intel'); // Global TI service — always available
   invToolsList.push('DACTA TIP');
   var invToolsLabel = invToolsList.join(' + ');
   console.log('[AI Investigation] Org: ' + org + ' | Namespace: ' + invNamespace + ' | mode=' + _invSourceRelevance.mode + ' | EDR: ' + _invHasEDR + ' | RealEDR: ' + _invIsRealEDR + ' | Vendor: ' + _invEdrVendorLabel + ' | CS-EDR: ' + _invHasCSEDR + ' | Firewall: ' + _invHasFirewall + ' | Scoped FW: ' + (_invScopedFwConns.map(function(c) { return c.vendor || c.display_name || 'firewall'; }).join(', ') || 'none') + ' | Tools: ' + invToolsLabel);
@@ -58277,11 +58278,13 @@ async function runAIInvestigation(ticketKey, issueData) {
   var cmdCtx = analyzeCommandContext(fullText);
 
   // ── CrowdStrike Falcon Intel enrichment (parallel with Elastic) ──
-  // Only enrich with CS if the org actually has CrowdStrike as EDR connector (not Microsoft M365 etc)
-  var csEnrichment = { lookup: {}, total: 0, queried: 0, actors: [], error: null, skippedNoCS: !_invHasCSEDR, edrVendor: _invIsRealEDR ? _invEdrVendorLabel : null };
-  var csAllIOCs = _invHasCSEDR ? [].concat(
+  // CS Falcon Intel is a GLOBAL threat intelligence service (API keys on Vercel env vars)
+  // It runs for ALL orgs regardless of their EDR vendor — it's threat intel, not EDR-specific.
+  // _invHasCSEDR only gates CS EDR telemetry queries (host lookups, alert correlation).
+  var csEnrichment = { lookup: {}, total: 0, queried: 0, actors: [], error: null, skippedNoCS: false, edrVendor: _invIsRealEDR ? _invEdrVendorLabel : null };
+  var csAllIOCs = [].concat(
     iocs.ips || [], iocs.domains || [], iocs.hashes || [], iocs.urls || []
-  ).filter(Boolean).slice(0, 100) : []; // Skip CS enrichment for non-CS orgs
+  ).filter(Boolean).slice(0, 100); // Always enrich IOCs via CS Falcon Intel (global service)
 
   var csEnrichPromise = (csAllIOCs.length > 0)
     ? fetch('/api/crowdstrike', {
