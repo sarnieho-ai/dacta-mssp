@@ -408,6 +408,254 @@ export default async function handler(req, res) {
       return res.status(200).json({ learning });
     }
 
+    // ─── ACTION: bulk_learning (paginated extraction of ALL closed/reported-to tickets + comments) ──
+    // Returns analyst investigation corpus in batches. Designed for resumable extraction:
+    //   ?action=bulk_learning                   → start from page 0
+    //   ?action=bulk_learning&cursor=<token>     → resume from cursor
+    //   ?action=bulk_learning&batch_size=25      → custom batch size (default 25, max 50)
+    //   ?action=bulk_learning&store=true         → auto-persist each record to SIEMLess DB
+    //   ?action=bulk_learning&min_comment_len=30 → minimum comment length to keep (default 30)
+    // Response includes { corpus: [...], progress: {...}, next_cursor, done }
+    if (action === 'bulk_learning') {
+      const batchSize = Math.min(parseInt(req.query.batch_size || body.batch_size || '25', 10) || 25, 50);
+      const cursor = req.query.cursor || body.cursor || null;
+      const storeToDB = String(req.query.store || body.store || 'false') === 'true';
+      const minCommentLen = parseInt(req.query.min_comment_len || body.min_comment_len || '30', 10) || 30;
+
+      // JQL: all closed + reported-to tickets, ordered by resolved date descending
+      const jql = 'project = DAC AND status IN ("Closed", "Completed", "Reported To", "Canceled") ORDER BY resolved DESC';
+
+      // Paginated search — use cursor if resuming
+      const searchPayload = { jql, fields: ['summary', 'status', 'resolution', 'resolutiondate', 'created', 'updated', 'customfield_10002', 'priority', 'assignee', 'reporter'], maxResults: batchSize };
+      if (cursor) searchPayload.nextPageToken = cursor;
+
+      const searchResp = await fetch(`${baseUrl}/rest/api/3/search/jql`, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(searchPayload)
+      });
+      if (!searchResp.ok) {
+        const errText = await searchResp.text();
+        return res.status(searchResp.status).json({ error: 'Jira search failed', details: errText });
+      }
+      const searchData = await searchResp.json();
+      const issues = searchData.issues || [];
+      const nextCursor = searchData.nextPageToken || null;
+      const isDone = searchData.isLast === true || !nextCursor;
+      const totalFromJira = searchData.total || issues.length;
+
+      // Fetch comments for each issue in parallel (bounded concurrency)
+      const corpus = [];
+      const CONCURRENCY = 5;
+      for (let i = 0; i < issues.length; i += CONCURRENCY) {
+        const batch = issues.slice(i, i + CONCURRENCY);
+        const results = await Promise.allSettled(batch.map(async (issue) => {
+          const key = issue.key;
+          const fields = issue.fields || {};
+          try {
+            const commentResp = await fetch(`${baseUrl}/rest/api/3/issue/${key}/comment?maxResults=50`, {
+              headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+            });
+            const commentsData = commentResp.ok ? await commentResp.json() : { comments: [] };
+            const comments = commentsData.comments || commentsData.values || [];
+            const cleanedComments = comments.map(_extractCommentText).filter(Boolean);
+
+            // Filter to meaningful comments (above min length threshold)
+            const meaningfulComments = cleanedComments.filter(c => c.length >= minCommentLen);
+
+            // Extract investigation timeline: all comments in order with author info
+            const commentTimeline = comments.map((c, idx) => {
+              const text = _extractCommentText(c);
+              if (!text || text.length < minCommentLen) return null;
+              return {
+                index: idx,
+                author: c.author ? (c.author.displayName || c.author.emailAddress || 'Unknown') : 'Unknown',
+                created: c.created || '',
+                text: text.substring(0, 2000) // Cap per-comment length
+              };
+            }).filter(Boolean);
+
+            // Closure reasoning = last meaningful comment
+            const closureReasoning = meaningfulComments.length > 0 ? meaningfulComments[meaningfulComments.length - 1] : '';
+
+            // Extract all entities (IPs, hashes, emails, domains, hostnames)
+            const allText = meaningfulComments.join(' ');
+            const ips = Array.from(new Set((allText.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || []).slice(0, 20)));
+            const hashes = Array.from(new Set((allText.match(/\b[a-f0-9]{32,64}\b/gi) || []).slice(0, 20)));
+            const emails = Array.from(new Set((allText.match(/\b[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\b/gi) || []).slice(0, 20)));
+
+            // Extract detection rule name from summary (pattern: "DACTA ... Rule Name")
+            const summary = fields.summary || '';
+            let detectionRule = '';
+            // Try to extract rule name: usually the full summary IS the rule name for SOC alerts
+            // Common patterns: "DACTA Distributed Port Scan", "DACTA Firewall Rule Modification", etc.
+            const ruleMatch = summary.match(/^(DACTA\s+.+?)(?:\s+on\s+|\s+from\s+|\s*[-–]\s*|$)/i);
+            if (ruleMatch) detectionRule = ruleMatch[1].trim();
+            else detectionRule = summary.replace(/\s+/g, ' ').trim();
+
+            const org = Array.isArray(fields.customfield_10002) && fields.customfield_10002[0]
+              ? (fields.customfield_10002[0].name || '') : '';
+
+            const record = {
+              ticket_key: key,
+              summary: summary,
+              detection_rule: detectionRule,
+              status: fields.status ? fields.status.name : '',
+              resolution: fields.resolution ? fields.resolution.name : '',
+              priority: fields.priority ? fields.priority.name : '',
+              org: org,
+              assignee: fields.assignee ? (fields.assignee.displayName || '') : '',
+              created: fields.created || '',
+              resolved: fields.resolutiondate || fields.updated || '',
+              comment_count: comments.length,
+              meaningful_comment_count: meaningfulComments.length,
+              closure_reasoning: closureReasoning.substring(0, 3000),
+              comment_timeline: commentTimeline.slice(0, 20), // Top 20 comments
+              entities: { ips, hashes, emails },
+              extracted_at: new Date().toISOString()
+            };
+
+            // Persist to SIEMLess DB if requested (gracefully handles missing table)
+            if (storeToDB) {
+              try {
+                await _sbUpsert('analyst_investigation_corpus', {
+                  ticket_key: key,
+                  summary: summary,
+                  detection_rule: detectionRule,
+                  status: record.status,
+                  resolution: record.resolution,
+                  priority: record.priority,
+                  org: org,
+                  assignee: record.assignee,
+                  created_at: record.created,
+                  resolved_at: record.resolved,
+                  comment_count: record.comment_count,
+                  meaningful_comment_count: record.meaningful_comment_count,
+                  closure_reasoning: record.closure_reasoning,
+                  comment_timeline: JSON.stringify(record.comment_timeline),
+                  entities: JSON.stringify(record.entities),
+                  extracted_at: record.extracted_at
+                }, 'ticket_key');
+              } catch (dbErr) {
+                console.warn('[Jira bulk_learning] DB persist failed for', key, '(table may not exist yet)');
+              }
+            }
+
+            return record;
+          } catch (e) {
+            console.warn('[Jira bulk_learning] failed for', key, e.message);
+            return { ticket_key: key, error: e.message };
+          }
+        }));
+
+        results.forEach(r => {
+          if (r.status === 'fulfilled' && r.value) corpus.push(r.value);
+        });
+      }
+
+      return res.status(200).json({
+        corpus,
+        progress: {
+          batch_returned: corpus.length,
+          total_matching: totalFromJira,
+          stored_to_db: storeToDB
+        },
+        next_cursor: isDone ? null : nextCursor,
+        done: isDone
+      });
+    }
+
+    // ─── ACTION: corpus_stats (get extraction stats from SIEMLess DB) ────────────
+    // Returns aggregated stats about the analyst investigation corpus
+    if (action === 'corpus_stats') {
+      const allRows = await _sbGet('analyst_investigation_corpus', 'select=ticket_key,detection_rule,org,status,resolution,meaningful_comment_count,closure_reasoning&limit=10000');
+      if (!allRows || allRows.length === 0) {
+        return res.status(200).json({ total: 0, by_rule: {}, by_org: {}, by_resolution: {}, quality: {} });
+      }
+
+      const byRule = {};
+      const byOrg = {};
+      const byResolution = {};
+      let withComments = 0;
+      let withMeaningfulClosure = 0;
+
+      allRows.forEach(row => {
+        const rule = row.detection_rule || 'Unknown';
+        byRule[rule] = (byRule[rule] || 0) + 1;
+
+        const org = row.org || 'Unknown';
+        byOrg[org] = (byOrg[org] || 0) + 1;
+
+        const res = row.resolution || row.status || 'Unknown';
+        byResolution[res] = (byResolution[res] || 0) + 1;
+
+        if ((row.meaningful_comment_count || 0) > 0) withComments++;
+        if (row.closure_reasoning && row.closure_reasoning.length >= 50) withMeaningfulClosure++;
+      });
+
+      return res.status(200).json({
+        total: allRows.length,
+        by_rule: byRule,
+        by_org: byOrg,
+        by_resolution: byResolution,
+        quality: {
+          with_comments: withComments,
+          with_meaningful_closure: withMeaningfulClosure,
+          pct_meaningful: allRows.length > 0 ? Math.round((withMeaningfulClosure / allRows.length) * 100) : 0
+        }
+      });
+    }
+
+    // ─── ACTION: corpus_by_rule (get all corpus records for a specific detection rule) ──
+    // Used by the LLM investigation pipeline to inject analyst precedent for a given rule
+    if (action === 'corpus_by_rule') {
+      const rule = req.query.rule || body.rule || '';
+      const org = req.query.org || body.org || '';
+      const limit = Math.min(parseInt(req.query.limit || body.limit || '10', 10) || 10, 50);
+
+      if (!rule) return res.status(400).json({ error: 'Missing rule parameter' });
+
+      // First try exact rule match for same org
+      let query = `select=ticket_key,summary,detection_rule,org,resolution,closure_reasoning,comment_timeline,entities&detection_rule=eq.${encodeURIComponent(rule)}&order=resolved_at.desc&limit=${limit}`;
+      if (org) query += `&org=eq.${encodeURIComponent(org)}`;
+
+      let rows = await _sbGet('analyst_investigation_corpus', query);
+
+      // If no results for this org, try same rule across all orgs
+      if ((!rows || rows.length === 0) && org) {
+        query = `select=ticket_key,summary,detection_rule,org,resolution,closure_reasoning,comment_timeline,entities&detection_rule=eq.${encodeURIComponent(rule)}&order=resolved_at.desc&limit=${limit}`;
+        rows = await _sbGet('analyst_investigation_corpus', query);
+      }
+
+      // If still no results, try partial match (rule name contains)
+      if (!rows || rows.length === 0) {
+        // Use ilike for partial matching
+        const ruleWords = rule.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
+        if (ruleWords.length > 0) {
+          const pattern = ruleWords.join('%');
+          query = `select=ticket_key,summary,detection_rule,org,resolution,closure_reasoning,comment_timeline,entities&detection_rule=ilike.*${encodeURIComponent(pattern)}*&order=resolved_at.desc&limit=${limit}`;
+          rows = await _sbGet('analyst_investigation_corpus', query);
+        }
+      }
+
+      // Parse stringified JSON fields
+      (rows || []).forEach(row => {
+        if (typeof row.comment_timeline === 'string') {
+          try { row.comment_timeline = JSON.parse(row.comment_timeline); } catch(e) { row.comment_timeline = []; }
+        }
+        if (typeof row.entities === 'string') {
+          try { row.entities = JSON.parse(row.entities); } catch(e) { row.entities = {}; }
+        }
+      });
+
+      return res.status(200).json({
+        rule,
+        org: org || 'all',
+        matches: (rows || []).length,
+        corpus: rows || []
+      });
+    }
+
     // ─── ACTION: counts (batch) ───────────────────────────────
     if (action === 'counts') {
       const body = req.body || {};
