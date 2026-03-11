@@ -59408,41 +59408,26 @@ async function runAIInvestigation(ticketKey, issueData) {
     setTimeout(initCollapsiblePanels, 100);
   }
 
-  // Populate Playbook Actions card from detection rules + SIEMLess DB
+  // Populate Playbook Actions card — DB playbook is authoritative, hardcoded fallback only if DB fetch fails
   var playbookCard = document.getElementById('playbookActionsCard');
   if (playbookCard) {
     var useCaseName = (issueData.fields && issueData.fields.customfield_10072) || '';
     var alertTitle = (issueData.fields && issueData.fields.summary) || '';
-    var matchedPlaybook = matchDetectionPlaybook(alertTitle, useCaseName, techniques);
-    var pbHTML = '';
-    if (matchedPlaybook) {
-      pbHTML += '<div style="padding:8px 10px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:6px;margin-bottom:8px;">' +
-        '<div style="font-size:10px;font-weight:600;color:#a78bfa;">' + matchedPlaybook.ruleName + '</div>' +
-        '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Detection Rule ID: ' + matchedPlaybook.ruleId + '</div>' +
-      '</div>';
-      matchedPlaybook.steps.forEach(function(step, si) {
-        pbHTML += '<div style="display:flex;gap:8px;padding:6px 0;' + (si < matchedPlaybook.steps.length - 1 ? 'border-bottom:1px solid var(--border-subtle);' : '') + '">' +
-          '<span style="font-size:10px;color:var(--cyan);font-weight:700;min-width:20px;">' + (si + 1) + '.</span>' +
-          '<div style="flex:1;">' +
-            '<div style="font-size:10px;color:var(--text-primary);font-weight:500;">' + step.action + '</div>' +
-            '<div style="font-size:8px;color:var(--text-muted);margin-top:1px;">' + step.detail + '</div>' +
-          '</div>' +
-        '</div>';
-      });
-    } else {
-      pbHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic;">No matching built-in playbook</div>';
-    }
 
-    // Fetch DB playbooks asynchronously — DB playbook is authoritative, replaces hardcoded fallback
+    // Show loading state first
+    var loadingHTML = '<div style="font-size:10px;color:var(--text-muted);padding:8px;"><span class="spinner-sm" style="display:inline-block;width:12px;height:12px;border:2px solid var(--border-subtle);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;margin-right:6px;vertical-align:middle;"></span>Loading playbook from SIEMLess DB...</div>';
+    var pbBody = playbookCard.querySelector('.inv-collapsible-body');
+    if (pbBody) { pbBody.innerHTML = loadingHTML; pbBody.style.display = ''; }
+    else { playbookCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Playbook Actions</span><span style="font-size:9px;color:var(--text-muted);margin-left:6px;">From Detection Rules + SIEMLess DB</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + loadingHTML + '</div>'; }
+
+    // DB fetch is the PRIMARY path — hardcoded fallback only on failure
     (async function() {
       try {
         var dbPbs = (_cachedPlaybooks && _cachedPlaybooks.length > 0) ? _cachedPlaybooks : await fetchRelevantPlaybooks(techniques, alertTitle, useCaseName);
         if (dbPbs.length > 0) {
-          // DB playbook is the authoritative source — replace the entire card content (hardcoded fallback was only a placeholder)
           var dbHTML = '<div>' +
             '<div style="font-size:9px;font-weight:600;color:var(--cyan);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">' + dIcon('book',14) + ' SIEMLess DB Playbooks (' + dbPbs.length + ' matched)</div>';
           dbPbs.forEach(function(pb) {
-            // Match type badge
             var matchBadge = '';
             var matchColor = 'var(--cyan)';
             var cardBg = 'rgba(0,212,255,0.04)';
@@ -59464,38 +59449,76 @@ async function runAIInvestigation(ticketKey, issueData) {
               (pb.description ? '<div style="font-size:9px;color:var(--text-secondary);margin-top:3px;">' + escapeHtml(pb.description).substring(0, 200) + '</div>' : '') +
               (pb.mitre_technique_id ? '<div style="font-size:8px;color:var(--text-muted);margin-top:2px;">MITRE: ' + escapeHtml(pb.mitre_technique_id) + '</div>' : '') +
               (pb._matchDetail ? '<div style="font-size:7px;color:var(--text-muted);margin-top:2px;font-style:italic;">' + dIcon('link',14) + ' ' + escapeHtml(pb._matchDetail) + '</div>' : '');
-            // Show triage steps
             if (pb.triage_steps) {
               var triageArr = Array.isArray(pb.triage_steps) ? pb.triage_steps : [pb.triage_steps];
+              dbHTML += '<div style="font-size:9px;font-weight:600;color:#a78bfa;margin-top:6px;margin-bottom:2px;">Triage Steps (' + triageArr.length + ')</div>';
               triageArr.forEach(function(ts, ti) {
-                dbHTML += '<div style="display:flex;gap:6px;padding:4px 0;">' +
+                dbHTML += '<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.03);">' +
                   '<span style="font-size:9px;color:#a78bfa;font-weight:700;min-width:16px;">' + (ti+1) + '.</span>' +
                   '<div style="font-size:9px;color:var(--text-primary);">' + escapeHtml(typeof ts === 'string' ? ts : ts.step || JSON.stringify(ts)) + '</div></div>';
               });
             }
-            // Show false positive guidance
             if (pb.false_positive_guidance) {
-              var fpArr = Array.isArray(pb.false_positive_guidance) ? pb.false_positive_guidance : [pb.false_positive_guidance];
-              dbHTML += '<div style="font-size:8px;color:var(--text-muted);margin-top:4px;padding:4px 6px;background:rgba(245,158,11,0.06);border-radius:4px;">FP Guidance: ' + escapeHtml(fpArr.join(' | ')) + '</div>';
+              var fpText = Array.isArray(pb.false_positive_guidance) ? pb.false_positive_guidance.join(' | ') : pb.false_positive_guidance;
+              dbHTML += '<div style="font-size:9px;font-weight:600;color:#f59e0b;margin-top:6px;margin-bottom:2px;">False Positive Guidance</div>';
+              dbHTML += '<div style="font-size:8px;color:var(--text-secondary);padding:4px 6px;background:rgba(245,158,11,0.06);border-radius:4px;">' + escapeHtml(fpText) + '</div>';
             }
-            // Show investigation queries
+            if (pb.containment_steps) {
+              var contArr = Array.isArray(pb.containment_steps) ? pb.containment_steps : [pb.containment_steps];
+              dbHTML += '<div style="font-size:9px;font-weight:600;color:#ef4444;margin-top:6px;margin-bottom:2px;">Containment Steps (' + contArr.length + ')</div>';
+              contArr.forEach(function(cs, ci) {
+                dbHTML += '<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.03);">' +
+                  '<span style="font-size:9px;color:#ef4444;font-weight:700;min-width:16px;">' + (ci+1) + '.</span>' +
+                  '<div style="font-size:9px;color:var(--text-primary);">' + escapeHtml(typeof cs === 'string' ? cs : JSON.stringify(cs)) + '</div></div>';
+              });
+            }
             if (pb.investigation_queries) {
-              var iqArr = Array.isArray(pb.investigation_queries) ? pb.investigation_queries : [pb.investigation_queries];
-              dbHTML += '<div style="font-size:8px;color:var(--text-muted);margin-top:3px;">' + dIcon('search',14) + ' Queries: ' + escapeHtml(iqArr.map(function(q) { return typeof q === 'string' ? q : JSON.stringify(q); }).join(' | ').substring(0, 300)) + '</div>';
+              var iqText = Array.isArray(pb.investigation_queries) ? pb.investigation_queries.join(' | ') : (typeof pb.investigation_queries === 'string' ? pb.investigation_queries : JSON.stringify(pb.investigation_queries));
+              dbHTML += '<div style="font-size:9px;font-weight:600;color:var(--cyan);margin-top:6px;margin-bottom:2px;">' + dIcon('search',14) + ' Investigation Queries</div>';
+              dbHTML += '<div style="font-size:8px;color:var(--text-secondary);padding:4px 6px;background:rgba(0,212,255,0.04);border-radius:4px;font-family:monospace;">' + escapeHtml(iqText.substring(0, 500)) + '</div>';
+            }
+            if (pb.escalation_criteria) {
+              var escText = Array.isArray(pb.escalation_criteria) ? pb.escalation_criteria.join(' | ') : pb.escalation_criteria;
+              dbHTML += '<div style="font-size:9px;font-weight:600;color:#f97316;margin-top:6px;margin-bottom:2px;">Escalation Criteria</div>';
+              dbHTML += '<div style="font-size:8px;color:var(--text-secondary);">' + escapeHtml(escText) + '</div>';
             }
             dbHTML += '</div>';
           });
           dbHTML += '</div>';
-          var pbBodyEl = playbookCard.querySelector('.inv-collapsible-body');
-          // Replace entire card content with DB playbook (authoritative source replaces hardcoded fallback)
-          if (pbBodyEl) pbBodyEl.innerHTML = dbHTML;
+          var pbBodyEl = document.querySelector('#playbookActionsCard .inv-collapsible-body');
+          if (pbBodyEl) { pbBodyEl.innerHTML = dbHTML; console.log('[Playbook Card] Replaced with DB playbook (' + dbPbs.length + ' matched)'); }
+        } else {
+          // No DB match — fall back to hardcoded playbook
+          var matchedPlaybook = matchDetectionPlaybook(alertTitle, useCaseName, techniques);
+          var fallbackHTML = '';
+          if (matchedPlaybook) {
+            fallbackHTML += '<div style="padding:8px 10px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:6px;margin-bottom:8px;">' +
+              '<div style="font-size:10px;font-weight:600;color:#a78bfa;">' + matchedPlaybook.ruleName + '</div>' +
+              '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Detection Rule ID: ' + matchedPlaybook.ruleId + '</div></div>';
+            matchedPlaybook.steps.forEach(function(step, si) {
+              fallbackHTML += '<div style="display:flex;gap:8px;padding:6px 0;' + (si < matchedPlaybook.steps.length - 1 ? 'border-bottom:1px solid var(--border-subtle);' : '') + '">' +
+                '<span style="font-size:10px;color:var(--cyan);font-weight:700;min-width:20px;">' + (si + 1) + '.</span>' +
+                '<div style="flex:1;"><div style="font-size:10px;color:var(--text-primary);font-weight:500;">' + step.action + '</div>' +
+                '<div style="font-size:8px;color:var(--text-muted);margin-top:1px;">' + step.detail + '</div></div></div>';
+            });
+          } else {
+            fallbackHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic;">No matching playbook found</div>';
+          }
+          var fbBodyEl = document.querySelector('#playbookActionsCard .inv-collapsible-body');
+          if (fbBodyEl) { fbBodyEl.innerHTML = fallbackHTML; console.log('[Playbook Card] Using hardcoded fallback (no DB match)'); }
         }
-      } catch(e) { console.warn('[Investigation] DB playbook fetch error:', e); }
+      } catch(e) {
+        console.warn('[Investigation] DB playbook fetch error:', e);
+        // On error — show hardcoded fallback
+        var matchedPlaybook = matchDetectionPlaybook(alertTitle, useCaseName, techniques);
+        var errHTML = matchedPlaybook ?
+          '<div style="padding:8px 10px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:6px;">' +
+          '<div style="font-size:10px;font-weight:600;color:#a78bfa;">' + matchedPlaybook.ruleName + ' (offline fallback)</div></div>' :
+          '<div style="font-size:10px;color:var(--text-muted);font-style:italic;">Playbook unavailable</div>';
+        var errBodyEl = document.querySelector('#playbookActionsCard .inv-collapsible-body');
+        if (errBodyEl) errBodyEl.innerHTML = errHTML;
+      }
     })();
-
-    var pbBody = playbookCard.querySelector('.inv-collapsible-body');
-    if (pbBody) { pbBody.innerHTML = pbHTML; pbBody.style.display = ''; }
-    else { playbookCard.innerHTML = '<div class="card-header inv-collapsible-header" style="margin-bottom:10px;cursor:pointer;"><span class="card-title">Playbook Actions</span><span style="font-size:9px;color:var(--text-muted);margin-left:6px;">From Detection Rules + SIEMLess DB</span><span class="inv-collapse-arrow" style="margin-left:auto;font-size:12px;color:var(--text-muted);">\u25BC</span></div><div class="inv-collapsible-body">' + pbHTML + '</div>'; }
     setTimeout(initCollapsiblePanels, 100);
   }
 
