@@ -502,6 +502,48 @@
 }
 
 /* ---- Notification badge stays red ---- */
+/* Notification Center Panel */
+.notif-panel {
+  display:none; position:absolute; top:48px; right:60px; width:400px; max-height:520px;
+  background:var(--bg-card); border:1px solid var(--border-card); border-radius:12px;
+  box-shadow:0 12px 48px rgba(0,0,0,0.5); z-index:10001; overflow:hidden;
+}
+.notif-panel.open { display:block; }
+.notif-panel-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; border-bottom:1px solid var(--border-subtle);
+}
+.notif-panel-header h3 { font-size:13px; font-weight:700; color:var(--text-primary); margin:0; }
+.notif-panel-list { max-height:420px; overflow-y:auto; padding:4px 0; }
+.notif-panel-list::-webkit-scrollbar { width:4px; }
+.notif-panel-list::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:4px; }
+.notif-item {
+  display:flex; gap:10px; padding:10px 16px; cursor:pointer; transition:background 0.15s;
+  border-bottom:1px solid rgba(255,255,255,0.03);
+}
+.notif-item:hover { background:rgba(0,212,255,0.04); }
+.notif-item.unread { background:rgba(0,212,255,0.03); }
+.notif-item.unread::before {
+  content:''; width:6px; height:6px; border-radius:50%; background:var(--cyan);
+  flex-shrink:0; margin-top:6px;
+}
+.notif-item .notif-icon {
+  width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; font-size:14px;
+}
+.notif-item .notif-icon.p1 { background:rgba(239,68,68,0.12); color:#ef4444; }
+.notif-item .notif-icon.p2 { background:rgba(249,115,22,0.12); color:#f97316; }
+.notif-item .notif-icon.p3 { background:rgba(245,158,11,0.12); color:#f59e0b; }
+.notif-item .notif-icon.p4 { background:rgba(148,163,184,0.10); color:#94a3b8; }
+.notif-item .notif-body { flex:1; min-width:0; }
+.notif-item .notif-title { font-size:11px; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.notif-item .notif-sub { font-size:10px; color:var(--text-muted); margin-top:2px; line-height:1.4; }
+.notif-item .notif-time { font-size:9px; color:var(--text-muted); font-family:var(--font-mono); white-space:nowrap; margin-top:2px; }
+.notif-empty { text-align:center; padding:40px 20px; color:var(--text-muted); font-size:11px; font-family:var(--font-mono); }
+.notif-badge-pulse { animation: notifPulse 2s ease-in-out infinite; }
+@keyframes notifPulse {
+  0%,100% { transform:scale(1); } 50% { transform:scale(1.15); }
+}
 [data-theme="light"] .notif-badge {
   background: var(--red);
   color: #fff;
@@ -3667,6 +3709,12 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 }
 
 /* ── Investigation Cache & Triage AI Status ── */
+/* Sortable column headers */
+.tq-sortable { cursor:pointer; user-select:none; white-space:nowrap; }
+.tq-sortable:hover { color:var(--cyan); }
+.tq-sortable .tq-sort-icon { font-size:9px; opacity:0.4; margin-left:2px; }
+.tq-sortable.tq-sort-active .tq-sort-icon { opacity:1; color:var(--cyan); }
+
 .tq-ai-badge {
   display:inline-flex; align-items:center; gap:3px;
   font-size:9px; font-weight:600; padding:2px 7px;
@@ -3682,11 +3730,20 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 .tq-ai-badge.cached-tp {
   background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.30); color:#ef4444;
 }
+.tq-ai-badge.cached-ltp {
+  background:rgba(249,115,22,0.12); border:1px solid rgba(249,115,22,0.30); color:#f97316;
+}
 .tq-ai-badge.cached-fp {
   background:rgba(16,185,129,0.10); border:1px solid rgba(16,185,129,0.25); color:#10b981;
 }
+.tq-ai-badge.cached-lfp {
+  background:rgba(6,182,212,0.12); border:1px solid rgba(6,182,212,0.30); color:#06b6d4;
+}
 .tq-ai-badge.cached-susp {
   background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.30); color:#f59e0b;
+}
+.tq-ai-badge.cached-ind {
+  background:rgba(148,163,184,0.10); border:1px solid rgba(148,163,184,0.25); color:#94a3b8;
 }
 .tq-ai-badge.overridden {
   background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.25); color:#f59e0b;
@@ -10358,9 +10415,19 @@ function getThemeTickColor() {
           <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
-        <div class="topbar-icon-btn" data-tooltip="Notifications">
+        <div class="topbar-icon-btn" data-tooltip="Notifications" onclick="toggleNotifPanel()" id="notifBellBtn">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span class="notif-badge">3</span>
+          <span class="notif-badge" id="notifBadgeCount" style="display:none;">0</span>
+        </div>
+        <!-- Notification Center Panel -->
+        <div class="notif-panel" id="notifPanel">
+          <div class="notif-panel-header">
+            <h3>Notifications</h3>
+            <button onclick="clearAllNotifications()" style="background:none;border:none;color:var(--text-muted);font-size:10px;cursor:pointer;font-family:var(--font-mono);padding:2px 6px;border-radius:4px;" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--text-muted)'">Mark all read</button>
+          </div>
+          <div class="notif-panel-list" id="notifPanelList">
+            <div class="notif-empty">No new notifications</div>
+          </div>
         </div>
         <div class="topbar-icon-btn" data-tooltip="Help"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
         <div class="user-chip" id="topbarUserChip" style="cursor:pointer;" onclick="toggleUserMenu()">
@@ -10842,16 +10909,15 @@ function getThemeTickColor() {
               <thead>
                 <tr>
                   <th style="width:32px;"><input type="checkbox" class="tq-cb" id="tqSelectAll" onchange="tqToggleSelectAll(this.checked)" title="Select All"></th>
-                  <th>ID</th>
-                  <th>P</th>
-                  <th>Title</th>
-                  <th>AI Status</th>
-                  <th title="CrowdStrike Falcon Intel pre-enrichment">CS Intel</th>
-                  <th>Organization</th>
+                  <th class="tq-sortable" data-sort="key" onclick="triageSortBy('key')">ID <span class="tq-sort-icon"></span></th>
+                  <th class="tq-sortable" data-sort="priority" onclick="triageSortBy('priority')">P <span class="tq-sort-icon"></span></th>
+                  <th class="tq-sortable" data-sort="summary" onclick="triageSortBy('summary')">Title <span class="tq-sort-icon"></span></th>
+                  <th class="tq-sortable" data-sort="aiVerdict" onclick="triageSortBy('aiVerdict')">AI Verdict <span class="tq-sort-icon"></span></th>
+                  <th class="tq-sortable" data-sort="org" onclick="triageSortBy('org')">Organization <span class="tq-sort-icon"></span></th>
                   <th>Source</th>
-                  <th>Status</th>
-                  <th>Analyst</th>
-                  <th id="thCreated" style="cursor:pointer;user-select:none;" onclick="toggleTriageSort()">Created <span id="triageSortIcon"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg></span></th>
+                  <th class="tq-sortable" data-sort="status" onclick="triageSortBy('status')">Status <span class="tq-sort-icon"></span></th>
+                  <th class="tq-sortable" data-sort="assignee" onclick="triageSortBy('assignee')">Analyst <span class="tq-sort-icon"></span></th>
+                  <th class="tq-sortable tq-sort-active" data-sort="created" onclick="triageSortBy('created')">Created <span class="tq-sort-icon">▼</span></th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -44075,7 +44141,7 @@ function applyProductionMode() {
   document.querySelectorAll('.labels-grid .label-chip .label-count').forEach(function(el) { el.textContent = '0'; });
 
   // Notification badge
-  var notifBadge = document.querySelector('.notif-badge'); if (notifBadge) notifBadge.textContent = '0';
+  // notif badge is now managed by updateNotifBadge()
 
   // ────────────────────────────────────────────────
   //  2. TRIAGE QUEUE
@@ -44092,7 +44158,7 @@ function applyProductionMode() {
 
     // Table — clear body, show empty
     triagePage.querySelectorAll('table tbody').forEach(function(tbody) {
-      tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:80px 24px;">' +
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:80px 24px;">' +
         emptyState('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>', 'No tickets in queue — connect Jira to populate') + '</td></tr>';
     });
 
@@ -52013,28 +52079,24 @@ async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
 
   var finalVerdict = (phaseResults.phase3 && phaseResults.phase3.final_verdict) || (phaseResults.phase2 && phaseResults.phase2.preliminary_verdict) || 'SUSPICIOUS';
   var confidence = (phaseResults.phase3 && phaseResults.phase3.final_confidence) || (phaseResults.phase2 && phaseResults.phase2.confidence) || (phaseResults.phase1 && phaseResults.phase1.confidence) || 45;
-  var verdict = 'SUSPICIOUS — Requires Analyst Review';
-  var verdictColor = 'var(--amber)';
-  var verdictBg = 'rgba(245,158,11,0.05)';
-  var verdictBorder = 'rgba(245,158,11,0.3)';
-  var actionLabel = 'Manual investigation recommended';
-  var verdictIcon = dIcon('warning', 14);
 
-  if (finalVerdict === 'TRUE_POSITIVE') {
-    verdict = 'TRUE POSITIVE — Confirmed Threat';
-    verdictColor = 'var(--red-bright)';
-    verdictBg = 'rgba(239,68,68,0.05)';
-    verdictBorder = 'rgba(239,68,68,0.3)';
-    actionLabel = 'Immediate action required';
-    verdictIcon = dIcon('siren', 14);
-  } else if (finalVerdict === 'FALSE_POSITIVE') {
-    verdict = 'FALSE POSITIVE — Business Justified';
-    verdictColor = 'var(--green)';
-    verdictBg = 'rgba(16,185,129,0.05)';
-    verdictBorder = 'rgba(16,185,129,0.3)';
-    actionLabel = 'Close as false positive';
-    verdictIcon = dIcon('checkCircle', 14);
-  }
+  // Use 6-tier verdict mapping
+  var tier = mapVerdictTier(finalVerdict, confidence);
+  var verdictLabels = {
+    'TP':  { text: 'TRUE POSITIVE — Confirmed Threat',      color: 'var(--red-bright)', bg: 'rgba(239,68,68,0.05)',  border: 'rgba(239,68,68,0.3)',  action: 'Immediate action required',        icon: dIcon('siren', 14) },
+    'LTP': { text: 'LIKELY TRUE POSITIVE — Probable Threat', color: '#f97316',           bg: 'rgba(249,115,22,0.05)', border: 'rgba(249,115,22,0.3)', action: 'Analyst verification recommended',  icon: dIcon('warning', 14) },
+    'SUS': { text: 'SUSPICIOUS — Requires Analyst Review',   color: 'var(--amber)',       bg: 'rgba(245,158,11,0.05)', border: 'rgba(245,158,11,0.3)', action: 'Manual investigation recommended',  icon: dIcon('warning', 14) },
+    'LFP': { text: 'LIKELY FALSE POSITIVE — Probable Benign',color: '#06b6d4',           bg: 'rgba(6,182,212,0.05)',  border: 'rgba(6,182,212,0.3)', action: 'Review and close if confirmed',    icon: dIcon('checkCircle', 14) },
+    'FP':  { text: 'FALSE POSITIVE — Business Justified',    color: 'var(--green)',       bg: 'rgba(16,185,129,0.05)', border: 'rgba(16,185,129,0.3)', action: 'Close as false positive',          icon: dIcon('checkCircle', 14) },
+    'IND': { text: 'INSUFFICIENT DATA — Telemetry Gaps',     color: '#94a3b8',           bg: 'rgba(148,163,184,0.05)',border: 'rgba(148,163,184,0.3)',action: 'Re-investigate with additional data',icon: dIcon('warning', 14) }
+  };
+  var vl = verdictLabels[tier.code] || verdictLabels['SUS'];
+  var verdict = vl.text;
+  var verdictColor = vl.color;
+  var verdictBg = vl.bg;
+  var verdictBorder = vl.border;
+  var actionLabel = vl.action;
+  var verdictIcon = vl.icon;
 
   var verdictBannerHTML = '<div class="verdict-banner" style="margin-top:12px;border-color:' + verdictBorder + ';background:' + verdictBg + ';">' +
     '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
@@ -52155,6 +52217,179 @@ function _startAutoInvestigationLoop() {
   console.log('[AutoInv] Background auto-investigation loop started (5min interval)');
 }
 
+// ══════════════════════════════════════════════════════════════
+//  NOTIFICATION CENTER — New Ticket Alerts via Jira Polling
+// ══════════════════════════════════════════════════════════════
+var _notifItems = [];           // { id, key, summary, priority, org, created, read, timestamp }
+var _notifPanelOpen = false;
+var _notifKnownKeys = new Set(); // track known ticket keys to detect new arrivals
+var _notifPollTimer = null;
+var _notifAudioCtx = null;
+
+function toggleNotifPanel() {
+  var panel = document.getElementById('notifPanel');
+  if (!panel) return;
+  _notifPanelOpen = !_notifPanelOpen;
+  panel.classList.toggle('open', _notifPanelOpen);
+  if (_notifPanelOpen) renderNotifPanel();
+}
+
+// Close panel when clicking outside
+document.addEventListener('click', function(e) {
+  var panel = document.getElementById('notifPanel');
+  var bell = document.getElementById('notifBellBtn');
+  if (_notifPanelOpen && panel && !panel.contains(e.target) && bell && !bell.contains(e.target)) {
+    _notifPanelOpen = false;
+    panel.classList.remove('open');
+  }
+});
+
+function renderNotifPanel() {
+  var list = document.getElementById('notifPanelList');
+  if (!list) return;
+  if (_notifItems.length === 0) {
+    list.innerHTML = '<div class="notif-empty"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;display:block;margin:0 auto 8px;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>No new notifications</div>';
+    return;
+  }
+  list.innerHTML = _notifItems.map(function(n) {
+    var priClass = (n.priority || 'P3').toUpperCase().replace(/[^P1234]/g, '');
+    if (['P1','P2','P3','P4'].indexOf(priClass) === -1) priClass = 'P3';
+    var priIcon = priClass === 'P1' ? dIcon('siren',14) : priClass === 'P2' ? dIcon('warning',14) : dIcon('bell',14);
+    var timeAgo = jiraTimeAgo(n.created);
+    return '<div class="notif-item' + (n.read ? '' : ' unread') + '" onclick="notifClickItem(\'' + n.key + '\')">' +
+      '<div class="notif-icon ' + priClass.toLowerCase() + '">' + priIcon + '</div>' +
+      '<div class="notif-body">' +
+        '<div class="notif-title">' + n.key + ' — ' + (n.priority || '') + '</div>' +
+        '<div class="notif-sub">' + (n.summary || '').substring(0, 80) + '</div>' +
+        '<div class="notif-time">' + (n.org ? n.org + ' · ' : '') + timeAgo + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function notifClickItem(key) {
+  // Mark as read
+  _notifItems.forEach(function(n) { if (n.key === key) n.read = true; });
+  updateNotifBadge();
+  // Close panel and navigate to investigation
+  _notifPanelOpen = false;
+  var panel = document.getElementById('notifPanel');
+  if (panel) panel.classList.remove('open');
+  // Navigate to triage then open investigation
+  navigate('triage');
+  setTimeout(function() { openInvestigation(key); }, 300);
+}
+
+function clearAllNotifications() {
+  _notifItems.forEach(function(n) { n.read = true; });
+  updateNotifBadge();
+  renderNotifPanel();
+}
+
+function updateNotifBadge() {
+  var unread = _notifItems.filter(function(n) { return !n.read; }).length;
+  var badge = document.getElementById('notifBadgeCount');
+  if (badge) {
+    badge.textContent = unread > 99 ? '99+' : unread;
+    badge.style.display = unread > 0 ? '' : 'none';
+    badge.classList.toggle('notif-badge-pulse', unread > 0);
+  }
+}
+
+function playNotifSound() {
+  try {
+    if (!_notifAudioCtx) _notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var ctx = _notifAudioCtx;
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
+  } catch(e) { /* audio not available */ }
+}
+
+// ── Jira Polling for New Tickets (every 60s) ──
+async function _pollJiraForNewTickets() {
+  if (window._dactaMode !== 'production') return;
+  try {
+    var data = await DactaJira.fetchTriage({ maxResults: 50 });
+    var issues = data.issues || [];
+    var newTickets = [];
+
+    // Seed known keys on first poll (no notifications for existing tickets)
+    if (_notifKnownKeys.size === 0) {
+      issues.forEach(function(t) { _notifKnownKeys.add(t.key); });
+      console.log('[NotifPoll] Initial seed: ' + _notifKnownKeys.size + ' known tickets');
+      return;
+    }
+
+    issues.forEach(function(t) {
+      if (!_notifKnownKeys.has(t.key)) {
+        _notifKnownKeys.add(t.key);
+        newTickets.push(t);
+      }
+    });
+
+    if (newTickets.length > 0) {
+      console.log('[NotifPoll] ' + newTickets.length + ' new ticket(s) detected');
+      newTickets.forEach(function(t) {
+        _notifItems.unshift({
+          id: 'notif-' + t.key + '-' + Date.now(),
+          key: t.key,
+          summary: t.summary,
+          priority: t.priorityShort || t.priority,
+          org: t.org,
+          created: t.created,
+          read: false,
+          timestamp: new Date().toISOString()
+        });
+      });
+      // Keep max 50 notifications
+      if (_notifItems.length > 50) _notifItems = _notifItems.slice(0, 50);
+      updateNotifBadge();
+      if (_notifPanelOpen) renderNotifPanel();
+      playNotifSound();
+
+      // Show browser toast for P1/P2 tickets
+      var critical = newTickets.filter(function(t) {
+        var ps = (t.priorityShort || t.priority || '').toUpperCase();
+        return ps.indexOf('P1') !== -1 || ps.indexOf('CRITICAL') !== -1 || ps.indexOf('P2') !== -1 || ps.indexOf('HIGH') !== -1;
+      });
+      if (critical.length > 0) {
+        showToast(critical.length + ' new high-priority ticket' + (critical.length > 1 ? 's' : '') + ': ' + critical.map(function(t){return t.key;}).join(', '), 'error');
+      } else {
+        showToast(newTickets.length + ' new ticket' + (newTickets.length > 1 ? 's' : '') + ' received', 'info');
+      }
+
+      // Refresh triage table if on triage page
+      var triagePage = document.getElementById('page-triage');
+      if (triagePage && triagePage.classList.contains('active')) {
+        populateLiveTriage();
+      }
+
+      // Queue new tickets for auto-investigation
+      _queueAutoInvestigation(newTickets);
+    }
+  } catch(e) {
+    console.warn('[NotifPoll] Error:', e.message);
+  }
+}
+
+function _startNotifPolling() {
+  if (window._dactaMode !== 'production') return;
+  // Initial poll after 5s (seed known tickets)
+  setTimeout(_pollJiraForNewTickets, 5000);
+  // Then poll every 60 seconds
+  if (_notifPollTimer) clearInterval(_notifPollTimer);
+  _notifPollTimer = setInterval(_pollJiraForNewTickets, 60000);
+  console.log('[NotifPoll] Jira new-ticket polling started (60s interval)');
+}
+
+// Start polling on boot
+setTimeout(_startNotifPolling, 2000);
+
 async function populateLiveTriage(pageOrAppend) {
   if (window._dactaMode !== 'production') return;
   if (_triageLoading) return;
@@ -52207,7 +52442,7 @@ async function populateLiveTriage(pageOrAppend) {
   // Show loading in table
   var tbody = triagePage.querySelector('table tbody');
   if (tbody) {
-    tbody.innerHTML = '<tr><td colspan="12">' + jiraProgressBarHTML() + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11">' + jiraProgressBarHTML() + '</td></tr>';
   }
 
   try {
@@ -52225,6 +52460,9 @@ async function populateLiveTriage(pageOrAppend) {
     }
 
     _triageCurrentIssues = issues;
+
+    // Seed notification known keys from triage data (prevent false alerts on first load)
+    issues.forEach(function(t) { _notifKnownKeys.add(t.key); });
 
     // ── Update subtitle ──
     var subtitle = triagePage.querySelector('.page-subtitle');
@@ -52248,7 +52486,6 @@ async function populateLiveTriage(pageOrAppend) {
           '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
           '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
           '<td data-ai-status="' + t.key + '">' + getTriageAIBadge(t.key) + '</td>' +
-          '<td data-cs-status="' + t.key + '">' + getCSBadge(t.key) + '</td>' +
           '<td style="font-size:11px;">' + t.org + '</td>' +
           '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
           '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
@@ -52269,7 +52506,7 @@ async function populateLiveTriage(pageOrAppend) {
       }
 
       if (_triageCurrentIssues.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:60px;">' +
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;">' +
           '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;">' +
           '<div style="font-size:24px;opacity:0.5;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></div>' +
           '<div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">No tickets match the current filters</div>' +
@@ -52318,7 +52555,7 @@ async function populateLiveTriage(pageOrAppend) {
   } catch (err) {
     console.error('[DactaJira] Triage error:', err);
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="12">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11">' + jiraErrorHTML('Failed to load triage data: ' + err.message, 'populateLiveTriage()') + '</td></tr>';
     }
   } finally {
     _triageLoading = false;
@@ -52636,7 +52873,6 @@ function rerenderTriageTable() {
       '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
       '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
       '<td data-ai-status="' + t.key + '">' + getTriageAIBadge(t.key) + '</td>' +
-      '<td data-cs-status="' + t.key + '">' + getCSBadge(t.key) + '</td>' +
       '<td style="font-size:11px;">' + t.org + '</td>' +
       '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
       '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
@@ -52648,7 +52884,7 @@ function rerenderTriageTable() {
   tbody.innerHTML = rowsHTML;
   if (filtered.length === 0) {
     var emptyMsg = _triageClientSearch ? 'No tickets match "' + _triageClientSearch.replace(/</g,'&lt;') + '"' : 'No tickets match the current filters';
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">' + emptyMsg + '</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:60px;"><div style="font-size:24px;opacity:0.5;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></div><div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">' + emptyMsg + '</div></td></tr>';
   }
   var tqSum = triagePage.querySelector('.tq-summary');
   if (tqSum) {
@@ -55348,14 +55584,74 @@ function jiraProgressBarHTML() {
 })();
 
 // ── SORTING (Task 2) ──
-var _triageSortAsc = false;
-function toggleTriageSort() {
-  _triageSortAsc = !_triageSortAsc;
-  var icon = document.getElementById('triageSortIcon');
-  if (icon) icon.innerHTML = _triageSortAsc ? '▲' : '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>';
+// ── Generic Triage Column Sorting ──
+var _triageSortCol = 'created';
+var _triageSortAsc = false; // default: newest first
+
+function triageSortBy(col) {
+  if (_triageSortCol === col) {
+    _triageSortAsc = !_triageSortAsc;
+  } else {
+    _triageSortCol = col;
+    _triageSortAsc = (col === 'created') ? false : true; // dates default desc, others asc
+  }
+  // Update header icons
+  document.querySelectorAll('#page-triage .tq-sortable').forEach(function(th) {
+    var iconEl = th.querySelector('.tq-sort-icon');
+    if (th.dataset.sort === col) {
+      th.classList.add('tq-sort-active');
+      if (iconEl) iconEl.textContent = _triageSortAsc ? '\u25B2' : '\u25BC';
+    } else {
+      th.classList.remove('tq-sort-active');
+      if (iconEl) iconEl.textContent = '';
+    }
+  });
+  // Priority sort map
+  var priOrder = { 'P1': 0, 'P2': 1, 'P3': 2, 'P4': 3 };
+  // Status sort map
+  var statusOrder = { 'Open': 0, 'In Progress': 1, 'Escalated': 2, 'Reported To': 3, 'Client Responded': 4, 'Closed': 5, 'Completed': 6, 'Canceled': 7 };
+
   _triageCurrentIssues.sort(function(a, b) {
-    var da = new Date(a.created), db = new Date(b.created);
-    return _triageSortAsc ? da - db : db - da;
+    var va, vb;
+    switch (col) {
+      case 'key':
+        // Sort by numeric part of ticket key (DAC-19168 -> 19168)
+        va = parseInt((a.key || '').replace(/[^0-9]/g, ''), 10) || 0;
+        vb = parseInt((b.key || '').replace(/[^0-9]/g, ''), 10) || 0;
+        break;
+      case 'priority':
+        va = priOrder[a.priorityShort] !== undefined ? priOrder[a.priorityShort] : 9;
+        vb = priOrder[b.priorityShort] !== undefined ? priOrder[b.priorityShort] : 9;
+        break;
+      case 'summary':
+        va = (a.summary || '').toLowerCase();
+        vb = (b.summary || '').toLowerCase();
+        return _triageSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      case 'aiVerdict':
+        var ca = _investigationCache[a.key];
+        var cb = _investigationCache[b.key];
+        va = ca ? mapVerdictTier(ca.verdict, ca.confidence).sortWeight : 99;
+        vb = cb ? mapVerdictTier(cb.verdict, cb.confidence).sortWeight : 99;
+        break;
+      case 'org':
+        va = (a.org || '').toLowerCase();
+        vb = (b.org || '').toLowerCase();
+        return _triageSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      case 'status':
+        va = statusOrder[a.status] !== undefined ? statusOrder[a.status] : 9;
+        vb = statusOrder[b.status] !== undefined ? statusOrder[b.status] : 9;
+        break;
+      case 'assignee':
+        va = (a.assignee || 'zzz').toLowerCase();
+        vb = (b.assignee || 'zzz').toLowerCase();
+        return _triageSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      case 'created':
+      default:
+        va = new Date(a.created).getTime() || 0;
+        vb = new Date(b.created).getTime() || 0;
+        break;
+    }
+    return _triageSortAsc ? va - vb : vb - va;
   });
   rerenderTriageTable();
 }
@@ -55597,6 +55893,30 @@ async function loadAllCachedKeys() {
 }
 
 // ── Triage queue AI status badge helper ──
+// ── 6-Tier Verdict Mapping: maps raw verdict + confidence into graduated tiers ──
+function mapVerdictTier(rawVerdict, confidence) {
+  var v = (rawVerdict || '').toUpperCase();
+  var c = parseInt(confidence, 10) || 0;
+  var isTP = v.indexOf('TRUE POSITIVE') !== -1 || v === 'TRUE_POSITIVE' || v.indexOf('CONFIRMED THREAT') !== -1;
+  var isFP = v.indexOf('FALSE POSITIVE') !== -1 || v === 'FALSE_POSITIVE' || v.indexOf('BUSINESS JUSTIFIED') !== -1;
+  var isSusp = v.indexOf('SUSPICIOUS') !== -1;
+  var isIND = v.indexOf('INSUFFICIENT') !== -1 || v.indexOf('GUARDRAIL') !== -1;
+
+  if (isIND) return { code: 'IND', label: 'Insufficient Data', cssClass: 'cached-ind', sortWeight: 3 };
+  if (isTP) {
+    if (c >= 85) return { code: 'TP', label: 'True Positive', cssClass: 'cached-tp', sortWeight: 0 };
+    if (c >= 65) return { code: 'LTP', label: 'Likely TP', cssClass: 'cached-ltp', sortWeight: 1 };
+    return { code: 'SUS', label: 'Suspicious', cssClass: 'cached-susp', sortWeight: 2 };
+  }
+  if (isFP) {
+    if (c >= 85) return { code: 'FP', label: 'False Positive', cssClass: 'cached-fp', sortWeight: 5 };
+    if (c >= 65) return { code: 'LFP', label: 'Likely FP', cssClass: 'cached-lfp', sortWeight: 4 };
+    return { code: 'SUS', label: 'Suspicious', cssClass: 'cached-susp', sortWeight: 2 };
+  }
+  if (isSusp) return { code: 'SUS', label: 'Suspicious', cssClass: 'cached-susp', sortWeight: 2 };
+  return { code: 'SUS', label: 'Suspicious', cssClass: 'cached-susp', sortWeight: 2 };
+}
+
 function getTriageAIBadge(ticketKey) {
   if (_activeInvestigations[ticketKey]) {
     return '<span class="tq-ai-badge investigating"><span class="jira-spinner" style="width:8px;height:8px;"></span> AI Investigating</span>';
@@ -55606,14 +55926,9 @@ function getTriageAIBadge(ticketKey) {
     if (cached.overrideVerdict) {
       return '<span class="tq-ai-badge overridden" title="Analyst override: ' + (cached.overrideVerdict || '') + '">' + dIcon('edit',14) + ' Overridden</span>';
     }
-    var shortVerdict = (cached.verdict || '').split('\u2014')[0].trim();
-    if (shortVerdict.length > 14) shortVerdict = shortVerdict.substring(0, 14) + '\u2026';
-    // Color-code by verdict type for quick visual identification
-    var isTP = shortVerdict.toUpperCase().indexOf('TRUE POSITIVE') !== -1 || shortVerdict.toUpperCase() === 'TRUE_POSITIVE';
-    var isFP = shortVerdict.toUpperCase().indexOf('FALSE POSITIVE') !== -1 || shortVerdict.toUpperCase() === 'FALSE_POSITIVE';
-    var isSusp = shortVerdict.toUpperCase().indexOf('SUSPICIOUS') !== -1;
-    var badgeClass = isTP ? 'cached-tp' : isFP ? 'cached-fp' : isSusp ? 'cached-susp' : 'cached';
-    return '<span class="tq-ai-badge ' + badgeClass + '" title="Cached ' + new Date(cached.timestamp).toLocaleString() + '">' + dIcon('check',14) + ' ' + (shortVerdict || 'Investigated') + '</span>';
+    var tier = mapVerdictTier(cached.verdict, cached.confidence);
+    var confStr = cached.confidence ? ' ' + cached.confidence + '%' : '';
+    return '<span class="tq-ai-badge ' + tier.cssClass + '" title="' + tier.label + confStr + ' — Cached ' + new Date(cached.timestamp).toLocaleString() + '">' + dIcon('check',14) + ' ' + tier.code + (cached.confidence ? ' <span style="opacity:0.7;font-size:8px;">' + cached.confidence + '%</span>' : '') + '</span>';
   }
   return '<span style="font-size:10px;color:var(--text-muted);">\u2014</span>';
 }
