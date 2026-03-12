@@ -1944,6 +1944,8 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   border-bottom: 1px solid var(--border-subtle);
 }
 .org-row:last-child { border-bottom: none; }
+.org-row:hover { background: var(--bg-elevated); border-radius: 6px; transition: background 0.15s; }
+.org-row-active { background: rgba(0,212,255,0.08); border-radius: 6px; border: 1px solid rgba(0,212,255,0.25); }
 .org-name { flex: 1; font-size: 12.5px; font-weight: 500; }
 .org-count { font-size: 11px; color: var(--text-muted); }
 .org-bar { width: 80px; height: 4px; background: var(--bg-elevated); border-radius: 2px; overflow: hidden; }
@@ -10467,7 +10469,7 @@ function getThemeTickColor() {
             </div>
             <div class="cc-status-pills">
               <div class="cc-status-pill green"><span class="cc-status-dot green"></span>SYSTEMS OPERATIONAL</div>
-              <div class="cc-status-pill cyan"><span class="cc-status-dot cyan"></span>SHIFT B · 14:00–22:00</div>
+              <div class="cc-status-pill cyan" id="ccShiftPill"><span class="cc-status-dot cyan"></span>SHIFT A · 07:00–19:00</div>
               <div class="cc-status-pill">ANALYST: JOHN LIM</div>
             </div>
           </div>
@@ -10822,6 +10824,16 @@ function getThemeTickColor() {
                 <span class="card-title">Priority Distribution</span><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Breakdown of all incidents by severity level</div>
               </div>
               <div class="priority-distribution" style="display:flex;flex-direction:column;gap:6px;">
+                <div style="padding:8px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Loading...</div>
+              </div>
+            </div>
+
+            <!-- Top 5 Rules Triggered -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Top Rules Triggered</span><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Most frequently triggered detection rules</div>
+              </div>
+              <div class="top-rules-triggered" style="display:flex;flex-direction:column;gap:6px;">
                 <div style="padding:8px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Loading...</div>
               </div>
             </div>
@@ -11794,7 +11806,7 @@ function getThemeTickColor() {
         <div class="page-header">
           <div>
             <div class="page-title">Shift Handover</div>
-            <div class="page-subtitle">Shift B → Shift C · 22:00 SGT</div>
+            <div class="page-subtitle" id="handoverShiftSubtitle">Shift A → Shift B · 19:00 SGT</div>
           </div>
           <div class="page-actions">
             <button class="btn btn-secondary btn-sm"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Generate Report</button>
@@ -11803,7 +11815,7 @@ function getThemeTickColor() {
         </div>
 
         <div class="shift-header-bar">
-          <div class="metric-card cyan"><div class="metric-label">Current Shift</div><div class="metric-value" style="font-size:18px;">Shift B</div><div class="metric-sub">14:00–22:00 SGT</div></div>
+          <div class="metric-card cyan"><div class="metric-label">Current Shift</div><div class="metric-value" id="handoverCurrentShift" style="font-size:18px;">Shift A</div><div class="metric-sub" id="handoverShiftTime">07:00–19:00 SGT</div></div>
           <div class="metric-card green"><div class="metric-label">Tickets Closed</div><div class="metric-value">8</div><div class="metric-sub">this shift</div></div>
           <div class="metric-card amber"><div class="metric-label">Open Tickets</div><div class="metric-value">6</div><div class="metric-sub">carrying over</div></div>
           <div class="metric-card red"><div class="metric-label">Escalated</div><div class="metric-value">2</div><div class="metric-sub">active escalations</div></div>
@@ -11916,7 +11928,7 @@ function getThemeTickColor() {
 
         <div class="grid-2" style="margin-bottom:16px;">
           <div class="card">
-            <div class="card-header"><span class="card-title">Shift B Team On Duty</span></div>
+            <div class="card-header"><span class="card-title" id="handoverOnDutyTitle">Shift A Team On Duty</span></div>
             <div style="display:flex;flex-direction:column;gap:8px;">
               <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg-elevated);border-radius:7px;">
                 <div class="user-avatar">JL</div>
@@ -11937,7 +11949,7 @@ function getThemeTickColor() {
           </div>
 
           <div class="card">
-            <div class="card-header"><span class="card-title">Shift C — Incoming</span><span class="badge badge-blue">Starts 22:00</span></div>
+            <div class="card-header"><span class="card-title" id="handoverIncomingTitle">Shift B — Incoming</span><span class="badge badge-blue" id="handoverIncomingBadge">Starts 19:00</span></div>
             <div style="display:flex;flex-direction:column;gap:8px;">
               <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg-elevated);border-radius:7px;">
                 <div class="user-avatar" style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);">RL</div>
@@ -11954,7 +11966,7 @@ function getThemeTickColor() {
         </div>
 
         <div class="card" style="margin-bottom:16px;">
-          <div class="card-header"><span class="card-title">Handover Notes from Shift A</span><span style="font-size:11px;color:var(--text-muted);">From: Wei Chen · 14:03 SGT</span></div>
+          <div class="card-header"><span class="card-title" id="handoverNotesTitle">Handover Notes from Shift B</span><span style="font-size:11px;color:var(--text-muted);">From: Wei Chen · 19:03 SGT</span></div>
           <div class="handover-note">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> <strong>CRITICAL — DAC-18158 (P1 Ransomware)</strong> is ACTIVE. Host DACTASG-WS-047 isolation in progress. Await confirmation from Elastic agent. john.santos account disable pending CISO approval (ETA 10 min). Do NOT close until full forensics complete.<br><br>
             DAC-18157 (P2 Lateral Movement) — relates to DAC-18158. Same user. Keep correlated.<br><br>
@@ -11964,13 +11976,13 @@ function getThemeTickColor() {
         </div>
 
         <div class="card">
-          <div class="card-header"><span class="card-title">Open Items — Carrying to Shift C</span></div>
+          <div class="card-header"><span class="card-title" id="handoverCarryTitle">Open Items — Carrying to Shift B</span></div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>ID</th><th>Priority</th><th>Title</th><th>Action Required</th><th>Owner</th><th>Deadline</th></tr></thead>
               <tbody>
                 <tr><td class="mono" style="color:var(--cyan);">DAC-18158</td><td><span class="badge badge-p1">P1</span></td><td>Ransomware Activity — DACTASG-WS-047</td><td>Complete isolation, await forensics</td><td>John Lim → Raj Lingam</td><td style="color:var(--red-bright);font-family:var(--font-mono);">URGENT</td></tr>
-                <tr><td class="mono" style="color:var(--cyan);">DAC-18157</td><td><span class="badge badge-p2">P2</span></td><td>Unusual Host Communication</td><td>Monitor correlated to DAC-18158</td><td>Sarah Tan → Aisha Hassan</td><td class="mono">22:00</td></tr>
+                <tr><td class="mono" style="color:var(--cyan);">DAC-18157</td><td><span class="badge badge-p2">P2</span></td><td>Unusual Host Communication</td><td>Monitor correlated to DAC-18158</td><td>Sarah Tan → Aisha Hassan</td><td class="mono">19:00</td></tr>
                 <tr><td class="mono" style="color:var(--cyan);">DAC-18120</td><td><span class="badge badge-p3">P3</span></td><td>Application Control — Unauthorized Execution</td><td>Follow up with Kenneth Ng (NW IT)</td><td>Marcus Wong → Aisha Hassan</td><td class="mono">18:00</td></tr>
               </tbody>
             </table>
@@ -47128,8 +47140,50 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
     this.closePath();
   };
 }
+// ── Dynamic Shift Determination ──
+// Shift A: 0700–1900 SGT, Shift B: 1900–0700 SGT
+function getCurrentShiftInfo() {
+  var now = new Date();
+  var sgt = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));
+  var h = sgt.getHours();
+  if (h >= 7 && h < 19) {
+    return { name: 'Shift A', time: '07:00–19:00', next: 'Shift B', nextStart: '19:00' };
+  } else {
+    return { name: 'Shift B', time: '19:00–07:00', next: 'Shift A', nextStart: '07:00' };
+  }
+}
+
+function updateShiftDisplays() {
+  var shift = getCurrentShiftInfo();
+  // Command center pill
+  var ccPill = document.getElementById('ccShiftPill');
+  if (ccPill) ccPill.innerHTML = '<span class="cc-status-dot cyan"></span>' + shift.name.toUpperCase() + ' · ' + shift.time;
+  // Handover page
+  var hSub = document.getElementById('handoverShiftSubtitle');
+  if (hSub) hSub.textContent = shift.name + ' → ' + shift.next + ' · ' + shift.nextStart + ' SGT';
+  var hCur = document.getElementById('handoverCurrentShift');
+  if (hCur) hCur.textContent = shift.name;
+  var hTime = document.getElementById('handoverShiftTime');
+  if (hTime) hTime.textContent = shift.time + ' SGT';
+  var hOnDuty = document.getElementById('handoverOnDutyTitle');
+  if (hOnDuty) hOnDuty.textContent = shift.name + ' Team On Duty';
+  var hIncoming = document.getElementById('handoverIncomingTitle');
+  if (hIncoming) hIncoming.textContent = shift.next + ' — Incoming';
+  var hInBadge = document.getElementById('handoverIncomingBadge');
+  if (hInBadge) hInBadge.textContent = 'Starts ' + shift.nextStart;
+  var hNotes = document.getElementById('handoverNotesTitle');
+  // Notes are from the previous shift
+  var prevShift = (shift.name === 'Shift A') ? 'Shift B' : 'Shift A';
+  if (hNotes) hNotes.textContent = 'Handover Notes from ' + prevShift;
+  var hCarry = document.getElementById('handoverCarryTitle');
+  if (hCarry) hCarry.textContent = 'Open Items — Carrying to ' + shift.next;
+}
+
 function initCommandCenter() {
   // Production guard removed — visuals render with live data
+  updateShiftDisplays();
+  // Update shift displays every 5 minutes
+  setInterval(updateShiftDisplays, 300000);
   var canvas = document.getElementById('commandCenterCanvas');
   if (!canvas) return;
   var ctx = canvas.getContext('2d');
@@ -51150,6 +51204,20 @@ function jiraLiveBadge() {
 
 // ── DASHBOARD LIVE DATA ─────────────────────────────────────
 
+// Dashboard org filter state
+window._dashOrgFilter = null; // null = show all orgs
+
+function toggleDashOrgFilter(orgName) {
+  if (window._dashOrgFilter === orgName) {
+    window._dashOrgFilter = null; // deselect
+  } else {
+    window._dashOrgFilter = orgName;
+  }
+  // Refresh dashboard visuals with filter
+  refreshDashboardData();
+  showToast(window._dashOrgFilter ? 'Filtering: ' + window._dashOrgFilter : 'Showing all organizations', 'info');
+}
+
 // Dashboard time range state
 var _dashTimeRange = '7d';
 var _dashTimeLabels = {
@@ -51635,7 +51703,16 @@ async function populateLiveDashboard() {
       if (analystGrid) {
         var entries = Object.entries(ac).sort(function(a,b) { return b[1].total - a[1].total; }).slice(0, 6);
         var maxA = entries.length > 0 ? entries[0][1].total : 1;
-        analystGrid.innerHTML = entries.map(function(e) {
+
+        // Fetch assignable users count (roster) for accurate analyst count
+        var analystCountHtml = '';
+        try {
+          var assignable = await DactaJira.fetchAssignableUsers();
+          var analystTotal = (assignable && assignable.users) ? assignable.users.length : entries.length;
+          analystCountHtml = '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.12);border-radius:6px;margin-bottom:8px;"><span style="font-size:10px;color:var(--text-muted);">Total Assignable Analysts</span><span style="font-size:13px;font-weight:700;color:var(--cyan);">' + analystTotal + '</span></div>';
+        } catch(e) {}
+
+        analystGrid.innerHTML = analystCountHtml + entries.map(function(e) {
           var pct = Math.round((e[1].total / maxA) * 100);
           return '<div style="display:flex;align-items:center;gap:8px;">' +
             '<span style="font-size:10px;color:var(--text-secondary);width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + e[0] + '</span>' +
@@ -51663,6 +51740,31 @@ async function populateLiveDashboard() {
           }).join('');
         }
       }
+      // ── Top Rules Triggered ──
+      var rulesGrid = document.querySelector('.top-rules-triggered');
+      if (rulesGrid) {
+        var topRules = tele.topRules || [];
+        if (topRules.length > 0) {
+          var maxRule = topRules[0].count || 1;
+          var ruleColors = ['#8b5cf6', '#6366f1', '#818cf8', '#a78bfa', '#c4b5fd'];
+          rulesGrid.innerHTML = topRules.slice(0, 5).map(function(r, idx) {
+            var pct = Math.round((r.count / maxRule) * 100);
+            var color = ruleColors[idx] || ruleColors[4];
+            // Truncate long rule names
+            var displayName = r.name.length > 40 ? r.name.substring(0, 37) + '...' : r.name;
+            return '<div style="display:flex;align-items:center;gap:8px;" title="' + r.name.replace(/"/g, '&quot;') + '">' +
+              '<span style="font-size:10px;font-weight:600;color:' + color + ';min-width:16px;">#' + (idx + 1) + '</span>' +
+              '<div style="flex:1;display:flex;flex-direction:column;gap:2px;overflow:hidden;">' +
+                '<span style="font-size:10px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + displayName + '</span>' +
+                '<div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;"><div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:2px;"></div></div>' +
+              '</div>' +
+              '<span style="font-size:10px;font-weight:600;color:var(--text-primary);min-width:24px;text-align:right;">' + r.count + '</span></div>';
+          }).join('');
+        } else {
+          rulesGrid.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">No detection rules in time range</div>';
+        }
+      }
+
       // Clean up all remaining sidebar spinners
       document.querySelectorAll('#page-dashboard .cc-right-sidebar .prod-sidebar-empty').forEach(function(el) { el.remove(); });
       document.querySelectorAll('#page-dashboard .prod-overlay').forEach(function(el) { el.remove(); });
@@ -51812,9 +51914,13 @@ async function populateLiveDashboard() {
           var dotColor = data.open > 3 ? 'amber' : data.open > 0 ? 'cyan' : 'green';
           var openText = data.open > 0 ? data.open + ' open' : 'clear';
           var openColor = data.open > 3 ? 'var(--amber)' : data.open > 0 ? 'var(--cyan)' : 'var(--green)';
+          var isActive = window._dashOrgFilter === name;
 
           var row = document.createElement('div');
-          row.className = 'org-row';
+          row.className = 'org-row' + (isActive ? ' org-row-active' : '');
+          row.style.cursor = 'pointer';
+          row.setAttribute('data-org', name);
+          row.onclick = function() { toggleDashOrgFilter(name); };
           row.innerHTML = '<div class="status-dot ' + dotColor + '"></div>' +
             '<span class="org-name">' + name + '</span>' +
             '<div class="org-bar"><div class="org-fill" style="width:' + pct + '%;' + (dotColor === 'cyan' ? 'background:var(--cyan);' : dotColor === 'green' ? 'background:var(--green);' : '') + '"></div></div>' +
@@ -53062,9 +53168,25 @@ async function openBulkAssignModal(keys) {
 async function doBulkAssign(keys, accountId, name) {
   var ov = document.getElementById('assignModalOverlay'); if (ov) ov.remove();
   showToast('Assigning ' + keys.length + ' tickets to ' + name + '...', 'info');
-  var ok=0, fail=0;
-  for (var i=0;i<keys.length;i++) { try { await DactaJira.assignIssue(keys[i],accountId); var is=_triageCurrentIssues.find(function(t){return t.key===keys[i];}); if(is){is.assignee=name;is.assigneeId=accountId;} ok++; } catch(e){fail++;} }
-  showToast(ok+' assigned'+(fail?', '+fail+' failed':''), fail?'warn':'success');
+  var ok = 0, fail = 0, errors = [];
+  for (var i = 0; i < keys.length; i++) {
+    try {
+      await DactaJira.assignIssue(keys[i], accountId);
+      var is = _triageCurrentIssues.find(function(t) { return t.key === keys[i]; });
+      if (is) { is.assignee = name; is.assigneeId = accountId; }
+      ok++;
+    } catch(e) {
+      fail++;
+      var errMsg = e.message || 'Unknown error';
+      errors.push(keys[i] + ': ' + errMsg);
+      console.error('[BulkAssign] Failed to assign ' + keys[i] + ' to ' + name + ':', errMsg);
+    }
+  }
+  if (fail > 0) {
+    showToast(ok + ' assigned, ' + fail + ' failed: ' + errors.slice(0, 2).join('; '), 'error');
+  } else {
+    showToast(ok + ' ticket' + (ok > 1 ? 's' : '') + ' assigned to ' + name, 'success');
+  }
   rerenderTriageTable();
 }
 // ============================================================
@@ -54344,6 +54466,10 @@ async function openInvestigation(ticketKey) {
                   '<div style="font-size:11px;font-weight:700;color:var(--rws-text-muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;">Affected Entities</div>' +
                   _rImpHTML +
                 '</div>' +
+                '<div id="summaryAiOverview" style="margin-top:14px;">' +
+                  '<div style="font-size:13px;font-weight:600;color:var(--rws-text-primary);margin-bottom:8px;">AI Investigation Summary</div>' +
+                  '<div id="summaryAiOverviewContent" style="font-size:12px;color:var(--rws-text-muted);font-style:italic;line-height:1.6;padding:10px 12px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.12);border-radius:8px;">Summary will appear after AI investigation completes...</div>' +
+                '</div>' +
                 '<div id="summaryTopFindings" style="margin-top:14px;">' +
                   '<div style="font-size:13px;font-weight:600;color:var(--rws-text-primary);margin-bottom:8px;">Top Findings</div>' +
                   '<div id="summaryTopFindingsContent" style="font-size:12px;color:var(--rws-text-muted);font-style:italic;">Findings will appear after AI investigation completes...</div>' +
@@ -55167,23 +55293,41 @@ function extractEvidenceFromCachedHTML(htmlContent) {
 }
 
 // ── Populate Top Findings in Summary tab (called after AI investigation) ──
-function populateTopFindings(inculpatory, exculpatory) {
+// Enhanced: combines playbook triage steps with AI evidence for actionable findings
+function populateTopFindings(inculpatory, exculpatory, playbookSteps) {
   var el = document.getElementById('summaryTopFindingsContent');
   if (!el) return;
   var findings = [];
-  // Take top 3 inculpatory
+
+  // First: add playbook-driven triage actions (actionable guidance)
+  (playbookSteps || []).slice(0, 3).forEach(function(step) {
+    var txt = typeof step === 'string' ? step : (step.action || step.step || JSON.stringify(step));
+    findings.push({type: 'playbook', text: txt});
+  });
+
+  // Then: add top AI-detected evidence
   (inculpatory || []).slice(0, 3).forEach(function(e) {
     findings.push({type: 'inculpatory', text: e.title || e.detail || ''});
   });
-  // Take top 2 exculpatory
   (exculpatory || []).slice(0, 2).forEach(function(e) {
     findings.push({type: 'exculpatory', text: e.title || e.detail || ''});
   });
+
+  // Deduplicate and limit to top 5
+  var seen = {};
+  findings = findings.filter(function(f) {
+    var key = f.text.substring(0, 50);
+    if (seen[key]) return false;
+    seen[key] = true;
+    return f.text.length > 0;
+  }).slice(0, 5);
+
   if (findings.length === 0) return;
   el.innerHTML = findings.map(function(finding, i) {
-    var dotColor = finding.type === 'inculpatory' ? '#EF4444' : '#10B981';
+    var dotColor = finding.type === 'playbook' ? '#6366F1' : finding.type === 'inculpatory' ? '#EF4444' : '#10B981';
+    var label = finding.type === 'playbook' ? '▶' : (finding.type === 'inculpatory' ? '▲' : '▼');
     return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
-      '<span style="font-size:11px;font-weight:700;color:' + dotColor + ';width:18px;flex-shrink:0;">' + (i + 1) + '</span>' +
+      '<span style="font-size:11px;font-weight:700;color:' + dotColor + ';width:18px;flex-shrink:0;">' + label + '</span>' +
       '<span style="font-size:12px;color:var(--rws-text-secondary);line-height:1.5;">' + highlightEntities(finding.text) + '</span></div>';
   }).join('');
 }
@@ -55200,9 +55344,60 @@ function _populateTopFindingsFromCache(cacheEntry) {
     inc = extracted.inculpatory;
     exc = extracted.exculpatory;
   }
-  if (inc.length > 0 || exc.length > 0) {
-    populateTopFindings(inc, exc);
+  // Try to get playbook triage steps from cached metadata
+  var pbSteps = cacheEntry.playbookTriageSteps || (cacheEntry.metadata && cacheEntry.metadata.playbookTriageSteps) || [];
+  if (inc.length > 0 || exc.length > 0 || pbSteps.length > 0) {
+    populateTopFindings(inc, exc, pbSteps);
   }
+  // Also populate AI summary
+  populateAiSummary(cacheEntry);
+}
+
+// ── Populate AI Investigation Summary in Summary tab ──
+function populateAiSummary(cacheEntry) {
+  var el = document.getElementById('summaryAiOverviewContent');
+  if (!el || !cacheEntry) return;
+  var verdict = cacheEntry.verdict || 'Pending';
+  var confidence = cacheEntry.confidence || 0;
+  var tier = (typeof mapVerdictTier === 'function') ? mapVerdictTier(verdict, confidence) : { label: verdict };
+  var summary = '';
+
+  // Build summary from available data
+  var iocs = cacheEntry.metadata ? (cacheEntry.metadata.iocs || {}) : (cacheEntry.iocs || {});
+  var techniques = cacheEntry.metadata ? (cacheEntry.metadata.techniques || []) : (cacheEntry.mitre_techniques || []);
+  var inc = cacheEntry.inculpatoryEvidence || (cacheEntry.metadata && cacheEntry.metadata.inculpatoryEvidence) || [];
+  var exc = cacheEntry.exculpatoryEvidence || (cacheEntry.metadata && cacheEntry.metadata.exculpatoryEvidence) || [];
+
+  var iocCount = 0;
+  if (iocs) Object.values(iocs).forEach(function(arr) { if (Array.isArray(arr)) iocCount += arr.length; });
+
+  summary += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+  summary += '<span style="font-size:12px;font-weight:700;color:' + (tier.color || 'var(--cyan)') + ';padding:3px 10px;background:' + (tier.color || 'var(--cyan)') + '15;border:1px solid ' + (tier.color || 'var(--cyan)') + '30;border-radius:6px;">' + (tier.label || verdict).toUpperCase() + '</span>';
+  summary += '<span style="font-size:11px;color:var(--rws-text-muted);">Confidence: ' + confidence + '%</span>';
+  summary += '</div>';
+
+  if (inc.length > 0 || exc.length > 0) {
+    summary += '<div style="font-size:12px;color:var(--rws-text-secondary);line-height:1.6;margin-bottom:6px;">';
+    summary += 'The AI investigation found <strong style="color:#EF4444;">' + inc.length + ' suspicious indicator' + (inc.length !== 1 ? 's' : '') + '</strong>';
+    if (exc.length > 0) summary += ' and <strong style="color:#10B981;">' + exc.length + ' benign indicator' + (exc.length !== 1 ? 's' : '') + '</strong>';
+    summary += '.';
+    if (iocCount > 0) summary += ' A total of <strong>' + iocCount + ' IOC' + (iocCount !== 1 ? 's' : '') + '</strong> were extracted for enrichment.';
+    if (techniques.length > 0) summary += ' <strong>' + techniques.length + ' MITRE ATT&CK technique' + (techniques.length !== 1 ? 's' : '') + '</strong> were identified.';
+    summary += '</div>';
+  }
+
+  // Include top inculpatory finding as key takeaway
+  if (inc.length > 0) {
+    var topFinding = inc[0].title || inc[0].detail || '';
+    if (topFinding) {
+      summary += '<div style="font-size:11px;color:var(--rws-text-muted);margin-top:6px;padding:8px;background:rgba(239,68,68,0.04);border-left:2px solid #EF4444;border-radius:0 4px 4px 0;">';
+      summary += '<strong>Key finding:</strong> ' + highlightEntities(topFinding);
+      summary += '</div>';
+    }
+  }
+
+  el.innerHTML = summary || '<span style="color:var(--rws-text-muted);font-style:italic;">No investigation data available yet.</span>';
+  el.style.fontStyle = 'normal';
 }
 
 // ── Open AI Copilot with ticket context pre-filled ──

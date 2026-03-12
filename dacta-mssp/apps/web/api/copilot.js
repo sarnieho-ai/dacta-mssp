@@ -109,6 +109,7 @@ const SYSTEM_PROMPT = `You are DACTA Copilot, an AI-powered SOC investigation as
 ## Available Data Sources
 - **Elastic SIEM**: Real-time log data from client environments. Supports KQL and Elasticsearch DSL queries. Data is organized by client namespace (e.g., dacta-*, nagaworld-*, foxwood-*).
 - **DACTA TIP**: Threat intelligence platform with IOC indicators, MITRE ATT&CK techniques, and threat reports.
+- **Multi-Scanner IOC Enrichment**: Query VirusTotal, AbuseIPDB, and CrowdStrike Falcon Intel simultaneously for IOC reputation. Use enrich_ioc_multi for comprehensive multi-source lookups — it provides per-scanner verdicts and a consensus score.
 - **Jira Service Management**: Incident tickets, alert history, and escalation records. Project key is DAC.
 
 ## Client Context
@@ -117,11 +118,13 @@ When a client is selected, the system will provide you with that client's ACTUAL
 ## Important Rules
 1. ALWAYS use tools to verify claims. Never say "this IP is malicious" without checking DACTA TIP and Elastic first.
 2. When searching logs, use appropriate index patterns based on the selected client.
-3. For IP lookups, check BOTH DACTA TIP (threat intel) AND Elastic (log presence).
+3. For IP lookups, check BOTH DACTA TIP (threat intel) AND Elastic (log presence). For comprehensive enrichment, use enrich_ioc_multi to query VirusTotal, AbuseIPDB, and CrowdStrike simultaneously.
 4. For ticket searches, construct appropriate JQL queries.
 5. When you find something interesting in logs, proactively suggest follow-up queries the analyst could run.
 6. If the user asks about a specific host, search across multiple data sources to build a complete picture.
-7. Acknowledge limitations — if a client has no EDR, say so rather than searching non-existent EDR indices.`;
+7. Acknowledge limitations — if a client has no EDR, say so rather than searching non-existent EDR indices.
+8. **TIME WINDOW CRITICAL**: When the analyst references a specific ticket (e.g., DAC-19187), you MUST first look up that ticket to get its creation date. Then scope ALL Elastic SIEM time-range queries to a window around that ticket's creation date (e.g., from 24h before to 24h after the ticket was created). NEVER default to the current date or an arbitrary date like January. If you cannot determine the ticket date, ask the analyst for the approximate time window.
+9. When enriching IOCs, prefer the enrich_ioc_multi tool for a comprehensive multi-scanner verdict. Use lookup_ioc_opencti only when specifically looking for MITRE-linked threat intelligence from DACTA TIP.`;
 
 // ── Tool Definitions ──
 const TOOLS = [
@@ -240,6 +243,21 @@ const TOOLS = [
         }
       },
       required: ['ticket_key']
+    }
+  },
+  {
+    name: 'enrich_ioc_multi',
+    description: 'Enrich one or more IOCs (IP addresses, domains, file hashes, URLs) across multiple threat intelligence scanners simultaneously — VirusTotal, AbuseIPDB, and CrowdStrike Falcon Intel. Returns per-scanner verdicts plus an aggregated consensus verdict with confidence score. Use this when the analyst asks to check an IOC, enrich indicators, or wants a multi-source reputation lookup. Prefer this over lookup_ioc_opencti when the analyst wants comprehensive multi-scanner enrichment.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        indicators: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of IOC values to enrich — IP addresses, domains, file hashes (MD5/SHA1/SHA256), or URLs. Max 10 per call.'
+        }
+      },
+      required: ['indicators']
     }
   }
 ];
@@ -549,6 +567,65 @@ async function executeGetInvestigationResult(input) {
   }
 }
 
+// ── Multi-Scanner IOC Enrichment (calls /api/ioc-enrich internally) ──
+async function executeEnrichIOCMulti(params) {
+  const indicators = (params.indicators || []).slice(0, 10);
+  if (indicators.length === 0) return { error: 'No indicators provided. Pass an array of IOCs (IPs, domains, hashes, URLs).' };
+
+  // Determine the base URL for the internal call
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : (process.env.NEXT_PUBLIC_SITE_URL || 'https://dacta-siemless.vercel.app');
+
+  try {
+    const resp = await fetch(`${baseUrl}/api/ioc-enrich`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ indicators })
+    });
+    if (!resp.ok) {
+      return { error: `Multi-scanner enrichment returned HTTP ${resp.status}` };
+    }
+    const data = await resp.json();
+
+    // Summarize for LLM context — keep it concise
+    const summary = [];
+    for (const [ioc, info] of Object.entries(data.results || {})) {
+      const c = info.consensus || {};
+      const scannerLines = [];
+      for (const [sName, sResult] of Object.entries(info.scanners || {})) {
+        if (sResult.available) {
+          scannerLines.push(`  ${sResult.scanner || sName}: ${sResult.verdict} (${sResult.confidence || 'n/a'} confidence)`);
+          // Include notable details
+          if (sResult.details) {
+            if (sResult.details.detection_ratio) scannerLines.push(`    Detection ratio: ${sResult.details.detection_ratio}`);
+            if (sResult.details.abuse_confidence_score != null) scannerLines.push(`    Abuse score: ${sResult.details.abuse_confidence_score}%`);
+            if (sResult.details.total_reports) scannerLines.push(`    Reports: ${sResult.details.total_reports}`);
+            if (sResult.details.actors && sResult.details.actors.length) scannerLines.push(`    Threat actors: ${sResult.details.actors.join(', ')}`);
+            if (sResult.details.malware_families && sResult.details.malware_families.length) scannerLines.push(`    Malware families: ${sResult.details.malware_families.join(', ')}`);
+          }
+        } else {
+          scannerLines.push(`  ${sName}: unavailable (${sResult.error || 'not configured'})`);
+        }
+      }
+      summary.push(
+        `IOC: ${ioc} (${info.type || 'unknown'})\n` +
+        `  CONSENSUS: ${c.verdict || 'unknown'} — ${c.confidence || 0}% confidence — ${c.reason || ''}\n` +
+        `  Scanners:\n${scannerLines.join('\n')}`
+      );
+    }
+
+    return {
+      enrichment_results: summary.join('\n\n'),
+      total_iocs: indicators.length,
+      scanners_configured: data.meta?.scanners || {},
+      raw: data.results // full data for reference
+    };
+  } catch (e) {
+    return { error: 'Multi-scanner enrichment failed: ' + e.message };
+  }
+}
+
 // ── Execute a tool call ──
 async function executeTool(name, input) {
   switch (name) {
@@ -564,6 +641,8 @@ async function executeTool(name, input) {
       return await executeJiraTicketDetails(input);
     case 'get_investigation_result':
       return await executeGetInvestigationResult(input);
+    case 'enrich_ioc_multi':
+      return await executeEnrichIOCMulti(input);
     default:
       return { error: `Unknown tool: ${name}` };
   }

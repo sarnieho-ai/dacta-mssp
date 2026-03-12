@@ -293,9 +293,13 @@ export default async function handler(req, res) {
       const body = req.body || {};
       let jqlParts = ['project = DAC AND type = "[System] Incident"'];
 
-      // Date range filter
-      if (body.dateFrom) jqlParts.push('created >= "' + body.dateFrom + '"');
-      if (body.dateTo) jqlParts.push('created <= "' + body.dateTo + '"');
+      // Date range filter — convert datetime-local format (2026-03-12T09:00) to Jira JQL format (2026/03/12 09:00)
+      function toJiraDate(dtLocal) {
+        if (!dtLocal) return null;
+        return dtLocal.replace(/-/g, '/').replace('T', ' ');
+      }
+      if (body.dateFrom) jqlParts.push('created >= "' + toJiraDate(body.dateFrom) + '"');
+      if (body.dateTo) jqlParts.push('created <= "' + toJiraDate(body.dateTo) + '"');
 
       if (body.status && body.status !== 'all') jqlParts.push(`status="${body.status}"`);
       if (body.priority && body.priority !== 'all') jqlParts.push(`priority="${body.priority}"`);
@@ -1310,13 +1314,14 @@ export default async function handler(req, res) {
       // Resolved this week
       queries.resolvedWeek = `${B} AND status in ("Closed","Completed","Canceled") AND updated >= startOfWeek()`;
       // Top assignees within time range
-      const [counts, recentAssignees] = await Promise.all([
+      const [counts, recentAssignees, useCaseData] = await Promise.all([
         (async () => {
           const results = {};
           await Promise.all(Object.entries(queries).map(([key, jql]) => countJql(jql).then(c => { results[key] = c; })));
           return results;
         })(),
-        searchJql(`${BT} AND assignee is not EMPTY ORDER BY created DESC`, ['assignee','status','priority','created'], 100)
+        searchJql(`${BT} AND assignee is not EMPTY ORDER BY created DESC`, ['assignee','status','priority','created'], 100),
+        searchJql(`${BT} ORDER BY created DESC`, ['customfield_10072'], 200)
       ]);
       // Compute assignee distribution
       const assigneeCounts = {};
@@ -1326,7 +1331,20 @@ export default async function handler(req, res) {
         assigneeCounts[name].total++;
         if ((iss.fields?.status?.name || '') === 'Open') assigneeCounts[name].open++;
       });
-      const teleResult = { counts, assigneeCounts };
+      // Compute top rules triggered from Threat Detection Library (customfield_10072)
+      const ruleCounts = {};
+      (useCaseData.issues || []).forEach(iss => {
+        const uc = iss.fields?.customfield_10072;
+        if (uc && typeof uc === 'string' && uc.trim()) {
+          const name = uc.trim();
+          ruleCounts[name] = (ruleCounts[name] || 0) + 1;
+        }
+      });
+      const topRules = Object.entries(ruleCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([name, count]) => ({ name, count }));
+      const teleResult = { counts, assigneeCounts, topRules };
       _setCache('telemetry_' + timeRange, teleResult);
       return res.status(200).json(teleResult);
     }
