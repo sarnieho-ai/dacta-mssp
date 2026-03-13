@@ -32806,6 +32806,17 @@ async function glscInit() {
         if (oc && oc.name) _glscOrgMap[oKeys[oi]] = oc.name;
       }
     }
+    // Fallback org names for orgs not in ORG_CONNECTORS (e.g. Silver Key)
+    var _glscFallbackOrgs = {
+      '93281f08-dbad-4d0d-8656-ab7618f373a4': 'Silver Key',
+      'b8672c8b-3907-48b0-8c58-b61aa38fbf4b': 'SPMT',
+      'bb0db674-d91f-4a21-9c71-984c10749feb': 'ADV Partners',
+      '3a6e0c3a-0bf7-4614-9299-bb9c02b0507d': 'Dacta Training'
+    };
+    var fbKeys = Object.keys(_glscFallbackOrgs);
+    for (var fi = 0; fi < fbKeys.length; fi++) {
+      if (!_glscOrgMap[fbKeys[fi]]) _glscOrgMap[fbKeys[fi]] = _glscFallbackOrgs[fbKeys[fi]];
+    }
 
     // Populate org selector
     var orgSel = document.getElementById('glscOrgFilter');
