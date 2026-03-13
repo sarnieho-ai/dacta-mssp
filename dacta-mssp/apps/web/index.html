@@ -60101,8 +60101,8 @@ async function runAIInvestigation(ticketKey, issueData) {
   // EDR-AWARE: If org explicitly has no EDR, don't treat missing EDR telemetry as a reason
   // to cap the verdict. The analyst investigates without EDR too — the AI should be able to.
   var _forceSuspiciousCap = false;
-  var _orgHasNoEDRByDesign = !_effectiveHasRealEDR && (function() {
-    var ec = getOrgConnector(namespace, 'edr');
+  var _orgHasNoEDRByDesign = !_invIsRealEDR && (function() {
+    var ec = getOrgConnector(invNamespace, 'edr');
     if (!ec) return false;
     var v = (ec.vendor || '').toLowerCase();
     return !ec.is_enabled || v === 'none' || v === 'pending' || v === '';
@@ -60157,8 +60157,8 @@ async function runAIInvestigation(ticketKey, issueData) {
   var _edrDependentQueryNames = ['CrowdStrike Alert', 'Host Inventory', 'Alert History', 'EDR Check'];
   var _universalCriticalQueryNames = ['Alert Correlation', 'DACTA TIP', 'Firewall', 'Network', 'Jira Analyst Learning'];
   // Determine if this org explicitly lacks EDR (check connector config)
-  var _orgExplicitlyNoEDR = !_effectiveHasRealEDR && (function() {
-    var ec = getOrgConnector(namespace, 'edr');
+  var _orgExplicitlyNoEDR = !_invIsRealEDR && (function() {
+    var ec = getOrgConnector(invNamespace, 'edr');
     if (!ec) return false;
     var v = (ec.vendor || '').toLowerCase();
     return !ec.is_enabled || v === 'none' || v === 'pending' || v === '';
