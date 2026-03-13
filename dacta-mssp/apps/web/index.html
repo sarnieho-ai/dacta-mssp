@@ -166,6 +166,9 @@
   color: var(--text-secondary);
 }
 [data-theme="light"] .org-select:hover { border-color: var(--border-accent); color: var(--text-primary); }
+[data-theme="light"] .org-dropdown-menu { background: #fff; border-color: rgba(0,0,0,0.12); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+[data-theme="light"] .org-dropdown-item:hover { background: rgba(0,0,0,0.04); }
+[data-theme="light"] .ai-verdict-legend { background: rgba(255,255,255,0.6); border-color: rgba(0,0,0,0.1); }
 [data-theme="light"] .prod-badge {
   background: rgba(5, 150, 105, 0.08);
   color: var(--green);
@@ -1389,6 +1392,46 @@ a { text-decoration: none; color: inherit; }
   transition: border-color var(--transition), color var(--transition);
 }
 .org-select:hover { border-color: var(--border-accent); color: var(--text-primary); }
+.org-select { position: relative; }
+.org-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 220px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  z-index: 9999;
+  padding: 4px 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.org-dropdown-menu.show { display: block; }
+.org-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.org-dropdown-item:hover {
+  background: rgba(0,212,255,0.06);
+  color: var(--text-primary);
+}
+.org-dropdown-item.active {
+  background: rgba(0,212,255,0.1);
+  color: var(--cyan);
+  font-weight: 600;
+}
+.org-dropdown-item .org-dd-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; position: relative; }
 .live-badge {
   display: flex;
@@ -3747,6 +3790,38 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
 .tq-ai-badge.cached-ind {
   background:rgba(148,163,184,0.10); border:1px solid rgba(148,163,184,0.25); color:#94a3b8;
 }
+
+/* AI Verdict Legend */
+.ai-verdict-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 3px 10px;
+  background: rgba(15,23,42,0.5);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  vertical-align: middle;
+}
+.ai-verdict-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  cursor: default;
+}
+.ai-legend-tp { background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.25); color:#ef4444; }
+.ai-legend-ltp { background:rgba(249,115,22,0.12); border:1px solid rgba(249,115,22,0.25); color:#f97316; }
+.ai-legend-sus { background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.25); color:#f59e0b; }
+.ai-legend-ind { background:rgba(148,163,184,0.10); border:1px solid rgba(148,163,184,0.25); color:#94a3b8; }
+.ai-legend-lfp { background:rgba(6,182,212,0.12); border:1px solid rgba(6,182,212,0.25); color:#06b6d4; }
+.ai-legend-fp { background:rgba(16,185,129,0.10); border:1px solid rgba(16,185,129,0.25); color:#10b981; }
 .tq-ai-badge.overridden {
   background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.25); color:#f59e0b;
 }
@@ -10397,10 +10472,11 @@ function getThemeTickColor() {
     <div id="topbar">
 
       <div class="topbar-sep"></div>
-      <div class="org-select">
+      <div class="org-select" id="topbarOrgSelect" onclick="toggleTopbarOrgDropdown(event)">
         <span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9h1"/><path d="M9 13h1"/><path d="M9 17h1"/></svg></span>
-        <span>All Organizations</span>
+        <span id="topbarOrgLabel">All Organizations</span>
         <span><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg></span>
+        <div class="org-dropdown-menu" id="topbarOrgDropdown"></div>
       </div>
       <div class="demo-toggle-wrap" id="demoToggleWrap" style="display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid var(--border-subtle);" title="Toggle between Production (live data) and Demo (sample data) mode">
         <span class="demo-label-text" id="demoToggleLabel" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">Demo</span><span class="prod-label-text" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">Mode</span>
@@ -51187,6 +51263,82 @@ function jiraLiveBadge() {
   return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:600;color:var(--green);letter-spacing:0.5px;padding:2px 8px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:10px;margin-left:8px;"><span style="width:6px;height:6px;background:var(--green);border-radius:50%;animation:livePulse 2s infinite;"></span>LIVE</span>';
 }
 
+// ── AI Verdict Legend (beside LIVE badge in triage subtitle) ──
+function aiVerdictLegendHTML() {
+  return '<span class="ai-verdict-legend" title="AI Verdict Classification Tiers">' +
+    '<span class="ai-verdict-legend-item ai-legend-tp" title="True Positive — Confirmed threat (≥85% confidence)">TP</span>' +
+    '<span class="ai-verdict-legend-item ai-legend-ltp" title="Likely True Positive — Probable threat (≥65% confidence)">LTP</span>' +
+    '<span class="ai-verdict-legend-item ai-legend-sus" title="Suspicious — Requires analyst review (50-69% threat score)">SUS</span>' +
+    '<span class="ai-verdict-legend-item ai-legend-ind" title="Indeterminate — Insufficient data to classify (35-49%)">IND</span>' +
+    '<span class="ai-verdict-legend-item ai-legend-lfp" title="Likely False Positive — Probably benign (15-34%)">LFP</span>' +
+    '<span class="ai-verdict-legend-item ai-legend-fp" title="False Positive — Confirmed benign (<15%)">FP</span>' +
+  '</span>';
+}
+
+// ── Topbar Global Org Selector ──
+window._topbarOrgFilter = null; // null = All Organizations
+
+function toggleTopbarOrgDropdown(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('topbarOrgDropdown');
+  if (!dd) return;
+  var isOpen = dd.classList.contains('show');
+  // Close all dropdowns first
+  document.querySelectorAll('.org-dropdown-menu.show').forEach(function(m) { m.classList.remove('show'); });
+  if (isOpen) return;
+  // Build dropdown items from ORG_CONNECTORS
+  var html = '<div class="org-dropdown-item' + (!window._topbarOrgFilter ? ' active' : '') + '" onclick="selectTopbarOrg(null, event)">' +
+    '<span class="org-dd-dot" style="background:var(--cyan);"></span> All Organizations</div>';
+  if (typeof ORG_CONNECTORS !== 'undefined' && ORG_CONNECTORS) {
+    var orgs = Object.keys(ORG_CONNECTORS).map(function(id) { return { id: id, name: ORG_CONNECTORS[id].name, code: ORG_CONNECTORS[id].code }; });
+    orgs.sort(function(a,b) { return a.name.localeCompare(b.name); });
+    orgs.forEach(function(o) {
+      var isActive = window._topbarOrgFilter === o.name;
+      html += '<div class="org-dropdown-item' + (isActive ? ' active' : '') + '" onclick="selectTopbarOrg(\'' + o.name.replace(/'/g,"\\'") + '\', event)">' +
+        '<span class="org-dd-dot" style="background:' + (isActive ? 'var(--cyan)' : 'var(--text-muted)') + ';"></span> ' + o.name + ' <span style="font-size:9px;color:var(--text-muted);margin-left:auto;">[' + o.code + ']</span></div>';
+    });
+  }
+  dd.innerHTML = html;
+  dd.classList.add('show');
+}
+
+function selectTopbarOrg(orgName, e) {
+  if (e) e.stopPropagation();
+  window._topbarOrgFilter = orgName;
+  // Update label
+  var label = document.getElementById('topbarOrgLabel');
+  if (label) label.textContent = orgName || 'All Organizations';
+  // Close dropdown
+  var dd = document.getElementById('topbarOrgDropdown');
+  if (dd) dd.classList.remove('show');
+  // Sync triage queue org filter if on that page
+  var tqOrg = document.getElementById('tqFilterOrg');
+  if (tqOrg) {
+    tqOrg.value = orgName || 'All Organizations';
+    // Trigger triage reload
+    if (typeof populateLiveTriage === 'function') populateLiveTriage();
+  }
+  // Sync dashboard org filter
+  if (orgName) {
+    window._dashOrgFilter = orgName;
+  } else {
+    window._dashOrgFilter = null;
+  }
+  if (typeof refreshDashboardData === 'function') refreshDashboardData();
+  // Toast
+  if (typeof showToast === 'function') {
+    showToast(orgName ? 'Filtered to: ' + orgName : 'Showing all organizations', 'info');
+  }
+}
+
+// Close topbar org dropdown on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#topbarOrgSelect')) {
+    var dd = document.getElementById('topbarOrgDropdown');
+    if (dd) dd.classList.remove('show');
+  }
+});
+
 // Add spinner + live pulse CSS
 (function() {
   var style = document.createElement('style');
@@ -52602,7 +52754,7 @@ async function populateLiveTriage(pageOrAppend) {
     // ── Update subtitle ──
     var subtitle = triagePage.querySelector('.page-subtitle');
     if (subtitle) {
-      subtitle.innerHTML = _triageCurrentIssues.length + ' tickets from SOC Alerts queue ' + jiraLiveBadge();
+      subtitle.innerHTML = _triageCurrentIssues.length + ' tickets from SOC Alerts queue ' + jiraLiveBadge() + aiVerdictLegendHTML();
     }
 
     // ── Update metric strip ──
