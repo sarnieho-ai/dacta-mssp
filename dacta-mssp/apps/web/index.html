@@ -50976,9 +50976,9 @@ function renderRosterGrid() {
       html += '<div class="oncall-tag">&#9741; ON-CALL: '+escH(name.split(' ')[0])+'</div>';
     });
     roster.forEach(function(name, idx) {
-      html += '<div class="roster-analyst" data-idx="'+idx+'">'+escH(name)+'<span class="ra-remove" onclick="removeRosterEntry(''+key+'','shiftA','+idx+')">&#x2715;</span></div>';
+      html += '<div class="roster-analyst" data-idx="'+idx+'">'+escH(name)+'<span class="ra-remove" onclick="removeRosterEntry(\x27'+key+'\x27,\x27shiftA\x27,'+idx+')">&#x2715;</span></div>';
     });
-    html += '<div class="roster-add-btn" onclick="showAnalystPicker(this,''+key+'','shiftA')">+ Add</div>';
+    html += '<div class="roster-add-btn" onclick="showAnalystPicker(this,\x27'+key+'\x27,\x27shiftA\x27)">+ Add</div>';
     html += '</div>';
   });
 
@@ -50990,9 +50990,9 @@ function renderRosterGrid() {
     var roster = (_rosterData[key] && _rosterData[key].shiftB) || [];
     html += '<div class="'+cls+'" data-date="'+key+'" data-shift="shiftB">';
     roster.forEach(function(name, idx) {
-      html += '<div class="roster-analyst shift-b" data-idx="'+idx+'">'+escH(name)+'<span class="ra-remove" onclick="removeRosterEntry(''+key+'','shiftB','+idx+')">&#x2715;</span></div>';
+      html += '<div class="roster-analyst shift-b" data-idx="'+idx+'">'+escH(name)+'<span class="ra-remove" onclick="removeRosterEntry(\x27'+key+'\x27,\x27shiftB\x27,'+idx+')">&#x2715;</span></div>';
     });
-    html += '<div class="roster-add-btn" onclick="showAnalystPicker(this,''+key+'','shiftB')">+ Add</div>';
+    html += '<div class="roster-add-btn" onclick="showAnalystPicker(this,\x27'+key+'\x27,\x27shiftB\x27)">+ Add</div>';
     html += '</div>';
   });
 
@@ -51007,7 +51007,7 @@ function showAnalystPicker(el, dateKey, shift) {
   _rosterAnalystPool.forEach(function(a) {
     if (existing.indexOf(a.name) !== -1) return; // already assigned
     var initials = a.name.split(' ').map(function(w){return w[0]}).join('').substring(0,2).toUpperCase();
-    picker.innerHTML += '<div class="rap-item" onclick="addRosterEntry(''+dateKey+'',''+shift+'',''+escH(a.name)+'')"><span class="rap-avatar">'+initials+'</span>'+escH(a.name)+'</div>';
+    picker.innerHTML += '<div class="rap-item" onclick="addRosterEntry(\x27'+dateKey+'\x27,\x27'+shift+'\x27,\x27'+escH(a.name)+'\x27)"><span class="rap-avatar">'+initials+'</span>'+escH(a.name)+'</div>';
   });
   if (!picker.innerHTML) picker.innerHTML = '<div style="padding:6px;font-size:10px;color:var(--text-muted);">All analysts assigned</div>';
   el.parentElement.appendChild(picker);
@@ -51371,7 +51371,7 @@ function loadPreviousHandoverNotes() {
 
   // Show older handovers
   if (history.length > 1) {
-    html += '<div style="margin-top:8px;font-size:10px;color:var(--text-muted);cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\';this.textContent=this.nextElementSibling.style.display===\'none\'?\'Show '+Math.min(history.length-1,5)+' older handovers...\':\'Hide older handovers\';">Show '+Math.min(history.length-1,5)+' older handovers...</div>';
+    html += '<div style="margin-top:8px;font-size:10px;color:var(--text-muted);cursor:pointer;" onclick="var el=this.nextElementSibling;if(el.style.display===\x27none\x27){el.style.display=\x27block\x27;this.textContent=\x27Hide older handovers\x27;}else{el.style.display=\x27none\x27;this.textContent=\x27Show older handovers...\x27;}">Show '+Math.min(history.length-1,5)+' older handovers...</div>';
     html += '<div style="display:none;margin-top:6px;">';
     history.slice(1,6).forEach(function(h) {
       html += '<div class="ho-notes-card" style="margin-bottom:6px;opacity:0.7;"><div class="ho-nc-header"><div class="ho-nc-from">'+escH(h.author||'Analyst')+' · '+escH(h.shift||'')+'</div><div class="ho-nc-time">'+new Date(h.timestamp).toLocaleDateString('en-SG')+'</div></div><div class="ho-nc-body">'+escH(h.notes||'').replace(/\n/g,'<br>').substring(0,200)+'</div></div>';
