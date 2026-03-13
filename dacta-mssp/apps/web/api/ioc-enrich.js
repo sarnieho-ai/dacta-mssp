@@ -414,7 +414,19 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const { indicators } = req.body || {};
+  const { indicators, action } = req.body || {};
+
+  // Health check — returns scanner availability without querying any IOCs
+  if (action === 'health') {
+    return res.status(200).json({
+      scanners: {
+        virustotal: { configured: !!VT_API_KEY },
+        abuseipdb: { configured: !!ABUSEIPDB_API_KEY },
+        crowdstrike: { configured: !!(CS_CLIENT_ID && CS_CLIENT_SECRET) }
+      }
+    });
+  }
+
   if (!indicators || !Array.isArray(indicators) || indicators.length === 0) {
     return res.status(400).json({ error: 'indicators[] required' });
   }

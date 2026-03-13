@@ -8545,6 +8545,270 @@ input[type="datetime-local"].filter-select::-webkit-calendar-picker-indicator {
   line-height: 1.5;
 }
 
+/* ---- Copilot Notepad Slide-out Panel ---- */
+.copilot-notepad-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8,12,24,0.5);
+  backdrop-filter: blur(4px);
+  z-index: 9998;
+  display: none;
+}
+.copilot-notepad-overlay.open { display: block; }
+.copilot-notepad-panel {
+  position: fixed;
+  top: 0; right: -420px; bottom: 0;
+  width: 400px;
+  background: var(--bg-page);
+  border-left: 1px solid var(--border-card);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  transition: right 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+.copilot-notepad-panel.open { right: 0; }
+.copilot-notepad-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-card);
+  flex-shrink: 0;
+}
+.copilot-notepad-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.copilot-notepad-header .notepad-count {
+  font-size: 10px;
+  background: rgba(0,212,255,0.1);
+  color: var(--cyan);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+}
+.copilot-notepad-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.copilot-notepad-body::-webkit-scrollbar { width: 4px; }
+.copilot-notepad-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+.copilot-notepad-entry {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px 12px;
+  position: relative;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.copilot-notepad-entry .notepad-entry-meta {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.copilot-notepad-entry .notepad-remove {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 12px;
+  padding: 0 4px; line-height: 1;
+  opacity: 0; transition: opacity 0.15s;
+}
+.copilot-notepad-entry:hover .notepad-remove { opacity: 1; }
+.copilot-notepad-entry .notepad-remove:hover { color: var(--red-bright); }
+.copilot-notepad-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+.copilot-notepad-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-card);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.copilot-notepad-footer textarea {
+  width: 100%;
+  min-height: 60px;
+  max-height: 120px;
+  resize: vertical;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  line-height: 1.5;
+}
+.copilot-notepad-footer textarea::placeholder { color: var(--text-muted); }
+.copilot-notepad-footer textarea:focus { outline: none; border-color: var(--cyan); }
+.copilot-notepad-actions {
+  display: flex;
+  gap: 6px;
+}
+/* "Copy to Notepad" button on copilot messages */
+.copilot-copy-notepad-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(0,212,255,0.06);
+  border: 1px solid rgba(0,212,255,0.12);
+  color: var(--cyan);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  opacity: 0;
+  transition: opacity 0.2s, background 0.15s;
+  white-space: nowrap;
+}
+.msg-row:hover .copilot-copy-notepad-btn { opacity: 1; }
+.copilot-copy-notepad-btn:hover { background: rgba(0,212,255,0.12); }
+.copilot-copy-notepad-btn.copied {
+  background: rgba(16,185,129,0.12);
+  border-color: rgba(16,185,129,0.2);
+  color: var(--green);
+}
+/* Send to Investigation modal */
+.notepad-send-overlay {
+  position: fixed; inset: 0;
+  background: rgba(8,12,24,0.7);
+  backdrop-filter: blur(6px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.notepad-send-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  width: 420px;
+  max-height: 70vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.notepad-send-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-card);
+}
+.notepad-send-modal-header h4 {
+  margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary);
+}
+.notepad-send-modal-header p {
+  margin: 4px 0 0; font-size: 11px; color: var(--text-muted);
+}
+.notepad-send-modal-body { padding: 16px 20px; }
+.notepad-send-search {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  margin-bottom: 10px;
+}
+.notepad-send-search:focus { outline: none; border-color: var(--cyan); }
+.notepad-send-search::placeholder { color: var(--text-muted); }
+.notepad-ticket-list {
+  max-height: 250px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.notepad-ticket-list::-webkit-scrollbar { width: 4px; }
+.notepad-ticket-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+.notepad-ticket-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.notepad-ticket-item:hover {
+  border-color: rgba(0,212,255,0.3);
+  background: rgba(0,212,255,0.04);
+}
+.notepad-ticket-item.selected {
+  border-color: var(--cyan);
+  background: rgba(0,212,255,0.08);
+}
+.notepad-ticket-item .ticket-key {
+  font-size: 11px; font-weight: 600; color: var(--cyan); font-family: var(--font-mono); white-space: nowrap;
+}
+.notepad-ticket-item .ticket-summary {
+  font-size: 11px; color: var(--text-secondary); flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.notepad-send-modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-card);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* Analyst Notes rendered in investigation page */
+.inv-analyst-notes {
+  background: rgba(0,212,255,0.04);
+  border: 1px solid rgba(0,212,255,0.15);
+  border-radius: 10px;
+  padding: 14px;
+  margin: 12px 0;
+}
+.inv-analyst-notes-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cyan);
+}
+.inv-analyst-note-entry {
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.inv-analyst-note-entry:last-child { margin-bottom: 0; }
+.inv-analyst-note-meta {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-bottom: 4px;
+}
+
 /* ---- Command Bar Overlay (keep) ---- */
 .copilot-cmdbar-overlay {
   position: fixed;
@@ -9993,6 +10257,7 @@ const DACTA_ICONS = {
   trendUp: '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
   clipboard: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>',
+  send: '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   beaker: '<path d="M9 3h6"/><path d="M10 3v5.4a5 5 0 0 1-1.7 3.7L5 15.5C3.3 17.1 4.4 20 6.7 20h10.6c2.3 0 3.4-2.9 1.7-4.5l-3.3-3.4A5 5 0 0 1 14 8.4V3"/>',
   antenna: '<path d="M4.9 19.1A10 10 0 0 1 12 2a10 10 0 0 1 7.1 17.1"/><path d="M8.1 15.9A6 6 0 0 1 12 6a6 6 0 0 1 3.9 9.9"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="14" x2="12" y2="22"/>',
@@ -29230,6 +29495,7 @@ body.snoc-fullscreen #page-snoc {
           </div>
           <div class="copilot-header-actions">
             <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-muted);font-family:var(--font-mono);padding:3px 8px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:6px;"><kbd style="background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:3px;padding:1px 4px;font-size:9px;">Ctrl</kbd><kbd style="background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:3px;padding:1px 4px;font-size:9px;">K</kbd></div>
+            <button class="btn btn-secondary btn-sm" onclick="toggleCopilotNotepad()" style="font-size:11px;display:flex;align-items:center;gap:4px;" title="Analyst Notepad"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Notepad <span id="notepadBadgeCount" style="font-size:9px;background:rgba(0,212,255,0.15);color:var(--cyan);padding:0 5px;border-radius:8px;font-family:var(--font-mono);display:none;">0</span></button>
             <button class="btn btn-secondary btn-sm" onclick="clearCopilotScreen()" style="background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:#f87171;font-size:11px;">Clear</button>
             <button class="btn btn-primary btn-sm" onclick="clearCopilotScreen()" style="font-size:11px;">+ New Session</button>
           </div>
@@ -29266,6 +29532,34 @@ body.snoc-fullscreen #page-snoc {
         </div>
 
       </div><!-- end page-copilot -->
+
+      <!-- ============================================================
+           COPILOT NOTEPAD SLIDE-OUT PANEL
+           ============================================================ -->
+      <div class="copilot-notepad-overlay" id="copilotNotepadOverlay" onclick="toggleCopilotNotepad()"></div>
+      <div class="copilot-notepad-panel" id="copilotNotepadPanel">
+        <div class="copilot-notepad-header">
+          <h3><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Analyst Notepad <span class="notepad-count" id="notepadPanelCount">0</span></h3>
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-secondary btn-sm" onclick="clearNotepadEntries()" style="font-size:10px;padding:3px 8px;background:rgba(239,68,68,0.06);border-color:rgba(239,68,68,0.15);color:#f87171;">Clear All</button>
+            <button style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:0 4px;line-height:1;" onclick="toggleCopilotNotepad()">&times;</button>
+          </div>
+        </div>
+        <div class="copilot-notepad-body" id="copilotNotepadBody">
+          <div class="copilot-notepad-empty" id="notepadEmptyState">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;margin-bottom:8px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><br>
+            No notes yet.<br><br>
+            Use <strong style="color:var(--cyan);">Copy to Notepad</strong> on any Copilot response,<br>or type your own notes below.
+          </div>
+        </div>
+        <div class="copilot-notepad-footer">
+          <textarea id="notepadManualInput" placeholder="Type analyst notes..."></textarea>
+          <div class="copilot-notepad-actions">
+            <button class="btn btn-secondary btn-sm" onclick="addManualNotepadEntry()" style="font-size:10px;flex:1;">+ Add Note</button>
+            <button class="btn btn-primary btn-sm" onclick="openNotepadSendModal()" style="font-size:10px;flex:1;display:flex;align-items:center;justify-content:center;gap:4px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send to Investigation</button>
+          </div>
+        </div>
+      </div>
 
       <!-- ============================================================
            COMMAND BAR OVERLAY
@@ -50013,6 +50307,15 @@ async function copilotCheckSources() {
     var r3 = await fetch('/api/jira', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'search',jql:'project=DAC',maxResults:1}) });
     sources.push(r3.ok ? 'Jira ' + dIcon('check',14) + '' : 'Jira ' + dIcon('close',14) + '');
   } catch(e) { sources.push('Jira ' + dIcon('close',14) + ''); }
+  // Check multi-scanner enrichment (VT + AbuseIPDB + CrowdStrike)
+  try {
+    var r4e = await fetch('/api/ioc-enrich', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'health'}) });
+    var enrichData = r4e.ok ? await r4e.json().catch(function(){return {};}) : {};
+    var scanners = enrichData.scanners || {};
+    if (scanners.virustotal && scanners.virustotal.configured) sources.push('VirusTotal ' + dIcon('check',14));
+    if (scanners.abuseipdb && scanners.abuseipdb.configured) sources.push('AbuseIPDB ' + dIcon('check',14));
+    if (scanners.crowdstrike && scanners.crowdstrike.configured) sources.push('CrowdStrike ' + dIcon('check',14));
+  } catch(e) { /* scanner health check optional */ }
   // Check Claude (OPTIONS pre-flight only — does NOT consume API tokens)
   try {
     var r4 = await fetch('/api/copilot', { method:'OPTIONS' });
@@ -50178,10 +50481,12 @@ async function copilotAsk(text) {
         var toolIcon = dIcon('search',14) + '';
         var toolLabel = tc.tool;
         if (tc.tool === 'search_elastic_siem') { toolIcon = dIcon('shield',14) + ''; toolLabel = 'SIEM Search'; }
-        else if (tc.tool === 'lookup_ioc_opencti') { toolIcon = dIcon('dot',14) + ''; toolLabel = 'IOC Lookup'; }
+        else if (tc.tool === 'lookup_ioc_opencti') { toolIcon = dIcon('dot',14) + ''; toolLabel = 'DACTA TIP Lookup'; }
+        else if (tc.tool === 'enrich_ioc_multi') { toolIcon = dIcon('target',14) + ''; toolLabel = 'VT + AbuseIPDB + CrowdStrike'; }
         else if (tc.tool === 'lookup_mitre_technique') { toolIcon = dIcon('globe',14) + ''; toolLabel = 'MITRE Lookup'; }
         else if (tc.tool === 'search_jira_tickets') { toolIcon = dIcon('ticket',14) + ''; toolLabel = 'Ticket Search'; }
         else if (tc.tool === 'get_jira_ticket_details') { toolIcon = dIcon('note',14) + ''; toolLabel = 'Ticket Details'; }
+        else if (tc.tool === 'get_investigation_result') { toolIcon = dIcon('aiRobot',14) + ''; toolLabel = 'Investigation Cache'; }
         toolSummary += '<span class="copilot-tool-badge">' + toolIcon + ' ' + toolLabel + '</span>';
       });
       toolSummary += '</div>';
@@ -50208,9 +50513,11 @@ async function copilotAsk(text) {
         var toolIcon2 = dIcon('search',14) + '';
         if (tc.tool === 'search_elastic_siem') toolIcon2 = dIcon('shield',14) + '';
         else if (tc.tool === 'lookup_ioc_opencti') toolIcon2 = dIcon('dot',14) + '';
+        else if (tc.tool === 'enrich_ioc_multi') toolIcon2 = dIcon('target',14) + '';
         else if (tc.tool === 'lookup_mitre_technique') toolIcon2 = dIcon('globe',14) + '';
         else if (tc.tool === 'search_jira_tickets') toolIcon2 = dIcon('ticket',14) + '';
         else if (tc.tool === 'get_jira_ticket_details') toolIcon2 = dIcon('note',14) + '';
+        else if (tc.tool === 'get_investigation_result') toolIcon2 = dIcon('aiRobot',14) + '';
         toolSummary += '<div style="margin-bottom:8px;padding:6px 8px;background:rgba(0,0,0,0.15);border-radius:6px;">' +
           '<div style="font-size:10px;font-weight:600;color:var(--cyan);margin-bottom:3px;">' + toolIcon2 + ' ' + escapeHtml(tc.tool) + '</div>' +
           (inputStr ? '<div style="font-size:10px;line-height:1.5;">' + inputStr + '</div>' : '') +
@@ -50239,7 +50546,11 @@ async function copilotAsk(text) {
       '<span>' + new Date().toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT \u00b7 ' + elapsed + 's' + tokenInfo + '</span></div>' +
       toolSummary +
       piiShieldHtml +
-      '<div class="msg-bubble-copilot">' + copilotRenderMarkdown(responseText) + '</div></div>';
+      '<div class="msg-bubble-copilot">' + copilotRenderMarkdown(responseText) + '</div>' +
+      '<div style="margin-top:6px;display:flex;gap:6px;"><button class="copilot-copy-notepad-btn" onclick="copyToNotepad(this)">' + dIcon('clipboard',12) + ' Copy to Notepad</button></div>' +
+      '</div>';
+    // Store raw text on the row for notepad extraction
+    copilotRow.dataset.rawText = responseText;
     messages.appendChild(copilotRow);
 
     // Track AI usage
@@ -50377,6 +50688,302 @@ function initCopilotPage() {
   // Render saved templates on page load
   setTimeout(copilotRenderSavedTemplates, 100);
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// COPILOT ANALYST NOTEPAD
+// ═══════════════════════════════════════════════════════════════════════
+var _notepadEntries = JSON.parse(localStorage.getItem('dacta_notepad') || '[]');
+var _notepadOpen = false;
+var _notepadSendTarget = null; // ticket key selected in send modal
+
+function toggleCopilotNotepad() {
+  _notepadOpen = !_notepadOpen;
+  var overlay = document.getElementById('copilotNotepadOverlay');
+  var panel = document.getElementById('copilotNotepadPanel');
+  if (overlay) overlay.classList.toggle('open', _notepadOpen);
+  if (panel) panel.classList.toggle('open', _notepadOpen);
+  if (_notepadOpen) renderNotepadEntries();
+}
+
+function _notepadPersist() {
+  try { localStorage.setItem('dacta_notepad', JSON.stringify(_notepadEntries)); } catch(e) {}
+  _notepadUpdateBadge();
+}
+
+function _notepadUpdateBadge() {
+  var countBadge = document.getElementById('notepadBadgeCount');
+  var panelCount = document.getElementById('notepadPanelCount');
+  var n = _notepadEntries.length;
+  if (countBadge) { countBadge.textContent = n; countBadge.style.display = n > 0 ? '' : 'none'; }
+  if (panelCount) panelCount.textContent = n;
+}
+
+function renderNotepadEntries() {
+  var body = document.getElementById('copilotNotepadBody');
+  var empty = document.getElementById('notepadEmptyState');
+  if (!body) return;
+  // Remove existing entries (keep empty state)
+  body.querySelectorAll('.copilot-notepad-entry').forEach(function(el) { el.remove(); });
+  if (_notepadEntries.length === 0) {
+    if (empty) empty.style.display = '';
+    _notepadUpdateBadge();
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  _notepadEntries.forEach(function(entry, idx) {
+    var div = document.createElement('div');
+    div.className = 'copilot-notepad-entry';
+    var sourceLabel = entry.source === 'copilot' ? 'From Copilot' : 'Manual Note';
+    var tsStr = entry.ts ? new Date(entry.ts).toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT' : '';
+    div.innerHTML = '<div class="notepad-entry-meta"><span>' + sourceLabel + ' · ' + tsStr + '</span>' +
+      '<button class="notepad-remove" onclick="removeNotepadEntry(' + idx + ')" title="Remove">&#x2715;</button></div>' +
+      '<div class="notepad-entry-text">' + escapeHtml(entry.text).replace(/\n/g, '<br>') + '</div>';
+    body.appendChild(div);
+  });
+  _notepadUpdateBadge();
+  body.scrollTop = body.scrollHeight;
+}
+
+function copyToNotepad(btn) {
+  var row = btn.closest('.msg-row');
+  if (!row) return;
+  var rawText = row.dataset.rawText || '';
+  if (!rawText) {
+    // Fallback: extract text from bubble
+    var bubble = row.querySelector('.msg-bubble-copilot');
+    rawText = bubble ? bubble.innerText : '';
+  }
+  if (!rawText.trim()) { showToast('Nothing to copy', 'warn'); return; }
+  _notepadEntries.push({
+    id: 'np-' + Date.now(),
+    text: rawText.trim(),
+    source: 'copilot',
+    ts: new Date().toISOString()
+  });
+  _notepadPersist();
+  renderNotepadEntries();
+  // Visual feedback on button
+  btn.classList.add('copied');
+  var origHTML = btn.innerHTML;
+  btn.innerHTML = dIcon('check',12) + ' Copied';
+  setTimeout(function() {
+    btn.classList.remove('copied');
+    btn.innerHTML = origHTML;
+  }, 1500);
+  showToast('Copied to Notepad', 'success');
+}
+
+function addManualNotepadEntry() {
+  var input = document.getElementById('notepadManualInput');
+  if (!input || !input.value.trim()) { showToast('Type a note first', 'warn'); return; }
+  _notepadEntries.push({
+    id: 'np-' + Date.now(),
+    text: input.value.trim(),
+    source: 'manual',
+    ts: new Date().toISOString()
+  });
+  input.value = '';
+  _notepadPersist();
+  renderNotepadEntries();
+  showToast('Note added', 'success');
+}
+
+function removeNotepadEntry(idx) {
+  _notepadEntries.splice(idx, 1);
+  _notepadPersist();
+  renderNotepadEntries();
+}
+
+function clearNotepadEntries() {
+  if (_notepadEntries.length === 0) return;
+  _notepadEntries = [];
+  _notepadPersist();
+  renderNotepadEntries();
+  showToast('Notepad cleared', 'info');
+}
+
+// ── Send to Investigation Modal ──
+function openNotepadSendModal() {
+  if (_notepadEntries.length === 0) { showToast('Notepad is empty', 'warn'); return; }
+  _notepadSendTarget = null;
+
+  // Build ticket list from triage cache + investigation cache
+  var tickets = [];
+  // Current investigation ticket first
+  if (_currentInvestigationKey) {
+    tickets.push({ key: _currentInvestigationKey, summary: '(Current Investigation)', current: true });
+  }
+  // From _investigationCache
+  Object.keys(_investigationCache).forEach(function(k) {
+    if (k === _currentInvestigationKey) return;
+    var c = _investigationCache[k];
+    tickets.push({ key: k, summary: (c.metadata && c.metadata.summary) || c.verdict || 'Cached Investigation' });
+  });
+  // From _triageTickets if available
+  if (typeof _triageTickets !== 'undefined' && Array.isArray(_triageTickets)) {
+    _triageTickets.forEach(function(t) {
+      if (!tickets.find(function(x) { return x.key === t.key; })) {
+        tickets.push({ key: t.key, summary: (t.fields && t.fields.summary) || '' });
+      }
+    });
+  }
+
+  var overlay = document.createElement('div');
+  overlay.className = 'notepad-send-overlay';
+  overlay.id = 'notepadSendOverlay';
+  overlay.onclick = function(e) { if (e.target === overlay) closeNotepadSendModal(); };
+
+  var ticketListHTML = tickets.map(function(t) {
+    var currentBadge = t.current ? ' <span style="font-size:8px;background:rgba(0,212,255,0.15);color:var(--cyan);padding:1px 5px;border-radius:6px;">CURRENT</span>' : '';
+    return '<div class="notepad-ticket-item" data-key="' + t.key + '" onclick="notepadSelectTicket(this,\'' + t.key + '\')">' +
+      '<span class="ticket-key">' + t.key + currentBadge + '</span>' +
+      '<span class="ticket-summary">' + escapeHtml((t.summary || '').substring(0, 80)) + '</span></div>';
+  }).join('');
+
+  overlay.innerHTML = '<div class="notepad-send-modal">' +
+    '<div class="notepad-send-modal-header"><h4>' + dIcon('send',16) + ' Send Notes to Investigation</h4>' +
+    '<p>' + _notepadEntries.length + ' note' + (_notepadEntries.length > 1 ? 's' : '') + ' will be saved to the selected ticket\'s investigation cache</p></div>' +
+    '<div class="notepad-send-modal-body">' +
+    '<input type="text" class="notepad-send-search" id="notepadTicketSearch" placeholder="Search tickets..." oninput="notepadFilterTickets(this.value)">' +
+    '<div class="notepad-ticket-list" id="notepadTicketList">' +
+    (ticketListHTML || '<div style="text-align:center;padding:20px;font-size:11px;color:var(--text-muted);">No tickets available. Open a ticket investigation first.</div>') +
+    '</div></div>' +
+    '<div class="notepad-send-modal-footer">' +
+    '<button class="btn btn-secondary btn-sm" onclick="closeNotepadSendModal()" style="font-size:11px;">Cancel</button>' +
+    '<button class="btn btn-primary btn-sm" id="notepadSendConfirmBtn" onclick="notepadSendToInvestigation()" style="font-size:11px;" disabled>Send Notes</button>' +
+    '</div></div>';
+
+  document.body.appendChild(overlay);
+  // Auto-select current investigation if exists
+  if (_currentInvestigationKey) {
+    var firstItem = overlay.querySelector('.notepad-ticket-item');
+    if (firstItem) { notepadSelectTicket(firstItem, _currentInvestigationKey); }
+  }
+  setTimeout(function() {
+    var search = document.getElementById('notepadTicketSearch');
+    if (search) search.focus();
+  }, 100);
+}
+
+function closeNotepadSendModal() {
+  var overlay = document.getElementById('notepadSendOverlay');
+  if (overlay) overlay.remove();
+  _notepadSendTarget = null;
+}
+
+function notepadSelectTicket(el, key) {
+  _notepadSendTarget = key;
+  document.querySelectorAll('.notepad-ticket-item').forEach(function(item) {
+    item.classList.remove('selected');
+  });
+  el.classList.add('selected');
+  var btn = document.getElementById('notepadSendConfirmBtn');
+  if (btn) btn.disabled = false;
+}
+
+function notepadFilterTickets(query) {
+  var q = query.toLowerCase();
+  document.querySelectorAll('#notepadTicketList .notepad-ticket-item').forEach(function(item) {
+    var key = (item.dataset.key || '').toLowerCase();
+    var summary = (item.querySelector('.ticket-summary') || {}).textContent || '';
+    item.style.display = (key.indexOf(q) >= 0 || summary.toLowerCase().indexOf(q) >= 0) ? '' : 'none';
+  });
+}
+
+async function notepadSendToInvestigation() {
+  if (!_notepadSendTarget) { showToast('Select a ticket first', 'warn'); return; }
+  var ticketKey = _notepadSendTarget;
+
+  // Build notes payload
+  var notesPayload = _notepadEntries.map(function(entry) {
+    return {
+      id: entry.id,
+      text: entry.text,
+      source: entry.source,
+      ts: entry.ts,
+      sentBy: _getCurrentUserEmail() || 'analyst',
+      sentAt: new Date().toISOString()
+    };
+  });
+
+  // Get or create cache entry
+  var cache = _investigationCache[ticketKey] || {};
+  // Merge with existing analyst notes (don't overwrite)
+  var existing = cache.analystNotes || [];
+  cache.analystNotes = existing.concat(notesPayload);
+  cache.timestamp = cache.timestamp || new Date().toISOString();
+
+  // Save to cache (persists to localStorage + SIEMLess DB)
+  await saveInvestigationCache(ticketKey, cache);
+
+  // Close modal
+  closeNotepadSendModal();
+
+  // Clear notepad after successful send
+  _notepadEntries = [];
+  _notepadPersist();
+  renderNotepadEntries();
+
+  // If the investigation page is currently showing this ticket, re-render notes
+  if (_currentInvestigationKey === ticketKey) {
+    renderAnalystNotesInInvestigation(ticketKey);
+  }
+
+  showToast('Notes sent to ' + ticketKey, 'success');
+
+  // Log to audit
+  if (typeof logToSupabase === 'function') {
+    logToSupabase('audit_log', {
+      user_email: _getCurrentUserEmail() || 'analyst',
+      action: 'notepad_send',
+      resource_type: 'investigation',
+      resource_id: ticketKey,
+      details: { note_count: notesPayload.length }
+    });
+  }
+}
+
+// ── Render Analyst Notes in Investigation Page ──
+function renderAnalystNotesInInvestigation(ticketKey) {
+  var cache = _investigationCache[ticketKey];
+  if (!cache || !cache.analystNotes || cache.analystNotes.length === 0) return;
+
+  // Find or create the notes container in the investigation page
+  var existing = document.getElementById('invAnalystNotes');
+  if (existing) existing.remove();
+
+  var notesDiv = document.createElement('div');
+  notesDiv.className = 'inv-analyst-notes';
+  notesDiv.id = 'invAnalystNotes';
+
+  var headerHTML = '<div class="inv-analyst-notes-header">' + dIcon('clipboard',16) + ' Analyst Notes from Copilot <span style="font-size:9px;font-weight:400;color:var(--text-muted);font-family:var(--font-mono);">' + cache.analystNotes.length + ' note' + (cache.analystNotes.length > 1 ? 's' : '') + '</span></div>';
+
+  var notesHTML = cache.analystNotes.map(function(note) {
+    var sourceLabel = note.source === 'copilot' ? 'From Copilot' : 'Manual';
+    var ts = note.sentAt ? new Date(note.sentAt).toLocaleString('en-SG', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+    var by = note.sentBy || 'analyst';
+    return '<div class="inv-analyst-note-entry">' +
+      '<div class="inv-analyst-note-meta">' + sourceLabel + ' · ' + by + ' · ' + ts + '</div>' +
+      '<div>' + escapeHtml(note.text).replace(/\n/g, '<br>') + '</div></div>';
+  }).join('');
+
+  notesDiv.innerHTML = headerHTML + notesHTML;
+
+  // Insert before the AI investigation result or at the top of the live panel
+  var livePanel = document.querySelector('.prod-investigation-live');
+  if (livePanel) {
+    // Try to insert after the header/summary area but before AI results
+    var invTabs = livePanel.querySelector('.r-tabs');
+    if (invTabs) {
+      invTabs.parentNode.insertBefore(notesDiv, invTabs);
+    } else {
+      livePanel.insertBefore(notesDiv, livePanel.firstChild);
+    }
+  }
+}
+
+// Init notepad badge on load
+setTimeout(function() { _notepadUpdateBadge(); }, 200);
 
 // ── Command Bar ──
 function openCopilotCmd() {
@@ -55869,6 +56476,8 @@ async function openInvestigation(ticketKey) {
       }
       // Deterministically populate Top Findings in Summary tab — no setTimeout race
       _populateTopFindingsFromCache(cachedResult);
+      // Render analyst notes if any were sent from Copilot notepad
+      renderAnalystNotesInInvestigation(ticketKey);
     } else if (cachedResult && cachedResult.verdict) {
       // Verdict exists but HTML is empty/incomplete — auto re-investigate silently
       // instead of showing a dead-end "Re-investigate" prompt
@@ -56858,7 +57467,8 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
       inculpatoryEvidence: (cacheEntry.inculpatoryEvidence || []).slice(0, 5),
       exculpatoryEvidence: (cacheEntry.exculpatoryEvidence || []).slice(0, 5),
       sidebarPanels: cacheEntry.sidebarPanels || null,
-      escalationData: cacheEntry.escalationData || null
+      escalationData: cacheEntry.escalationData || null,
+      analystNotes: cacheEntry.analystNotes || null
     };
     if (cacheEntry.elasticLogs) lsCacheAll[ticketKey].elasticLogs = cacheEntry.elasticLogs;
     if (cacheEntry.iocs) lsCacheAll[ticketKey].iocs = cacheEntry.iocs;
@@ -61577,6 +62187,9 @@ async function runAIInvestigation(ticketKey, issueData) {
   await saveInvestigationCache(ticketKey, cacheEntry);
   markInvestigationCompleted(ticketKey);
   console.log('[AI Investigation] Cached result for ' + ticketKey + ' at ' + investigatedTimestamp);
+
+  // Render analyst notes if any were sent from Copilot notepad
+  renderAnalystNotesInInvestigation(ticketKey);
 
   // Append feedback loop panel
   var invMainContent = document.getElementById('invMainContent');
