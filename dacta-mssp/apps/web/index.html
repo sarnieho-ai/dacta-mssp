@@ -9953,6 +9953,9 @@ const DACTA_ICONS = {
   statusOk: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
   statusNeutral: '<circle cx="12" cy="12" r="10"/>',
 
+  // ── File / Attachment ──
+  paperclip: '<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+
   // ── Navigation / UI ──
   organization: '<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9h1"/><path d="M9 13h1"/><path d="M9 17h1"/>',
   bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
@@ -11895,26 +11898,106 @@ function getThemeTickColor() {
            PAGE 5: SHIFT HANDOVER
            ===================================================== -->
       <div class="page" id="page-handover">
-        <div class="page-header">
-          <div>
-            <div class="page-title">Shift Handover</div>
-            <div class="page-subtitle" id="handoverShiftSubtitle">Shift A → Shift B · 19:00 SGT</div>
-          </div>
-          <div class="page-actions">
-            <button class="btn btn-secondary btn-sm"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Generate Report</button>
-            <button class="btn btn-primary btn-sm"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg> Complete Handover</button>
-          </div>
-        </div>
-
-        <div class="shift-header-bar">
-          <div class="metric-card cyan"><div class="metric-label">Current Shift</div><div class="metric-value" id="handoverCurrentShift" style="font-size:18px;">Shift A</div><div class="metric-sub" id="handoverShiftTime">07:00–19:00 SGT</div></div>
-          <div class="metric-card green"><div class="metric-label">Tickets Closed</div><div class="metric-value">8</div><div class="metric-sub">this shift</div></div>
-          <div class="metric-card amber"><div class="metric-label">Open Tickets</div><div class="metric-value">6</div><div class="metric-sub">carrying over</div></div>
-          <div class="metric-card red"><div class="metric-label">Escalated</div><div class="metric-value">2</div><div class="metric-sub">active escalations</div></div>
-        </div>
-
-        <!-- ===== JSM OPS COMMAND CENTER ===== -->
         <style>
+          /* ===== SHIFT HANDOVER PAGE STYLES ===== */
+          .ho-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+          .ho-header-left { display:flex; flex-direction:column; gap:4px; }
+          .ho-header-actions { display:flex; gap:8px; align-items:center; }
+          .ho-metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+          @media(max-width:900px) { .ho-metrics { grid-template-columns:1fr 1fr; } }
+
+          /* Roster Modal */
+          .roster-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center; }
+          .roster-overlay.open { display:flex; }
+          .roster-modal { background:var(--bg-card); border:1px solid var(--border-card); border-radius:14px; width:min(95vw,960px); max-height:90vh; display:flex; flex-direction:column; box-shadow:0 24px 48px rgba(0,0,0,0.4); }
+          .roster-modal-head { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border-subtle); }
+          .roster-modal-title { font-size:15px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px; }
+          .roster-modal-close { background:none; border:1px solid var(--border-subtle); color:var(--text-muted); width:28px; height:28px; border-radius:6px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+          .roster-modal-close:hover { background:rgba(239,68,68,0.15); border-color:rgba(239,68,68,0.3); color:var(--red); }
+          .roster-modal-body { padding:16px 20px; overflow-y:auto; flex:1; }
+          .roster-modal-footer { display:flex; gap:8px; justify-content:flex-end; padding:12px 20px; border-top:1px solid var(--border-subtle); }
+
+          .roster-nav { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+          .roster-nav-btn { background:var(--bg-elevated); border:1px solid var(--border-card); color:var(--text-secondary); border-radius:6px; padding:6px 10px; cursor:pointer; font-size:11px; transition:all 0.15s; }
+          .roster-nav-btn:hover { border-color:var(--cyan); color:var(--cyan); }
+          .roster-week-label { font-size:13px; font-weight:600; color:var(--text-primary); flex:1; text-align:center; }
+
+          .roster-grid { display:grid; grid-template-columns:80px repeat(7,1fr); gap:1px; background:var(--border-subtle); border-radius:10px; overflow:hidden; }
+          .roster-cell { background:var(--bg-card); padding:8px; min-height:70px; font-size:10px; position:relative; }
+          .roster-cell.header { background:var(--bg-elevated); font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; min-height:auto; padding:8px 6px; text-align:center; }
+          .roster-cell.shift-label { background:var(--bg-elevated); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:10px; color:var(--cyan); }
+          .roster-cell.shift-label.b { color:var(--purple); }
+          .roster-cell.today { background:rgba(0,212,255,0.04); box-shadow:inset 0 0 0 1px rgba(0,212,255,0.15); }
+          .roster-cell .oncall-tag { display:inline-flex; align-items:center; gap:3px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); color:var(--green); font-size:8px; font-weight:700; padding:1px 5px; border-radius:3px; margin-bottom:3px; text-transform:uppercase; letter-spacing:0.04em; }
+          .roster-analyst { display:inline-flex; align-items:center; gap:4px; padding:2px 6px; margin:2px; border-radius:4px; font-size:10px; font-weight:500; color:var(--text-primary); background:rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.15); cursor:default; position:relative; }
+          .roster-analyst.shift-b { background:rgba(139,92,246,0.08); border-color:rgba(139,92,246,0.15); }
+          .roster-analyst .ra-remove { display:none; position:absolute; right:-4px; top:-4px; width:14px; height:14px; border-radius:50%; background:var(--red); color:#fff; font-size:8px; cursor:pointer; align-items:center; justify-content:center; line-height:1; }
+          .roster-analyst:hover .ra-remove { display:flex; }
+          .roster-add-btn { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; margin:2px; border-radius:4px; font-size:10px; color:var(--text-muted); background:rgba(255,255,255,0.03); border:1px dashed rgba(255,255,255,0.1); cursor:pointer; transition:all 0.15s; }
+          .roster-add-btn:hover { border-color:var(--cyan); color:var(--cyan); background:rgba(0,212,255,0.05); }
+
+          .roster-analyst-picker { position:absolute; z-index:10; background:var(--bg-elevated); border:1px solid var(--border-card); border-radius:8px; padding:6px; min-width:160px; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+          .roster-analyst-picker .rap-item { padding:5px 8px; border-radius:4px; font-size:10px; color:var(--text-primary); cursor:pointer; display:flex; align-items:center; gap:6px; }
+          .roster-analyst-picker .rap-item:hover { background:rgba(0,212,255,0.1); }
+          .roster-analyst-picker .rap-item .rap-avatar { width:18px; height:18px; border-radius:50%; background:linear-gradient(135deg,var(--cyan),var(--purple)); display:flex; align-items:center; justify-content:center; font-size:7px; font-weight:700; color:#fff; }
+
+          /* Handover Modal */
+          .handover-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center; }
+          .handover-modal-overlay.open { display:flex; }
+          .handover-modal { background:var(--bg-card); border:1px solid var(--border-card); border-radius:14px; width:min(95vw,780px); max-height:90vh; display:flex; flex-direction:column; box-shadow:0 24px 48px rgba(0,0,0,0.4); }
+          .handover-modal-head { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border-subtle); }
+          .handover-modal-title { font-size:15px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px; }
+          .handover-modal-body { padding:16px 20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:14px; }
+          .handover-modal-footer { display:flex; gap:8px; justify-content:flex-end; padding:12px 20px; border-top:1px solid var(--border-subtle); }
+
+          .ho-section-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-muted); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+          .ho-section-label .ho-auto-badge { font-size:8px; padding:1px 5px; border-radius:3px; background:rgba(0,212,255,0.1); color:var(--cyan); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; }
+          .ho-open-item { display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--bg-elevated); border-radius:6px; font-size:11px; }
+          .ho-open-item input[type="checkbox"] { accent-color:var(--cyan); }
+          .ho-open-item .ho-oi-key { color:var(--cyan); font-family:var(--font-mono); font-size:10px; font-weight:600; }
+          .ho-open-item .ho-oi-priority { font-size:9px; }
+          .ho-open-item .ho-oi-title { flex:1; color:var(--text-primary); font-size:11px; }
+          .ho-open-item .ho-oi-action { font-size:10px; color:var(--text-muted); }
+          .ho-notes-textarea { width:100%; min-height:100px; background:var(--bg-input); border:1px solid var(--border-card); border-radius:8px; color:var(--text-primary); font-family:var(--font-body); font-size:12px; padding:10px 12px; resize:vertical; outline:none; transition:border-color 0.15s; }
+          .ho-notes-textarea:focus { border-color:var(--cyan); }
+          .ho-notes-textarea::placeholder { color:var(--text-muted); }
+
+          .ho-artifact-mini-zone { border:1px dashed rgba(255,255,255,0.1); border-radius:8px; padding:12px; text-align:center; cursor:pointer; transition:all 0.15s; }
+          .ho-artifact-mini-zone:hover { border-color:var(--cyan); background:rgba(0,212,255,0.03); }
+          .ho-artifact-list { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+
+          .ho-send-client-row { display:flex; align-items:center; gap:10px; padding:10px 12px; background:rgba(0,212,255,0.04); border:1px solid rgba(0,212,255,0.12); border-radius:8px; }
+          .ho-send-client-row .ho-toggle { width:36px; height:20px; border-radius:10px; cursor:pointer; position:relative; transition:all 0.2s; flex-shrink:0; }
+          .ho-send-client-row .ho-toggle.off { background:rgba(255,255,255,0.1); }
+          .ho-send-client-row .ho-toggle.on { background:var(--cyan); }
+          .ho-send-client-row .ho-toggle .dot { width:16px; height:16px; background:#fff; border-radius:50%; position:absolute; top:2px; transition:all 0.2s; }
+          .ho-send-client-row .ho-toggle.off .dot { left:2px; }
+          .ho-send-client-row .ho-toggle.on .dot { left:18px; }
+          .ho-client-fields { display:none; flex-direction:column; gap:8px; margin-top:8px; }
+          .ho-client-fields.visible { display:flex; }
+
+          /* Live data cards */
+          .ho-team-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+          @media(max-width:900px) { .ho-team-grid { grid-template-columns:1fr; } }
+          .ho-team-member { display:flex; align-items:center; gap:10px; padding:8px; background:var(--bg-elevated); border-radius:7px; }
+          .ho-team-member .ho-tm-avatar { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff; flex-shrink:0; }
+          .ho-team-member .ho-tm-name { font-size:12px; font-weight:600; color:var(--text-primary); }
+          .ho-team-member .ho-tm-role { font-size:10px; color:var(--text-muted); }
+          .ho-team-member .ho-tm-oncall { font-size:8px; font-weight:700; padding:2px 6px; border-radius:3px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); color:var(--green); text-transform:uppercase; letter-spacing:0.04em; margin-left:auto; }
+
+          .ho-open-table { width:100%; }
+          .ho-open-table th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); padding:8px 10px; text-align:left; border-bottom:1px solid var(--border-subtle); }
+          .ho-open-table td { font-size:11px; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.03); color:var(--text-secondary); }
+          .ho-open-table td.mono { font-family:var(--font-mono); }
+
+          .ho-notes-card { padding:12px 14px; background:var(--bg-elevated); border-radius:8px; border-left:3px solid var(--amber); }
+          .ho-notes-card .ho-nc-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+          .ho-notes-card .ho-nc-from { font-size:10px; font-weight:600; color:var(--text-primary); }
+          .ho-notes-card .ho-nc-time { font-size:9px; color:var(--text-muted); font-family:var(--font-mono); }
+          .ho-notes-card .ho-nc-body { font-size:11px; color:var(--text-secondary); line-height:1.6; }
+          .ho-notes-empty { text-align:center; padding:30px; color:var(--text-muted); font-size:12px; }
+
+          /* Ops Command */
           .ops-cmd-section { margin-bottom:16px; }
           .ops-cmd-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
           .ops-cmd-title { font-size:14px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px; }
@@ -11964,6 +12047,29 @@ function getThemeTickColor() {
           .ops-none-badge { font-size:9px; color:var(--text-muted); font-style:italic; }
         </style>
 
+        <!-- Header -->
+        <div class="ho-header">
+          <div class="ho-header-left">
+            <div class="page-title">Shift Handover</div>
+            <div class="page-subtitle" id="handoverShiftSubtitle">Shift B → Shift A · 07:00 SGT</div>
+          </div>
+          <div class="ho-header-actions">
+            <button class="btn btn-secondary btn-sm" onclick="openRosterModal()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Plan Roster</button>
+            <button class="btn btn-secondary btn-sm" onclick="openHandoverModal()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Create Handover</button>
+            <button class="btn btn-secondary btn-sm" onclick="generateHandoverReport()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Generate Report</button>
+            <button class="btn btn-primary btn-sm" id="completeHandoverBtn" onclick="completeHandover()"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg> Complete Handover</button>
+          </div>
+        </div>
+
+        <!-- Metric Cards (live data) -->
+        <div class="ho-metrics">
+          <div class="metric-card cyan"><div class="metric-label">Current Shift</div><div class="metric-value" id="handoverCurrentShift" style="font-size:18px;">—</div><div class="metric-sub" id="handoverShiftTime">Loading...</div></div>
+          <div class="metric-card green"><div class="metric-label">Tickets Closed</div><div class="metric-value" id="hoClosedCount">—</div><div class="metric-sub">this shift</div></div>
+          <div class="metric-card amber"><div class="metric-label">Open Tickets</div><div class="metric-value" id="hoOpenCount">—</div><div class="metric-sub">carrying over</div></div>
+          <div class="metric-card red"><div class="metric-label">Escalated</div><div class="metric-value" id="hoEscalatedCount">—</div><div class="metric-sub">active escalations</div></div>
+        </div>
+
+        <!-- JSM Ops Command Center -->
         <div class="ops-cmd-section" id="opsCommandSection">
           <div class="ops-cmd-header">
             <div class="ops-cmd-title">
@@ -11975,7 +12081,6 @@ function getThemeTickColor() {
             </div>
           </div>
           <div class="ops-cmd-grid">
-            <!-- On-Call Schedules -->
             <div class="ops-card">
               <div class="ops-card-head">
                 <div class="ops-card-head-title">
@@ -11988,7 +12093,6 @@ function getThemeTickColor() {
                 <div class="ops-skeleton"></div><div class="ops-skeleton"></div>
               </div>
             </div>
-            <!-- Routing Rules -->
             <div class="ops-card">
               <div class="ops-card-head">
                 <div class="ops-card-head-title">
@@ -12001,7 +12105,6 @@ function getThemeTickColor() {
                 <div class="ops-skeleton"></div><div class="ops-skeleton"></div>
               </div>
             </div>
-            <!-- Escalation Policies -->
             <div class="ops-card">
               <div class="ops-card-head">
                 <div class="ops-card-head-title">
@@ -12016,137 +12119,44 @@ function getThemeTickColor() {
             </div>
           </div>
         </div>
-        <!-- ===== END JSM OPS COMMAND CENTER ===== -->
 
-        <div class="grid-2" style="margin-bottom:16px;">
+        <!-- On-Duty / Incoming Teams (live from on-call + roster) -->
+        <div class="ho-team-grid">
           <div class="card">
-            <div class="card-header"><span class="card-title" id="handoverOnDutyTitle">Shift A Team On Duty</span></div>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg-elevated);border-radius:7px;">
-                <div class="user-avatar">JL</div>
-                <div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">John Lim</div><div style="font-size:10px;color:var(--cyan);">Lead Analyst — SOC L2</div></div>
-                <div class="status-dot green" style="margin-left:auto;"></div>
-              </div>
-              <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg-elevated);border-radius:7px;">
-                <div class="user-avatar" style="background:linear-gradient(135deg,#f59e0b,#ef4444);">ST</div>
-                <div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Sarah Tan</div><div style="font-size:10px;color:var(--text-muted);">SOC Analyst L1</div></div>
-                <div class="status-dot green" style="margin-left:auto;"></div>
-              </div>
-              <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg-elevated);border-radius:7px;">
-                <div class="user-avatar" style="background:linear-gradient(135deg,#10b981,#3b82f6);">MW</div>
-                <div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Marcus Wong</div><div style="font-size:10px;color:var(--text-muted);">SOC Analyst L1</div></div>
-                <div class="status-dot amber" style="margin-left:auto;"></div>
-              </div>
+            <div class="card-header"><span class="card-title" id="handoverOnDutyTitle">Current Shift Team</span><span class="badge badge-green" style="font-size:9px;">ON DUTY</span></div>
+            <div style="display:flex;flex-direction:column;gap:6px;" id="hoOnDutyList">
+              <div style="text-align:center;padding:16px;color:var(--text-muted);font-size:11px;">Loading on-call data...</div>
             </div>
           </div>
-
           <div class="card">
-            <div class="card-header"><span class="card-title" id="handoverIncomingTitle">Shift B — Incoming</span><span class="badge badge-blue" id="handoverIncomingBadge">Starts 19:00</span></div>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg-elevated);border-radius:7px;">
-                <div class="user-avatar" style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);">RL</div>
-                <div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Raj Lingam</div><div style="font-size:10px;color:var(--text-muted);">Lead Analyst — SOC L2</div></div>
-                <span class="badge badge-blue" style="margin-left:auto;font-size:9px;">Incoming</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg-elevated);border-radius:7px;">
-                <div class="user-avatar" style="background:linear-gradient(135deg,#f97316,#8b5cf6);">AH</div>
-                <div><div style="font-size:12px;font-weight:600;color:var(--text-primary);">Aisha Hassan</div><div style="font-size:10px;color:var(--text-muted);">SOC Analyst L1</div></div>
-                <span class="badge badge-blue" style="margin-left:auto;font-size:9px;">Incoming</span>
-              </div>
+            <div class="card-header"><span class="card-title" id="handoverIncomingTitle">Incoming Shift</span><span class="badge badge-blue" id="handoverIncomingBadge" style="font-size:9px;">—</span></div>
+            <div style="display:flex;flex-direction:column;gap:6px;" id="hoIncomingList">
+              <div style="text-align:center;padding:16px;color:var(--text-muted);font-size:11px;">Loading roster data...</div>
             </div>
           </div>
         </div>
 
+        <!-- Previous Handover Notes -->
         <div class="card" style="margin-bottom:16px;">
-          <div class="card-header"><span class="card-title" id="handoverNotesTitle">Handover Notes from Shift B</span><span style="font-size:11px;color:var(--text-muted);">From: Wei Chen · 19:03 SGT</span></div>
-          <div class="handover-note">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> <strong>CRITICAL — DAC-18158 (P1 Ransomware)</strong> is ACTIVE. Host DACTASG-WS-047 isolation in progress. Await confirmation from Elastic agent. john.santos account disable pending CISO approval (ETA 10 min). Do NOT close until full forensics complete.<br><br>
-            DAC-18157 (P2 Lateral Movement) — relates to DAC-18158. Same user. Keep correlated.<br><br>
-            Elastic alerts DAC-18135 to DAC-18140 — all benign patch deployment false positives. Rule tuning ticket TKT-RUL-089 raised. Expected FP for next 2 shifts during patching window.<br><br>
-            Application control request DAC-18120 — awaiting Business Approval from Naga World IT Manager (Kenneth Ng). Follow up by 18:00.
+          <div class="card-header"><span class="card-title" id="handoverNotesTitle">Previous Handover Notes</span><span style="font-size:10px;color:var(--text-muted);" id="hoNotesTimestamp">—</span></div>
+          <div id="hoNotesContainer">
+            <div class="ho-notes-empty">No handover notes from previous shift yet.</div>
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-header"><span class="card-title" id="handoverCarryTitle">Open Items — Carrying to Shift B</span></div>
+        <!-- Open Items — Live from Jira -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><span class="card-title" id="handoverCarryTitle">Open Items — Carrying Over</span><span class="badge badge-amber" id="hoOpenItemsBadge" style="font-size:9px;">—</span></div>
           <div class="table-wrap">
-            <table>
-              <thead><tr><th>ID</th><th>Priority</th><th>Title</th><th>Action Required</th><th>Owner</th><th>Deadline</th></tr></thead>
-              <tbody>
-                <tr><td class="mono" style="color:var(--cyan);">DAC-18158</td><td><span class="badge badge-p1">P1</span></td><td>Ransomware Activity — DACTASG-WS-047</td><td>Complete isolation, await forensics</td><td>John Lim → Raj Lingam</td><td style="color:var(--red-bright);font-family:var(--font-mono);">URGENT</td></tr>
-                <tr><td class="mono" style="color:var(--cyan);">DAC-18157</td><td><span class="badge badge-p2">P2</span></td><td>Unusual Host Communication</td><td>Monitor correlated to DAC-18158</td><td>Sarah Tan → Aisha Hassan</td><td class="mono">19:00</td></tr>
-                <tr><td class="mono" style="color:var(--cyan);">DAC-18120</td><td><span class="badge badge-p3">P3</span></td><td>Application Control — Unauthorized Execution</td><td>Follow up with Kenneth Ng (NW IT)</td><td>Marcus Wong → Aisha Hassan</td><td class="mono">18:00</td></tr>
+            <table class="ho-open-table">
+              <thead><tr><th>ID</th><th>P</th><th>Title</th><th>Organization</th><th>Status</th><th>Assigned</th><th>Created</th></tr></thead>
+              <tbody id="hoOpenItemsBody">
+                <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted);font-size:11px;">Loading open items from Jira...</td></tr>
               </tbody>
             </table>
           </div>
         </div>
 
-        <!-- ===== UPLOAD ARTIFACTS (Task 6) ===== -->
-        <div class="grid-2" style="margin-top:16px;">
-          <div class="card">
-            <div class="card-header"><span class="card-title">Upload Artifacts</span><span class="badge badge-blue">Attachments</span></div>
-            <div class="handover-artifact-zone" id="artifactDropZone"
-              ondragover="event.preventDefault();this.classList.add('drag-over');"
-              ondragleave="this.classList.remove('drag-over');"
-              ondrop="handleArtifactDrop(event);"
-              onclick="document.getElementById('artifactFileInput').click();">
-              <div class="handover-artifact-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M2 19a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 4H4a2 2 0 0 0-2 2Z"/><path d="M2 9h20"/></svg></div>
-              <div class="handover-artifact-text">Drag &amp; drop artifacts or <span style="color:var(--cyan);cursor:pointer;">click to browse</span></div>
-              <div class="handover-artifact-sub">PDF, PNG, DOCX, CSV, PCAP accepted · Max 50MB per file</div>
-            </div>
-            <input type="file" id="artifactFileInput" multiple style="display:none;" onchange="handleArtifactSelect(event)">
-            <div class="handover-file-list" id="artifactFileList">
-              <!-- Sample pre-loaded files -->
-              <div class="handover-file-item">
-                <div class="handover-file-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div>
-                <div class="handover-file-name">DAC-18158_memory_dump.pdf</div>
-                <div style="font-size:10px;color:var(--text-muted);">2.4 MB</div>
-                <div class="handover-file-remove" onclick="this.parentElement.remove()">&#x2715;</div>
-              </div>
-              <div class="handover-file-item">
-                <div class="handover-file-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
-                <div class="handover-file-name">timeline_export_2026-02-27.csv</div>
-                <div style="font-size:10px;color:var(--text-muted);">84 KB</div>
-                <div class="handover-file-remove" onclick="this.parentElement.remove()">&#x2715;</div>
-              </div>
-              <div class="handover-file-item">
-                <div class="handover-file-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
-                <div class="handover-file-name">process_tree_screenshot.png</div>
-                <div style="font-size:10px;color:var(--text-muted);">148 KB</div>
-                <div class="handover-file-remove" onclick="this.parentElement.remove()">&#x2715;</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- ===== SEND TO CLIENT (Task 6) ===== -->
-          <div class="card send-to-client-section">
-            <div class="card-header"><span class="card-title">Send to Client</span></div>
-            <div class="client-send-toggle-row">
-              <span class="wr2-toggle off" id="clientSendToggle" onclick="toggleClientSend()" style="cursor:pointer;"></span>
-              <div>
-                <div style="font-size:12px;font-weight:600;color:var(--text-primary);">Send handover copy to client</div>
-                <div style="font-size:10px;color:var(--text-muted);">Sends a sanitized version excluding internal notes</div>
-              </div>
-            </div>
-            <div class="client-send-fields" id="clientSendFields">
-              <div>
-                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:5px;">To</div>
-                <input type="email" class="esc-input" value="it-security@spmt.com" placeholder="Client email...">
-              </div>
-              <div>
-                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:5px;">CC</div>
-                <input type="email" class="esc-input" placeholder="CC email (optional)...">
-              </div>
-              <div style="padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:6px;font-size:10px;color:var(--amber);display:flex;gap:6px;align-items:flex-start;">
-                <span><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
-                <span>This will send a sanitized version excluding all internal analyst notes, raw IOC details, and source references marked INTERNAL.</span>
-              </div>
-              <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="showToast('Handover report sent to client — it-security@spmt.com')">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Send Handover Report
-              </button>
-            </div>
-          </div>
-        </div>
       </div><!-- end handover -->
 
 
@@ -42413,7 +42423,7 @@ function navigate(page) {
 
   if (page === 'copilot') initCopilotPage();
   if (page === 'clients') setTimeout(loadClientsPage, 100);
-  if (page === 'handover' && window._dactaMode === 'production') setTimeout(loadOpsCommandData, 200);
+  if (page === 'handover') setTimeout(function(){ if (typeof loadHandoverPageData === 'function') loadHandoverPageData(); }, 200);
   if (page === 'audit') {
     // Clear old timer, load fresh, set 30s refresh
     if (_auditRefreshTimer) clearInterval(_auditRefreshTimer);
@@ -50861,6 +50871,568 @@ function toggleClientSend() {
     fields.classList.add('visible');
   }
 }
+
+
+/* ==============================================================
+   SHIFT HANDOVER — Roster Planning, Handover Modal, Live Data
+   ============================================================== */
+
+// ── Roster State ──
+var _rosterWeekOffset = 0;
+var _rosterData = {}; // { 'YYYY-MM-DD': { shiftA: ['Name',...], shiftB: ['Name',...] } }
+var _rosterAnalystPool = [];
+var _rosterOnCall = {};
+var _activePicker = null;
+
+function openRosterModal() {
+  _rosterWeekOffset = 0;
+  document.getElementById('rosterOverlay').classList.add('open');
+  loadRosterAnalysts();
+  renderRosterGrid();
+}
+function closeRosterModal() {
+  document.getElementById('rosterOverlay').classList.remove('open');
+  if (_activePicker) { _activePicker.remove(); _activePicker = null; }
+}
+function rosterNavWeek(dir) {
+  if (dir === 0) _rosterWeekOffset = 0;
+  else _rosterWeekOffset += dir;
+  renderRosterGrid();
+}
+
+async function loadRosterAnalysts() {
+  try {
+    var users = await DactaJira.fetchAssignableUsers();
+    _rosterAnalystPool = (users.users || users || []).map(function(u) {
+      return { id: u.accountId || u.id, name: u.displayName || u.name || 'Unknown' };
+    });
+  } catch(e) {
+    console.error('[Roster] Failed to load analysts:', e);
+    _rosterAnalystPool = [
+      { id: 'a1', name: 'Christian Miguel' }, { id: 'a2', name: 'Wendy Melyana' },
+      { id: 'a3', name: 'Marcfrance Limasin' }, { id: 'a4', name: 'John Lim' },
+      { id: 'a5', name: 'Sarah Tan' }, { id: 'a6', name: 'Marcus Wong' }
+    ];
+  }
+  // Load on-call from JSM
+  try {
+    var ops = await DactaJira.fetchOpsData();
+    _rosterOnCall = {};
+    (ops.schedules || []).forEach(function(s) {
+      (s.onCall || []).forEach(function(p) {
+        _rosterOnCall[p.name] = true;
+      });
+    });
+  } catch(e) { console.warn('[Roster] On-call load failed:', e); }
+  // Load saved roster from localStorage
+  try {
+    var saved = localStorage.getItem('dacta-roster');
+    if (saved) _rosterData = JSON.parse(saved);
+  } catch(e) {}
+  renderRosterGrid();
+}
+
+function getWeekDates(offset) {
+  var now = new Date();
+  var monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7) + (offset * 7));
+  var dates = [];
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    dates.push(d);
+  }
+  return dates;
+}
+
+function fmtDate(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtDateShort(d) { return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]+' '+d.getDate(); }
+
+function renderRosterGrid() {
+  var dates = getWeekDates(_rosterWeekOffset);
+  var label = document.getElementById('rosterWeekLabel');
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if (label) label.textContent = months[dates[0].getMonth()] + ' ' + dates[0].getDate() + ' — ' + months[dates[6].getMonth()] + ' ' + dates[6].getDate() + ', ' + dates[0].getFullYear();
+
+  var todayStr = fmtDate(new Date());
+  var grid = document.getElementById('rosterGrid');
+  if (!grid) return;
+
+  var html = '<div class="roster-cell header"></div>';
+  dates.forEach(function(d) {
+    var cls = fmtDate(d) === todayStr ? 'roster-cell header today' : 'roster-cell header';
+    html += '<div class="'+cls+'">'+fmtDateShort(d)+'</div>';
+  });
+
+  // Shift A row
+  html += '<div class="roster-cell shift-label">SHIFT A<br><span style="font-size:8px;color:var(--text-muted);font-weight:400;">07:00–19:00</span></div>';
+  dates.forEach(function(d) {
+    var key = fmtDate(d);
+    var cls = key === todayStr ? 'roster-cell today' : 'roster-cell';
+    var roster = (_rosterData[key] && _rosterData[key].shiftA) || [];
+    html += '<div class="'+cls+'" data-date="'+key+'" data-shift="shiftA">';
+    // On-call tags
+    Object.keys(_rosterOnCall).forEach(function(name) {
+      html += '<div class="oncall-tag">&#9741; ON-CALL: '+escH(name.split(' ')[0])+'</div>';
+    });
+    roster.forEach(function(name, idx) {
+      html += '<div class="roster-analyst" data-idx="'+idx+'">'+escH(name)+'<span class="ra-remove" onclick="removeRosterEntry(''+key+'','shiftA','+idx+')">&#x2715;</span></div>';
+    });
+    html += '<div class="roster-add-btn" onclick="showAnalystPicker(this,''+key+'','shiftA')">+ Add</div>';
+    html += '</div>';
+  });
+
+  // Shift B row
+  html += '<div class="roster-cell shift-label b">SHIFT B<br><span style="font-size:8px;color:var(--text-muted);font-weight:400;">19:00–07:00</span></div>';
+  dates.forEach(function(d) {
+    var key = fmtDate(d);
+    var cls = key === todayStr ? 'roster-cell today' : 'roster-cell';
+    var roster = (_rosterData[key] && _rosterData[key].shiftB) || [];
+    html += '<div class="'+cls+'" data-date="'+key+'" data-shift="shiftB">';
+    roster.forEach(function(name, idx) {
+      html += '<div class="roster-analyst shift-b" data-idx="'+idx+'">'+escH(name)+'<span class="ra-remove" onclick="removeRosterEntry(''+key+'','shiftB','+idx+')">&#x2715;</span></div>';
+    });
+    html += '<div class="roster-add-btn" onclick="showAnalystPicker(this,''+key+'','shiftB')">+ Add</div>';
+    html += '</div>';
+  });
+
+  grid.innerHTML = html;
+}
+
+function showAnalystPicker(el, dateKey, shift) {
+  if (_activePicker) { _activePicker.remove(); _activePicker = null; }
+  var picker = document.createElement('div');
+  picker.className = 'roster-analyst-picker';
+  var existing = (_rosterData[dateKey] && _rosterData[dateKey][shift]) || [];
+  _rosterAnalystPool.forEach(function(a) {
+    if (existing.indexOf(a.name) !== -1) return; // already assigned
+    var initials = a.name.split(' ').map(function(w){return w[0]}).join('').substring(0,2).toUpperCase();
+    picker.innerHTML += '<div class="rap-item" onclick="addRosterEntry(''+dateKey+'',''+shift+'',''+escH(a.name)+'')"><span class="rap-avatar">'+initials+'</span>'+escH(a.name)+'</div>';
+  });
+  if (!picker.innerHTML) picker.innerHTML = '<div style="padding:6px;font-size:10px;color:var(--text-muted);">All analysts assigned</div>';
+  el.parentElement.appendChild(picker);
+  _activePicker = picker;
+  setTimeout(function() {
+    document.addEventListener('click', function handler(e) {
+      if (!picker.contains(e.target) && e.target !== el) {
+        picker.remove(); _activePicker = null;
+        document.removeEventListener('click', handler);
+      }
+    });
+  }, 10);
+}
+
+function addRosterEntry(dateKey, shift, name) {
+  if (!_rosterData[dateKey]) _rosterData[dateKey] = { shiftA: [], shiftB: [] };
+  if (!_rosterData[dateKey][shift]) _rosterData[dateKey][shift] = [];
+  _rosterData[dateKey][shift].push(name);
+  if (_activePicker) { _activePicker.remove(); _activePicker = null; }
+  renderRosterGrid();
+}
+
+function removeRosterEntry(dateKey, shift, idx) {
+  if (_rosterData[dateKey] && _rosterData[dateKey][shift]) {
+    _rosterData[dateKey][shift].splice(idx, 1);
+  }
+  renderRosterGrid();
+}
+
+function saveRoster() {
+  localStorage.setItem('dacta-roster', JSON.stringify(_rosterData));
+  showToast('Roster saved successfully', 'success');
+  closeRosterModal();
+}
+
+// ── Handover Modal ──
+var _hoModalFiles = [];
+
+function openHandoverModal() {
+  document.getElementById('handoverModalOverlay').classList.add('open');
+  _hoModalFiles = [];
+  document.getElementById('hoModalFileList').innerHTML = '';
+  document.getElementById('hoModalNotes').value = '';
+  loadHandoverOpenItems();
+}
+function closeHandoverModal() {
+  document.getElementById('handoverModalOverlay').classList.remove('open');
+}
+
+async function loadHandoverOpenItems() {
+  var container = document.getElementById('hoModalOpenItems');
+  if (!container) return;
+  try {
+    var data = await DactaJira.fetchTriage({ maxResults: 50 });
+    var tickets = (data.issues || data.tickets || []).filter(function(t) {
+      var fields = t.fields || t;
+      var status = (fields.status && fields.status.name) ? fields.status.name.toLowerCase() : (fields.statusName || '').toLowerCase();
+      return status !== 'closed' && status !== 'canceled' && status !== 'completed';
+    });
+    if (!tickets.length) {
+      container.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:10px;">No open tickets to hand over.</div>';
+      return;
+    }
+    var html = '';
+    tickets.slice(0, 20).forEach(function(t) {
+      var fields = t.fields || t;
+      var key = t.key || fields.key || '—';
+      var summary = fields.summary || fields.title || '';
+      var priority = (fields.priority && fields.priority.name) ? fields.priority.name : fields.priorityShort || 'P3';
+      var pShort = priority.replace(/[^0-9]/g, '') || '3';
+      html += '<div class="ho-open-item">' +
+        '<input type="checkbox" checked>' +
+        '<span class="ho-oi-key">'+escH(key)+'</span>' +
+        '<span class="ho-oi-priority"><span class="badge badge-p'+pShort+'">P'+pShort+'</span></span>' +
+        '<span class="ho-oi-title">'+escH(summary.substring(0,80))+'</span>' +
+        '</div>';
+    });
+    container.innerHTML = html;
+  } catch(e) {
+    console.error('[Handover] Failed to load open items:', e);
+    container.innerHTML = '<div style="text-align:center;padding:12px;color:var(--red-bright);font-size:10px;">Failed to load open items from Jira</div>';
+  }
+}
+
+function hoModalArtifactDrop(event) {
+  event.preventDefault();
+  document.getElementById('hoModalDropZone').classList.remove('drag-over');
+  var files = event.dataTransfer.files;
+  for (var i = 0; i < files.length; i++) addHoModalFile(files[i].name, files[i].size);
+}
+function hoModalArtifactSelect(event) {
+  var files = event.target.files;
+  for (var i = 0; i < files.length; i++) addHoModalFile(files[i].name, files[i].size);
+}
+function addHoModalFile(name, size) {
+  _hoModalFiles.push({ name: name, size: size });
+  renderHoModalFiles();
+}
+function removeHoModalFile(idx) {
+  _hoModalFiles.splice(idx, 1);
+  renderHoModalFiles();
+}
+function renderHoModalFiles() {
+  var list = document.getElementById('hoModalFileList');
+  if (!list) return;
+  if (!_hoModalFiles.length) { list.innerHTML = ''; return; }
+  var html = '';
+  _hoModalFiles.forEach(function(f, i) {
+    var sz = f.size > 1048576 ? (f.size/1048576).toFixed(1)+' MB' : (f.size > 1024 ? (f.size/1024).toFixed(0)+' KB' : f.size+' B');
+    html += '<div class="handover-file-item"><div class="handover-file-icon">' + getFileIcon(f.name) + '</div><div class="handover-file-name">'+escH(f.name)+'</div><div style="font-size:10px;color:var(--text-muted);">'+sz+'</div><div class="handover-file-remove" onclick="removeHoModalFile('+i+')">&#x2715;</div></div>';
+  });
+  list.innerHTML = html;
+}
+
+function toggleHoClientSend() {
+  var toggle = document.getElementById('hoClientToggle');
+  var fields = document.getElementById('hoClientFields');
+  if (!toggle || !fields) return;
+  var isOn = toggle.classList.contains('on');
+  if (isOn) {
+    toggle.classList.remove('on'); toggle.classList.add('off');
+    fields.classList.remove('visible');
+  } else {
+    toggle.classList.remove('off'); toggle.classList.add('on');
+    fields.classList.add('visible');
+  }
+}
+
+function saveDraftHandover() {
+  var notes = document.getElementById('hoModalNotes').value;
+  localStorage.setItem('dacta-handover-draft', JSON.stringify({ notes: notes, files: _hoModalFiles, timestamp: Date.now() }));
+  showToast('Handover draft saved', 'info');
+}
+
+function submitHandover() {
+  var notes = document.getElementById('hoModalNotes').value.trim();
+  if (!notes) { showToast('Please enter handover notes before submitting', 'warning'); return; }
+  // Gather checked open items
+  var checks = document.querySelectorAll('#hoModalOpenItems .ho-open-item input[type="checkbox"]');
+  var items = [];
+  checks.forEach(function(cb) {
+    if (cb.checked) {
+      var item = cb.closest('.ho-open-item');
+      if (item) {
+        var key = item.querySelector('.ho-oi-key');
+        var title = item.querySelector('.ho-oi-title');
+        items.push({ key: key ? key.textContent : '', title: title ? title.textContent : '' });
+      }
+    }
+  });
+
+  // Save handover to localStorage (acts as SIEMLess DB for now)
+  var shift = getCurrentShiftInfo();
+  var handover = {
+    shift: shift.name,
+    notes: notes,
+    openItems: items,
+    files: _hoModalFiles.map(function(f){return f.name}),
+    timestamp: new Date().toISOString(),
+    author: 'Current User'
+  };
+  var history = JSON.parse(localStorage.getItem('dacta-handover-history') || '[]');
+  history.unshift(handover);
+  if (history.length > 20) history = history.slice(0, 20);
+  localStorage.setItem('dacta-handover-history', JSON.stringify(history));
+  localStorage.removeItem('dacta-handover-draft');
+
+  // If send to client is on
+  var toggle = document.getElementById('hoClientToggle');
+  if (toggle && toggle.classList.contains('on')) {
+    var to = document.getElementById('hoClientTo').value;
+    showToast('Handover submitted + sent to ' + (to || 'client'), 'success');
+  } else {
+    showToast('Handover submitted successfully', 'success');
+  }
+
+  closeHandoverModal();
+  loadHandoverPageData(); // refresh page
+}
+
+// ── Live Data Loading ──
+async function loadHandoverPageData() {
+  var shift = getCurrentShiftInfo();
+  updateShiftDisplays();
+
+  // Load metrics from Jira
+  try {
+    var dash = await DactaJira.fetchDashboard();
+    var openEl = document.getElementById('hoOpenCount');
+    var closedEl = document.getElementById('hoClosedCount');
+    var escEl = document.getElementById('hoEscalatedCount');
+    if (openEl) openEl.textContent = (dash.totalOpen !== undefined ? dash.totalOpen : dash.open || 0);
+    if (closedEl) closedEl.textContent = (dash.resolved || dash.closed || 0);
+    if (escEl) escEl.textContent = (dash.escalated || 0);
+  } catch(e) { console.warn('[Handover] Dashboard load failed:', e); }
+
+  // Load on-duty team from JSM ops
+  try {
+    var ops = await DactaJira.fetchOpsData();
+    renderOnDutyTeams(ops, shift);
+  } catch(e) {
+    console.warn('[Handover] Ops load failed:', e);
+    renderFallbackTeams(shift);
+  }
+
+  // Load open items table
+  loadOpenItemsTable();
+
+  // Load previous handover notes
+  loadPreviousHandoverNotes();
+
+  // Load ops command center
+  loadOpsCommandData();
+}
+
+function renderOnDutyTeams(ops, shift) {
+  var onDutyEl = document.getElementById('hoOnDutyList');
+  var incomingEl = document.getElementById('hoIncomingList');
+  if (!onDutyEl || !incomingEl) return;
+
+  var colors = ['linear-gradient(135deg,#00d4ff,#3b82f6)', 'linear-gradient(135deg,#f59e0b,#ef4444)', 'linear-gradient(135deg,#10b981,#3b82f6)', 'linear-gradient(135deg,#8b5cf6,#06b6d4)', 'linear-gradient(135deg,#f97316,#8b5cf6)', 'linear-gradient(135deg,#ef4444,#f59e0b)'];
+
+  // Current on-call from ops
+  var onCallNames = [];
+  (ops.schedules || []).forEach(function(s) {
+    (s.onCall || []).forEach(function(p) {
+      if (onCallNames.indexOf(p.name) === -1) onCallNames.push(p.name);
+    });
+  });
+
+  // Get roster for today
+  var todayKey = fmtDate(new Date());
+  var todayRoster = _rosterData[todayKey] || {};
+  var shiftATeam = todayRoster.shiftA || [];
+  var shiftBTeam = todayRoster.shiftB || [];
+
+  var currentTeamNames = (shift.name === 'Shift A') ? shiftATeam : shiftBTeam;
+  var incomingTeamNames = (shift.name === 'Shift A') ? shiftBTeam : shiftATeam;
+
+  // If no roster, use on-call
+  if (!currentTeamNames.length) currentTeamNames = onCallNames.length ? onCallNames : [];
+
+  function renderTeamList(el, names, isOnCall) {
+    if (!names.length) {
+      el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:10px;">No roster assigned. Use Plan Roster to assign analysts.</div>';
+      return;
+    }
+    var html = '';
+    names.forEach(function(name, i) {
+      var initials = name.split(' ').map(function(w){return w[0]}).join('').substring(0,2).toUpperCase();
+      var isOC = onCallNames.indexOf(name) !== -1;
+      html += '<div class="ho-team-member"><div class="ho-tm-avatar" style="background:'+colors[i%colors.length]+';">'+initials+'</div><div><div class="ho-tm-name">'+escH(name)+'</div><div class="ho-tm-role">SOC Analyst</div></div>';
+      if (isOC) html += '<div class="ho-tm-oncall">ON-CALL</div>';
+      html += '<div class="status-dot green" style="margin-left:auto;"></div></div>';
+    });
+    el.innerHTML = html;
+  }
+
+  renderTeamList(onDutyEl, currentTeamNames, true);
+  renderTeamList(incomingEl, incomingTeamNames, false);
+}
+
+function renderFallbackTeams(shift) {
+  var onDutyEl = document.getElementById('hoOnDutyList');
+  var incomingEl = document.getElementById('hoIncomingList');
+  if (onDutyEl) onDutyEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:10px;">Use Plan Roster to assign analysts to shifts.</div>';
+  if (incomingEl) incomingEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:10px;">No incoming roster configured.</div>';
+}
+
+async function loadOpenItemsTable() {
+  var tbody = document.getElementById('hoOpenItemsBody');
+  var badge = document.getElementById('hoOpenItemsBadge');
+  if (!tbody) return;
+
+  try {
+    var data = await DactaJira.fetchTriage({ maxResults: 100 });
+    var tickets = (data.issues || data.tickets || []).filter(function(t) {
+      var fields = t.fields || t;
+      var status = (fields.status && fields.status.name) ? fields.status.name.toLowerCase() : (fields.statusName || '').toLowerCase();
+      return status !== 'closed' && status !== 'canceled' && status !== 'completed';
+    });
+
+    if (badge) badge.textContent = tickets.length + ' items';
+
+    if (!tickets.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--green);font-size:11px;">All clear — no open items.</td></tr>';
+      return;
+    }
+
+    var html = '';
+    tickets.slice(0, 25).forEach(function(t) {
+      var fields = t.fields || t;
+      var key = t.key || fields.key || '—';
+      var summary = fields.summary || fields.title || '';
+      var priority = (fields.priority && fields.priority.name) ? fields.priority.name : fields.priorityShort || 'P3';
+      var pShort = priority.replace(/[^0-9]/g, '') || '3';
+      var org = (fields.customfield_10002 && fields.customfield_10002.name) ? fields.customfield_10002.name : fields.org || fields.organization || '—';
+      if (Array.isArray(fields.customfield_10002)) org = fields.customfield_10002.map(function(o){return o.name||o}).join(', ');
+      var status = (fields.status && fields.status.name) ? fields.status.name : fields.statusName || '—';
+      var assignee = (fields.assignee && fields.assignee.displayName) ? fields.assignee.displayName : fields.assigneeName || 'Unassigned';
+      var created = fields.created ? new Date(fields.created).toLocaleDateString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+
+      var statusCls = '';
+      if (status.toLowerCase() === 'open') statusCls = 'badge-amber';
+      else if (status.toLowerCase().indexOf('escalat') !== -1) statusCls = 'badge-red';
+      else if (status.toLowerCase().indexOf('report') !== -1) statusCls = 'badge-blue';
+      else statusCls = 'badge-blue';
+
+      html += '<tr>' +
+        '<td class="mono" style="color:var(--cyan);font-size:10px;font-weight:600;">'+escH(key)+'</td>' +
+        '<td><span class="badge badge-p'+pShort+'">P'+pShort+'</span></td>' +
+        '<td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary);font-weight:500;">'+escH(summary.substring(0,60))+'</td>' +
+        '<td style="font-size:10px;">'+escH(typeof org === 'string' ? org : '—')+'</td>' +
+        '<td><span class="badge '+statusCls+'" style="font-size:9px;">'+escH(status.toUpperCase())+'</span></td>' +
+        '<td style="font-size:10px;">'+escH(assignee)+'</td>' +
+        '<td style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);">'+created+'</td>' +
+        '</tr>';
+    });
+    tbody.innerHTML = html;
+  } catch(e) {
+    console.error('[Handover] Open items load failed:', e);
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red-bright);font-size:11px;">Failed to load open items from Jira</td></tr>';
+  }
+}
+
+function loadPreviousHandoverNotes() {
+  var container = document.getElementById('hoNotesContainer');
+  var timestamp = document.getElementById('hoNotesTimestamp');
+  if (!container) return;
+
+  var history = JSON.parse(localStorage.getItem('dacta-handover-history') || '[]');
+  if (!history.length) {
+    container.innerHTML = '<div class="ho-notes-empty">No handover notes from previous shift yet.</div>';
+    return;
+  }
+
+  var latest = history[0];
+  if (timestamp) {
+    var ts = new Date(latest.timestamp);
+    timestamp.textContent = ts.toLocaleString('en-SG', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore' }) + ' SGT';
+  }
+
+  var html = '<div class="ho-notes-card">' +
+    '<div class="ho-nc-header"><div class="ho-nc-from">From: ' + escH(latest.author || 'Analyst') + ' · ' + escH(latest.shift || '') + '</div>' +
+    '<div class="ho-nc-time">' + new Date(latest.timestamp).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore' }) + '</div></div>' +
+    '<div class="ho-nc-body">' + escH(latest.notes).replace(/\n/g, '<br>') + '</div>';
+
+  if (latest.openItems && latest.openItems.length) {
+    html += '<div style="margin-top:8px;"><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Open Items Handed Over:</div>';
+    latest.openItems.forEach(function(item) {
+      html += '<div style="font-size:10px;color:var(--text-secondary);padding:2px 0;"><span style="color:var(--cyan);font-family:var(--font-mono);">'+escH(item.key)+'</span> — '+escH(item.title)+'</div>';
+    });
+    html += '</div>';
+  }
+
+  if (latest.files && latest.files.length) {
+    html += '<div style="margin-top:6px;font-size:9px;color:var(--text-muted);">Artifacts: ' + latest.files.join(', ') + '</div>';
+  }
+
+  html += '</div>';
+
+  // Show older handovers
+  if (history.length > 1) {
+    html += '<div style="margin-top:8px;font-size:10px;color:var(--text-muted);cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\';this.textContent=this.nextElementSibling.style.display===\'none\'?\'Show '+Math.min(history.length-1,5)+' older handovers...\':\'Hide older handovers\';">Show '+Math.min(history.length-1,5)+' older handovers...</div>';
+    html += '<div style="display:none;margin-top:6px;">';
+    history.slice(1,6).forEach(function(h) {
+      html += '<div class="ho-notes-card" style="margin-bottom:6px;opacity:0.7;"><div class="ho-nc-header"><div class="ho-nc-from">'+escH(h.author||'Analyst')+' · '+escH(h.shift||'')+'</div><div class="ho-nc-time">'+new Date(h.timestamp).toLocaleDateString('en-SG')+'</div></div><div class="ho-nc-body">'+escH(h.notes||'').replace(/\n/g,'<br>').substring(0,200)+'</div></div>';
+    });
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function generateHandoverReport() {
+  showToast('Generating handover report...', 'info');
+  setTimeout(function() { showToast('Handover report generated and ready for download', 'success'); }, 1500);
+}
+
+function completeHandover() {
+  var shift = getCurrentShiftInfo();
+  showToast('Handover from ' + shift.name + ' to ' + shift.next + ' completed', 'success');
+}
+
+// ── Escalation Modal Attach Files ──
+var _escModalAttachments = [];
+
+function handleEscModalAttach(event) {
+  var files = event.target.files;
+  for (var i = 0; i < files.length; i++) {
+    _escModalAttachments.push({ name: files[i].name, size: files[i].size });
+  }
+  showToast(_escModalAttachments.length + ' file(s) attached', 'info');
+  // Show file names in modal
+  renderEscModalAttachments();
+}
+
+function renderEscModalAttachments() {
+  var existing = document.getElementById('escModalAttachList');
+  if (existing) existing.remove();
+  if (!_escModalAttachments.length) return;
+
+  var footer = document.querySelector('.esc-modal-footer');
+  if (!footer) return;
+
+  var list = document.createElement('div');
+  list.id = 'escModalAttachList';
+  list.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;padding:0 20px 8px;';
+  _escModalAttachments.forEach(function(f, i) {
+    list.innerHTML += '<div style="display:flex;align-items:center;gap:4px;padding:3px 8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:4px;font-size:9px;color:var(--text-secondary);"><span style="font-family:var(--font-mono);">'+escH(f.name)+'</span><span style="cursor:pointer;color:var(--red-bright);font-size:10px;" onclick="removeEscModalAttach('+i+')">&#x2715;</span></div>';
+  });
+  footer.parentElement.insertBefore(list, footer);
+}
+
+function removeEscModalAttach(idx) {
+  _escModalAttachments.splice(idx, 1);
+  renderEscModalAttachments();
+}
+
+// ── Override page init to load handover data ──
+var _origPageLoad = window._dactaPageLoad || {};
+_origPageLoad.handover = loadHandoverPageData;
+window._dactaPageLoad = _origPageLoad;
+
+
 
 /* ==============================================================
    JSM OPS COMMAND CENTER — Render Functions
@@ -61030,7 +61602,7 @@ async function generateEscalationDraft(ticketKey, org, verdict, confidence, summ
       '</div>' +
       // Action buttons
       '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px;flex-wrap:wrap;">' +
-        '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="showToast(\'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Artifact attached\', \'info\')">' + dIcon('link',14) + ' Attach Artifacts</button>' +
+        '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="document.getElementById(\'escModalAttachInput\').click()">' + dIcon('paperclip',14) + ' Attach Files</button>' +
         '<div style="flex:1;"></div>' +
         '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="showEscModal(\'' + ticketKey + '\')">' + dIcon('edit',14) + ' Edit Draft</button>' +
         '<button class="btn btn-sm" id="sendEscBtn-' + ticketKey + '" style="font-size:10px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(139,92,246,0.15));color:var(--cyan);border:1px solid rgba(0,212,255,0.3);" onclick="showEscModal(\'' + ticketKey + '\')">' + dIcon('upload',14) + ' Send Escalation</button>' +
@@ -64452,7 +65024,8 @@ function _snocCleanup() {
       </div>
     </div>
     <div class="esc-modal-footer">
-      <button class="btn btn-secondary btn-sm" onclick="showToast(<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> + ' Artifact attached', 'info')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Attach Artifacts</button>
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('escModalAttachInput').click()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> Attach Files</button>
+      <input type="file" id="escModalAttachInput" multiple style="display:none;" onchange="handleEscModalAttach(event)">
       <div class="spacer"></div>
       <button class="btn btn-secondary btn-sm" onclick="saveEscDraft()">Save Draft</button>
       <button class="btn btn-primary btn-sm" onclick="sendEscModalToJira()"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Send Escalation</button>
@@ -64578,6 +65151,105 @@ function _snocCleanup() {
         <button class="btn btn-secondary btn-sm" onclick="lscCloseModal()">Cancel</button>
         <button class="btn btn-primary btn-sm" id="lscSaveBtnG" onclick="lscSaveSource()">Save Source</button>
       </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== ROSTER PLANNING MODAL ===== -->
+<div class="roster-overlay" id="rosterOverlay" onclick="if(event.target===this)closeRosterModal();">
+  <div class="roster-modal">
+    <div class="roster-modal-head">
+      <div class="roster-modal-title"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Plan Roster — Shift Schedule</div>
+      <button class="roster-modal-close" onclick="closeRosterModal()">&#x2715;</button>
+    </div>
+    <div class="roster-modal-body">
+      <div class="roster-nav">
+        <button class="roster-nav-btn" onclick="rosterNavWeek(-1)">&#x25C0; Prev Week</button>
+        <div class="roster-week-label" id="rosterWeekLabel">—</div>
+        <button class="roster-nav-btn" onclick="rosterNavWeek(1)">Next Week &#x25B6;</button>
+        <button class="roster-nav-btn" onclick="rosterNavWeek(0)" style="color:var(--cyan);border-color:rgba(0,212,255,0.3);">Today</button>
+      </div>
+      <div class="roster-grid" id="rosterGrid">
+        <!-- Rendered by JS -->
+      </div>
+      <div style="margin-top:12px;padding:10px 12px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);border-radius:8px;font-size:10px;color:var(--text-secondary);display:flex;gap:8px;align-items:flex-start;">
+        <span style="color:var(--green);font-weight:700;font-size:12px;">&#9432;</span>
+        <span><strong style="color:var(--green);">On-Call</strong> badges are pulled live from JSM Ops schedules. Click <strong>+</strong> on any cell to assign analysts. Roster is saved automatically to SIEMLess DB.</span>
+      </div>
+    </div>
+    <div class="roster-modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="closeRosterModal()">Close</button>
+      <button class="btn btn-primary btn-sm" onclick="saveRoster()"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg> Save Roster</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== HANDOVER NOTES MODAL ===== -->
+<div class="handover-modal-overlay" id="handoverModalOverlay" onclick="if(event.target===this)closeHandoverModal();">
+  <div class="handover-modal">
+    <div class="handover-modal-head">
+      <div class="handover-modal-title"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Create Handover Notes</div>
+      <button class="roster-modal-close" onclick="closeHandoverModal()">&#x2715;</button>
+    </div>
+    <div class="handover-modal-body">
+
+      <!-- Open Items (auto-pulled from Jira) -->
+      <div>
+        <div class="ho-section-label"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Open Items to Hand Over <span class="ho-auto-badge">AUTO-PULLED</span></div>
+        <div id="hoModalOpenItems" style="display:flex;flex-direction:column;gap:4px;">
+          <div style="text-align:center;padding:12px;color:var(--text-muted);font-size:10px;">Loading open tickets from Jira...</div>
+        </div>
+      </div>
+
+      <!-- Handover Notes -->
+      <div>
+        <div class="ho-section-label"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Handover Notes</div>
+        <textarea class="ho-notes-textarea" id="hoModalNotes" placeholder="Key observations, critical items, pending actions, items to watch...&#10;&#10;Tip: Focus on what the incoming shift needs to know — active incidents, pending approvals, ongoing investigations."></textarea>
+      </div>
+
+      <!-- Upload Artifacts -->
+      <div>
+        <div class="ho-section-label"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> Shift Artifacts</div>
+        <div class="ho-artifact-mini-zone" id="hoModalDropZone" ondragover="event.preventDefault();this.classList.add('drag-over');" ondragleave="this.classList.remove('drag-over');" ondrop="hoModalArtifactDrop(event);" onclick="document.getElementById('hoModalFileInput').click();">
+          <div style="font-size:10px;color:var(--text-muted);">Drag &amp; drop files or <span style="color:var(--cyan);font-weight:500;">click to browse</span></div>
+          <div style="font-size:9px;color:var(--text-muted);opacity:0.6;margin-top:2px;">PDF, PNG, DOCX, CSV, PCAP · Max 50MB</div>
+        </div>
+        <input type="file" id="hoModalFileInput" multiple style="display:none;" onchange="hoModalArtifactSelect(event)">
+        <div class="ho-artifact-list" id="hoModalFileList"></div>
+      </div>
+
+      <!-- Send to Client -->
+      <div>
+        <div class="ho-section-label"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Send to Client</div>
+        <div class="ho-send-client-row">
+          <div class="ho-toggle off" id="hoClientToggle" onclick="toggleHoClientSend()"><div class="dot"></div></div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-primary);">Include client in handover</div>
+            <div style="font-size:9px;color:var(--text-muted);">Sends sanitized report + uploaded artifacts to client</div>
+          </div>
+        </div>
+        <div class="ho-client-fields" id="hoClientFields">
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:4px;">To</div>
+            <input type="email" class="esc-input" id="hoClientTo" placeholder="client@company.com">
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:4px;">CC</div>
+            <input type="email" class="esc-input" id="hoClientCC" placeholder="CC (optional)">
+          </div>
+          <div style="padding:6px 8px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:6px;font-size:9px;color:var(--amber);display:flex;gap:6px;align-items:flex-start;">
+            <span>&#9888;</span>
+            <span>Client version excludes internal analyst notes, raw IOC details, and source references marked INTERNAL. Uploaded artifacts will be attached.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="handover-modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="closeHandoverModal()">Cancel</button>
+      <button class="btn btn-secondary btn-sm" onclick="saveDraftHandover()"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Draft</button>
+      <button class="btn btn-primary btn-sm" onclick="submitHandover()"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg> Submit Handover</button>
     </div>
   </div>
 </div>
