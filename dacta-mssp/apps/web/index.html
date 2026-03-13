@@ -31777,14 +31777,15 @@ async function lscRefreshLastEvents(data) {
         // Also update the metrics bar counts
         src._liveStatus = newStatus;
         src._liveLastEvent = realTs;
-        if (newStatus !== (src.status || 'healthy')) {
-          var sb = window._dactaSupabase;
-          if (sb) {
-            await sb.from('client_log_sources').update({
-              status: newStatus,
-              last_event_at: realTs
-            }).eq('id', src.id);
+        // Always update last_event_at in DB when we get a real timestamp;
+        // also update status if it changed
+        var sb = window._dactaSupabase;
+        if (sb) {
+          var updatePayload = { last_event_at: realTs };
+          if (newStatus !== (src.status || 'healthy')) {
+            updatePayload.status = newStatus;
           }
+          await sb.from('client_log_sources').update(updatePayload).eq('id', src.id);
         }
       } catch(e) {
         console.warn('[LSC] Refresh error for ' + (src.source_name || src.id), e);
@@ -31961,6 +31962,7 @@ async function stgLsLoadOrg(orgId) {
       stgLsShowConnectorSources(orgId);
     } else {
       stgLsRenderCards(_stgLsCurrentData);
+      lscRefreshLastEvents(_stgLsCurrentData);
     }
     // Gap detection
     var expectedCount = _stgLsCurrentData.filter(function(s){ return s.expected_by_client === true; }).length;
