@@ -55550,14 +55550,12 @@ async function openInvestigation(ticketKey) {
               '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">Correlated Alerts</div>' +
               '<div id="invSideCorrelatedContent" style="font-size:11px;color:var(--rws-text-muted);font-style:italic;">Correlations will appear after investigation...</div>' +
               '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
-              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">Feedback</div>' +
-              '<div style="display:flex;gap:6px;margin-bottom:8px;">' +
-                '<button class="btn btn-sm" style="padding:4px 10px;font-size:10px;border-radius:6px;background:rgba(16,185,129,0.08);color:#10B981;border:1px solid rgba(16,185,129,0.2);" onclick="submitInvFeedback(\'good\');">&#x1F44D; Good</button>' +
-                '<button class="btn btn-sm" style="padding:4px 10px;font-size:10px;border-radius:6px;background:rgba(239,68,68,0.08);color:#EF4444;border:1px solid rgba(239,68,68,0.2);" onclick="submitInvFeedback(\'bad\');">&#x1F44E; Bad</button>' +
-              '</div>' +
-              '<div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0;"></div>' +
-              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">AI Copilot</div>' +
-              '<button class="btn btn-sm" style="width:100%;padding:8px 12px;font-size:11px;background:rgba(99,102,241,0.08);color:#6366F1;border:1px solid rgba(99,102,241,0.2);border-radius:6px;text-align:left;" onclick="openCopilotForTicket(\'' + ticketKey + '\');"><span style="margin-right:6px;">&#129302;</span> Open in AI Copilot</button>' +
+              '<div style="font-size:14px;font-weight:700;color:var(--rws-text-primary);margin-bottom:12px;">' + dIcon('refresh',14) + ' Analyst Feedback</div>' +
+              '<button class="btn btn-sm" id="invSideFeedbackBtn" style="width:100%;padding:10px 12px;font-size:11px;background:rgba(139,92,246,0.08);color:#8b5cf6;border:1px solid rgba(139,92,246,0.2);border-radius:6px;text-align:left;display:flex;align-items:center;gap:8px;" onclick="openFeedbackModal(\'' + ticketKey + '\');">' +
+                '<span style="font-size:14px;">' + dIcon('edit',14) + '</span>' +
+                '<div><div style="font-weight:600;">Rate & Improve Investigation</div><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Your feedback tunes future LLM investigations</div></div>' +
+              '</button>' +
+              '<div id="invSideFeedbackStatus" style="font-size:9px;color:var(--text-muted);margin-top:6px;display:none;"></div>' +
             '</div>' +
 
             // ── Containment section (Containment tab) ──
@@ -57613,31 +57611,20 @@ function appendFeedbackPanel(ticketKey, cacheEntry, container) {
   var existingNotes = cacheEntry.promptNotes || '';
   var existingRating = cacheEntry.feedbackRating || '';
 
-  var feedbackHTML = '<div class="inv-feedback-panel" id="invFeedbackPanel">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
-      '<div style="font-size:12px;font-weight:700;color:var(--text-primary);">' + dIcon('refresh',14) + ' Analyst Feedback Loop</div>' +
-      '<div style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">Improves future investigations</div>' +
-    '</div>' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">' +
-      '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">Investigation Quality</span>' +
-      '<div style="display:flex;gap:4px;" id="feedbackRating">' +
-        '<button class="btn btn-xs ' + (existingRating === 'good' ? 'btn-primary' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'good\')" style="font-size:10px;">' + dIcon('check',14) + ' Accurate</button>' +
-        '<button class="btn btn-xs ' + (existingRating === 'partial' ? 'btn-amber' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'partial\')" style="font-size:10px;">' + dIcon('sparkle',14) + ' Partially</button>' +
-        '<button class="btn btn-xs ' + (existingRating === 'poor' ? 'btn-danger' : 'btn-secondary') + '" onclick="setFeedbackRating(\'' + ticketKey + '\',\'poor\')" style="font-size:10px;">' + dIcon('close',14) + ' Inaccurate</button>' +
+  // Compact inline feedback bar — full editor opens in modal from right panel
+  var _fbStatusText = existingRating ? ('<span style="color:' + (existingRating === 'good' ? '#10b981' : existingRating === 'partial' ? '#f59e0b' : '#ef4444') + ';font-weight:600;text-transform:capitalize;">' + existingRating + '</span>') : '<span style="color:var(--text-muted);font-style:italic;">Not rated yet</span>';
+  var feedbackHTML = '<div class="inv-feedback-panel" id="invFeedbackPanel" style="cursor:pointer;" onclick="openFeedbackModal(\'' + ticketKey + '\')">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--text-primary);">' + dIcon('refresh',14) + ' Analyst Feedback Loop</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);">Rating: ' + _fbStatusText + '</div>' +
+        (existingFeedback ? '<span style="font-size:8px;padding:2px 6px;background:rgba(16,185,129,0.1);color:#10b981;border-radius:4px;">Feedback saved</span>' : '') +
       '</div>' +
-    '</div>' +
-    '<div style="margin-bottom:10px;">' +
-      '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">What did the AI miss or get wrong?</div>' +
-      '<textarea id="feedbackText" style="width:100%;min-height:60px;resize:vertical;" placeholder="e.g. Missed lateral movement from host B, or false positive due to scheduled task...">' + existingFeedback + '</textarea>' +
-    '</div>' +
-    '<div style="margin-bottom:10px;">' +
-      '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Prompt Improvement Notes <span style="font-size:9px;color:var(--purple);">(LLM will use this context in future investigations)</span></div>' +
-      '<textarea id="promptNotes" style="width:100%;min-height:60px;resize:vertical;" placeholder="e.g. For this client, always check FortiGate deny logs for outbound C2. Check if process is a known scheduled task before flagging...">' + existingNotes + '</textarea>' +
-    '</div>' +
-    '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
-      '<button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="saveFeedback(\'' + ticketKey + '\')">' + dIcon('save',14) + ' Save Feedback</button>' +
+      '<button class="btn btn-xs btn-secondary" style="font-size:10px;" onclick="event.stopPropagation();openFeedbackModal(\'' + ticketKey + '\')">' + dIcon('edit',12) + ' Open Feedback</button>' +
     '</div>' +
   '</div>';
+  // Hidden feedback rating div (kept for setFeedbackRating backward compat)
+  feedbackHTML += '<div style="display:none;" id="feedbackRating"></div>';
 
   var el = document.createElement('div');
   el.innerHTML = feedbackHTML;
@@ -57670,6 +57657,167 @@ async function saveFeedback(ticketKey) {
   cache.promptNotes = promptNotes;
   await saveInvestigationCache(ticketKey, cache);
   showToast('Feedback saved \u2014 LLM will use this context in future investigations', 'success');
+  // Update right panel feedback status
+  var fbStatusEl = document.getElementById('invSideFeedbackStatus');
+  if (fbStatusEl) { fbStatusEl.style.display = ''; fbStatusEl.innerHTML = dIcon('check',12) + ' Feedback saved'; fbStatusEl.style.color = '#10b981'; }
+}
+
+// ── Feedback Modal (opens from right panel button) ──
+function openFeedbackModal(ticketKey) {
+  var cache = _investigationCache[ticketKey] || {};
+  var existingFeedback = cache.feedbackText || '';
+  var existingNotes = cache.promptNotes || '';
+  var existingRating = cache.feedbackRating || '';
+
+  var overlay = document.createElement('div');
+  overlay.id = 'feedbackModalOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  overlay.onclick = function(e) { if (e.target === overlay) closeFeedbackModal(); };
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface-primary,#1a1a2e);border:1px solid var(--border-card,#2a2a4a);border-radius:12px;padding:24px;width:640px;max-width:90vw;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);';
+
+  var ratingBtns = function(r, cls) {
+    return '<button class="btn btn-sm ' + (existingRating === r ? cls : 'btn-secondary') + '" onclick="setFeedbackRatingModal(\'' + ticketKey + '\',\'' + r + '\')" id="fbModalBtn_' + r + '" style="font-size:11px;padding:6px 14px;">';
+  };
+
+  modal.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">' +
+    '<div style="font-size:16px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;">' + dIcon('refresh',16) + ' Analyst Feedback Loop</div>' +
+    '<button onclick="closeFeedbackModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px;">&times;</button></div>' +
+    '<div style="font-size:10px;color:var(--purple);margin-bottom:16px;">Your feedback improves future AI investigations for this rule and organization</div>' +
+    '<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">Investigation Quality</div>' +
+    '<div style="display:flex;gap:8px;" id="fbModalRating">' +
+      ratingBtns('good','btn-primary') + dIcon('check',14) + ' Accurate</button>' +
+      ratingBtns('partial','btn-amber') + dIcon('sparkle',14) + ' Partially</button>' +
+      ratingBtns('poor','btn-danger') + dIcon('close',14) + ' Inaccurate</button>' +
+    '</div></div>' +
+    '<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">What did the AI miss or get wrong?</div>' +
+    '<textarea id="fbModalText" style="width:100%;min-height:100px;resize:vertical;background:var(--bg-input,#0d0d1a);border:1px solid var(--border-card);border-radius:8px;color:var(--text-primary);padding:10px 12px;font-size:12px;font-family:inherit;" placeholder="e.g. Missed lateral movement from host B, or false positive due to scheduled task...">' + escapeHtml(existingFeedback) + '</textarea></div>' +
+    '<div style="margin-bottom:20px;"><div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Prompt Improvement Notes</div>' +
+    '<div style="font-size:9px;color:var(--purple);margin-bottom:6px;">LLM will use this context in future investigations for similar alerts</div>' +
+    '<textarea id="fbModalNotes" style="width:100%;min-height:100px;resize:vertical;background:var(--bg-input,#0d0d1a);border:1px solid var(--border-card);border-radius:8px;color:var(--text-primary);padding:10px 12px;font-size:12px;font-family:inherit;" placeholder="e.g. For this client, always check FortiGate deny logs for outbound C2. Check if process is a known scheduled task before flagging...">' + escapeHtml(existingNotes) + '</textarea></div>' +
+    '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
+    '<button class="btn btn-secondary" onclick="closeFeedbackModal()" style="font-size:11px;">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="saveFeedbackFromModal(\'' + ticketKey + '\')" style="font-size:11px;">' + dIcon('save',14) + ' Save Feedback</button></div>';
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  setTimeout(function() { var ta = document.getElementById('fbModalText'); if (ta) ta.focus(); }, 100);
+}
+
+function closeFeedbackModal() {
+  var ov = document.getElementById('feedbackModalOverlay');
+  if (ov) ov.remove();
+}
+
+function setFeedbackRatingModal(ticketKey, rating) {
+  if (!_investigationCache[ticketKey]) _investigationCache[ticketKey] = {};
+  _investigationCache[ticketKey].feedbackRating = rating;
+  var container = document.getElementById('fbModalRating');
+  if (container) {
+    container.querySelectorAll('button').forEach(function(btn) { btn.className = 'btn btn-sm btn-secondary'; });
+    var target = document.getElementById('fbModalBtn_' + rating);
+    var cls = { good: 'btn-primary', partial: 'btn-amber', poor: 'btn-danger' }[rating];
+    if (target) target.className = 'btn btn-sm ' + cls;
+  }
+  // Also sync the inline feedback panel if present
+  setFeedbackRating(ticketKey, rating);
+}
+
+function saveFeedbackFromModal(ticketKey) {
+  var cache = _investigationCache[ticketKey];
+  if (!cache) { showToast('No investigation to save feedback for', 'warn'); return; }
+  var text = (document.getElementById('fbModalText') || {}).value || '';
+  var notes = (document.getElementById('fbModalNotes') || {}).value || '';
+  cache.feedbackText = text;
+  cache.promptNotes = notes;
+  // Also sync inline textareas if present
+  var inlineFB = document.getElementById('feedbackText');
+  if (inlineFB) inlineFB.value = text;
+  var inlinePN = document.getElementById('promptNotes');
+  if (inlinePN) inlinePN.value = notes;
+  saveInvestigationCache(ticketKey, cache);
+  closeFeedbackModal();
+  showToast('Feedback saved \u2014 LLM will use this context in future investigations', 'success');
+  var fbStatusEl = document.getElementById('invSideFeedbackStatus');
+  if (fbStatusEl) { fbStatusEl.style.display = ''; fbStatusEl.innerHTML = dIcon('check',12) + ' Feedback saved'; fbStatusEl.style.color = '#10b981'; }
+}
+
+// ── Correlated Alerts Drill-Down Modal ──
+function openCorrelatedAlertsModal() {
+  var ticketKey = _currentInvestigationKey;
+  if (!ticketKey) return;
+  var cache = _investigationCache[ticketKey];
+  if (!cache) return;
+  var jiraCorr = cache.jiraCorrelation || (cache.metadata && cache.metadata.jiraCorrelation) || [];
+  var analystPrecedent = cache.analystPrecedent || (cache.metadata && cache.metadata.analystPrecedent) || [];
+  // Also try from elasticLogs in the current investigation context
+  if (jiraCorr.length === 0 && cache.elasticLogs) {
+    jiraCorr = cache.elasticLogs.jiraCorrelation || [];
+    analystPrecedent = cache.elasticLogs.analystPrecedent || [];
+  }
+
+  var overlay = document.createElement('div');
+  overlay.id = 'corrAlertsModalOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface-primary,#1a1a2e);border:1px solid var(--border-card,#2a2a4a);border-radius:12px;padding:24px;width:800px;max-width:90vw;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);';
+
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
+    '<div style="font-size:16px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;">' + dIcon('clipboard',16) + ' Correlated Alerts \u2014 ' + jiraCorr.length + ' Related Tickets</div>' +
+    '<button onclick="this.closest(\'.feedbackModalOverlay,div[id=corrAlertsModalOverlay]\').remove();document.getElementById(\'corrAlertsModalOverlay\').remove();" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px;">&times;</button></div>';
+
+  html += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:16px;">Same detection rule + same entity/IP for this organization (last 90 days)</div>';
+
+  if (jiraCorr.length === 0) {
+    html += '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:40px 0;">No correlated alerts found.</div>';
+  } else {
+    // Table header
+    html += '<div style="display:grid;grid-template-columns:90px 1fr 80px 80px 80px 100px;gap:1px;background:var(--border-subtle);border-radius:8px;overflow:hidden;margin-bottom:4px;">';
+    html += '<div style="padding:8px 10px;font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;background:var(--surface-secondary);">Ticket</div>';
+    html += '<div style="padding:8px 10px;font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;background:var(--surface-secondary);">Summary</div>';
+    html += '<div style="padding:8px 10px;font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;background:var(--surface-secondary);">Priority</div>';
+    html += '<div style="padding:8px 10px;font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;background:var(--surface-secondary);">Status</div>';
+    html += '<div style="padding:8px 10px;font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;background:var(--surface-secondary);">Resolution</div>';
+    html += '<div style="padding:8px 10px;font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;background:var(--surface-secondary);">Analyst Note</div>';
+    html += '</div>';
+
+    // Ticket rows
+    html += '<div style="display:flex;flex-direction:column;gap:1px;">';
+    jiraCorr.forEach(function(jt) {
+      var age = '';
+      if (jt.created) {
+        var days = Math.floor((Date.now() - new Date(jt.created).getTime()) / 86400000);
+        age = days === 0 ? 'today' : days + 'd ago';
+      }
+      var priColor = (jt.priority || '').includes('P1') ? '#ef4444' : (jt.priority || '').includes('P2') ? '#f59e0b' : '#00d4ff';
+      var statusLower = (jt.status || '').toLowerCase();
+      var statusColor = statusLower.includes('closed') || statusLower.includes('resolved') || statusLower.includes('done') ? '#10b981' : statusLower.includes('progress') ? '#3b82f6' : 'var(--text-muted)';
+      // Find analyst closing comment for this ticket
+      var closingNote = '';
+      (analystPrecedent || []).filter(function(ap) { return ap.ticket === jt.key; }).forEach(function(ap) {
+        if (ap.text && ap.text.length > closingNote.length) closingNote = ap.text;
+      });
+      // Truncate
+      var noteDisplay = closingNote.length > 120 ? closingNote.substring(0, 120) + '\u2026' : closingNote;
+
+      html += '<div style="display:grid;grid-template-columns:90px 1fr 80px 80px 80px 100px;gap:1px;padding:1px 0;cursor:pointer;" onclick="openTicket(\'' + jt.key + '\')" onmouseover="this.style.background=\'rgba(99,102,241,0.06)\'" onmouseout="this.style.background=\'transparent\'">';
+      html += '<div style="padding:8px 10px;font-size:10px;font-weight:600;color:var(--cyan);font-family:var(--font-mono);">' + jt.key + '</div>';
+      html += '<div style="padding:8px 10px;font-size:10px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(jt.summary || '') + '">' + escapeHtml(jt.summary || '') + '</div>';
+      html += '<div style="padding:8px 10px;"><span style="font-size:9px;padding:2px 6px;border-radius:8px;background:' + priColor + '15;color:' + priColor + ';border:1px solid ' + priColor + '30;">' + ((jt.priority || '').split(' - ')[0] || '?') + '</span></div>';
+      html += '<div style="padding:8px 10px;font-size:10px;color:' + statusColor + ';font-weight:500;">' + (jt.status || '?') + '</div>';
+      html += '<div style="padding:8px 10px;font-size:10px;color:var(--text-muted);">' + (jt.resolution || '\u2014') + '</div>';
+      html += '<div style="padding:8px 10px;font-size:9px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(closingNote) + '">' + (noteDisplay || '<span style="font-style:italic;opacity:0.5;">No closing note</span>') + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  modal.innerHTML = html;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
 }
 
 // ── Enhanced override that persists to cache ──
@@ -60053,21 +60201,73 @@ async function runAIInvestigation(ticketKey, issueData) {
   }
 
   // Inject Jira cross-ticket correlation as evidence
+  // CRITICAL: Analyze closed ticket verdicts before blindly using as inculpatory
   var _jcLen = (elasticLogs.jiraCorrelation || []).length;
-  if (_jcLen >= 3) {
-    inculpatory.push({
-      title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets with same rule + entity (last 90d)',
-      severity: 'high',
-      source: 'JIRA_CORRELATION',
-      detail: _jcLen + ' other Jira tickets match the same detection rule on the same host/IP for this org. This recurring pattern suggests either a persistent threat or a noisy rule. Keys: ' + elasticLogs.jiraCorrelation.slice(0, 5).map(function(j) { return j.key; }).join(', ')
+  if (_jcLen >= 1) {
+    var _jcClosed = (elasticLogs.jiraCorrelation || []).filter(function(jt) {
+      var s = (jt.status || '').toLowerCase();
+      return s === 'done' || s === 'closed' || s === 'resolved';
     });
-  } else if (_jcLen >= 1) {
-    inculpatory.push({
-      title: 'Jira Cross-Ticket: ' + _jcLen + ' related ticket(s) found (same rule + entity)',
-      severity: 'medium',
-      source: 'JIRA_CORRELATION',
-      detail: 'Found ' + _jcLen + ' related Jira ticket(s) with the same detection rule and entities. Keys: ' + elasticLogs.jiraCorrelation.map(function(j) { return j.key; }).join(', ')
+    var _jcOpen = _jcLen - _jcClosed.length;
+    // Check analyst precedent comments for FP indicators
+    var _jcFPCount = 0, _jcTPCount = 0, _jcUnknownCount = 0;
+    var _fpPatterns = /false.?positive|fp|benign|noise|noisy|whitelisted|excluded|business.?justified|safe|legitimate|expected|authorized|scheduled|tuning|suppressed/i;
+    var _tpPatterns = /true.?positive|tp|confirmed|malicious|compromised|incident|escalat|containment|isolat/i;
+    _jcClosed.forEach(function(jt) {
+      var resolution = (jt.resolution || '').toLowerCase();
+      // Check resolution field first
+      if (/won't do|duplicate|cannot reproduce|declined|false|noise/i.test(resolution)) { _jcFPCount++; return; }
+      if (/done|fixed|resolved/i.test(resolution) && _tpPatterns.test(jt.summary || '')) { _jcTPCount++; return; }
+      // Check analyst precedent comments if available
+      var closingComment = '';
+      (elasticLogs.analystPrecedent || []).filter(function(ap) { return ap.ticket === jt.key; }).forEach(function(ap) { closingComment += ' ' + ap.text; });
+      if (_fpPatterns.test(closingComment)) { _jcFPCount++; }
+      else if (_tpPatterns.test(closingComment)) { _jcTPCount++; }
+      else { _jcUnknownCount++; }
     });
+    // If no precedent comments, mark all closed as unknown
+    if (_jcClosed.length > 0 && _jcFPCount === 0 && _jcTPCount === 0 && _jcUnknownCount === 0) {
+      _jcUnknownCount = _jcClosed.length;
+    }
+
+    var _jcKeys = elasticLogs.jiraCorrelation.slice(0, 5).map(function(j) { return j.key; }).join(', ');
+
+    // Decision logic: If majority closed as FP → this is a noisy rule (exculpatory)
+    // If majority closed as TP → persistent threat (inculpatory)
+    // If mixed/unknown → neutral with context
+    if (_jcFPCount > 0 && _jcFPCount >= _jcTPCount && _jcFPCount >= (_jcClosed.length * 0.5)) {
+      // Majority FP — this is a noisy rule, not a persistent threat
+      exculpatory.push({
+        title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets — ' + _jcFPCount + '/' + _jcClosed.length + ' closed as FALSE POSITIVE',
+        severity: _jcFPCount >= 3 ? 'strong' : 'moderate',
+        source: 'JIRA_CORRELATION',
+        detail: 'Of ' + _jcLen + ' related tickets (same rule + entity), ' + _jcClosed.length + ' are closed. ' + _jcFPCount + ' were closed as FP/noise/benign. This indicates a noisy detection rule for this entity, not a persistent threat. Consider rule tuning. Keys: ' + _jcKeys
+      });
+    } else if (_jcTPCount > 0 && _jcTPCount > _jcFPCount) {
+      // Majority TP — genuine persistent threat
+      inculpatory.push({
+        title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets — ' + _jcTPCount + ' confirmed TRUE POSITIVE (last 90d)',
+        severity: _jcLen >= 3 ? 'high' : 'medium',
+        source: 'JIRA_CORRELATION',
+        detail: _jcLen + ' related tickets match same rule + entity. ' + _jcTPCount + '/' + _jcClosed.length + ' closed tickets were confirmed as True Positive/malicious by analysts. This is a recurring confirmed threat pattern. Keys: ' + _jcKeys
+      });
+    } else if (_jcLen >= 3) {
+      // Mixed or unknown verdicts — add as inculpatory but with caveats
+      inculpatory.push({
+        title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets (verdicts: ' + (_jcTPCount > 0 ? _jcTPCount + ' TP, ' : '') + (_jcFPCount > 0 ? _jcFPCount + ' FP, ' : '') + (_jcOpen > 0 ? _jcOpen + ' open, ' : '') + (_jcUnknownCount > 0 ? _jcUnknownCount + ' unverified' : '') + ')',
+        severity: 'medium',
+        source: 'JIRA_CORRELATION',
+        detail: _jcLen + ' related tickets found. Closed verdicts: ' + _jcTPCount + ' TP, ' + _jcFPCount + ' FP, ' + _jcUnknownCount + ' unknown/unverified. ' + _jcOpen + ' still open. Pattern requires analyst review — cannot determine persistent threat vs noisy rule without checking closed ticket outcomes. Keys: ' + _jcKeys
+      });
+    } else {
+      // 1-2 tickets with no clear verdict direction
+      inculpatory.push({
+        title: 'Jira Cross-Ticket: ' + _jcLen + ' related ticket(s) found (same rule + entity)',
+        severity: 'low',
+        source: 'JIRA_CORRELATION',
+        detail: 'Found ' + _jcLen + ' related ticket(s). ' + (_jcClosed.length > 0 ? 'Closed: ' + _jcFPCount + ' FP, ' + _jcTPCount + ' TP, ' + _jcUnknownCount + ' unknown. ' : '') + (_jcOpen > 0 ? _jcOpen + ' still open. ' : '') + 'Keys: ' + _jcKeys
+      });
+    }
   }
 
   // ── Compute balanced verdict ──
@@ -60087,11 +60287,21 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (csHighConfirmCount > 0) tpWeight += csHighConfirmCount * 35; // High CS confidence = very strong TP signal
   if (csMediumConfirmCount > 0) tpWeight += csMediumConfirmCount * 18;
   if (csEnrichment.actors.length > 0) tpWeight += 15; // Named adversary attribution = significant TP signal
-  // ── Jira cross-ticket correlation weight ──
-  // Multiple related tickets (same rule + same entity + same org) indicate a recurring pattern
+  // ── Jira cross-ticket correlation weight (verdict-aware) ──
+  // Weight depends on what those correlated tickets actually concluded
+  // NOTE: _jcFPCount, _jcTPCount, _jcUnknownCount, _jcOpen were set in the evidence injection block above
   var _jiraCorrCount = (elasticLogs.jiraCorrelation || []).length;
-  if (_jiraCorrCount >= 3) tpWeight += 15; // Strong recurring pattern
-  else if (_jiraCorrCount >= 1) tpWeight += 8; // Some recurrence
+  if (typeof _jcTPCount !== 'undefined' && _jcTPCount > _jcFPCount) {
+    // Majority confirmed TP → strong recurring threat signal
+    if (_jiraCorrCount >= 3) tpWeight += 15;
+    else tpWeight += 8;
+  } else if (typeof _jcFPCount !== 'undefined' && _jcFPCount > _jcTPCount) {
+    // Majority FP → noisy rule, ADD to FP weight instead
+    fpWeight += (_jcFPCount >= 3 ? 15 : 8);
+  } else {
+    // Mixed/unknown → minimal weight, analyst needs to verify
+    if (_jiraCorrCount >= 3) tpWeight += 5;
+  }
 
   // ── TELEMETRY DEPTH CHECK: Detect if verdict is based on lack of evidence rather than confirmed malicious activity ──
   // If the only inculpatory evidence comes from TICKET_TEXT (no SIEM-confirmed threat indicators),
@@ -60386,6 +60596,15 @@ async function runAIInvestigation(ticketKey, issueData) {
   }
   if ((elasticLogs.jiraCorrelation || []).length > 0) {
     _llmAlertContext.jira_correlated_ticket_count = elasticLogs.jiraCorrelation.length;
+    // Provide verdict breakdown so LLM can assess whether this is a persistent threat or noisy rule
+    _llmAlertContext.jira_correlation_verdict_breakdown = {
+      total: _jiraCorrCount || elasticLogs.jiraCorrelation.length,
+      tp_count: typeof _jcTPCount !== 'undefined' ? _jcTPCount : 0,
+      fp_count: typeof _jcFPCount !== 'undefined' ? _jcFPCount : 0,
+      unknown_count: typeof _jcUnknownCount !== 'undefined' ? _jcUnknownCount : 0,
+      open_count: typeof _jcOpen !== 'undefined' ? _jcOpen : 0,
+      instruction: 'CRITICAL: Do NOT blindly treat correlated ticket count as inculpatory evidence. If the majority of related tickets were closed as FALSE POSITIVE, this indicates a NOISY RULE, not a persistent threat. Check the verdict breakdown above. Only treat cross-ticket pattern as inculpatory if closed tickets were confirmed TRUE POSITIVE by analysts.'
+    };
   }
 
   // Inject analyst precedent from resolved correlated tickets
@@ -60839,10 +61058,10 @@ async function runAIInvestigation(ticketKey, issueData) {
     });
     verdictBannerHTML += '</div></div>';
   }
-  // Add Jira correlation summary if found
+  // Add Jira correlation summary if found (clickable to open drill-down modal)
   if ((elasticLogs.jiraCorrelation || []).length > 0) {
-    verdictBannerHTML += '<div style="margin-top:6px;font-size:9px;color:var(--text-muted);">' +
-      dIcon('clipboard',12) + ' ' + elasticLogs.jiraCorrelation.length + ' related Jira ticket(s) found with same rule + entity. See Correlated Alerts for details.</div>';
+    verdictBannerHTML += '<div style="margin-top:6px;font-size:9px;color:var(--text-muted);cursor:pointer;" onclick="openCorrelatedAlertsModal()" onmouseover="this.style.color=\'var(--cyan)\'" onmouseout="this.style.color=\'var(--text-muted)\'">' +
+      dIcon('clipboard',12) + ' ' + elasticLogs.jiraCorrelation.length + ' related Jira ticket(s) found with same rule + entity. <span style="color:var(--cyan);text-decoration:underline;">View all correlated alerts \u2192</span></div>';
   }
   verdictBannerHTML += '</div>';
 
@@ -60992,8 +61211,10 @@ async function runAIInvestigation(ticketKey, issueData) {
         '</div>';
       });
       if (_jiraCorr.length > 10) {
-        cHTML += '<div style="font-size:9px;color:var(--text-muted);text-align:center;padding:4px 0;">+ ' + (_jiraCorr.length - 10) + ' more related tickets</div>';
+        cHTML += '<div style="font-size:9px;color:var(--cyan);text-align:center;padding:6px 0;cursor:pointer;text-decoration:underline;" onclick="openCorrelatedAlertsModal()">+ ' + (_jiraCorr.length - 10) + ' more related tickets \u2014 View all \u2192</div>';
       }
+      // Always add a "View All" button at the bottom for quick access
+      cHTML += '<div style="text-align:center;margin-top:6px;"><button class="btn btn-xs btn-secondary" style="font-size:9px;padding:4px 12px;" onclick="openCorrelatedAlertsModal()">' + dIcon('search',12) + ' View All Correlated Alerts</button></div>';
       cHTML += '</div>';
     } else {
       cHTML += '<div style="font-size:10px;color:var(--text-muted);font-style:italic;padding:4px 0;margin-bottom:8px;">' +
@@ -61237,6 +61458,9 @@ async function runAIInvestigation(ticketKey, issueData) {
     // Store actual evidence arrays for Top Findings restoration from cache
     inculpatoryEvidence: (inculpatory || []).slice(0, 5),
     exculpatoryEvidence: (exculpatory || []).slice(0, 5),
+    // Store Jira correlation + analyst precedent for Correlated Alerts modal
+    jiraCorrelation: (elasticLogs.jiraCorrelation || []),
+    analystPrecedent: (elasticLogs.analystPrecedent || []),
     metadata: {
       totalRounds: totalRounds,
       org: org,
