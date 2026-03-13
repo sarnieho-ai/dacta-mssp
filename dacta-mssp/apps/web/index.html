@@ -51086,11 +51086,14 @@ window.DactaJira = {
   async fetchDashboard() {
     var now = Date.now();
     var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '7d';
-    var cacheKey = 'dashboard_' + tr;
+    var orgF = window._topbarOrgFilter || '';
+    var cacheKey = 'dashboard_' + tr + (orgF ? '_' + orgF : '');
     if (this._cache[cacheKey] && (now - (this._cacheTime[cacheKey] || 0)) < this._CACHE_TTL) {
       return this._cache[cacheKey];
     }
-    var data = await this._fetch('/api/jira?action=dashboard&timeRange=' + encodeURIComponent(tr));
+    var url = '/api/jira?action=dashboard&timeRange=' + encodeURIComponent(tr);
+    if (orgF) url += '&org=' + encodeURIComponent(orgF);
+    var data = await this._fetch(url);
     this._cache[cacheKey] = data;
     this._cacheTime[cacheKey] = now;
     return data;
@@ -51161,9 +51164,12 @@ window.DactaJira = {
   async fetchTelemetry() {
     var now = Date.now();
     var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '7d';
-    var cacheKey = 'telemetry_' + tr;
+    var orgF = window._topbarOrgFilter || '';
+    var cacheKey = 'telemetry_' + tr + (orgF ? '_' + orgF : '');
     if (this._cache[cacheKey] && (now - (this._cacheTime[cacheKey] || 0)) < this._CACHE_TTL) return this._cache[cacheKey];
-    var data = await this._fetch('/api/jira?action=telemetry&timeRange=' + encodeURIComponent(tr));
+    var url = '/api/jira?action=telemetry&timeRange=' + encodeURIComponent(tr);
+    if (orgF) url += '&org=' + encodeURIComponent(orgF);
+    var data = await this._fetch(url);
     this._cache[cacheKey] = data;
     this._cacheTime[cacheKey] = now;
     return data;
@@ -51172,11 +51178,14 @@ window.DactaJira = {
   async fetchDashVisuals() {
     var now = Date.now();
     var tr = typeof _dashTimeRange !== 'undefined' ? _dashTimeRange : '7d';
-    var cacheKey = 'dashvisuals_' + tr;
+    var orgF = window._topbarOrgFilter || '';
+    var cacheKey = 'dashvisuals_' + tr + (orgF ? '_' + orgF : '');
     if (this._cache[cacheKey] && (now - (this._cacheTime[cacheKey] || 0)) < this._CACHE_TTL) {
       return this._cache[cacheKey];
     }
-    var data = await this._fetch('/api/jira?action=dashvisuals&timeRange=' + encodeURIComponent(tr));
+    var url = '/api/jira?action=dashvisuals&timeRange=' + encodeURIComponent(tr);
+    if (orgF) url += '&org=' + encodeURIComponent(orgF);
+    var data = await this._fetch(url);
     this._cache[cacheKey] = data;
     this._cacheTime[cacheKey] = now;
     return data;
@@ -51311,20 +51320,43 @@ function selectTopbarOrg(orgName, e) {
   // Close dropdown
   var dd = document.getElementById('topbarOrgDropdown');
   if (dd) dd.classList.remove('show');
-  // Sync triage queue org filter if on that page
+
+  // Clear ALL DactaJira client caches so fresh org-filtered data is fetched
+  if (typeof DactaJira !== 'undefined' && DactaJira._cache) {
+    Object.keys(DactaJira._cache).forEach(function(k) { delete DactaJira._cache[k]; });
+    Object.keys(DactaJira._cacheTime).forEach(function(k) { delete DactaJira._cacheTime[k]; });
+  }
+  window._liveVis = null;
+
+  // Sync triage queue org filter
   var tqOrg = document.getElementById('tqFilterOrg');
   if (tqOrg) {
-    tqOrg.value = orgName || 'All Organizations';
+    // Ensure the option exists before setting value
+    var found = false;
+    var targetVal = orgName || 'All Organizations';
+    for (var i = 0; i < tqOrg.options.length; i++) {
+      if (tqOrg.options[i].text === targetVal || tqOrg.options[i].value === targetVal) {
+        tqOrg.selectedIndex = i;
+        found = true;
+        break;
+      }
+    }
+    if (!found && orgName) {
+      // Add missing option temporarily
+      var opt = document.createElement('option');
+      opt.textContent = orgName;
+      tqOrg.appendChild(opt);
+      tqOrg.value = orgName;
+    }
     // Trigger triage reload
     if (typeof populateLiveTriage === 'function') populateLiveTriage();
   }
-  // Sync dashboard org filter
-  if (orgName) {
-    window._dashOrgFilter = orgName;
-  } else {
-    window._dashOrgFilter = null;
-  }
-  if (typeof refreshDashboardData === 'function') refreshDashboardData();
+
+  // Sync dashboard org filter and refresh
+  window._dashOrgFilter = orgName || null;
+  window._dashboardLoading = false;
+  if (typeof populateLiveDashboard === 'function') populateLiveDashboard();
+
   // Toast
   if (typeof showToast === 'function') {
     showToast(orgName ? 'Filtered to: ' + orgName : 'Showing all organizations', 'info');

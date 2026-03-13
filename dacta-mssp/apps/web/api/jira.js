@@ -237,6 +237,7 @@ export default async function handler(req, res) {
     if (action === 'dashboard') {
       // Time range mapping for JQL
       const timeRange = req.query.timeRange || '24h';
+      const orgFilter = req.query.org || '';
       const timeRangeMap = {
         '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': '-24h',
         '7d': '-168h', '30d': '-720h'
@@ -246,13 +247,14 @@ export default async function handler(req, res) {
       const createdFilter = isRelative ? ('created >= "' + recentJql + '"') : ('created >= ' + recentJql);
       const updatedFilter = isRelative ? ('updated >= "' + recentJql + '"') : ('updated >= ' + recentJql);
 
-      // Check server-side cache (keyed by time range)
-      var cached = _getCached('dashboard_' + timeRange);
+      // Check server-side cache (keyed by time range + org)
+      const cacheKeySuffix = timeRange + (orgFilter ? '_' + orgFilter : '');
+      var cached = _getCached('dashboard_' + cacheKeySuffix);
       if (cached) {
         res.setHeader('X-Cache', 'HIT');
         return res.status(200).json(cached);
       }
-      const B = 'project = DAC AND type = "[System] Incident"';
+      const B = 'project = DAC AND type = "[System] Incident"' + (orgFilter ? ' AND "Organizations" = "' + orgFilter + '"' : '');
       const [
         openCount, p1Count, p2Count, p3Count, p4Count,
         closedTodayCount, canceledTodayCount, completedTodayCount,
@@ -284,7 +286,7 @@ export default async function handler(req, res) {
         },
         recentTickets: (recentData.issues || []).map(normalizeIssue)
       };
-      _setCache('dashboard_' + timeRange, dashResult);
+      _setCache('dashboard_' + cacheKeySuffix, dashResult);
       return res.status(200).json(dashResult);
     }
 
@@ -1153,6 +1155,7 @@ export default async function handler(req, res) {
     if (action === 'dashvisuals') {
       // Time range support — same mapping as dashboard action
       const timeRange = req.query.timeRange || '24h';
+      const orgFilter = req.query.org || '';
       const timeRangeMap = {
         '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': '-24h',
         '7d': '-168h', '30d': '-720h'
@@ -1161,13 +1164,14 @@ export default async function handler(req, res) {
       const isRelative = recentJql.startsWith('-');
       const createdFilter = isRelative ? ('created >= "' + recentJql + '"') : ('created >= ' + recentJql);
 
-      // Check server-side cache (keyed by time range)
-      var cachedVis = _getCached('dashvisuals_' + timeRange);
+      // Check server-side cache (keyed by time range + org)
+      const cacheKeySuffix = timeRange + (orgFilter ? '_' + orgFilter : '');
+      var cachedVis = _getCached('dashvisuals_' + cacheKeySuffix);
       if (cachedVis) {
         res.setHeader('X-Cache', 'HIT');
         return res.status(200).json(cachedVis);
       }
-      const B = 'project = DAC AND type = "[System] Incident"';
+      const B = 'project = DAC AND type = "[System] Incident"' + (orgFilter ? ' AND "Organizations" = "' + orgFilter + '"' : '');
       const BT = `${B} AND ${createdFilter}`; // time-filtered base
 
       // Parallel: count queries + fetch recent tickets for distribution analysis
@@ -1271,7 +1275,7 @@ export default async function handler(req, res) {
         orgDist, statusDist, prioDist,
         issueCount: issues.length
       };
-      _setCache('dashvisuals_' + timeRange, visResult);
+      _setCache('dashvisuals_' + cacheKeySuffix, visResult);
       return res.status(200).json(visResult);
     }
 
@@ -1279,6 +1283,7 @@ export default async function handler(req, res) {
     if (action === 'telemetry') {
       // Time range support
       const timeRange = req.query.timeRange || '24h';
+      const orgFilter = req.query.org || '';
       const timeRangeMap = {
         '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': '-24h',
         '7d': '-168h', '30d': '-720h'
@@ -1287,13 +1292,14 @@ export default async function handler(req, res) {
       const isRelative = recentJql.startsWith('-');
       const createdFilter = isRelative ? ('created >= "' + recentJql + '"') : ('created >= ' + recentJql);
 
-      // Check server-side cache (keyed by time range)
-      var cachedTele = _getCached('telemetry_' + timeRange);
+      // Check server-side cache (keyed by time range + org)
+      const cacheKeySuffix = timeRange + (orgFilter ? '_' + orgFilter : '');
+      var cachedTele = _getCached('telemetry_' + cacheKeySuffix);
       if (cachedTele) {
         res.setHeader('X-Cache', 'HIT');
         return res.status(200).json(cachedTele);
       }
-      const B = 'project = DAC AND type = "[System] Incident"';
+      const B = 'project = DAC AND type = "[System] Incident"' + (orgFilter ? ' AND "Organizations" = "' + orgFilter + '"' : '');
       const BT = `${B} AND ${createdFilter}`; // time-filtered base
       const now = new Date();
       const queries = {};
@@ -1345,7 +1351,7 @@ export default async function handler(req, res) {
         .slice(0, 10)
         .map(([name, count]) => ({ name, count }));
       const teleResult = { counts, assigneeCounts, topRules };
-      _setCache('telemetry_' + timeRange, teleResult);
+      _setCache('telemetry_' + cacheKeySuffix, teleResult);
       return res.status(200).json(teleResult);
     }
 
