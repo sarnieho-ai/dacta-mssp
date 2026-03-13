@@ -8622,14 +8622,46 @@ input[type="datetime-local"].filter-select::-webkit-calendar-picker-indicator {
   align-items: center;
   justify-content: space-between;
 }
-.copilot-notepad-entry .notepad-remove {
+.copilot-notepad-entry .notepad-remove,
+.copilot-notepad-entry .notepad-edit-btn {
   background: none; border: none; cursor: pointer;
   color: var(--text-muted); font-size: 12px;
   padding: 0 4px; line-height: 1;
   opacity: 0; transition: opacity 0.15s;
 }
-.copilot-notepad-entry:hover .notepad-remove { opacity: 1; }
+.copilot-notepad-entry:hover .notepad-remove,
+.copilot-notepad-entry:hover .notepad-edit-btn { opacity: 1; }
 .copilot-notepad-entry .notepad-remove:hover { color: var(--red-bright); }
+.copilot-notepad-entry .notepad-edit-btn:hover { color: var(--cyan); }
+.copilot-notepad-entry .notepad-entry-text { cursor: default; }
+.copilot-notepad-entry .notepad-entry-textarea {
+  width: 100%; min-height: 60px; max-height: 200px; resize: vertical;
+  background: rgba(0,0,0,0.15); border: 1px solid var(--cyan);
+  border-radius: 6px; padding: 8px 10px; font-size: 12px;
+  color: var(--text-primary); font-family: var(--font-body);
+  line-height: 1.6; margin-top: 4px;
+}
+.copilot-notepad-entry .notepad-entry-textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 2px rgba(0,212,255,0.15); }
+.copilot-notepad-entry .notepad-edit-actions {
+  display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end;
+}
+.copilot-notepad-entry .notepad-edit-actions button {
+  font-size: 10px; padding: 3px 10px; border-radius: 4px; cursor: pointer; border: none;
+}
+.copilot-notepad-entry .notepad-save-btn {
+  background: rgba(0,212,255,0.15); color: var(--cyan); font-weight: 600;
+}
+.copilot-notepad-entry .notepad-save-btn:hover { background: rgba(0,212,255,0.25); }
+.copilot-notepad-entry .notepad-cancel-btn {
+  background: rgba(255,255,255,0.05); color: var(--text-muted);
+}
+.copilot-notepad-entry .notepad-cancel-btn:hover { background: rgba(255,255,255,0.1); }
+.copilot-notepad-entry.editing {
+  border-color: var(--cyan); background: rgba(0,212,255,0.02);
+}
+.copilot-notepad-entry .notepad-edited-badge {
+  font-size: 8px; color: var(--text-muted); font-style: italic; margin-left: 4px;
+}
 .copilot-notepad-empty {
   text-align: center;
   padding: 40px 20px;
@@ -50733,11 +50765,14 @@ function renderNotepadEntries() {
   _notepadEntries.forEach(function(entry, idx) {
     var div = document.createElement('div');
     div.className = 'copilot-notepad-entry';
+    div.dataset.idx = idx;
     var sourceLabel = entry.source === 'copilot' ? 'From Copilot' : 'Manual Note';
     var tsStr = entry.ts ? new Date(entry.ts).toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' SGT' : '';
-    div.innerHTML = '<div class="notepad-entry-meta"><span>' + sourceLabel + ' · ' + tsStr + '</span>' +
-      '<button class="notepad-remove" onclick="removeNotepadEntry(' + idx + ')" title="Remove">&#x2715;</button></div>' +
-      '<div class="notepad-entry-text">' + escapeHtml(entry.text).replace(/\n/g, '<br>') + '</div>';
+    var editedBadge = entry.edited ? '<span class="notepad-edited-badge">(edited)</span>' : '';
+    div.innerHTML = '<div class="notepad-entry-meta"><span>' + sourceLabel + ' \u00b7 ' + tsStr + editedBadge + '</span>' +
+      '<span style="display:flex;gap:2px;"><button class="notepad-edit-btn" onclick="editNotepadEntry(' + idx + ')" title="Edit">\u270E</button>' +
+      '<button class="notepad-remove" onclick="removeNotepadEntry(' + idx + ')" title="Remove">&#x2715;</button></span></div>' +
+      '<div class="notepad-entry-text" ondblclick="editNotepadEntry(' + idx + ')">' + escapeHtml(entry.text).replace(/\n/g, '<br>') + '</div>';
     body.appendChild(div);
   });
   _notepadUpdateBadge();
@@ -50791,6 +50826,43 @@ function addManualNotepadEntry() {
 function removeNotepadEntry(idx) {
   _notepadEntries.splice(idx, 1);
   _notepadPersist();
+  renderNotepadEntries();
+}
+
+function editNotepadEntry(idx) {
+  var entry = _notepadEntries[idx];
+  if (!entry) return;
+  var body = document.getElementById('copilotNotepadBody');
+  if (!body) return;
+  var entryDiv = body.querySelector('.copilot-notepad-entry[data-idx="' + idx + '"]');
+  if (!entryDiv || entryDiv.classList.contains('editing')) return;
+  entryDiv.classList.add('editing');
+  var textDiv = entryDiv.querySelector('.notepad-entry-text');
+  if (!textDiv) return;
+  var originalText = entry.text;
+  textDiv.innerHTML = '<textarea class="notepad-entry-textarea" id="notepadEditArea_' + idx + '">' + escapeHtml(originalText) + '</textarea>' +
+    '<div class="notepad-edit-actions">' +
+    '<button class="notepad-cancel-btn" onclick="cancelNotepadEdit(' + idx + ')">Cancel</button>' +
+    '<button class="notepad-save-btn" onclick="saveNotepadEntry(' + idx + ')">\u2713 Save</button>' +
+    '</div>';
+  var ta = document.getElementById('notepadEditArea_' + idx);
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+
+function saveNotepadEntry(idx) {
+  var ta = document.getElementById('notepadEditArea_' + idx);
+  if (!ta) return;
+  var newText = ta.value.trim();
+  if (!newText) { showToast('Note cannot be empty', 'warn'); return; }
+  _notepadEntries[idx].text = newText;
+  _notepadEntries[idx].edited = true;
+  _notepadEntries[idx].editedAt = new Date().toISOString();
+  _notepadPersist();
+  renderNotepadEntries();
+  showToast('Note saved', 'success');
+}
+
+function cancelNotepadEdit(idx) {
   renderNotepadEntries();
 }
 
