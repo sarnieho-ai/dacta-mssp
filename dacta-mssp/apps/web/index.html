@@ -52183,11 +52183,38 @@ async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
     else roundsHTML += buildRoundHTML(3, totalRounds, 'Adversarial Challenge', 'done', '<div style="font-size:10px;color:var(--text-secondary);">Adversarial challenge did not complete in the background run.</div>');
   }
 
-  var finalVerdict = (phaseResults.phase3 && phaseResults.phase3.final_verdict) || (phaseResults.phase2 && phaseResults.phase2.preliminary_verdict) || 'SUSPICIOUS';
-  var confidence = (phaseResults.phase3 && phaseResults.phase3.final_confidence) || (phaseResults.phase2 && phaseResults.phase2.confidence) || (phaseResults.phase1 && phaseResults.phase1.confidence) || 45;
+  var finalVerdict = (phaseResults.phase3 && phaseResults.phase3.final_verdict) || (phaseResults.phase2 && phaseResults.phase2.preliminary_verdict) || (phaseResults.phase1 ? 'SUSPICIOUS' : 'SUSPICIOUS');
+  var confidence = (phaseResults.phase3 && phaseResults.phase3.final_confidence) || (phaseResults.phase2 && phaseResults.phase2.confidence) || (phaseResults.phase1 && phaseResults.phase1.confidence) || 0;
 
-  // Use 6-tier verdict mapping
-  var tier = mapVerdictTier(finalVerdict, confidence);
+  // Compute threat_score: prefer LLM-provided, fall back to heuristic
+  var threatScore = (phaseResults.phase3 && phaseResults.phase3.threat_score) || (phaseResults.phase2 && phaseResults.phase2.threat_score) || null;
+
+  // If no phases returned data, compute a heuristic threat score from alert metadata
+  if (!confidence && !threatScore) {
+    var heuristic = 40; // neutral baseline
+    // Priority-based adjustment
+    if (pShort === 'P1') heuristic = 75;
+    else if (pShort === 'P2') heuristic = 60;
+    else if (pShort === 'P3') heuristic = 40;
+    else if (pShort === 'P4') heuristic = 25;
+    // Evidence-based adjustment
+    var incDelta = Math.min(inculpatory.length * 5, 20);
+    var excDelta = Math.min(exculpatory.length * 5, 20);
+    heuristic = heuristic + incDelta - excDelta;
+    // MITRE technique count
+    if (techniques.length >= 3) heuristic += 10;
+    else if (techniques.length >= 1) heuristic += 5;
+    // IOC presence
+    if (iocs.ips && iocs.ips.length > 0) heuristic += 5;
+    if (iocs.hashes && iocs.hashes.length > 0) heuristic += 10;
+    // Clamp
+    heuristic = Math.max(5, Math.min(95, heuristic));
+    confidence = heuristic;
+    threatScore = heuristic;
+  }
+
+  // Use 6-tier verdict mapping with threat_score for differentiation
+  var tier = mapVerdictTier(finalVerdict, confidence, threatScore);
   var verdictLabels = {
     'TP':  { text: 'TRUE POSITIVE — Confirmed Threat',      color: 'var(--red-bright)', bg: 'rgba(239,68,68,0.05)',  border: 'rgba(239,68,68,0.3)',  action: 'Immediate action required',        icon: dIcon('siren', 14) },
     'LTP': { text: 'LIKELY TRUE POSITIVE — Probable Threat', color: '#f97316',           bg: 'rgba(249,115,22,0.05)', border: 'rgba(249,115,22,0.3)', action: 'Analyst verification recommended',  icon: dIcon('warning', 14) },
@@ -52223,6 +52250,7 @@ async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
     html: roundsHTML + verdictBannerHTML,
     verdict: verdict,
     confidence: confidence,
+    threatScore: threatScore,
     timestamp: new Date().toISOString(),
     escalationData: { org: org, summary: summary, ticketData: f },
     inculpatoryEvidence: (inculpatory || []).slice(0, 5),
@@ -52233,7 +52261,8 @@ async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
       priority: pShort,
       techniquesCount: techniques.length,
       inculpatoryCount: inculpatory.length,
-      exculpatoryCount: exculpatory.length
+      exculpatoryCount: exculpatory.length,
+      threatScore: threatScore
     },
     sidebarPanels: {},
     elasticLogs: elasticLogs,
@@ -55359,7 +55388,7 @@ function populateAiSummary(cacheEntry) {
   if (!el || !cacheEntry) return;
   var verdict = cacheEntry.verdict || 'Pending';
   var confidence = cacheEntry.confidence || 0;
-  var tier = (typeof mapVerdictTier === 'function') ? mapVerdictTier(verdict, confidence) : { label: verdict };
+  var tier = (typeof mapVerdictTier === 'function') ? mapVerdictTier(verdict, confidence, cacheEntry.threatScore || (cacheEntry.metadata && cacheEntry.metadata.threatScore)) : { label: verdict };
   var summary = '';
 
   // Build summary from available data
@@ -55825,8 +55854,8 @@ function triageSortBy(col) {
       case 'aiVerdict':
         var ca = _investigationCache[a.key];
         var cb = _investigationCache[b.key];
-        va = ca ? mapVerdictTier(ca.verdict, ca.confidence).sortWeight : 99;
-        vb = cb ? mapVerdictTier(cb.verdict, cb.confidence).sortWeight : 99;
+        va = ca ? mapVerdictTier(ca.verdict, ca.confidence, ca.threatScore || (ca.metadata && ca.metadata.threatScore)).sortWeight : 99;
+        vb = cb ? mapVerdictTier(cb.verdict, cb.confidence, cb.threatScore || (cb.metadata && cb.metadata.threatScore)).sortWeight : 99;
         break;
       case 'org':
         va = (a.org || '').toLowerCase();
@@ -55973,6 +56002,7 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
     // Store a lightweight version (no full HTML for localStorage size limits)
     lsCacheAll[ticketKey] = {
       verdict: cacheEntry.verdict, confidence: cacheEntry.confidence,
+      threatScore: cacheEntry.threatScore,
       timestamp: cacheEntry.timestamp, html: cacheEntry.html,
       overrideVerdict: cacheEntry.overrideVerdict, overrideReason: cacheEntry.overrideReason,
       feedbackRating: cacheEntry.feedbackRating, feedbackText: cacheEntry.feedbackText,
@@ -56088,27 +56118,51 @@ async function loadAllCachedKeys() {
 }
 
 // ── Triage queue AI status badge helper ──
-// ── 6-Tier Verdict Mapping: maps raw verdict + confidence into graduated tiers ──
-function mapVerdictTier(rawVerdict, confidence) {
+// ── 6-Tier Verdict Mapping: maps raw verdict + confidence + threat_score into graduated tiers ──
+// The third argument (threatScore) is optional — from Phase 2/3 LLM threat_score field.
+// When present, it overrides confidence-only logic for SUSPICIOUS verdicts to provide
+// meaningful differentiation (the core fix for the "everything is SUS" problem).
+function mapVerdictTier(rawVerdict, confidence, threatScore) {
   var v = (rawVerdict || '').toUpperCase();
   var c = parseInt(confidence, 10) || 0;
+  var ts = parseInt(threatScore, 10); // NaN if not provided
   var isTP = v.indexOf('TRUE POSITIVE') !== -1 || v === 'TRUE_POSITIVE' || v.indexOf('CONFIRMED THREAT') !== -1;
   var isFP = v.indexOf('FALSE POSITIVE') !== -1 || v === 'FALSE_POSITIVE' || v.indexOf('BUSINESS JUSTIFIED') !== -1;
   var isSusp = v.indexOf('SUSPICIOUS') !== -1;
   var isIND = v.indexOf('INSUFFICIENT') !== -1 || v.indexOf('GUARDRAIL') !== -1;
 
   if (isIND) return { code: 'IND', label: 'Insufficient Data', cssClass: 'cached-ind', sortWeight: 3 };
+
   if (isTP) {
     if (c >= 85) return { code: 'TP', label: 'True Positive', cssClass: 'cached-tp', sortWeight: 0 };
     if (c >= 65) return { code: 'LTP', label: 'Likely TP', cssClass: 'cached-ltp', sortWeight: 1 };
-    return { code: 'SUS', label: 'Suspicious', cssClass: 'cached-susp', sortWeight: 2 };
+    // TP with low confidence → still treat as likely TP (LLM said TP, just unsure)
+    return { code: 'LTP', label: 'Likely TP', cssClass: 'cached-ltp', sortWeight: 1 };
   }
+
   if (isFP) {
     if (c >= 85) return { code: 'FP', label: 'False Positive', cssClass: 'cached-fp', sortWeight: 5 };
     if (c >= 65) return { code: 'LFP', label: 'Likely FP', cssClass: 'cached-lfp', sortWeight: 4 };
-    return { code: 'SUS', label: 'Suspicious', cssClass: 'cached-susp', sortWeight: 2 };
+    // FP with low confidence → still treat as likely FP
+    return { code: 'LFP', label: 'Likely FP', cssClass: 'cached-lfp', sortWeight: 4 };
   }
-  if (isSusp) return { code: 'SUS', label: 'Suspicious', cssClass: 'cached-susp', sortWeight: 2 };
+
+  // SUSPICIOUS verdict — the key differentiation logic.
+  // Use threat_score if available (from newer LLM responses), otherwise fall back to confidence.
+  if (isSusp || v === '') {
+    var effectiveScore = !isNaN(ts) ? ts : c;
+    // High threat score → Likely True Positive (needs urgent analyst attention)
+    if (effectiveScore >= 70) return { code: 'LTP', label: 'Likely TP', cssClass: 'cached-ltp', sortWeight: 1 };
+    // Moderate-high → Suspicious (genuine uncertainty, leaning malicious)
+    if (effectiveScore >= 50) return { code: 'SUS', label: 'Suspicious', cssClass: 'cached-susp', sortWeight: 2 };
+    // Moderate-low → Indeterminate (not enough data to decide)
+    if (effectiveScore >= 35) return { code: 'IND', label: 'Indeterminate', cssClass: 'cached-ind', sortWeight: 3 };
+    // Low → Likely False Positive (leaning benign)
+    if (effectiveScore >= 15) return { code: 'LFP', label: 'Likely FP', cssClass: 'cached-lfp', sortWeight: 4 };
+    // Very low → False Positive
+    return { code: 'FP', label: 'False Positive', cssClass: 'cached-fp', sortWeight: 5 };
+  }
+
   return { code: 'SUS', label: 'Suspicious', cssClass: 'cached-susp', sortWeight: 2 };
 }
 
@@ -56121,7 +56175,7 @@ function getTriageAIBadge(ticketKey) {
     if (cached.overrideVerdict) {
       return '<span class="tq-ai-badge overridden" title="Analyst override: ' + (cached.overrideVerdict || '') + '">' + dIcon('edit',14) + ' Overridden</span>';
     }
-    var tier = mapVerdictTier(cached.verdict, cached.confidence);
+    var tier = mapVerdictTier(cached.verdict, cached.confidence, cached.threatScore || (cached.metadata && cached.metadata.threatScore));
     var confStr = cached.confidence ? ' ' + cached.confidence + '%' : '';
     return '<span class="tq-ai-badge ' + tier.cssClass + '" title="' + tier.label + confStr + ' — Cached ' + new Date(cached.timestamp).toLocaleString() + '">' + dIcon('check',14) + ' ' + tier.code + (cached.confidence ? ' <span style="opacity:0.7;font-size:8px;">' + cached.confidence + '%</span>' : '') + '</span>';
   }
@@ -59549,30 +59603,33 @@ async function runAIInvestigation(ticketKey, issueData) {
                 _fv = 'SUSPICIOUS';
               }
 
-              if (_fv === 'TRUE_POSITIVE') {
-                verdict = 'TRUE POSITIVE \u2014 Confirmed Threat';
-                verdictColor = 'var(--red-bright)'; verdictBg = 'rgba(239,68,68,0.05)'; verdictBorder = 'rgba(239,68,68,0.3)';
-                actionLabel = 'Immediate action required';
-              } else if (_fv === 'FALSE_POSITIVE') {
-                verdict = 'FALSE POSITIVE \u2014 Business Justified';
-                verdictColor = 'var(--green)'; verdictBg = 'rgba(16,185,129,0.05)'; verdictBorder = 'rgba(16,185,129,0.3)';
-                actionLabel = 'Close as false positive';
-              } else {
-                // Apply guardrail-specific message if applicable
-                if (_failedQueriesGuardrail) {
-                  verdict = 'SUSPICIOUS \u2014 Incomplete Investigation';
-                  actionLabel = 'Analyst verification required \u2014 ' + _totalCritIssues + ' critical queries failed or lacked telemetry';
-                } else {
-                  verdict = 'SUSPICIOUS \u2014 Requires Analyst Review';
-                  actionLabel = 'Manual investigation recommended';
-                }
-                verdictColor = 'var(--amber)'; verdictBg = 'rgba(245,158,11,0.05)'; verdictBorder = 'rgba(245,158,11,0.3)';
-              }
               confidence = _llmResp.result.final_confidence || confidence;
               // Cap confidence if verdict was overridden by coherence check
               if (_llmResp.result.final_verdict !== _fv) {
                 confidence = Math.min(confidence, 65);
               }
+              // Use 6-tier verdict mapping for consistent classification
+              var _fgThreatScore = _llmResp.result.threat_score || null;
+              var _fgTier = mapVerdictTier(_fv, confidence, _fgThreatScore);
+              var _fgLabels = {
+                'TP':  { text: 'TRUE POSITIVE \u2014 Confirmed Threat',      color: 'var(--red-bright)', bg: 'rgba(239,68,68,0.05)',  border: 'rgba(239,68,68,0.3)',  action: 'Immediate action required' },
+                'LTP': { text: 'LIKELY TRUE POSITIVE \u2014 Probable Threat', color: '#f97316',           bg: 'rgba(249,115,22,0.05)', border: 'rgba(249,115,22,0.3)', action: 'Analyst verification recommended' },
+                'SUS': { text: 'SUSPICIOUS \u2014 Requires Analyst Review',   color: 'var(--amber)',       bg: 'rgba(245,158,11,0.05)', border: 'rgba(245,158,11,0.3)', action: 'Manual investigation recommended' },
+                'IND': { text: 'INDETERMINATE \u2014 Telemetry Gaps',        color: '#94a3b8',           bg: 'rgba(148,163,184,0.05)',border: 'rgba(148,163,184,0.3)',action: 'Re-investigate with additional data' },
+                'LFP': { text: 'LIKELY FALSE POSITIVE \u2014 Probable Benign',color: '#06b6d4',           bg: 'rgba(6,182,212,0.05)',  border: 'rgba(6,182,212,0.3)', action: 'Review and close if confirmed' },
+                'FP':  { text: 'FALSE POSITIVE \u2014 Business Justified',    color: 'var(--green)',       bg: 'rgba(16,185,129,0.05)', border: 'rgba(16,185,129,0.3)', action: 'Close as false positive' }
+              };
+              var _fgVl = _fgLabels[_fgTier.code] || _fgLabels['SUS'];
+              // Apply guardrail-specific override
+              if (_failedQueriesGuardrail && (_fgTier.code === 'TP' || _fgTier.code === 'LTP')) {
+                _fgVl = _fgLabels['SUS'];
+                _fgVl.action = 'Analyst verification required \u2014 ' + _totalCritIssues + ' critical queries failed or lacked telemetry';
+              }
+              verdict = _fgVl.text;
+              verdictColor = _fgVl.color; verdictBg = _fgVl.bg; verdictBorder = _fgVl.border;
+              actionLabel = _fgVl.action;
+              // Store threat score for cache
+              window._fgThreatScore = _fgThreatScore;
             }
           }
         } catch (_llmErr) {
@@ -60169,6 +60226,7 @@ async function runAIInvestigation(ticketKey, issueData) {
     html: cachedHTML,
     verdict: verdict,
     confidence: confidence,
+    threatScore: window._fgThreatScore || null,
     timestamp: investigatedTimestamp,
     escalationData: { org: org, summary: summary, ticketData: f },
     // Store actual evidence arrays for Top Findings restoration from cache
@@ -60180,7 +60238,8 @@ async function runAIInvestigation(ticketKey, issueData) {
       priority: pShort,
       techniquesCount: techniques.length,
       inculpatoryCount: inculpatory.length,
-      exculpatoryCount: exculpatory.length
+      exculpatoryCount: exculpatory.length,
+      threatScore: window._fgThreatScore || null
     },
     // Capture sidebar panel contents for cache restoration (delayed to allow async playbook fetch)
     sidebarPanels: {}

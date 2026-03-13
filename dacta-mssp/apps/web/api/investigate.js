@@ -194,6 +194,25 @@ Think like a senior DACTA analyst. Follow this investigation order:
 - If a query is unsuccessful or returns no meaningful data, treat it as inconclusive or suspicious — never as confirmation of a true positive
 - IMPORTANT: Use the exact index patterns listed in the alert context. These are org-specific and different per client.
 
+## Confidence Calibration Guide (MANDATORY)
+Your confidence score MUST be calibrated against these anchors. Do NOT default to 40-50% — that range is ONLY for alerts where evidence is genuinely balanced.
+
+- **90-100**: Smoking gun evidence. Confirmed C2 beacon, known malware hash, active data exfiltration with evidence trail.
+- **75-89**: Strong evidence pointing one direction. Multiple corroborating signals (e.g., malicious IP + suspicious process + lateral movement indicators).
+- **60-74**: Moderate evidence with some corroboration. Alert context + 1-2 supporting SIEM findings, but no definitive proof.
+- **40-59**: Genuinely ambiguous. Evidence is roughly balanced between malicious and benign explanations. Use this range ONLY when you truly cannot lean either way.
+- **25-39**: Leaning benign. Some suspicious elements but significant benign explanations exist (e.g., known admin tool, scheduled task, internal scanning).
+- **10-24**: Likely benign. Strong indicators of legitimate activity (known IT automation, documented business process, previously whitelisted).
+- **0-9**: Definitively benign. Confirmed false positive with clear documentation.
+
+Priority-based priors (adjust based on evidence):
+- P1/Critical alerts: Start at 70 (high severity = high prior) and adjust based on evidence
+- P2/High alerts: Start at 60 and adjust
+- P3/Medium alerts: Start at 45 and adjust
+- P4/Low alerts: Start at 30 and adjust
+
+IMPORTANT: The confidence score should reflect the DIRECTION and STRENGTH of evidence, not just uncertainty. A P1 ransomware alert with corroborating SIEM logs should score 80+. A P4 port scan from an internal scanner should score 15-25.
+
 ## Output Format
 You MUST respond with a valid JSON object (no markdown, no code fences) containing:
 {
@@ -214,6 +233,7 @@ You MUST respond with a valid JSON object (no markdown, no code fences) containi
   ],
   "preliminary_assessment": "Your current best understanding of the situation based on evidence gathered",
   "confidence": 0-100,
+  "confidence_rationale": "Brief explanation of why you chose this specific confidence score",
   "open_questions": ["Things that couldn't be answered with available tools"],
   "analyst_corpus_insights": {
     "corpus_queried": true,
@@ -256,6 +276,22 @@ You have been given the raw investigation findings from Phase 1. Your job is to:
 - If analyst learning from closed tickets is provided, use it as historical context to refine hypotheses, compare patterns, and identify likely benign workflows or recurring threat behaviors — but do not treat historical analyst comments as stronger evidence than current-ticket SIEM or threat-intel findings.
 - If an analyst_corpus section is provided with historical investigation data for the same detection rule, reference the pattern summary (e.g., "4/5 prior instances closed as FP") and key analyst reasoning in your narrative. This is powerful context for calibrating your confidence.
 
+## Confidence Calibration Guide (MANDATORY)
+Your confidence score MUST be calibrated against these anchors. Do NOT default to 40-50%.
+
+- **90-100**: Smoking gun evidence. Confirmed C2, known malware hash, active exfiltration.
+- **75-89**: Strong directional evidence. Multiple corroborating signals pointing same way.
+- **60-74**: Moderate evidence with some corroboration. Leaning one direction but gaps remain.
+- **40-59**: Genuinely ambiguous. ONLY use when evidence is truly balanced — this should be RARE.
+- **25-39**: Leaning benign. Suspicious elements but strong benign explanations.
+- **10-24**: Likely benign. Clear legitimate activity patterns.
+- **0-9**: Definitively benign false positive.
+
+Your verdict + confidence must be CONSISTENT:
+- TRUE_POSITIVE requires confidence >= 65 (you are asserting this IS malicious)
+- FALSE_POSITIVE requires confidence >= 65 (you are asserting this IS benign)
+- SUSPICIOUS means you cannot determine direction — confidence should reflect how much additional investigation would help (higher = more data could resolve it, lower = fundamentally ambiguous)
+
 ## Output Format
 You MUST respond with a valid JSON object (no markdown, no code fences):
 {
@@ -278,8 +314,11 @@ You MUST respond with a valid JSON object (no markdown, no code fences):
   "preliminary_verdict": "TRUE_POSITIVE|FALSE_POSITIVE|SUSPICIOUS",
   "verdict_reasoning": "Why you reached this verdict based on the evidence",
   "confidence": 0-100,
+  "threat_score": 0-100,
   "key_evidence_count": {"threat": 0, "benign": 0, "inconclusive": 0}
 }
+
+The threat_score is INDEPENDENT of your verdict confidence. It represents how THREATENING this alert is on a 0-100 scale: 90+ = critical active threat, 70-89 = high threat likely needs containment, 50-69 = moderate threat needs investigation, 30-49 = low threat likely benign, 0-29 = negligible/false positive. This score helps differentiate alerts even when the verdict is the same.
 
 CRITICAL: Output ONLY the JSON object. No explanatory text before or after.`;
 
@@ -313,6 +352,23 @@ If the alert context contains a VERDICT GUARDRAIL section or notes that critical
 - Clean negative results are excluded from this guardrail.
 - This rule overrides ALL other reasoning. Even if the remaining evidence looks malicious, incomplete investigation = SUSPICIOUS.
 
+## Confidence Calibration Guide (MANDATORY)
+Your final_confidence MUST be calibrated. Do NOT default to 40-50%.
+
+- **90-100**: Smoking gun. Verdict is essentially certain.
+- **75-89**: Strong evidence. Verdict is highly likely correct.
+- **60-74**: Moderate evidence. Leaning strongly in one direction.
+- **40-59**: Genuinely ambiguous. ONLY if evidence is truly balanced. This should be RARE.
+- **25-39**: Leaning opposite direction. Some concerning elements but benign explanation is stronger.
+- **10-24**: Likely the opposite. Strong evidence it's benign/malicious (opposite of initial assessment).
+- **0-9**: Certain the opposite.
+
+Rules:
+- TRUE_POSITIVE verdict requires final_confidence >= 65
+- FALSE_POSITIVE verdict requires final_confidence >= 65
+- If your confidence is below 65 for either TP or FP, you MUST use SUSPICIOUS
+- SUSPICIOUS verdict confidence should indicate how THREATENING the alert is: high confidence SUSPICIOUS (65+) = "probably malicious but can't confirm", low confidence SUSPICIOUS (<35) = "probably benign but can't confirm"
+
 ## Output Format
 You MUST respond with a valid JSON object (no markdown, no code fences):
 {
@@ -338,11 +394,14 @@ You MUST respond with a valid JSON object (no markdown, no code fences):
   "stress_test_result": "VERDICT_HOLDS|VERDICT_WEAKENED|VERDICT_SHOULD_FLIP",
   "final_verdict": "TRUE_POSITIVE|FALSE_POSITIVE|SUSPICIOUS",
   "final_confidence": 0-100,
+  "threat_score": 0-100,
   "final_reasoning": "The definitive conclusion after adversarial testing",
   "recommended_actions": [
     {"action": "What to do next", "priority": "HIGH|MEDIUM|LOW", "type": "containment|investigation|documentation|notification"}
   ]
 }
+
+The threat_score is INDEPENDENT of verdict confidence. It represents how THREATENING this alert is: 90+ = critical active threat, 70-89 = high threat, 50-69 = moderate, 30-49 = low, 0-29 = negligible. This helps prioritize analyst attention even among SUSPICIOUS verdicts.
 
 CRITICAL: Output ONLY the JSON object. No explanatory text before or after.`;
 
