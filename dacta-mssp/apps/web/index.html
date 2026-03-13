@@ -52960,6 +52960,7 @@ async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
       bytes_analysis: elasticLogs.bytesAnalysis || [],
       temporal_analysis: elasticLogs.temporalAnalysis || [],
       dest_tip_results: elasticLogs.destTipResults || [],
+      ip_reputation: (elasticLogs.ipReputation || []).map(function(r) { return { ip: r.ipAddress || r.ip, assessment: r.assessment, score: r.abuseConfidenceScore, reports: r.totalReports, isp: r.isp, country: r.countryCode, summary: r.summary }; }),
       device_names: elasticLogs.deviceNames || [],
       mac_addresses: elasticLogs.macAddresses || []
     },
@@ -57911,6 +57912,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     analystPrecedent: [],   // Closure notes/comments from resolved correlated tickets (analyst learning)
     analystLearnings: [],   // structured learning from closed Jira tickets for LLM context
     analystCorpus: null,     // rule-based analyst corpus from query_analyst_corpus (for LLM injection)
+    ipReputation: [],          // AbuseIPDB IP reputation results
     elasticConnected: false, openctiConnected: false,
     queriesRun: 0, queryDetails: []
   };
@@ -58516,6 +58518,42 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     (iocs.devices || []).forEach(function(d) { if (!logs.deviceNames.includes(d)) logs.deviceNames.push(d); });
     (iocs.macs || []).forEach(function(m) { if (!logs.macAddresses.includes(m)) logs.macAddresses.push(m); });
 
+    // ── AbuseIPDB IP Reputation Pre-Check ──
+    // Check all public IPs against AbuseIPDB for abuse confidence scores
+    var publicIPs = (iocs.ips || []).filter(function(ip) {
+      return !(/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.|255\.|fe80:|::1|fc00:|fd00:)/i.test(ip));
+    }).slice(0, 5); // Limit to 5 IPs to stay within rate limits
+    if (publicIPs.length > 0) {
+      try {
+        for (var abIdx = 0; abIdx < publicIPs.length; abIdx++) {
+          var abIP = publicIPs[abIdx];
+          var qAB = { name: 'AbuseIPDB Reputation \u2014 ' + abIP, query: abIP, status: 'running' };
+          logs.queryDetails.push(qAB); logs.queriesRun++;
+          var abResp = await fetch('/api/abuseipdb', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'check_ip', ip: abIP, maxAgeInDays: 90 })
+          });
+          if (abResp.ok) {
+            var abData = await abResp.json();
+            markQueryResult(qAB, abData.assessment === 'HIGHLY_MALICIOUS' ? 'success' : (abData.assessment === 'CLEAN' ? 'clean' : 'success'),
+              abData.totalReports || 0,
+              abData.summary || (abIP + ': ' + abData.assessment),
+              { evidenceType: 'IP_REPUTATION', semanticOutcome: abData.assessment === 'CLEAN' ? 'clean_negative' : (abData.abuseConfidenceScore >= 50 ? 'positive_match' : 'low_signal'), dataCoverage: 'checked' });
+            logs.ipReputation.push(abData);
+            console.log('[AbuseIPDB] ' + abIP + ': score=' + abData.abuseConfidenceScore + '%, reports=' + abData.totalReports + ', assessment=' + abData.assessment);
+          } else if (abResp.status === 503) {
+            markQueryResult(qAB, 'skipped', 0, 'AbuseIPDB API key not configured', { evidenceType: 'IP_REPUTATION', semanticOutcome: 'not_available', dataCoverage: 'unchecked' });
+            break; // No point checking more IPs if API key is missing
+          } else {
+            markQueryResult(qAB, 'error', 0, 'AbuseIPDB lookup failed (HTTP ' + abResp.status + ')', { evidenceType: 'IP_REPUTATION', semanticOutcome: 'query_failed', dataCoverage: 'unknown' });
+          }
+        }
+      } catch (abErr) {
+        console.warn('[Investigation] AbuseIPDB pre-check failed:', abErr.message);
+      }
+    }
+
     // No host info or alert history from EDR
 
     // ── FALLBACK Query 5: IP-based alert correlation (network/ML alerts without EDR) ──
@@ -59092,6 +59130,28 @@ function generateInculpatoryEvidence(summary, desc, techniques, iocs, cmdCtx) {
   if (techniques.some(function(t) { return t.id === 'EDR-BLOCK'; })) {
     evidence.push({ title: 'EDR behavioral detection triggered', severity: 'medium', source: 'TICKET_TEXT', detail: 'The endpoint protection platform independently flagged and blocked this activity based on behavioral analysis, corroborating the threat classification.' });
   }
+  // Network/firewall alert patterns
+  if (lower.includes('port scan') || lower.includes('portscan') || lower.includes('port sweep')) {
+    evidence.push({ title: 'Port scanning activity detected', severity: 'medium', source: 'TICKET_TEXT', detail: 'Network reconnaissance via port scanning indicates potential pre-attack enumeration or vulnerability assessment. Quantify: how many ports, how many targets, over what time window.' });
+  }
+  if (lower.includes('denied') || lower.includes('blocked') || lower.includes('dropped')) {
+    if (lower.includes('firewall') || lower.includes('fortigate') || lower.includes('palo alto')) {
+      evidence.push({ title: 'Firewall deny/block events', severity: 'low', source: 'TICKET_TEXT', detail: 'Traffic was blocked by perimeter firewall. While the intent may be malicious, the block was successful. Quantify: number of blocked events, frequency, and whether any traffic was actually allowed through.' });
+    }
+  }
+  if ((lower.includes('outbound') || lower.includes('egress')) && (lower.includes('suspicious') || lower.includes('unusual') || lower.includes('anomal'))) {
+    evidence.push({ title: 'Suspicious outbound network activity', severity: 'high', source: 'TICKET_TEXT', detail: 'Unusual outbound/egress traffic pattern detected. Could indicate C2 communication, data exfiltration, or beaconing behavior.' });
+  }
+  if (lower.includes('brute') || (lower.includes('multiple') && lower.includes('fail') && lower.includes('login'))) {
+    evidence.push({ title: 'Brute force / credential spraying indicators', severity: 'high', source: 'TICKET_TEXT', detail: 'Multiple authentication failures from same source suggest credential brute-force or password spraying attack.' });
+  }
+  if (lower.includes('c2') || lower.includes('command and control') || lower.includes('beacon') || lower.includes('callback')) {
+    evidence.push({ title: 'C2/beaconing indicators', severity: 'critical', source: 'TICKET_TEXT', detail: 'Command-and-control communication patterns detected. Regular interval connections to external infrastructure suggest active compromise and remote control.' });
+  }
+  if (lower.includes('dns tunnel') || lower.includes('dns exfil') || (lower.includes('dns') && lower.includes('unusual'))) {
+    evidence.push({ title: 'DNS-based data exfiltration/tunneling', severity: 'high', source: 'TICKET_TEXT', detail: 'Anomalous DNS query patterns may indicate DNS tunneling for covert data exfiltration or C2 channel.' });
+  }
+
   // Generic technique-based evidence
   techniques.forEach(function(t) {
     if (!evidence.some(function(e) { return e.title.toLowerCase().includes(t.name.toLowerCase().split(':')[0].trim().substring(0,10)); })) {
@@ -59163,6 +59223,26 @@ function generateExculpatoryEvidence(summary, desc, techniques, iocs, cmdCtx, el
         evidence.push({ title: 'User context suggests authorized activity', severity: 'moderate', detail: ae.result + '. User: ' + ae.user });
       }
     });
+    // Network-specific exculpatory patterns
+    if (elasticLogs.firewallBlocks && elasticLogs.firewallBlocks.length > 0 && elasticLogs.firewallBlocks.every(function(fb) { return fb.status === 'BLOCKED'; })) {
+      evidence.push({ title: 'All traffic was blocked by firewall (' + elasticLogs.firewallBlocks.length + ' events)', severity: 'strong', detail: 'Perimeter firewall successfully denied all detected malicious connection attempts. No traffic reached the internal network. The security control functioned as designed.' });
+    }
+    // Zero-byte transfer pattern
+    if ((elasticLogs.bytesAnalysis || []).some(function(b) { return b.zeroByteEvents || b.assessment === 'ZERO_TRANSFER'; })) {
+      evidence.push({ title: 'Zero-byte network transfer detected', severity: 'strong', detail: 'Network connections show zero bytes transferred, indicating the connection was blocked or reset before any data exchange occurred. This strongly suggests successful perimeter defense.' });
+    }
+    // All TIP lookups clean
+    if ((elasticLogs.destTipResults || []).length > 0 && (elasticLogs.destTipResults || []).every(function(t) { return !t.found; })) {
+      evidence.push({ title: 'All destination IPs clean in threat intelligence (' + elasticLogs.destTipResults.length + ' checked)', severity: 'moderate', detail: 'None of the destination IP addresses appear in DACTA TIP threat intelligence database. No known malicious associations or abuse reports found.' });
+    }
+    // AbuseIPDB clean results
+    if (elasticLogs.ipReputation && elasticLogs.ipReputation.length > 0) {
+      var cleanIPs = elasticLogs.ipReputation.filter(function(r) { return r.assessment === 'CLEAN'; });
+      var maliciousIPs = elasticLogs.ipReputation.filter(function(r) { return r.assessment === 'HIGHLY_MALICIOUS' || r.assessment === 'SUSPICIOUS'; });
+      if (cleanIPs.length > 0 && maliciousIPs.length === 0) {
+        evidence.push({ title: 'All checked IPs clean in AbuseIPDB (' + cleanIPs.length + ' IPs)', severity: 'strong', detail: 'AbuseIPDB reports 0% abuse confidence for all checked IP addresses. No abuse reports filed by any contributor. This is strong exculpatory evidence for network-based alerts.' });
+      }
+    }
   }
 
   // Process was killed before any harm
@@ -59842,6 +59922,7 @@ async function runAIInvestigation(ticketKey, issueData) {
       bytes_analysis: elasticLogs.bytesAnalysis || [],
       temporal_analysis: elasticLogs.temporalAnalysis || [],
       dest_tip_results: elasticLogs.destTipResults || [],
+      ip_reputation: (elasticLogs.ipReputation || []).map(function(r) { return { ip: r.ipAddress || r.ip, assessment: r.assessment, score: r.abuseConfidenceScore, reports: r.totalReports, isp: r.isp, country: r.countryCode, summary: r.summary }; }),
       device_names: elasticLogs.deviceNames || [],
       mac_addresses: elasticLogs.macAddresses || [],
       has_edr: _invIsRealEDR,
@@ -59994,6 +60075,19 @@ async function runAIInvestigation(ticketKey, issueData) {
     // CrowdStrike Intel counts as confirmed
     if (e.title && (e.title.indexOf('CrowdStrike Intel') !== -1 || e.title.indexOf('MALICIOUS') !== -1)) _hasSIEMConfirmedThreat = true;
   });
+
+  // ── AbuseIPDB IP Reputation weight ──
+  if (elasticLogs.ipReputation && elasticLogs.ipReputation.length > 0) {
+    var _abMalicious = elasticLogs.ipReputation.filter(function(r) { return r.assessment === 'HIGHLY_MALICIOUS'; });
+    var _abSuspicious = elasticLogs.ipReputation.filter(function(r) { return r.assessment === 'SUSPICIOUS' || r.assessment === 'LOW_RISK'; });
+    var _abClean = elasticLogs.ipReputation.filter(function(r) { return r.assessment === 'CLEAN'; });
+    if (_abMalicious.length > 0) {
+      tpWeight += _abMalicious.length * 20; // Highly malicious = strong TP signal
+      _hasSIEMConfirmedThreat = true; // AbuseIPDB counts as confirmed threat intel
+    }
+    if (_abSuspicious.length > 0) tpWeight += _abSuspicious.length * 8;
+    if (_abClean.length > 0 && _abMalicious.length === 0) fpWeight += _abClean.length * 10; // All clean = FP signal
+  }
   var _noEDRTelemetry = !_invIsRealEDR;
   var _allExculpatoryStrong = exculpatory.length > 0 && exculpatory.every(function(e) { return e.severity === 'strong' || e.severity === 'moderate'; });
   // Check if zero-byte transfer was found (strong FP indicator for firewall-only)
@@ -60442,32 +60536,48 @@ async function runAIInvestigation(ticketKey, issueData) {
               var _effectiveThreat = Math.min(_p2Threat || _heuristicIncCount, _heuristicIncCount || _p2Threat);
               var _effectiveBenign = Math.max(_p2Benign || _heuristicExcCount, _heuristicExcCount || _p2Benign);
 
-              // RULE 1: If LLM says TRUE_POSITIVE but there are 0 inculpatory findings and exculpatory > 0, downgrade to FP
-              if (_fv === 'TRUE_POSITIVE' && _effectiveThreat === 0 && _effectiveBenign > 0) {
-                console.warn('[Verdict Coherence] TRUE_POSITIVE but 0 threat / ' + _effectiveBenign + ' benign evidence. Overriding to FALSE_POSITIVE.');
-                _fv = 'FALSE_POSITIVE';
-              }
-              // RULE 2: If LLM says TRUE_POSITIVE but exculpatory >= inculpatory, NEVER allow TP — downgrade to SUSPICIOUS
-              // An analyst would never confirm a threat when more evidence supports benign
-              else if (_fv === 'TRUE_POSITIVE' && _effectiveBenign > 0 && _effectiveBenign >= _effectiveThreat) {
-                console.warn('[Verdict Coherence] TRUE_POSITIVE but exculpatory(' + _effectiveBenign + ') >= inculpatory(' + _effectiveThreat + '). Evidence does not support confirmed threat. Downgrading to SUSPICIOUS.');
+              // ADVISORY COHERENCE CHECKS — LLM verdict has primary authority
+              // The LLM has tool-based evidence (SIEM queries, TIP lookups, AbuseIPDB, EDR, analyst corpus)
+              // that the heuristic doesn't see. Only override in extreme contradictions.
+              
+              // RULE 1: If LLM says TRUE_POSITIVE but heuristic found ZERO inculpatory AND multiple exculpatory, downgrade to SUSPICIOUS (not FP)
+              // Rationale: LLM may have tool-based evidence the heuristic missed, so don't flip all the way to FP
+              if (_fv === 'TRUE_POSITIVE' && _effectiveThreat === 0 && _effectiveBenign >= 2) {
+                console.warn('[Verdict Coherence] TRUE_POSITIVE but 0 threat / ' + _effectiveBenign + ' benign evidence. Advisory downgrade to SUSPICIOUS (LLM may have tool evidence heuristic missed).');
                 _fv = 'SUSPICIOUS';
               }
-              // RULE 3: If LLM says FALSE_POSITIVE but threat evidence greatly outweighs benign (3:1+), upgrade to SUSPICIOUS
+              // RULE 2: If LLM says TRUE_POSITIVE but exculpatory greatly outweighs inculpatory (2x+), advisory downgrade
+              // Relaxed from >= to > 2x — gives LLM more room when evidence is close
+              else if (_fv === 'TRUE_POSITIVE' && _effectiveBenign > 0 && _effectiveBenign >= _effectiveThreat * 2) {
+                console.warn('[Verdict Coherence] TRUE_POSITIVE but exculpatory(' + _effectiveBenign + ') >> inculpatory(' + _effectiveThreat + '). Advisory downgrade to SUSPICIOUS.');
+                _fv = 'SUSPICIOUS';
+              }
+              // RULE 3: If LLM says FALSE_POSITIVE but threat evidence greatly outweighs benign (3:1+), advisory upgrade
+              // Keep this as a safety net — if overwhelming threat evidence exists, LLM's FP is suspicious
               else if (_fv === 'FALSE_POSITIVE' && _effectiveThreat > 0 && (_effectiveBenign === 0 || _effectiveThreat >= _effectiveBenign * 3)) {
-                console.warn('[Verdict Coherence] FALSE_POSITIVE but evidence heavily threatening (' + _effectiveThreat + ' threat / ' + _effectiveBenign + ' benign). Upgrading to SUSPICIOUS.');
+                console.warn('[Verdict Coherence] FALSE_POSITIVE but evidence heavily threatening (' + _effectiveThreat + ' threat / ' + _effectiveBenign + ' benign). Advisory upgrade to SUSPICIOUS.');
                 _fv = 'SUSPICIOUS';
               }
               // ── Telemetry depth check for LLM verdict ──
-              // If LLM says TRUE_POSITIVE but no EDR and no SIEM-confirmed malicious indicators, cap at SUSPICIOUS
-              if (_fv === 'TRUE_POSITIVE' && _forceSuspiciousCap) {
-                console.warn('[Verdict Coherence] TRUE_POSITIVE but telemetry is insufficient (no EDR + no SIEM-confirmed threats). Downgrading to SUSPICIOUS.');
-                _fv = 'SUSPICIOUS';
+              // If LLM says TRUE_POSITIVE but no EDR and no SIEM-confirmed malicious indicators, consider capping
+              // ADVISORY: If LLM has high confidence (>= 80) from its own tool-based investigation, allow its verdict
+              // The LLM uses SIEM queries, AbuseIPDB, TIP lookups, and analyst corpus — it may have evidence the heuristic missed
+              var _llmConfidence = _llmResp.result.final_confidence || 0;
+              if (_fv === 'TRUE_POSITIVE' && _forceSuspiciousCap && !_failedQueriesGuardrail) {
+                if (_llmConfidence >= 80) {
+                  console.log('[Verdict Coherence] TRUE_POSITIVE with insufficient heuristic telemetry BUT LLM confidence is ' + _llmConfidence + '%. Allowing LLM verdict (advisory override).');
+                  // LLM has strong evidence from tools — trust it, but cap confidence slightly
+                  confidence = Math.min(_llmConfidence, 85);
+                } else {
+                  console.warn('[Verdict Coherence] TRUE_POSITIVE but telemetry is insufficient and LLM confidence is only ' + _llmConfidence + '%. Downgrading to SUSPICIOUS.');
+                  _fv = 'SUSPICIOUS';
+                }
               }
-              // ── Failed queries guardrail for LLM verdict ──
-              // If LLM says TRUE_POSITIVE but critical queries failed/returned empty, cap at SUSPICIOUS
+              // ── Failed queries guardrail for LLM verdict — HARD BLOCK (safety-critical) ──
+              // If critical queries actually failed/errored, we cannot trust any TP verdict regardless of LLM confidence
+              // This is the ONLY hard block remaining — everything else is advisory
               if (_fv === 'TRUE_POSITIVE' && _failedQueriesGuardrail) {
-                console.warn('[Verdict Guardrail] LLM said TRUE_POSITIVE but ' + _totalCritIssues + ' critical queries failed or lacked telemetry. Downgrading to SUSPICIOUS.');
+                console.warn('[Verdict Guardrail] LLM said TRUE_POSITIVE but ' + _totalCritIssues + ' critical queries failed or lacked telemetry. Downgrading to SUSPICIOUS (hard guardrail).');
                 _fv = 'SUSPICIOUS';
               }
 

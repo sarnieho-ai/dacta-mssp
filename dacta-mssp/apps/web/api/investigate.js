@@ -291,10 +291,29 @@ Think like a senior DACTA analyst. Follow this investigation order:
 - Use ONLY the relevant index patterns listed in the alert context. If the context says some vendors or log sources are not relevant, do NOT query them
 - Follow the pivot chain: alert source IP → what else did it talk to? → were those targets compromised? → timeline correlation
 
-### Step 4: Corroborate with Threat Intel & EDR
+### Step 4: IP Reputation Check (ALWAYS for public IPs)
+- For EVERY public IP address in the alert IOCs, use lookup_ip_reputation to check AbuseIPDB reputation
+- This provides quantitative data: abuse confidence score (0-100%), number of reports, ISP, country, and top abuse categories
+- An IP with score >= 80% is HIGHLY_MALICIOUS — strong inculpatory evidence
+- An IP with score 25-79% is SUSPICIOUS/LOW_RISK — moderate inculpatory evidence
+- An IP with score 0% and 0 reports is CLEAN — moderate exculpatory evidence
+- Private/reserved IPs are automatically detected and skipped
+- Do NOT skip this step — IP reputation is one of the strongest quantitative signals available
+
+### Step 5: Corroborate with Threat Intel & EDR
 - Use search_edr ONLY when the alert context explicitly says endpoint telemetry is relevant and permitted
 - Check DACTA TIP for IOC reputation and MITRE technique context when the alert contains applicable IOCs or techniques
 - Look at alert history on the same host or entity only when that entity is relevant to the alert
+
+### Step 6: Quantitative Evidence Gathering
+- Use search_siem with aggregations (aggs) to get EVENT COUNTS, not just individual events
+- Example: Count how many times a source IP communicated with a destination in the last 24h vs 7d vs 30d
+- Example: Aggregate bytes_sent and bytes_received to quantify data transfer volumes
+- Example: Count unique destination IPs contacted by a source to detect scanning behavior
+- A single firewall deny event means little; 500 deny events from the same source in 1 hour is a port scan
+- Always report QUANTITIES in your findings: "47 connection attempts", "3.2MB transferred", "contacted 128 unique IPs"
+- If event counts are 0 for a query, that IS meaningful evidence (absence of activity)
+- Never say "suspicious activity detected" without quantifying HOW MUCH activity
 
 ### Evidence Quality Rules
 - If a query is unsuccessful or returns no meaningful data, treat it as inconclusive or suspicious — never as confirmation of a true positive
@@ -318,6 +337,13 @@ Priority-based priors (adjust based on evidence):
 - P4/Low alerts: Start at 30 and adjust
 
 IMPORTANT: The confidence score should reflect the DIRECTION and STRENGTH of evidence, not just uncertainty. A P1 ransomware alert with corroborating SIEM logs should score 80+. A P4 port scan from an internal scanner should score 15-25.
+
+QUANTITATIVE CALIBRATION:
+- AbuseIPDB score >= 80% for an involved IP: +20 confidence toward TP
+- AbuseIPDB score == 0% with 0 reports: +15 confidence toward FP
+- 100+ blocked firewall events from same source: strong indicator of scanning (usually FP for the target)
+- Zero bytes transferred in network events: strong FP indicator (connection never established)
+- 5+ correlated Jira tickets with same rule on same host: strong recurring pattern signal
 
 ## Output Format
 You MUST respond with a valid JSON object (no markdown, no code fences) containing:
@@ -586,6 +612,18 @@ const INVESTIGATION_TOOLS = [
         limit: { type: "integer", description: "Max results to return (default 5, max 20)" }
       },
       required: ["detection_rule"]
+    }
+  },
+  {
+    name: "lookup_ip_reputation",
+    description: "Check an IP address reputation against AbuseIPDB. Returns abuse confidence score (0-100), number of reports, ISP, country, usage type, and top abuse categories. Use this for ANY public IP addresses found in the alert to quickly assess if they are known-malicious, suspicious, or clean. Private/reserved IPs are automatically detected and skipped. CRITICAL: Use this tool early in your investigation for every public IP in the alert IOCs — it provides quantitative reputation data that directly informs your verdict confidence.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ip: { type: "string", description: "The IP address to check (IPv4 or IPv6)" },
+        max_age_days: { type: "integer", description: "Max age of reports in days (default 90, max 365)" }
+      },
+      required: ["ip"]
     }
   }
 ];
@@ -1244,6 +1282,47 @@ async function executeQueryAnalystCorpus(input) {
   };
 }
 
+// ── AbuseIPDB IP Reputation Lookup ──
+async function executeLookupIPReputation(input) {
+  const ip = input.ip || input.ipAddress;
+  if (!ip) return { error: 'ip is required' };
+
+  try {
+    // Call our AbuseIPDB serverless proxy
+    const resp = await fetch(`https://dacta-siemless.vercel.app/api/abuseipdb`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'check_ip', ip, maxAgeInDays: input.max_age_days || 90 })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      // If AbuseIPDB is not configured, return graceful degradation
+      if (resp.status === 503) {
+        return {
+          ip,
+          assessment: 'UNAVAILABLE',
+          note: 'AbuseIPDB API key not configured. IP reputation check skipped.',
+          summary: `${ip} — AbuseIPDB not configured. Treat IP reputation as UNKNOWN.`
+        };
+      }
+      return { error: `AbuseIPDB lookup failed (${resp.status}): ${errText}` };
+    }
+
+    const result = await resp.json();
+    console.log(`[AbuseIPDB] ${ip}: score=${result.abuseConfidenceScore}, reports=${result.totalReports}, assessment=${result.assessment}`);
+    return result;
+  } catch (err) {
+    console.warn('[AbuseIPDB] Lookup failed for', ip, ':', err.message);
+    return {
+      ip,
+      assessment: 'ERROR',
+      error: err.message,
+      summary: `${ip} — AbuseIPDB lookup failed: ${err.message}. Treat IP reputation as UNKNOWN.`
+    };
+  }
+}
+
 async function executeTool(name, input) {
   switch (name) {
     case 'search_siem': return await executeSearchSIEM(input);
@@ -1251,6 +1330,7 @@ async function executeTool(name, input) {
     case 'lookup_mitre': return await executeLookupMITRE(input);
     case 'search_edr': return await executeSearchEDR(input, _currentEDRContext);
     case 'query_analyst_corpus': return await executeQueryAnalystCorpus(input);
+    case 'lookup_ip_reputation': return await executeLookupIPReputation(input);
     default: return { error: `Unknown tool: ${name}` };
   }
 }
@@ -1768,6 +1848,12 @@ ${(() => {
     sections.push('### DACTA TIP Lookup Results (Destination IP Pivot)');
     di.dest_tip_results.forEach(t => {
       sections.push(`- ${t.value}: ${t.found ? 'FOUND — Labels: ' + t.labels.join(', ') + ' (Source: ' + t.source + ')' : 'NOT FOUND in TIP — no abuse reports'}`);
+    });
+  }
+  if (di.ip_reputation && di.ip_reputation.length > 0) {
+    sections.push('### AbuseIPDB IP Reputation Results');
+    di.ip_reputation.forEach(r => {
+      sections.push(`- ${r.summary || r.ip + ': ' + r.assessment}`);
     });
   }
   if (di.device_names && di.device_names.length > 0) {
