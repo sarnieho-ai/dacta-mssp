@@ -1787,6 +1787,22 @@ tbody tr:hover td { background: linear-gradient(90deg, rgba(0,212,255,0.03) 0%, 
   border-color: var(--border-accent);
   color: var(--text-primary);
 }
+/* Date picker — force light controls on dark bg for contrast */
+input[type="datetime-local"].filter-select {
+  color-scheme: dark;
+  color: var(--text-primary);
+}
+input[type="datetime-local"].filter-select::-webkit-calendar-picker-indicator {
+  filter: invert(0.7) brightness(1.4);
+  cursor: pointer;
+}
+[data-theme="light"] input[type="datetime-local"].filter-select {
+  color-scheme: light;
+  color: var(--text-secondary);
+}
+[data-theme="light"] input[type="datetime-local"].filter-select::-webkit-calendar-picker-indicator {
+  filter: none;
+}
 
 /* Metric cards row */
 .metrics-row {
