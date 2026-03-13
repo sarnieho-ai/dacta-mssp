@@ -59885,20 +59885,37 @@ async function runAIInvestigation(ticketKey, issueData) {
   elasticLogs = elasticResult.value || simulateElasticLookup(summary, cleanDesc, iocs, techniques);
   console.log('[AI Investigation] Elastic lookup complete: ' + elasticLogs.queriesRun + ' queries, connected=' + elasticLogs.elasticConnected);
 
-  // ── Boost inculpatory weight from multi-scanner consensus + CrowdStrike ──
-  var csHighConfirmCount = 0, csMediumConfirmCount = 0;
-  // Count from multi-scanner consensus verdicts
+  // ── Boost inculpatory weight from multi-scanner consensus ──
+  // Track consensus-level counts AND per-scanner attribution
+  var _msConsensusHighCount = 0, _msConsensusMedCount = 0;
+  var _msFlaggedScanners = {}; // { 'VirusTotal': {malicious:N, suspicious:N}, ... }
   Object.values(multiScannerData.results || {}).forEach(function(iocR) {
     var cv = (iocR.consensus || {}).verdict;
-    if (cv === 'malicious') csHighConfirmCount++;
-    else if (cv === 'suspicious') csMediumConfirmCount++;
+    if (cv === 'malicious') _msConsensusHighCount++;
+    else if (cv === 'suspicious') _msConsensusMedCount++;
+    // Track which individual scanners flagged this IOC
+    Object.entries(iocR.scanners || {}).forEach(function(se) {
+      var sName = se[0], sData = se[1];
+      if (!sData.available) return;
+      var pretty = sName === 'virustotal' ? 'VirusTotal' : sName === 'abuseipdb' ? 'AbuseIPDB' : sName === 'crowdstrike' ? 'CrowdStrike' : sName;
+      if (!_msFlaggedScanners[pretty]) _msFlaggedScanners[pretty] = { malicious: 0, suspicious: 0, clean: 0 };
+      if (sData.verdict === 'malicious') _msFlaggedScanners[pretty].malicious++;
+      else if (sData.verdict === 'suspicious') _msFlaggedScanners[pretty].suspicious++;
+      else _msFlaggedScanners[pretty].clean++;
+    });
   });
+  // Backward-compat aliases used elsewhere
+  var csHighConfirmCount = _msConsensusHighCount, csMediumConfirmCount = _msConsensusMedCount;
   // Fallback: also count from CS-only enrichment if multi-scanner not available
   if (csHighConfirmCount === 0 && csMediumConfirmCount === 0) {
     Object.values(csEnrichment.lookup || {}).forEach(function(ioc) {
       if (ioc.malicious_confidence === 'high') csHighConfirmCount++;
       else if (ioc.malicious_confidence === 'medium') csMediumConfirmCount++;
     });
+    // If we fell back to CS-only, attribute to CrowdStrike
+    if (csHighConfirmCount > 0 || csMediumConfirmCount > 0) {
+      _msFlaggedScanners['CrowdStrike'] = { malicious: csHighConfirmCount, suspicious: csMediumConfirmCount, clean: 0 };
+    }
   }
 
   // Legacy evidence generators kept for fallback if LLM API unavailable
@@ -60003,25 +60020,35 @@ async function runAIInvestigation(ticketKey, issueData) {
     // If no firewall networkConnection entries at all (e.g. 0 IPs in ticket), add nothing
   }
 
-  // Inject CrowdStrike confirmed IOC evidence into inculpatory chain
+  // Inject multi-scanner confirmed IOC evidence into inculpatory chain
+  // Build attribution string from actual scanners that flagged malicious/suspicious
+  var _maliciousScanners = Object.entries(_msFlaggedScanners).filter(function(e) { return e[1].malicious > 0; }).map(function(e) { return e[0]; });
+  var _suspiciousScanners = Object.entries(_msFlaggedScanners).filter(function(e) { return e[1].suspicious > 0 && e[1].malicious === 0; }).map(function(e) { return e[0]; });
+  var _allFlaggingScanners = _maliciousScanners.concat(_suspiciousScanners);
+
   if (csHighConfirmCount > 0) {
+    var _evidSourceLabel = _maliciousScanners.length > 0 ? _maliciousScanners.join(' + ') : 'Multi-Scanner Consensus';
     var csActorStr = csEnrichment.actors.length > 0 ? ' — attributed to: ' + csEnrichment.actors.slice(0,3).join(', ') : '';
     inculpatory.unshift({
-      title: 'CrowdStrike Intel: ' + csHighConfirmCount + ' IOC(s) confirmed MALICIOUS (HIGH confidence)',
+      title: _evidSourceLabel + ': ' + csHighConfirmCount + ' IOC(s) confirmed MALICIOUS (HIGH confidence)',
       severity: 'critical',
-      detail: csHighConfirmCount + ' indicator(s) in this ticket were positively identified as malicious by CrowdStrike Falcon Intelligence' + csActorStr + '. CrowdStrike high-confidence verdicts are based on multi-source validation across their global sensor network.'
+      source: 'THREAT_INTEL',
+      detail: csHighConfirmCount + ' indicator(s) in this ticket were positively identified as malicious by ' + _evidSourceLabel + csActorStr + '. ' + (_maliciousScanners.length > 1 ? 'Multi-source consensus across ' + _maliciousScanners.join(', ') + ' strengthens this verdict.' : _maliciousScanners[0] + ' high-confidence verdicts are based on multi-source validation.')
     });
   } else if (csMediumConfirmCount > 0) {
+    var _suspSourceLabel = _suspiciousScanners.length > 0 ? _suspiciousScanners.join(' + ') : 'Multi-Scanner Consensus';
     inculpatory.push({
-      title: 'CrowdStrike Intel: ' + csMediumConfirmCount + ' IOC(s) flagged SUSPICIOUS (MEDIUM confidence)',
+      title: _suspSourceLabel + ': ' + csMediumConfirmCount + ' IOC(s) flagged SUSPICIOUS (MEDIUM confidence)',
       severity: 'high',
-      detail: csMediumConfirmCount + ' indicator(s) have a medium-confidence malicious verdict from CrowdStrike Falcon Intelligence. Recommend treating as malicious pending further analysis.'
+      source: 'THREAT_INTEL',
+      detail: csMediumConfirmCount + ' indicator(s) have a medium-confidence verdict from ' + _suspSourceLabel + '. Recommend treating as malicious pending further analysis.'
     });
   } else if (csAllIOCs.length > 0 && csEnrichment.total === 0 && !csEnrichment.error && !csEnrichment.skippedNoCS) {
     exculpatory.push({
-      title: 'CrowdStrike Intel: All ' + csAllIOCs.length + ' IOC(s) returned UNVERIFIED/CLEAN',
+      title: 'Threat Intel: All ' + csAllIOCs.length + ' IOC(s) returned UNVERIFIED/CLEAN',
       severity: 'moderate',
-      detail: 'No IOCs in this ticket were identified as malicious by CrowdStrike Falcon Intelligence. This is a moderate indicator of false positive or novel threat not yet in the intelligence database.'
+      source: 'THREAT_INTEL',
+      detail: 'No IOCs in this ticket were identified as malicious by any configured scanner (' + Object.keys(_msFlaggedScanners).join(', ') + '). This is a moderate indicator of false positive or novel threat not yet in the intelligence database.'
     });
   }
 
@@ -62444,10 +62471,18 @@ function buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs
         sourceBadgeBg = 'rgba(16,185,129,0.15)';
         sourceBadgeColor = '#10b981';
         sourceBadgeText = '[SIEM CONFIRMED]';
-      } else if (ev.title.toLowerCase().includes('crowdstrike')) {
+      } else if (ev.source === 'SIEM_CHECKED') {
+        sourceBadgeBg = 'rgba(6,182,212,0.15)';
+        sourceBadgeColor = '#06b6d4';
+        sourceBadgeText = '[SIEM CHECKED]';
+      } else if (ev.source === 'THREAT_INTEL' || ev.title.toLowerCase().includes('virustotal') || ev.title.toLowerCase().includes('abuseipdb') || ev.title.toLowerCase().includes('crowdstrike') || ev.title.toLowerCase().includes('multi-scanner')) {
         sourceBadgeBg = 'rgba(234,88,12,0.15)';
         sourceBadgeColor = '#ea580c';
         sourceBadgeText = '[THREAT INTEL]';
+      } else if (ev.source === 'JIRA_CORRELATION') {
+        sourceBadgeBg = 'rgba(99,102,241,0.15)';
+        sourceBadgeColor = '#6366f1';
+        sourceBadgeText = '[TICKET TEXT]';
       } else {
         sourceBadgeBg = 'rgba(245,158,11,0.15)';
         sourceBadgeColor = '#f59e0b';
