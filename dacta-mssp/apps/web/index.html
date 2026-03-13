@@ -58775,7 +58775,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     analystLearnings: [],   // structured learning from closed Jira tickets for LLM context
     analystCorpus: null,     // rule-based analyst corpus from query_analyst_corpus (for LLM injection)
     ipReputation: [],          // AbuseIPDB IP reputation results
-    elasticConnected: false, openctiConnected: false,
+    elasticConnected: false, openctiConnected: false, _dataSourceLabel: null,
     queriesRun: 0, queryDetails: []
   };
 
@@ -58878,6 +58878,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         if (csDirectResp.ok) {
           var csDirectData = await csDirectResp.json();
           qDirect1.status = 'success'; qDirect1.hits = (csDirectData.detections || []).length;
+          logs.elasticConnected = true; logs._dataSourceLabel = 'CrowdStrike API';
           (csDirectData.detections || []).forEach(function(det) {
             logs.rawAlerts.push({
               timestamp: det.created_timestamp, hostname: det.hostname, processName: (det.behaviors[0] || {}).filename || '',
@@ -58893,7 +58894,6 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
               scenario: '', objective: '', localPrevalence: '', globalPrevalence: '', _source: 'direct_api'
             });
           });
-          if (csDirectData.detections && csDirectData.detections.length) logs.elasticConnected = true;
         } else { qDirect1.status = 'error'; }
       } else if (_edrVendorLower.includes('trend') || _edrVendorLower.includes('vision')) {
         // Direct Trend Micro Vision One API
@@ -58906,6 +58906,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
         if (tmDirectResp.ok) {
           var tmDirectData = await tmDirectResp.json();
           qDirect2.status = 'success'; qDirect2.hits = (tmDirectData.items || []).length;
+          logs.elasticConnected = true; logs._dataSourceLabel = 'Trend Vision One API';
           (tmDirectData.items || []).forEach(function(item) {
             logs.rawAlerts.push({
               timestamp: item.createdDateTime || '', hostname: item.endpointHostName || '',
@@ -58916,7 +58917,6 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
               product: 'Trend Vision One (Direct API)', _source: 'direct_api'
             });
           });
-          if (tmDirectData.items && tmDirectData.items.length) logs.elasticConnected = true;
         } else { qDirect2.status = 'error'; }
       } else if (_edrVendorLower.includes('heimdal')) {
         // Direct Heimdal Security API
@@ -58929,6 +58929,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
           var hmDirectData = await hmDirectResp.json();
           var hmItems = Array.isArray(hmDirectData) ? hmDirectData : (hmDirectData.data || []);
           qDirect3.status = 'success'; qDirect3.hits = hmItems.length;
+          logs.elasticConnected = true; logs._dataSourceLabel = 'Heimdal API';
           hmItems.forEach(function(item) {
             logs.rawAlerts.push({
               timestamp: item.detectionDate || item.createdAt || '', hostname: item.machineName || item.hostname || '',
@@ -58940,7 +58941,6 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
               product: 'Heimdal Security (Direct API)', _source: 'direct_api'
             });
           });
-          if (hmItems.length) logs.elasticConnected = true;
         } else { qDirect3.status = 'error'; }
       }
     } catch(directApiErr) {
@@ -59175,8 +59175,10 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
     }
   } else if (_effectiveHasRealEDR && !_effectiveHasCSCapableEDR) {
     // ── Non-CrowdStrike real EDR vendor (Heimdal, Sophos, etc.) — no Elastic index but has direct API ──
+    // Also covers CrowdStrike orgs where _sourceRelevance.endpoint is false (non-endpoint alerts)
     var realEdrMsg = (_orgConfig ? _orgConfig.name : namespace) + ' uses ' + _edrVendorLabel + ' as EDR/XDR. Endpoint telemetry available via direct API (no Elastic index patterns for this vendor).';
     console.log('[Investigation] ' + realEdrMsg);
+    logs.elasticConnected = true; logs._dataSourceLabel = _edrVendorLabel + ' API';
     logs.queryDetails.push({ name: 'EDR Check (' + _edrVendorLabel + ')', index: 'ORG_CONNECTORS', query: 'orgHasConnector("' + namespace + '", "edr") + vendor=' + _edrVendorLabel, status: 'success', hits: 1, note: realEdrMsg });
     logs.childProcesses.push({ status: 'OK', query: _edrVendorLabel + ' Endpoint Agent', result: realEdrMsg + ' Process tree queries routed via ' + _edrVendorLabel + ' direct API.', count: 0, live: true });
     logs.edrActions.push({ status: 'OK', action: _edrVendorLabel + ' Endpoint Available', result: 'Endpoint containment available via ' + _edrVendorLabel + ' API. Response actions can be executed at the Response Center.', engine: _edrVendorLabel });
@@ -63017,8 +63019,11 @@ function buildRound1HTML(summary, desc, techniques, iocs, cmdCtx, elasticLogs, p
   var elConn = elasticLogs.elasticConnected || false;
   var ocConn = elasticLogs.openctiConnected || false;
   var qCount = elasticLogs.queriesRun || 0;
+  var _dsLabel = elasticLogs._dataSourceLabel || 'ELASTIC SIEM';
+  var _dsLiveLabel = _dsLabel.toUpperCase() + ' LIVE';
+  var _dsOffLabel = _dsLabel.toUpperCase() + ' OFFLINE';
   html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">' +
-    '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;' + (elConn ? 'background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);') + '">' + (elConn ? '\u25CF ELASTIC SIEM LIVE' : '\u25CB ELASTIC OFFLINE') + '</span>' +
+    '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;' + (elConn ? 'background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);') + '">' + (elConn ? '\u25CF ' + _dsLiveLabel : '\u25CB ' + _dsOffLabel) + '</span>' +
     '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.05em;' + (ocConn ? 'background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);') + '">' + (ocConn ? '\u25CF DACTA TIP LIVE' : '\u25CB DACTA TIP NO HITS') + '</span>' +
     '<span style="font-size:8px;padding:2px 8px;border-radius:10px;font-weight:600;color:var(--text-muted);background:var(--surface-1);border:1px solid var(--border-subtle);">' + qCount + ' QUERIES EXECUTED</span>' +
   '</div>';
