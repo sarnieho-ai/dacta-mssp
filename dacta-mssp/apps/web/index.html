@@ -55770,10 +55770,10 @@ async function openInvestigation(ticketKey) {
     _impApps = [...new Set(_impApps)].slice(0, 3);
     // Data objects: files, paths, policies
     var _impDataObjs = [];
-    var _impPathM = _impFullText.match(/Path:?\s*([\w.]+)/i);
-    if (_impPathM && _impPathM[1]) _impDataObjs.push(_impPathM[1]);
-    (_rIOCs.files || []).forEach(function(fi) { _impDataObjs.push(fi); });
-    (_rIOCs.paths || []).forEach(function(p) { _impDataObjs.push(p); });
+    var _impPathM = _impFullText.match(/(?:File\s*)?Path:\s*([\w.\/\\-]+)/i);
+    if (_impPathM && _impPathM[1] && _impPathM[1].length > 2) _impDataObjs.push(_impPathM[1]);
+    (_rIOCs.files || []).forEach(function(fi) { if (fi.length > 2) _impDataObjs.push(fi); });
+    (_rIOCs.paths || []).forEach(function(p) { if (p.length > 2) _impDataObjs.push(p); });
     _impDataObjs = [...new Set(_impDataObjs)].slice(0, 3);
 
     function _impCard(icon, label, items, color) {
@@ -56533,7 +56533,7 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   var changesMatch = cleanDesc.match(/(?:Total\s*)?(?:configuration\s*)?changes?\s*done:?\s*(\d+)/i);
   // Message field: capture up to the next structured field or config block
   var msgMatch = cleanDesc.match(/Message:?\s*([^\n]+?)(?=\s*(?:Firewall\s*Config|Object|Source|Dest|Rule|Time|Path|Kibana|Username|Affected|Observer|$))/i);
-  var pathMatch = cleanDesc.match(/Path:?\s*([\w.]+)/i);
+  var pathMatch = cleanDesc.match(/(?:File\s*)?Path:\s*([\w.\/\\-]+)/i);
 
   // ── Extract rich behavioral data (from analyst comments / descriptions) ──
   // Source IP: require valid IP format (at least x.x.x.x with dots) to avoid matching counts like '11'
