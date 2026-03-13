@@ -38,50 +38,125 @@ const CS_BASE_URL = process.env.CROWDSTRIKE_BASE_URL || 'https://api.us-2.crowds
 
 // ═══════════════════════════════════════════════
 // Organization Context Loader
+// ═══════════════════════════════════════════════
+// Org ID resolution: namespace → org_id mapping
+// This is the authoritative mapping used when the organizations table
+// is empty or unreachable. Keeps investigation working regardless of DB state.
+// ═══════════════════════════════════════════════
+const NAMESPACE_TO_ORG_ID = {
+  'dacta':           '9ce7a126-4e9d-434e-b952-f4c4fce56fa1',
+  'nagaworld':       '3a57db8a-7787-414c-9e28-1c14de388d31',
+  'emservices':      'bc08ccf3-7143-47ff-97af-07b735208186',
+  'sptelecom':       '00145232-a625-4b8b-be55-989b35b1c7c2',
+  'toyotafinancial': 'a1cffb2a-32f3-4cb6-b29e-3fa40d8e08a6',
+  'foxwood':         'f6463102-adc3-4bdc-a014-ba197d0fada6',
+  'spmt':            'b8672c8b-3907-48b0-8c58-b61aa38fbf4b',
+  'silverkey':       '93281f08-dbad-4d0d-8656-ab7618f373a4',
+  'advpartners':     'bb0db674-d91f-4a21-9c71-984c10749feb',
+  'dactatraining':   '3a6e0c3a-0bf7-4614-9299-bb9c02b0507d'
+};
+
+// Reverse map: org name fragments → namespace (for name-based resolution)
+const ORG_NAME_TO_NAMESPACE = {
+  'dacta global': 'dacta', 'dacta': 'dacta',
+  'naga world': 'nagaworld', 'nagaworld': 'nagaworld',
+  'em services': 'emservices', 'em service': 'emservices',
+  'sp telecom': 'sptelecom', 'sptele': 'sptelecom',
+  'toyota financial': 'toyotafinancial', 'toyota': 'toyotafinancial',
+  'foxwood': 'foxwood', 'foxwood technology': 'foxwood',
+  'spmt': 'spmt', 'sp media': 'spmt',
+  'silverkey': 'silverkey', 'silver key': 'silverkey',
+  'adv partners': 'advpartners', 'advpartners': 'advpartners',
+  'dacta training': 'dactatraining', 'dactatraining': 'dactatraining'
+};
+
 // Resolves org name → org_id → connectors + log sources
+// Uses a 3-tier resolution strategy:
+//   1. Query organizations table (DB, via service role key)
+//   2. Match orgName against ORG_NAME_TO_NAMESPACE → NAMESPACE_TO_ORG_ID
+//   3. Use the namespace parameter directly → NAMESPACE_TO_ORG_ID
 // ═══════════════════════════════════════════════
 async function loadOrgContext(orgName, namespace) {
-  if (!SUPABASE_SERVICE_KEY) return { orgId: null, connectors: [], logSources: [], indexPatterns: [] };
+  if (!SUPABASE_SERVICE_KEY) return { orgId: null, connectors: [], logSources: [], indexPatterns: [], edrStatus: null };
   const headers = {
     'apikey': SUPABASE_SERVICE_KEY,
     'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
     'Accept': 'application/json'
   };
   try {
-    // Step 1: Resolve org name to org_id (prioritize exact matches)
+    // Step 1: Resolve org name to org_id
+    // Strategy: Try organizations table first, then fallback to namespace maps
     let orgId = null;
+    let resolvedVia = 'none';
+
+    // 1a. Try organizations table (may be empty if RLS blocks or not yet populated)
     if (orgName) {
-      const orgResp = await fetch(`${SUPABASE_URL}/rest/v1/organizations?select=id,name,short_name`, { headers });
-      if (orgResp.ok) {
-        const orgs = await orgResp.json();
-        const nameLower = orgName.toLowerCase().trim();
-        // Priority 1: Exact name match
-        let org = orgs.find(o => o.name.toLowerCase() === nameLower);
-        // Priority 2: Full name contained in the other (but require full word match)
-        if (!org) org = orgs.find(o => {
-          const dbName = o.name.toLowerCase();
-          return (nameLower.includes(dbName) && dbName.length > 3) ||
-                 (dbName.includes(nameLower) && nameLower.length > 3);
-        });
-        // Priority 3: Short name match (only if short_name >= 3 chars to avoid false matches)
-        if (!org) org = orgs.find(o =>
-          o.short_name && o.short_name.length >= 3 && nameLower.includes(o.short_name.toLowerCase())
-        );
-        if (org) orgId = org.id;
+      try {
+        const orgResp = await fetch(`${SUPABASE_URL}/rest/v1/organizations?select=id,name,short_name`, { headers });
+        if (orgResp.ok) {
+          const orgs = await orgResp.json();
+          if (orgs.length > 0) {
+            const nameLower = orgName.toLowerCase().trim();
+            let org = orgs.find(o => o.name.toLowerCase() === nameLower);
+            if (!org) org = orgs.find(o => {
+              const dbName = o.name.toLowerCase();
+              return (nameLower.includes(dbName) && dbName.length > 3) ||
+                     (dbName.includes(nameLower) && nameLower.length > 3);
+            });
+            if (!org) org = orgs.find(o =>
+              o.short_name && o.short_name.length >= 3 && nameLower.includes(o.short_name.toLowerCase())
+            );
+            if (org) { orgId = org.id; resolvedVia = 'organizations_table'; }
+          }
+        }
+      } catch (e) {
+        console.warn('[Investigate] organizations table query failed:', e.message);
       }
     }
-    if (!orgId) {
-      console.log('[Investigate] Could not resolve org_id for:', orgName);
-      return { orgId: null, connectors: [], logSources: [], indexPatterns: [] };
+
+    // 1b. Fallback: resolve via org name → namespace → org_id map
+    if (!orgId && orgName) {
+      const nameLower = orgName.toLowerCase().trim();
+      const matchedNS = ORG_NAME_TO_NAMESPACE[nameLower];
+      if (matchedNS && NAMESPACE_TO_ORG_ID[matchedNS]) {
+        orgId = NAMESPACE_TO_ORG_ID[matchedNS];
+        resolvedVia = 'name_to_namespace_map';
+      } else {
+        // Fuzzy: check if any key is contained in orgName
+        for (const [fragment, ns] of Object.entries(ORG_NAME_TO_NAMESPACE)) {
+          if (nameLower.includes(fragment) && NAMESPACE_TO_ORG_ID[ns]) {
+            orgId = NAMESPACE_TO_ORG_ID[ns];
+            resolvedVia = 'name_fragment_match';
+            break;
+          }
+        }
+      }
     }
+
+    // 1c. Fallback: resolve via namespace parameter directly
+    if (!orgId && namespace) {
+      const ns = namespace.toLowerCase().trim();
+      if (NAMESPACE_TO_ORG_ID[ns]) {
+        orgId = NAMESPACE_TO_ORG_ID[ns];
+        resolvedVia = 'namespace_direct';
+      }
+    }
+
+    if (!orgId) {
+      console.log('[Investigate] Could not resolve org_id for:', orgName, '/ namespace:', namespace);
+      return { orgId: null, connectors: [], logSources: [], indexPatterns: [], edrStatus: null };
+    }
+    console.log(`[Investigate] Resolved org_id=${orgId} via ${resolvedVia} (orgName="${orgName}", namespace="${namespace}")`);
 
     // Step 2: Load connectors and log sources in parallel
     const [connResp, lsResp] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/org_connectors?org_id=eq.${orgId}&is_enabled=eq.true&select=id,connector_type,vendor,api_endpoint,auth_type,credentials_ref,health_status`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/org_connectors?org_id=eq.${orgId}&select=id,connector_type,vendor,display_name,is_enabled,api_endpoint,auth_type,credentials_ref,health_status,metadata`, { headers }),
       fetch(`${SUPABASE_URL}/rest/v1/client_log_sources?org_id=eq.${orgId}&select=source_name,vendor,source_type,index_pattern,status`, { headers })
     ]);
 
-    const connectors = connResp.ok ? await connResp.json() : [];
+    // Note: fetch ALL connectors (not just is_enabled=true) so we know the org's full tooling picture
+    const allConnectors = connResp.ok ? await connResp.json() : [];
+    const enabledConnectors = allConnectors.filter(c => c.is_enabled !== false);
     const logSources = lsResp.ok ? await lsResp.json() : [];
 
     // Step 3: Extract all unique index patterns
@@ -94,11 +169,42 @@ async function loadOrgContext(orgName, namespace) {
       }
     });
 
-    console.log(`[Investigate] Org context loaded: orgId=${orgId}, connectors=${connectors.length}, logSources=${logSources.length}, indices=${indexPatterns.length}`);
-    return { orgId, connectors, logSources, indexPatterns };
+    // Step 4: Build EDR status summary (globally aware)
+    // This tells the investigation engine EXACTLY what EDR situation the org has
+    const edrConnector = allConnectors.find(c => c.connector_type === 'edr');
+    let edrStatus = null;
+    if (edrConnector) {
+      const vendor = (edrConnector.vendor || '').toLowerCase();
+      const isRealEDR = edrConnector.is_enabled && vendor !== 'none' && vendor !== 'pending' && vendor !== '';
+      const isExplicitlyNoEDR = !edrConnector.is_enabled || vendor === 'none';
+      edrStatus = {
+        has_edr: isRealEDR,
+        explicitly_no_edr: isExplicitlyNoEDR,
+        vendor: edrConnector.vendor || 'Unknown',
+        display_name: edrConnector.display_name || edrConnector.vendor || 'EDR',
+        is_enabled: edrConnector.is_enabled,
+        health_status: edrConnector.health_status || 'unknown',
+        // For guardrails: if org explicitly has no EDR, don't penalize for missing EDR telemetry
+        skip_edr_telemetry_gap: isExplicitlyNoEDR
+      };
+    } else {
+      // No EDR connector record at all — unknown situation, don't assume either way
+      edrStatus = {
+        has_edr: false,
+        explicitly_no_edr: false,
+        vendor: null,
+        display_name: null,
+        is_enabled: false,
+        health_status: 'not_configured',
+        skip_edr_telemetry_gap: false
+      };
+    }
+
+    console.log(`[Investigate] Org context loaded: orgId=${orgId}, connectors=${enabledConnectors.length}/${allConnectors.length} (enabled/total), logSources=${logSources.length}, indices=${indexPatterns.length}, EDR: ${edrStatus.has_edr ? edrStatus.vendor : (edrStatus.explicitly_no_edr ? 'NONE (explicit)' : 'unknown')}`);
+    return { orgId, connectors: enabledConnectors, allConnectors, logSources, indexPatterns, edrStatus };
   } catch (err) {
     console.error('[Investigate] Failed to load org context:', err.message);
-    return { orgId: null, connectors: [], logSources: [], indexPatterns: [] };
+    return { orgId: null, connectors: [], logSources: [], indexPatterns: [], edrStatus: null };
   }
 }
 
@@ -1577,16 +1683,30 @@ export default async function handler(req, res) {
       ).join('\n');
     }
 
-    // ── Build connector/tools summary ──
+    // ── Build connector/tools summary (EDR-aware) ──
     let connectorSummary = '';
     const scopedConnectors = (sourceRelevance.relevantConnectors && sourceRelevance.relevantConnectors.length > 0) ? sourceRelevance.relevantConnectors : orgCtx.connectors;
     const activeConnectors = scopedConnectors.filter(c => c.health_status === 'healthy' || c.health_status === 'degraded');
     if (activeConnectors.length > 0) {
       connectorSummary = '\n### Available Security Tools for This Organization\n' + activeConnectors.map(c =>
-        `- **${c.vendor}** (${c.connector_type}) — status: ${c.health_status}`
+        `- **${c.vendor || c.display_name}** (${c.connector_type}) — status: ${c.health_status}`
       ).join('\n');
       if (_currentEDRContext) {
         connectorSummary += `\n\n**EDR Available For This Alert**: ${_currentEDRContext.vendor}. Use the search_edr tool only for endpoint-relevant hypotheses.`;
+      }
+    }
+
+    // ── Build org-level EDR status context for LLM ──
+    // This is CRITICAL: tells the LLM whether missing EDR data is expected or a gap
+    const edrStatus = orgCtx.edrStatus;
+    let edrStatusSummary = '';
+    if (edrStatus) {
+      if (edrStatus.has_edr) {
+        edrStatusSummary = `\n### Organization EDR Status\nThis organization has **${edrStatus.vendor}** (${edrStatus.display_name}) deployed as their EDR/XDR solution (status: ${edrStatus.health_status}).\nEndpoint telemetry IS available. If endpoint queries return no data, this may indicate a real gap worth investigating.`;
+      } else if (edrStatus.explicitly_no_edr) {
+        edrStatusSummary = `\n### Organization EDR Status\n**This organization has NO EDR deployed.** This is a known configuration — the client does not use endpoint detection.\nDo NOT count missing endpoint/EDR telemetry as a failure or telemetry gap. Base your verdict entirely on available log sources (SIEM, firewall, threat intel).\nA firewall-only investigation CAN reach FALSE_POSITIVE if the available evidence is sufficiently clear (clean TIP, blocked traffic, known scanner IPs, zero-byte transfers).`;
+      } else {
+        edrStatusSummary = `\n### Organization EDR Status\nEDR status for this organization is **unknown** (not configured in the connector database).\nTreat missing endpoint data as inconclusive — neither confirm nor deny based on absent EDR telemetry.`;
       }
     }
 
@@ -1733,6 +1853,7 @@ ${indexContext}
 ${fieldMappingContext}
 ${logSourceSummary}
 ${connectorSummary}
+${edrStatusSummary}
 ${relevanceSummary}`;
 
     const tokenizedBrief = vault.tokenize(alertBrief);

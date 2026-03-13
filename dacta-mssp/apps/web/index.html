@@ -42620,9 +42620,10 @@ var ORG_CONNECTORS = {
   '9ce7a126-4e9d-434e-b952-f4c4fce56fa1': { // Dacta Global
     code: 'DG', name: 'Dacta Global', type: 'internal', namespace: 'dacta',
     connectors: [
-      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'dacta', index_pattern: 'dacta-*' } },
-      { connector_type: 'edr', vendor: 'CrowdStrike', display_name: 'CrowdStrike Falcon EDR', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'dacta', index_pattern: '.ds-logs-crowdstrike.alert-dacta-*', host_index: '.ds-logs-crowdstrike.host-dacta-*' } },
-      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'dacta', index_pattern: 'logs-panw.panos-dacta-*' } },
+      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'dacta', index_pattern: 'logs-*-dacta' } },
+      { connector_type: 'edr', vendor: 'Heimdal', display_name: 'Heimdal Security', is_enabled: true, health_status: 'healthy', metadata: { api_type: 'direct_api', notes: 'Heimdal EDR/XDR — endpoint detections, DNS security, patching via direct API (not SIEM indexed)' } },
+      { connector_type: 'firewall', vendor: 'Fortinet', display_name: 'Fortigate', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'dacta', index_pattern: 'logs-fortinet_fortigate.log-dacta logs-netflow.log-dacta' } },
+      { connector_type: 'audit', vendor: 'Microsoft', display_name: 'Microsoft 365 + Defender for Endpoint', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'dacta', index_pattern: 'logs-m365_defender.alert-dacta logs-m365_defender.incident-dacta logs-m365_defender.log-dacta logs-microsoft_defender_endpoint.log-dacta logs-o365.audit-dacta', notes: 'Includes MDE endpoint telemetry in SIEM' } },
       { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
       { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } },
       { connector_type: 'identity', vendor: 'Microsoft', display_name: 'Azure AD / Entra ID', is_enabled: true, health_status: 'healthy', metadata: { type: 'identity_provider', protocol: 'SAML/OIDC' } },
@@ -60003,10 +60004,32 @@ async function runAIInvestigation(ticketKey, issueData) {
 
   // If verdict would be TP but is driven by lack of telemetry (not confirmed malicious evidence),
   // downgrade to SUSPICIOUS to avoid unwanted alarms
+  // EDR-AWARE: If org explicitly has no EDR, don't treat missing EDR telemetry as a reason
+  // to cap the verdict. The analyst investigates without EDR too — the AI should be able to.
   var _forceSuspiciousCap = false;
+  var _orgHasNoEDRByDesign = !_effectiveHasRealEDR && (function() {
+    var ec = getOrgConnector(namespace, 'edr');
+    if (!ec) return false;
+    var v = (ec.vendor || '').toLowerCase();
+    return !ec.is_enabled || v === 'none' || v === 'pending' || v === '';
+  })();
   if (_isLackOfTelemetryVerdict && tpWeight > fpWeight * 1.5) {
-    console.warn('[Verdict Sensitivity] TP verdict based on lack of telemetry (no EDR + no SIEM-confirmed threats). Capping at SUSPICIOUS.');
-    _forceSuspiciousCap = true;
+    if (_orgHasNoEDRByDesign) {
+      // Org doesn't have EDR — "lack of EDR telemetry" is expected, not a verdict blocker
+      // Only cap if there's genuinely no SIEM evidence either (not just missing EDR)
+      var _hasSIEMEvidence = (elasticLogs.queryDetails || []).some(function(qd) {
+        return (qd.result_state === 'success' || qd.result_state === 'clean' || qd.result_state === 'checked_clear') && qd.hits > 0;
+      });
+      if (!_hasSIEMEvidence) {
+        console.warn('[Verdict Sensitivity] No EDR (by design) AND no SIEM evidence. Capping at SUSPICIOUS.');
+        _forceSuspiciousCap = true;
+      } else {
+        console.log('[Verdict Sensitivity] Org has no EDR by design but SIEM evidence exists. Allowing verdict to proceed.');
+      }
+    } else {
+      console.warn('[Verdict Sensitivity] TP verdict based on lack of telemetry (no EDR + no SIEM-confirmed threats). Capping at SUSPICIOUS.');
+      _forceSuspiciousCap = true;
+    }
   }
   // Additional downgrade: if we have zero bytes + all TIP clean + no EDR, this is strongly benign
   if (_hasZeroByteTransfer && _allTIPClean && _noEDRTelemetry) {
@@ -60036,7 +60059,23 @@ async function runAIInvestigation(ticketKey, issueData) {
     }
   });
   // Critical query categories: SIEM alert lookup, network connections, alert history, TIP
-  var _criticalQueryNames = ['CrowdStrike Alert', 'Alert History', 'Alert Correlation', 'DACTA TIP', 'Firewall', 'Network', 'Host Inventory', 'Jira Analyst Learning'];
+  // EDR-AWARE: queries that require EDR are only critical if the org actually has EDR deployed
+  var _edrDependentQueryNames = ['CrowdStrike Alert', 'Host Inventory', 'Alert History', 'EDR Check'];
+  var _universalCriticalQueryNames = ['Alert Correlation', 'DACTA TIP', 'Firewall', 'Network', 'Jira Analyst Learning'];
+  // Determine if this org explicitly lacks EDR (check connector config)
+  var _orgExplicitlyNoEDR = !_effectiveHasRealEDR && (function() {
+    var ec = getOrgConnector(namespace, 'edr');
+    if (!ec) return false;
+    var v = (ec.vendor || '').toLowerCase();
+    return !ec.is_enabled || v === 'none' || v === 'pending' || v === '';
+  })();
+  // Build the effective critical query list — exclude EDR-dependent queries for orgs without EDR
+  var _criticalQueryNames = _universalCriticalQueryNames.slice();
+  if (!_orgExplicitlyNoEDR) {
+    _criticalQueryNames = _criticalQueryNames.concat(_edrDependentQueryNames);
+  } else {
+    console.log('[Verdict Guardrail] Org has no EDR — excluding EDR-dependent queries from critical failure count: ' + _edrDependentQueryNames.join(', '));
+  }
   var _failedCritical = _failedQueries.filter(function(q) {
     return _criticalQueryNames.some(function(cn) { return q.indexOf(cn) !== -1; });
   });
@@ -60048,6 +60087,7 @@ async function runAIInvestigation(ticketKey, issueData) {
   var _critEmptyCount = _emptyCritical.length;
   var _totalCritIssues = _critFailCount + _critEmptyCount;
   // If 3+ critical queries failed/had telemetry gaps, this is insufficient evidence — cap at SUSPICIOUS
+  // For orgs without EDR, the threshold is effectively higher because EDR queries are excluded
   var _failedQueriesGuardrail = false;
   var _failedQueryList = _failedCritical.concat(_emptyCritical);
   if (_totalCritIssues >= 3) {
