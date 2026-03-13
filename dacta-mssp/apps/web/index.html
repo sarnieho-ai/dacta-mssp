@@ -55754,7 +55754,8 @@ async function openInvestigation(ticketKey) {
     // Match: 'Affected Firewall:', 'Firewall Device:', 'Observer Device:', 'Device:', 'Hostname:', 'Host:'
     var _impDevRx = /(?:Affected\s*Firewall|Firewall\s*Device|Observer\s*Device|Device|Hostname|Host):\s*([\w.-]+)/gi;
     var _impDevM;
-    while ((_impDevM = _impDevRx.exec(_impFullText)) !== null) { if (_impDevM[1].length > 2) _impDeviceMatches.push(_impDevM[1]); }
+    var _siemPlatformDeny = /^(kibana|splunk|sentinel|qradar|wazuh|suricata|graylog|logstash|filebeat|winlogbeat|metricbeat|elastic|siem|cribl|chronicle|humio|arcsight|logrythm|syslog|fluentd|zeek|snort|ossec|demisto|phantom|xsoar|cortex)$/i;
+    while ((_impDevM = _impDevRx.exec(_impFullText)) !== null) { if (_impDevM[1].length > 2 && !_siemPlatformDeny.test(_impDevM[1])) _impDeviceMatches.push(_impDevM[1]); }
     // Also capture hostnames from IOC extraction
     (_rIOCs.hosts || []).forEach(function(h) { if (!_impDeviceMatches.includes(h)) _impDeviceMatches.push(h); });
     _impDeviceMatches = [...new Set(_impDeviceMatches)];
@@ -56357,9 +56358,10 @@ async function openInvestigation(ticketKey) {
         var _entDevRx = /(?:Affected\s*Firewall|Firewall\s*Device|Observer\s*Device|Device|Hostname|Host):\s*([\w.-]+)/gi;
         var _entDevM;
         var _entDevSeen = new Set();
+        var _entSiemDeny = /^(kibana|splunk|sentinel|qradar|wazuh|suricata|graylog|logstash|filebeat|winlogbeat|metricbeat|elastic|siem|cribl|chronicle|humio|arcsight|logrythm|syslog|fluentd|zeek|snort|ossec|demisto|phantom|xsoar|cortex)$/i;
         while ((_entDevM = _entDevRx.exec(fullText)) !== null) {
           var _ed = _entDevM[1];
-          if (_ed.length > 2 && !_entDevSeen.has(_ed.toLowerCase())) {
+          if (_ed.length > 2 && !_entDevSeen.has(_ed.toLowerCase()) && !_entSiemDeny.test(_ed)) {
             _entDevSeen.add(_ed.toLowerCase());
             entities.push({type:'Device', icon:'&#128187;', value:_ed});
           }
@@ -56662,7 +56664,8 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
   if (userMatch && userMatch[1] && userMatch[1] !== primaryEntity) {
     contextParts.push('User: <strong>' + escapeHtml(userMatch[1]) + '</strong>');
   }
-  if (deviceMatch && deviceMatch[1]) {
+  var _narrSiemDeny = /^(kibana|splunk|sentinel|qradar|wazuh|suricata|graylog|logstash|filebeat|winlogbeat|metricbeat|elastic|siem|cribl|chronicle|humio|arcsight|logrythm|syslog|fluentd|zeek|snort|ossec|demisto|phantom|xsoar|cortex)$/i;
+  if (deviceMatch && deviceMatch[1] && !_narrSiemDeny.test(deviceMatch[1])) {
     contextParts.push('Device: <strong>' + escapeHtml(deviceMatch[1]) + '</strong>');
   }
   if (hostMatch && hostMatch[1]) {
@@ -56675,7 +56678,7 @@ function buildAlertSummaryHTML(summary, description, techniques, iocs, alertCat,
     contextParts.push('Firewall ruleset: <em>' + escapeHtml(rulesetMatch[1]) + '</em>');
   }
   // Observer device (Distributed Scan alerts): 'Observer Device: DactaForti (Fortinet)'
-  if (observerDeviceMatch && observerDeviceMatch[1]) {
+  if (observerDeviceMatch && observerDeviceMatch[1] && !_narrSiemDeny.test(observerDeviceMatch[1])) {
     var _obsLabel = escapeHtml(observerDeviceMatch[1]);
     if (observerDeviceMatch[2]) _obsLabel += ' (' + escapeHtml(observerDeviceMatch[2]) + ')';
     contextParts.push('Observer: <strong>' + _obsLabel + '</strong>');
@@ -58174,8 +58177,7 @@ function renderCachedInvestigation(ticketKey, cacheEntry, invMainContent, issueD
   // Re-init collapsible after restoring sidebar
   setTimeout(initCollapsiblePanels, 300);
 
-  // Also add feedback panel below
-  appendFeedbackPanel(ticketKey, cacheEntry, invMainContent);
+  // Feedback panel removed from main content — accessible via sidebar button
 
   // Regenerate escalation draft from cached verdict data
   if (cacheEntry.verdict && cacheEntry.escalationData) {
@@ -58642,7 +58644,7 @@ function extractIOCs(text) {
   m = text.match(macPattern) || []; iocs.macs = [...new Set(m.map(function(mac) { return mac.toUpperCase().replace(/-/g, ':'); }))];
 
   // Device name extraction — captures non-standard hostnames from structured log fields
-  var DEVICE_DENYLIST = /^(unknown|none|null|undefined|localhost|default|any|name|host|device|source|destination|true|false|internal|external|string|number|object|array|function|query|search|index|field|value|alert|event|log|data|type|status|action|rule|process|network|firewall|elastic|siem|http|https|ftp|tcp|udp|icmp)$/i;
+  var DEVICE_DENYLIST = /^(unknown|none|null|undefined|localhost|default|any|name|host|device|source|destination|true|false|internal|external|string|number|object|array|function|query|search|index|field|value|alert|event|log|data|type|status|action|rule|process|network|firewall|elastic|siem|http|https|ftp|tcp|udp|icmp|kibana|splunk|sentinel|qradar|wazuh|suricata|graylog|logstash|filebeat|winlogbeat|metricbeat|cribl|chronicle|humio|arcsight|logrythm|syslog|fluentd|zeek|snort|ossec|demisto|phantom|xsoar|cortex)$/i;
   while ((m = deviceNamePattern.exec(text)) !== null) {
     var dev = m[1];
     if (dev && dev.length >= 2 && dev.length <= 30 && !DEVICE_DENYLIST.test(dev) && !/^[0-9.]+$/.test(dev)) {
@@ -62230,11 +62232,7 @@ async function runAIInvestigation(ticketKey, issueData) {
   // Render analyst notes if any were sent from Copilot notepad
   renderAnalystNotesInInvestigation(ticketKey);
 
-  // Append feedback loop panel
-  var invMainContent = document.getElementById('invMainContent');
-  if (invMainContent) {
-    appendFeedbackPanel(ticketKey, cacheEntry, invMainContent);
-  }
+  // Feedback panel removed from main content — accessible via sidebar button
 
   // ═══════════════════════════════════════════════
   // ATTACK PATH VISUALIZATION (Task 3)
