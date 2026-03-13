@@ -31710,7 +31710,7 @@ function lscRenderCards(data) {
       _idxArr.forEach(function(p) { html += '<span class="idx-chip">' + _lscEsc(p) + '</span>'; });
       html += '</div></div>';
     }
-    html += '<div class="src-meta-item"><div class="lbl">Events/Day</div><div class="val">' + epsDisplay + '</div></div>';
+    html += '<div class="src-meta-item"><div class="lbl">Events/Day</div><div class="val lsc-epd">' + epsDisplay + '</div></div>';
     html += '<div class="src-meta-item"><div class="lbl">Onboarded</div><div class="val">' + onboardDate + '</div></div>';
     html += '<div class="src-meta-item"><div class="lbl">Last Event</div><div class="val lsc-last-event">' + lastEvent + '</div></div>';
     html += '</div>';
@@ -31740,7 +31740,8 @@ async function lscRefreshLastEvents(data) {
         // Convert space-separated or comma-separated index patterns to comma-separated for Elastic API
         var indexForQuery = (src.index_pattern || '').trim().split(/[\s,]+/).filter(function(p){ return p.length > 0; }).join(',');
         if (!indexForQuery) return;
-        var res = await fetch('/api/elastic', {
+        // Fire two queries in parallel: last event search + 24h event count
+        var searchPromise = fetch('/api/elastic', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -31754,17 +31755,40 @@ async function lscRefreshLastEvents(data) {
             }
           })
         });
+        var countPromise = fetch('/api/elastic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'count',
+            index: indexForQuery,
+            body: { query: { range: { '@timestamp': { gte: 'now-24h' } } } }
+          })
+        });
+        var responses = await Promise.all([searchPromise, countPromise]);
+        var res = responses[0];
+        var countRes = responses[1];
         if (!res.ok) throw new Error('HTTP ' + res.status);
         var result = await res.json();
+        // Parse 24h event count
+        var liveEPD = 0;
+        try {
+          if (countRes.ok) {
+            var countData = await countRes.json();
+            liveEPD = (countData && countData.count) ? countData.count : 0;
+          }
+        } catch(ce) { console.warn('[LSC] Count parse error', ce); }
+
         // Handle cases where the index doesn't exist or has no data
         if (result.error) {
           console.warn('[LSC] Elastic error for ' + src.source_name + ':', result.error.type || result.error);
           _lscUpdateCardStatus(src.id, null, 'silent', 'No index');
+          _lscUpdateCardEPD(src.id, 0);
           return;
         }
         if (!result.hits || !result.hits.hits || result.hits.hits.length === 0) {
           console.log('[LSC] No events for ' + src.source_name);
           _lscUpdateCardStatus(src.id, null, 'silent', 'No events (30d)');
+          _lscUpdateCardEPD(src.id, 0);
           return;
         }
         var realTs = result.hits.hits[0]._source['@timestamp'];
@@ -31774,14 +31798,15 @@ async function lscRefreshLastEvents(data) {
         if (timeDiff < 4 * 3600000) newStatus = 'healthy';
         else if (timeDiff < 24 * 3600000) newStatus = 'degraded';
         _lscUpdateCardStatus(src.id, realTs, newStatus, null);
+        _lscUpdateCardEPD(src.id, liveEPD);
         // Also update the metrics bar counts
         src._liveStatus = newStatus;
         src._liveLastEvent = realTs;
-        // Always update last_event_at in DB when we get a real timestamp;
-        // also update status if it changed
+        src._liveEPD = liveEPD;
+        // Always update last_event_at and events_per_day in DB
         var sb = window._dactaSupabase;
         if (sb) {
-          var updatePayload = { last_event_at: realTs };
+          var updatePayload = { last_event_at: realTs, events_per_day: liveEPD };
           if (newStatus !== (src.status || 'healthy')) {
             updatePayload.status = newStatus;
           }
@@ -31794,20 +31819,27 @@ async function lscRefreshLastEvents(data) {
   });
   Promise.allSettled(updatePromises).then(function() {
     // After all Elastic queries settle, re-calculate the metrics bar from live statuses
-    var h = 0, d = 0, s = 0;
+    var h = 0, d = 0, s = 0, totalEpd = 0;
     data.forEach(function(src) {
       var st = src._liveStatus || src.status || 'healthy';
       if (st === 'healthy') h++;
       else if (st === 'degraded') d++;
       else s++;
+      totalEpd += (src._liveEPD !== undefined ? src._liveEPD : (src.events_per_day || 0));
     });
-    var hEl = document.getElementById('lscHealthy');
-    var dEl = document.getElementById('lscDegraded');
-    var sEl = document.getElementById('lscSilent');
-    if (hEl) hEl.textContent = h;
-    if (dEl) dEl.textContent = d;
-    if (sEl) sEl.textContent = s;
-    console.log('[LSC] Elastic refresh complete: ' + h + ' healthy, ' + d + ' degraded, ' + s + ' silent');
+    // Update metrics in both LSC and Settings views
+    ['lscHealthy','stgLsHealthy'].forEach(function(id){ var el = document.getElementById(id); if (el) el.textContent = h; });
+    ['lscDegraded','stgLsDegraded'].forEach(function(id){ var el = document.getElementById(id); if (el) el.textContent = d; });
+    ['lscSilent','stgLsSilent'].forEach(function(id){ var el = document.getElementById(id); if (el) el.textContent = s; });
+    ['lscTotalEPS','stgLsTotalEPS'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        if (totalEpd >= 1000000) { el.innerHTML = (totalEpd / 1000000).toFixed(1) + '<span style="font-size:14px;">M</span>'; }
+        else if (totalEpd >= 1000) { el.innerHTML = (totalEpd / 1000).toFixed(1) + '<span style="font-size:14px;">K</span>'; }
+        else { el.textContent = totalEpd.toLocaleString(); }
+      }
+    });
+    console.log('[LSC] Elastic refresh complete: ' + h + ' healthy, ' + d + ' degraded, ' + s + ' silent, ' + totalEpd.toLocaleString() + ' events/day');
   }).catch(function(e) {
     console.warn('[LSC] Batch refresh error', e);
   });
@@ -31837,6 +31869,16 @@ function _lscUpdateCardStatus(id, timestamp, newStatus, fallbackText) {
     var statusColor = newStatus === 'healthy' ? '#22c55e' : newStatus === 'degraded' ? '#f59e0b' : '#ef4444';
     statusLabel.style.color = statusColor;
     statusLabel.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+  }
+}
+
+// Helper: update a card's Events/Day value
+function _lscUpdateCardEPD(id, epd) {
+  var card = document.querySelector('[data-lsc-id="' + id + '"]');
+  if (!card) return;
+  var epdEl = card.querySelector('.lsc-epd');
+  if (epdEl) {
+    epdEl.textContent = epd > 0 ? epd.toLocaleString() : '\u2014';
   }
 }
 
@@ -32037,7 +32079,7 @@ function stgLsRenderCards(data) {
       _idxArr.forEach(function(p) { html += '<span class="idx-chip">' + _lscEsc(p) + '</span>'; });
       html += '</div></div>';
     }
-    html += '<div class="src-meta-item"><div class="lbl">Events/Day</div><div class="val">' + epsDisplay + '</div></div>';
+    html += '<div class="src-meta-item"><div class="lbl">Events/Day</div><div class="val lsc-epd">' + epsDisplay + '</div></div>';
     html += '<div class="src-meta-item"><div class="lbl">Onboarded</div><div class="val">' + onboardDate + '</div></div>';
     html += '<div class="src-meta-item"><div class="lbl">Last Event</div><div class="val lsc-last-event">' + lastEvent + '</div></div>';
     html += '</div>';
