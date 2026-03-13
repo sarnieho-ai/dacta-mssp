@@ -42855,7 +42855,8 @@ function resolveFirewallIndexes(namespace, fwConnectors) {
   if (fwConnectors && fwConnectors.length > 0) {
     return fwConnectors.map(function(fc) {
       var m = fc.metadata || {};
-      if (m.index_pattern) return m.index_pattern;
+      // Normalize index_pattern: space-separated → comma-separated (Elastic expects commas)
+      if (m.index_pattern) return m.index_pattern.trim().replace(/\s+/g, ',');
       var v = (fc.vendor || '').toLowerCase();
       if (v.includes('fortinet') || v.includes('fortigate')) return 'logs-fortinet_fortigate.log-' + namespace + '-*';
       if (v.includes('palo') || v.includes('panw')) return 'logs-panw.panos-' + namespace + '-*';
@@ -57900,21 +57901,42 @@ function submitOverrideWithCache() {
 // ═══════════════════════════════════════════════════════════════════════
 
 // ── Elastic SIEM Query Helper ──
-async function queryElastic(action, index, body) {
+async function queryElastic(action, index, body, _retryCount) {
+  // Sanitize index: space-separated patterns → comma-separated (Elastic expects commas)
+  var _safeIndex = index ? index.trim().replace(/\s+/g, ',') : index;
+  var _attempt = (_retryCount || 0);
+  var MAX_RETRIES = 2; // up to 3 total attempts
   try {
     var resp = await fetch('/api/elastic', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: action, index: index, body: body })
+      body: JSON.stringify({ action: action, index: _safeIndex, body: body })
     });
     if (!resp.ok) {
       var errData = null;
       try { errData = await resp.json(); } catch(e) {}
-      console.warn('[Elastic] HTTP ' + resp.status + (errData ? ' — ' + (errData.error || '') : ''));
+      console.warn('[Elastic] HTTP ' + resp.status + (errData ? ' — ' + (errData.error || '') : '') + ' (attempt ' + (_attempt + 1) + ')');
+      // Retry on 5xx or 429 (rate limit)
+      if (_attempt < MAX_RETRIES && (resp.status >= 500 || resp.status === 429)) {
+        var backoff = Math.pow(2, _attempt) * 1000; // 1s, 2s
+        console.log('[Elastic] Retrying in ' + backoff + 'ms...');
+        await new Promise(function(r) { setTimeout(r, backoff); });
+        return queryElastic(action, index, body, _attempt + 1);
+      }
       return null;
     }
     return await resp.json();
-  } catch (err) { console.error('[Elastic] Query failed:', err.message || err); return null; }
+  } catch (err) {
+    console.error('[Elastic] Query failed (attempt ' + (_attempt + 1) + '):', err.message || err);
+    // Retry on network errors
+    if (_attempt < MAX_RETRIES) {
+      var backoff = Math.pow(2, _attempt) * 1000;
+      console.log('[Elastic] Retrying in ' + backoff + 'ms...');
+      await new Promise(function(r) { setTimeout(r, backoff); });
+      return queryElastic(action, index, body, _attempt + 1);
+    }
+    return null;
+  }
 }
 
 // ── DACTA TIP GraphQL Helper ──
