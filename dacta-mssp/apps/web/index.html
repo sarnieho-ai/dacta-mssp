@@ -32797,19 +32797,20 @@ async function glscInit() {
       return;
     }
 
-    // Build org map from ORG_CONNECTORS
+    // Build org map from ORG_CONNECTORS (key = org_id, value.name = org name)
     _glscOrgMap = {};
     if (typeof ORG_CONNECTORS !== 'undefined' && ORG_CONNECTORS) {
       var oKeys = Object.keys(ORG_CONNECTORS);
       for (var oi = 0; oi < oKeys.length; oi++) {
         var oc = ORG_CONNECTORS[oKeys[oi]];
-        if (oc && oc.org_id && oc.name) _glscOrgMap[oc.org_id] = oc.name;
+        if (oc && oc.name) _glscOrgMap[oKeys[oi]] = oc.name;
       }
     }
 
-    // Populate org selector (only once or refresh)
+    // Populate org selector
     var orgSel = document.getElementById('glscOrgFilter');
-    if (orgSel && orgSel.options.length <= 1) {
+    var currentOrgVal = orgSel ? orgSel.value : '';
+    if (orgSel && Object.keys(_glscOrgMap).length > 0 && orgSel.options.length <= 1) {
       var orgHTML = '<option value="">All Organizations</option>';
       var sortedOrgs = Object.keys(_glscOrgMap).sort(function(a, b) {
         return (_glscOrgMap[a] || '').localeCompare(_glscOrgMap[b] || '');
