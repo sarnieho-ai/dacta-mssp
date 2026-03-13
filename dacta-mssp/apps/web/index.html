@@ -52620,7 +52620,7 @@ async function populateLiveTriage(pageOrAppend) {
           '<td><span class="mono" style="color:var(--cyan);font-size:11px;">' + t.key + '</span></td>' +
           '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
           '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
-          '<td data-ai-status="' + t.key + '">' + getTriageAIBadge(t.key) + '</td>' +
+          '<td data-ai-status="' + t.key + '" data-priority="' + t.priorityShort + '">' + getTriageAIBadge(t.key, t.priorityShort) + '</td>' +
           '<td style="font-size:11px;">' + t.org + '</td>' +
           '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
           '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
@@ -53007,7 +53007,7 @@ function rerenderTriageTable() {
       '<td><span class="mono" style="color:var(--cyan);font-size:11px;">' + t.key + '</span></td>' +
       '<td><span class="badge ' + jiraPriorityBadge(t.priority) + '">' + t.priorityShort + '</span></td>' +
       '<td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text-primary);font-size:12px;">' + t.summary + '</td>' +
-      '<td data-ai-status="' + t.key + '">' + getTriageAIBadge(t.key) + '</td>' +
+      '<td data-ai-status="' + t.key + '" data-priority="' + t.priorityShort + '">' + getTriageAIBadge(t.key, t.priorityShort) + '</td>' +
       '<td style="font-size:11px;">' + t.org + '</td>' +
       '<td style="font-size:11px;"><span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);color:#00d4ff;">Jira</span></td>' +
       '<td><span class="badge ' + jiraStatusBadge(t.status) + '">' + t.status + '</span></td>' +
@@ -56166,7 +56166,7 @@ function mapVerdictTier(rawVerdict, confidence, threatScore) {
   return { code: 'SUS', label: 'Suspicious', cssClass: 'cached-susp', sortWeight: 2 };
 }
 
-function getTriageAIBadge(ticketKey) {
+function getTriageAIBadge(ticketKey, priorityShort) {
   if (_activeInvestigations[ticketKey]) {
     return '<span class="tq-ai-badge investigating"><span class="jira-spinner" style="width:8px;height:8px;"></span> AI Investigating</span>';
   }
@@ -56175,7 +56175,18 @@ function getTriageAIBadge(ticketKey) {
     if (cached.overrideVerdict) {
       return '<span class="tq-ai-badge overridden" title="Analyst override: ' + (cached.overrideVerdict || '') + '">' + dIcon('edit',14) + ' Overridden</span>';
     }
-    var tier = mapVerdictTier(cached.verdict, cached.confidence, cached.threatScore || (cached.metadata && cached.metadata.threatScore));
+    var ts = cached.threatScore || (cached.metadata && cached.metadata.threatScore);
+    // For legacy cached entries with SUSPICIOUS ~45% and no threat_score,
+    // derive a synthetic threat_score from ticket priority for meaningful differentiation
+    if (!ts && cached.verdict && cached.verdict.toUpperCase().indexOf('SUSPICIOUS') !== -1) {
+      var pShrt = priorityShort || (cached.metadata && cached.metadata.priority) || '';
+      var pUp = pShrt.toUpperCase();
+      if (pUp === 'P1') ts = 78; // P1 + SUS → high threat, maps to LTP
+      else if (pUp === 'P2') ts = 62; // P2 + SUS → moderate-high, maps to SUS
+      else if (pUp === 'P3') ts = 42; // P3 + SUS → moderate-low, maps to IND
+      else if (pUp === 'P4') ts = 25; // P4 + SUS → low, maps to LFP
+    }
+    var tier = mapVerdictTier(cached.verdict, cached.confidence, ts);
     var confStr = cached.confidence ? ' ' + cached.confidence + '%' : '';
     return '<span class="tq-ai-badge ' + tier.cssClass + '" title="' + tier.label + confStr + ' — Cached ' + new Date(cached.timestamp).toLocaleString() + '">' + dIcon('check',14) + ' ' + tier.code + (cached.confidence ? ' <span style="opacity:0.7;font-size:8px;">' + cached.confidence + '%</span>' : '') + '</span>';
   }
@@ -56196,7 +56207,8 @@ function markInvestigationCompleted(ticketKey) {
 function refreshTriageAIColumn() {
   document.querySelectorAll('[data-ai-status]').forEach(function(cell) {
     var key = cell.getAttribute('data-ai-status');
-    if (key) cell.innerHTML = getTriageAIBadge(key);
+    var priority = cell.getAttribute('data-priority') || '';
+    if (key) cell.innerHTML = getTriageAIBadge(key, priority);
   });
 }
 
