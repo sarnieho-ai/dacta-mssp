@@ -16162,26 +16162,35 @@ function getThemeTickColor() {
         <div class="page-header">
           <div>
             <div class="page-title">Log Source Catalog</div>
-            <div class="page-subtitle">Global catalog of all supported log sources &mdash; linked to detection rules</div>
+            <div class="page-subtitle">Live log sources across all clients &mdash; linked to available detection rules</div>
           </div>
           <div class="page-actions" style="display:flex;align-items:center;gap:10px;">
+            <select id="glscOrgFilter" class="lsc-org-select" onchange="glscInit()">
+              <option value="">All Organizations</option>
+            </select>
             <span id="glscTotalCount" style="font-size:11px;color:var(--text-muted);"></span>
           </div>
         </div>
 
         <!-- Metrics row -->
         <div class="metrics-row" id="glscMetrics" style="margin-bottom:16px;">
-          <div class="metric-card cyan"><div class="metric-label">Log Sources</div><div class="metric-value" id="glscSourceCount">&mdash;</div><div class="metric-sub">vendors</div></div>
-          <div class="metric-card green"><div class="metric-label">Detection Rules</div><div class="metric-value" id="glscRuleCount">&mdash;</div><div class="metric-sub">total</div></div>
-          <div class="metric-card amber"><div class="metric-label">Categories</div><div class="metric-value" id="glscCatCount">&mdash;</div><div class="metric-sub">types</div></div>
-          <div class="metric-card red"><div class="metric-label">Unmapped</div><div class="metric-value" id="glscUnmappedCount">&mdash;</div><div class="metric-sub">no rules</div></div>
+          <div class="metric-card cyan"><div class="metric-label">Log Sources</div><div class="metric-value" id="glscSourceCount">&mdash;</div><div class="metric-sub">active</div></div>
+          <div class="metric-card green"><div class="metric-label">Healthy</div><div class="metric-value" id="glscHealthyCount">&mdash;</div><div class="metric-sub">sources</div></div>
+          <div class="metric-card amber"><div class="metric-label">Events / Day</div><div class="metric-value" id="glscEPDTotal">&mdash;</div><div class="metric-sub">total</div></div>
+          <div class="metric-card red"><div class="metric-label">No Rules</div><div class="metric-value" id="glscNoRulesCount">&mdash;</div><div class="metric-sub">coverage gaps</div></div>
         </div>
 
         <!-- Filter bar -->
         <div class="glsc-filter-bar">
-          <input type="text" id="glscSearch" class="filter-input" placeholder="Search vendor, product, category..." style="min-width:260px;font-size:12px;" oninput="glscFilterCatalog()">
-          <select id="glscCatFilter" class="filter-select" style="min-width:140px;font-size:11px;" onchange="glscFilterCatalog()">
-            <option value="">All Categories</option>
+          <input type="text" id="glscSearch" class="filter-input" placeholder="Search vendor, source name, type..." style="min-width:260px;font-size:12px;" oninput="glscFilterCatalog()">
+          <select id="glscTypeFilter" class="filter-select" style="min-width:140px;font-size:11px;" onchange="glscFilterCatalog()">
+            <option value="">All Types</option>
+          </select>
+          <select id="glscStatusFilter" class="filter-select" style="min-width:140px;font-size:11px;" onchange="glscFilterCatalog()">
+            <option value="">All Status</option>
+            <option value="healthy">Healthy</option>
+            <option value="degraded">Degraded</option>
+            <option value="silent">Silent</option>
           </select>
           <span id="glscFilterStatus" style="font-size:10px;color:var(--text-muted);margin-left:auto;"></span>
         </div>
@@ -32767,17 +32776,18 @@ async function loadCoverageAnalyticsLive() {
 
 
 // ══════════════════════════════════════════════════════════════
-//  GLOBAL LOG SOURCE CATALOG — derived from detection_rules
+//  GLOBAL LOG SOURCE CATALOG — from client_log_sources (live data)
+//  Cross-references detection_rules for coverage mapping
 // ══════════════════════════════════════════════════════════════
-var _glscData = null; // { vendorKey: { vendor, platform, category, rules: [...] } }
 var _glscAllEntries = [];
+var _glscMatchedRules = {}; // keyed by vendor lowercase -> array of rules
+var _glscOrgMap = {};       // org_id -> org name
 
 async function glscInit() {
   var container = document.getElementById('glscContainer');
   if (!container) return;
 
-  // Show loading
-  container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><div class="spinner" style="margin:0 auto 12px auto;"></div><div style="font-size:12px;">Loading global log source catalog from detection rules...</div></div>';
+  container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><div class="spinner" style="margin:0 auto 12px auto;"></div><div style="font-size:12px;">Loading live log sources...</div></div>';
 
   try {
     var sb = window._dactaSupabase || window._supabaseRef;
@@ -32786,57 +32796,127 @@ async function glscInit() {
       setTimeout(glscInit, 1000);
       return;
     }
-    var res = await sb.from('detection_rules').select('id,name,vendor,platform,log_source_product,log_source_category,log_source_service,severity,mitre_tactic,status');
-    if (res.error) throw res.error;
-    var rules = res.data || [];
 
-    // Aggregate by vendor + platform
-    var catalog = {};
-    var categories = new Set();
-    rules.forEach(function(r) {
-      var v = (r.vendor || 'unknown').trim().toLowerCase();
-      var p = (r.platform || r.log_source_service || r.vendor || 'Unknown').trim();
-      var cat = (r.log_source_category || 'unknown').trim().toLowerCase();
-      var key = v + '::' + p.toLowerCase();
-      if (!catalog[key]) {
-        catalog[key] = {
-          vendor: r.vendor || 'Unknown',
-          vendorLower: v,
-          platform: p,
-          category: cat,
-          categoryLabel: cat.charAt(0).toUpperCase() + cat.slice(1),
-          rules: []
-        };
+    // Build org map from ORG_CONNECTORS
+    _glscOrgMap = {};
+    if (typeof ORG_CONNECTORS !== 'undefined' && ORG_CONNECTORS) {
+      var oKeys = Object.keys(ORG_CONNECTORS);
+      for (var oi = 0; oi < oKeys.length; oi++) {
+        var oc = ORG_CONNECTORS[oKeys[oi]];
+        if (oc && oc.org_id && oc.name) _glscOrgMap[oc.org_id] = oc.name;
       }
-      catalog[key].rules.push(r);
-      if (cat) categories.add(cat);
+    }
+
+    // Populate org selector (only once or refresh)
+    var orgSel = document.getElementById('glscOrgFilter');
+    if (orgSel && orgSel.options.length <= 1) {
+      var orgHTML = '<option value="">All Organizations</option>';
+      var sortedOrgs = Object.keys(_glscOrgMap).sort(function(a, b) {
+        return (_glscOrgMap[a] || '').localeCompare(_glscOrgMap[b] || '');
+      });
+      for (var si = 0; si < sortedOrgs.length; si++) {
+        orgHTML += '<option value="' + sortedOrgs[si] + '">' + _glscEsc(_glscOrgMap[sortedOrgs[si]]) + '</option>';
+      }
+      orgSel.innerHTML = orgHTML;
+    }
+
+    var selectedOrg = orgSel ? orgSel.value : '';
+
+    // 1) Fetch live log sources from client_log_sources
+    var lsQuery = sb.from('client_log_sources').select('*').order('vendor', { ascending: true });
+    if (selectedOrg) lsQuery = lsQuery.eq('org_id', selectedOrg);
+    var lsRes = await lsQuery;
+    if (lsRes.error) throw lsRes.error;
+    var sources = lsRes.data || [];
+
+    // 2) Fetch detection rules for cross-reference
+    var rulesRes = await sb.from('detection_rules').select('id,name,vendor,platform,log_source_product,log_source_category,severity,mitre_tactic,status');
+    var allRules = (rulesRes.data && !rulesRes.error) ? rulesRes.data : [];
+
+    // Build vendor -> rules lookup
+    _glscMatchedRules = {};
+    allRules.forEach(function(r) {
+      var rv = (r.vendor || '').trim().toLowerCase();
+      if (!rv) return;
+      if (!_glscMatchedRules[rv]) _glscMatchedRules[rv] = [];
+      _glscMatchedRules[rv].push(r);
+      // Also index by platform/product for broader matching
+      var rp = (r.log_source_product || r.platform || '').trim().toLowerCase();
+      if (rp && rp !== rv) {
+        if (!_glscMatchedRules[rp]) _glscMatchedRules[rp] = [];
+        _glscMatchedRules[rp].push(r);
+      }
     });
 
-    // Sort entries by vendor name then rule count desc
-    _glscAllEntries = Object.values(catalog).sort(function(a, b) {
-      if (a.vendorLower < b.vendorLower) return -1;
-      if (a.vendorLower > b.vendorLower) return 1;
-      return b.rules.length - a.rules.length;
+    // 3) Build entries from live sources
+    var types = new Set();
+    _glscAllEntries = sources.map(function(s) {
+      var vendorLower = (s.vendor || '').trim().toLowerCase();
+      var srcType = (s.source_type || 'custom').trim().toLowerCase();
+      types.add(srcType);
+
+      // Find matching detection rules by vendor name
+      var matchedRules = [];
+      var vendorAliases = [vendorLower];
+      // Add common aliases for matching
+      if (vendorLower === 'fortinet') vendorAliases.push('fortigate', 'fortinet_fortigate');
+      if (vendorLower === 'crowdstrike') vendorAliases.push('crowdstrike_falcon', 'crowdstrike falcon');
+      if (vendorLower === 'palo_alto') vendorAliases.push('paloalto', 'palo alto', 'pan-os');
+      if (vendorLower === 'microsoft' || vendorLower === 'm365') vendorAliases.push('microsoft', 'm365', 'azure', 'entra', 'defender');
+      if (vendorLower === 'imperva') vendorAliases.push('imperva_waf', 'securesphere');
+      if (vendorLower === 'trend micro tipping point') vendorAliases.push('trendmicro', 'tipping_point', 'tippingpoint');
+
+      for (var ai = 0; ai < vendorAliases.length; ai++) {
+        var found = _glscMatchedRules[vendorAliases[ai]];
+        if (found) {
+          for (var fi = 0; fi < found.length; fi++) {
+            var isDup = false;
+            for (var di = 0; di < matchedRules.length; di++) {
+              if (matchedRules[di].id === found[fi].id) { isDup = true; break; }
+            }
+            if (!isDup) matchedRules.push(found[fi]);
+          }
+        }
+      }
+
+      return {
+        id: s.id,
+        source_name: s.source_name || 'Unknown',
+        vendor: s.vendor || 'Unknown',
+        vendorLower: vendorLower,
+        source_type: srcType,
+        typeLabel: srcType.toUpperCase(),
+        status: (s.status || 'silent').toLowerCase(),
+        index_pattern: s.index_pattern || '',
+        events_per_day: s.events_per_day || 0,
+        onboarded_at: s.onboarded_at || '',
+        last_event_at: s.last_event_at || '',
+        notes: s.notes || '',
+        org_id: s.org_id || '',
+        org_name: _glscOrgMap[s.org_id] || 'Unknown Org',
+        monitoring_active: s.monitoring_active,
+        rules: matchedRules
+      };
+    });
+
+    // Sort: by org name then vendor
+    _glscAllEntries.sort(function(a, b) {
+      if (a.org_name < b.org_name) return -1;
+      if (a.org_name > b.org_name) return 1;
+      return a.vendorLower.localeCompare(b.vendorLower);
     });
 
     // Update metrics
-    var srcEl = document.getElementById('glscSourceCount');
-    var ruleEl = document.getElementById('glscRuleCount');
-    var catEl = document.getElementById('glscCatCount');
-    var unmEl = document.getElementById('glscUnmappedCount');
-    if (srcEl) srcEl.textContent = _glscAllEntries.length;
-    if (ruleEl) ruleEl.textContent = rules.length;
-    if (catEl) catEl.textContent = categories.size;
-    if (unmEl) unmEl.textContent = _glscAllEntries.filter(function(e) { return e.rules.length === 0; }).length;
+    glscUpdateMetrics(_glscAllEntries);
 
-    // Populate category filter
-    var catSelect = document.getElementById('glscCatFilter');
-    if (catSelect) {
-      var catHTML = '<option value="">All Categories</option>';
-      Array.from(categories).sort().forEach(function(c) {
-        catHTML += '<option value="' + c + '">' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>';
+    // Populate type filter
+    var typeSelect = document.getElementById('glscTypeFilter');
+    if (typeSelect) {
+      var tHTML = '<option value="">All Types</option>';
+      Array.from(types).sort().forEach(function(t) {
+        tHTML += '<option value="' + t + '">' + t.toUpperCase() + '</option>';
       });
-      catSelect.innerHTML = catHTML;
+      typeSelect.innerHTML = tHTML;
     }
 
     glscRenderCatalog(_glscAllEntries);
@@ -32847,23 +32927,59 @@ async function glscInit() {
   }
 }
 
+function glscUpdateMetrics(entries) {
+  var srcEl = document.getElementById('glscSourceCount');
+  var healthyEl = document.getElementById('glscHealthyCount');
+  var epdEl = document.getElementById('glscEPDTotal');
+  var noRulesEl = document.getElementById('glscNoRulesCount');
+
+  var healthyCount = 0;
+  var totalEPD = 0;
+  var noRulesCount = 0;
+
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].status === 'healthy') healthyCount++;
+    totalEPD += entries[i].events_per_day || 0;
+    if (entries[i].rules.length === 0) noRulesCount++;
+  }
+
+  if (srcEl) srcEl.textContent = entries.length;
+  if (healthyEl) healthyEl.textContent = healthyCount;
+  if (epdEl) epdEl.textContent = _glscFormatNum(totalEPD);
+  if (noRulesEl) noRulesEl.textContent = noRulesCount;
+
+  var totalEl = document.getElementById('glscTotalCount');
+  if (totalEl) totalEl.textContent = entries.length + ' log source' + (entries.length !== 1 ? 's' : '');
+}
+
+function _glscFormatNum(n) {
+  if (n >= 1000000000) return (n / 1000000000).toFixed(1) + 'B';
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+
 function glscFilterCatalog() {
   var searchVal = (document.getElementById('glscSearch') || {}).value || '';
-  var catVal = (document.getElementById('glscCatFilter') || {}).value || '';
+  var typeVal = (document.getElementById('glscTypeFilter') || {}).value || '';
+  var statusVal = (document.getElementById('glscStatusFilter') || {}).value || '';
   var q = searchVal.toLowerCase().trim();
 
   var filtered = _glscAllEntries.filter(function(e) {
-    if (catVal && e.category !== catVal) return false;
+    if (typeVal && e.source_type !== typeVal) return false;
+    if (statusVal && e.status !== statusVal) return false;
     if (q) {
-      var haystack = (e.vendor + ' ' + e.platform + ' ' + e.category).toLowerCase();
+      var haystack = (e.vendor + ' ' + e.source_name + ' ' + e.source_type + ' ' + e.org_name + ' ' + e.index_pattern).toLowerCase();
       if (haystack.indexOf(q) === -1) return false;
     }
     return true;
   });
 
+  glscUpdateMetrics(filtered);
+
   var statusEl = document.getElementById('glscFilterStatus');
   if (statusEl) {
-    if (q || catVal) {
+    if (q || typeVal || statusVal) {
       statusEl.textContent = 'Showing ' + filtered.length + ' of ' + _glscAllEntries.length + ' log sources';
     } else {
       statusEl.textContent = '';
@@ -32880,7 +32996,7 @@ function glscRenderCatalog(entries) {
     return;
   }
 
-  var CAT_COLORS = {
+  var TYPE_COLORS = {
     'edr': { bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.2)', color: '#a78bfa' },
     'firewall': { bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.2)', color: '#fb923c' },
     'siem': { bg: 'rgba(0,212,255,0.08)', border: 'rgba(0,212,255,0.2)', color: '#00d4ff' },
@@ -32888,41 +33004,105 @@ function glscRenderCatalog(entries) {
     'email': { bg: 'rgba(236,72,153,0.08)', border: 'rgba(236,72,153,0.2)', color: '#ec4899' },
     'cloud': { bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.2)', color: '#10b981' },
     'audit': { bg: 'rgba(234,179,8,0.08)', border: 'rgba(234,179,8,0.2)', color: '#eab308' },
-    'network': { bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.2)', color: '#fb923c' }
+    'security': { bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.2)', color: '#fb923c' },
+    'custom': { bg: 'rgba(100,116,139,0.08)', border: 'rgba(100,116,139,0.2)', color: '#94a3b8' }
   };
-  var DEFAULT_CAT = { bg: 'rgba(100,116,139,0.08)', border: 'rgba(100,116,139,0.2)', color: '#94a3b8' };
-
+  var DEFAULT_TYPE = { bg: 'rgba(100,116,139,0.08)', border: 'rgba(100,116,139,0.2)', color: '#94a3b8' };
+  var STATUS_COLORS = { healthy: '#22c55e', degraded: '#f59e0b', silent: '#ef4444' };
   var SEV_COLORS = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#10b981', info: '#64748b' };
+
+  // Group by org if showing all
+  var orgSel = document.getElementById('glscOrgFilter');
+  var showAllOrgs = !orgSel || !orgSel.value;
+  var currentOrgGroup = '';
 
   var html = '';
   entries.forEach(function(entry, idx) {
-    var cc = CAT_COLORS[entry.category] || DEFAULT_CAT;
+    var tc = TYPE_COLORS[entry.source_type] || DEFAULT_TYPE;
     var ruleCount = entry.rules.length;
+    var statusColor = STATUS_COLORS[entry.status] || '#64748b';
+
+    // Org group header
+    if (showAllOrgs && entry.org_name !== currentOrgGroup) {
+      currentOrgGroup = entry.org_name;
+      html += '<div style="font-size:11px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:1px;padding:16px 0 8px 0;border-bottom:1px solid rgba(0,212,255,0.1);margin-bottom:10px;';
+      if (idx > 0) html += 'margin-top:20px;';
+      html += '">' + _glscEsc(currentOrgGroup) + '</div>';
+    }
 
     html += '<div class="glsc-card" id="glsc-card-' + idx + '" onclick="glscToggleCard(' + idx + ')">';
     html += '<div style="display:flex;align-items:center;gap:14px;">';
-    // Vendor icon placeholder
-    html += '<div style="width:38px;height:38px;border-radius:8px;background:' + cc.bg + ';border:1px solid ' + cc.border + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
-    html += '<span style="font-size:12px;font-weight:700;color:' + cc.color + ';text-transform:uppercase;">' + (entry.vendor || '?').substring(0, 2) + '</span>';
+
+    // Status dot + vendor icon
+    html += '<div style="position:relative;width:38px;height:38px;border-radius:8px;background:' + tc.bg + ';border:1px solid ' + tc.border + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
+    html += '<span style="font-size:12px;font-weight:700;color:' + tc.color + ';text-transform:uppercase;">' + (entry.vendor || '?').substring(0, 2) + '</span>';
+    html += '<span style="position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:' + statusColor + ';border:2px solid var(--bg-card);box-shadow:0 0 6px ' + statusColor + ';"></span>';
     html += '</div>';
+
     // Info
     html += '<div style="flex:1;min-width:0;">';
-    html += '<div style="font-size:13px;font-weight:600;color:var(--text-primary);">' + _glscEsc(entry.vendor) + '</div>';
-    html += '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + _glscEsc(entry.platform) + '</div>';
+    html += '<div style="font-size:13px;font-weight:600;color:var(--text-primary);">' + _glscEsc(entry.source_name) + '</div>';
+    html += '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;display:flex;align-items:center;gap:8px;">';
+    html += '<span>' + _glscEsc(entry.vendor) + '</span>';
+    if (!showAllOrgs) {
+      // Don't repeat org name if filtered
+    } else {
+      // already shown in group header
+    }
     html += '</div>';
-    // Category badge
-    html += '<span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;letter-spacing:0.5px;text-transform:uppercase;background:' + cc.bg + ';color:' + cc.color + ';border:1px solid ' + cc.border + ';">' + entry.categoryLabel + '</span>';
+    html += '</div>';
+
+    // Type badge
+    html += '<span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;letter-spacing:0.5px;text-transform:uppercase;background:' + tc.bg + ';color:' + tc.color + ';border:1px solid ' + tc.border + ';">' + entry.typeLabel + '</span>';
+
+    // EPD
+    html += '<div style="text-align:center;min-width:72px;">';
+    html += '<div style="font-size:14px;font-weight:700;color:var(--text-primary);font-family:var(--font-mono);">' + _glscFormatNum(entry.events_per_day) + '</div>';
+    html += '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;">EPD</div>';
+    html += '</div>';
+
     // Rule count
-    html += '<div style="text-align:center;min-width:60px;">';
-    html += '<div style="font-size:16px;font-weight:700;color:' + (ruleCount > 0 ? 'var(--cyan)' : 'var(--text-muted)') + ';font-family:var(--font-mono);">' + ruleCount + '</div>';
+    html += '<div style="text-align:center;min-width:54px;">';
+    html += '<div style="font-size:14px;font-weight:700;color:' + (ruleCount > 0 ? 'var(--cyan)' : 'rgba(239,68,68,0.7)') + ';font-family:var(--font-mono);">' + ruleCount + '</div>';
     html += '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;">rules</div>';
     html += '</div>';
+
     // Expand arrow
     html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.3;transition:transform .15s;" class="glsc-arrow-' + idx + '"><polyline points="6 9 12 15 18 9"/></svg>';
     html += '</div>';
 
-    // Expandable rules panel
+    // Expandable detail panel
     html += '<div class="glsc-rules-panel" id="glsc-rules-' + idx + '">';
+
+    // Source details grid
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px 20px;margin-bottom:14px;">';
+    html += _glscMetaItem('Status', '<span style="color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + entry.status + '</span>' + (entry.monitoring_active ? ' &bull; Monitored' : ''));
+    html += _glscMetaItem('Events / Day', _glscFormatNum(entry.events_per_day));
+    html += _glscMetaItem('Onboarded', entry.onboarded_at ? entry.onboarded_at.substring(0, 10) : 'N/A');
+    html += _glscMetaItem('Last Event', entry.last_event_at ? entry.last_event_at.substring(0, 16).replace('T', ' ') : 'N/A');
+    html += '</div>';
+
+    // Index patterns
+    if (entry.index_pattern) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-family:var(--font-mono);">Index Patterns</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+      var indices = entry.index_pattern.split(/\s+/);
+      for (var ii = 0; ii < indices.length; ii++) {
+        if (indices[ii].trim()) {
+          html += '<span class="idx-chip">' + _glscEsc(indices[ii].trim()) + '</span>';
+        }
+      }
+      html += '</div></div>';
+    }
+
+    // Notes
+    if (entry.notes) {
+      html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;padding:8px 12px;background:rgba(0,0,0,0.15);border-radius:6px;font-style:italic;">' + _glscEsc(entry.notes) + '</div>';
+    }
+
+    // Detection rules cross-reference
+    html += '<div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;">';
     if (ruleCount > 0) {
       html += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Detection Rules (' + ruleCount + ')</div>';
       entry.rules.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
@@ -32938,12 +33118,22 @@ function glscRenderCatalog(entries) {
         html += '</div>';
       });
     } else {
-      html += '<div style="font-size:11px;color:var(--text-muted);font-style:italic;">No detection rules mapped to this log source yet.</div>';
+      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.5)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+      html += '<span style="font-size:11px;color:rgba(239,68,68,0.7);">No detection rules available for this log source</span>';
+      html += '<button class="btn btn-sm" style="margin-left:auto;font-size:10px;padding:3px 10px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);color:var(--cyan);border-radius:5px;cursor:pointer;" onclick="event.stopPropagation();navigateTo(\'rules\')">Go to Detection Rules</button>';
+      html += '</div>';
     }
     html += '</div>';
-    html += '</div>';
+
+    html += '</div>'; // rules-panel
+    html += '</div>'; // card
   });
   container.innerHTML = html;
+}
+
+function _glscMetaItem(label, val) {
+  return '<div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--font-mono);">' + label + '</div><div style="font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);">' + val + '</div></div>';
 }
 
 function glscToggleCard(idx) {
@@ -35016,168 +35206,96 @@ window._tipInitAllFixes = _tipInitAllFixes;
 // ============================================================
 
 // ─── Seed Data ──────────────────────────────────────────────
-var HUNT_SEED_DATA = {
-  hunts: [
-    {
-      id: 'HNT-001',
-      name: 'DarkPink ISO Delivery Detection',
-      status: 'running',
-      severity: 'critical',
-      mitre: ['T1566.001','T1204.002','T1059.007'],
-      platform: 'KQL',
-      hunter: 'Raj Lingam',
-      scope: ['all'],
-      events_scanned: 1200000,
-      suspects: 14,
-      confirmed: 2,
-      created: '2026-02-15',
-      desc: 'Detects delivery of ISO/IMG container files via email consistent with DarkPink APT initial access TTPs. Targets finance users with spoofed vendor emails carrying malicious disk images.',
-      query: 'SecurityEvent | where EventID == 4688 | where NewProcessName endswith ".iso"'
-    },
-    {
-      id: 'HNT-002',
-      name: 'Cobalt Strike Beacon Pattern',
-      status: 'running',
-      severity: 'high',
-      mitre: ['T1071.001','T1573.001'],
-      platform: 'KQL',
-      hunter: 'John Lim',
-      scope: ['DG','SPMT'],
-      events_scanned: 847000,
-      suspects: 3,
-      confirmed: 0,
-      created: '2026-02-20',
-      desc: 'Identifies periodic beacon-style C2 communication over HTTP/HTTPS with jittered ~60-second intervals characteristic of Cobalt Strike default malleable profiles.',
-      query: 'NetworkConnection | where DestPort in (443,8443) | where BytesSent between (50..100)'
-    },
-    {
-      id: 'HNT-003',
-      name: 'Living-off-the-Land Binary Abuse',
-      status: 'scheduled',
-      severity: 'medium',
-      mitre: ['T1218.011','T1218.005'],
-      platform: 'SPL',
-      hunter: 'Sarah Tan',
-      scope: ['all'],
-      events_scanned: 0,
-      suspects: 0,
-      confirmed: 0,
-      created: '2026-03-01',
-      scheduled_start: '2026-03-03',
-      desc: 'Hunts for abuse of native Windows binaries (LOLBins) — specifically mshta.exe, certutil.exe, regsvr32.exe — used as proxy execution vehicles to evade application whitelisting.',
-      query: 'index=sysmon EventCode=1 (Image="*\\\\mshta.exe" OR Image="*\\\\msbuild.exe")'
-    }
-  ],
-  findings: [
-    { id: 'HF-0041', date: '2026-02-28', hunt_id: 'HNT-001', hunt_name: 'DarkPink ISO Delivery', severity: 'critical', status: 'escalated', ticket: 'DAC-18160', details: 'ISO file with embedded DLL sideloading detected on endpoint DACTASG-WS-047', iocs: ['185.220.101.34','sha256:a3f9c1...','spoofed-vendor-sg.com'] },
-    { id: 'HF-0040', date: '2026-02-27', hunt_id: 'HNT-001', hunt_name: 'DarkPink ISO Delivery', severity: 'high', status: 'escalated', ticket: 'DAC-18157', details: 'Suspicious ISO mount event followed by rundll32 execution — DLL sideloading pattern', iocs: ['sha256:9b1e4a...','rundll32.exe /s evil.dll'] },
-    { id: 'HF-0039', date: '2026-02-25', hunt_id: 'HNT-002', hunt_name: 'Cobalt Strike Beacon', severity: 'critical', status: 'escalated', ticket: 'DAC-18155', details: 'C2 beacon pattern matching Cobalt Strike malleable profile detected from DGSRV-APP01', iocs: ['185.220.101.34','443/tcp','JA3:a0e9f5d...'] },
-    { id: 'HF-0038', date: '2026-02-22', hunt_id: 'HNT-003', hunt_name: 'LOLBin Abuse', severity: 'medium', status: 'review', details: 'mshta.exe spawning powershell with encoded command on 2 endpoints', iocs: ['certutil.exe -decode payload.txt','hxxp://192.168.99.45/beacon'] },
-    { id: 'HF-0037', date: '2026-02-20', hunt_id: 'HNT-002', hunt_name: 'SMB Admin Share', severity: 'high', status: 'graduated', rule: 'RUL-0142', details: 'Lateral movement via admin$ share access from non-admin workstation — PsExec pattern', iocs: ['DGSRV-DC01','admin$','4 endpoints affected'] },
-    { id: 'HF-0036', date: '2026-02-18', hunt_id: 'HNT-002', hunt_name: 'Beacon Detection', severity: 'low', status: 'closed', details: 'False positive — legitimate monitoring tool beacon pattern mimics C2 interval profile', iocs: [] }
-  ],
-  pipeline: [
-    { hunt_name: 'LOLBin Abuse Hunt', stage: 'candidate', criteria_met: 3, criteria_total: 6, mitre: ['T1218.011','T1218.005'], note: 'Needs more true positives (currently 1/3 required)' },
-    { hunt_name: 'Cobalt Strike Beacon', stage: 'review', criteria_met: 5, criteria_total: 6, mitre: ['T1071.001','T1573.001'], note: 'Peer review pending — assigned to John Lim (Senior Hunt Lead)' },
-    { hunt_name: 'DarkPink ISO Delivery', stage: 'approved', criteria_met: 6, criteria_total: 6, mitre: ['T1566.001','T1204.002'], note: 'Awaiting SIEM Push to RUL-0148' },
-    { hunt_name: 'SMB Admin Share', stage: 'graduated', rule: 'RUL-0142', deployed: '2026-01-15', mitre: ['T1021.002'] },
-    { hunt_name: 'LSASS Memory Access', stage: 'graduated', rule: 'RUL-0138', deployed: '2025-12-08', mitre: ['T1003.001'] }
-  ],
-  playbooks: [
-    { id: 'PB-001', name: 'APT Initial Access Hunt', level: 'ADVANCED', duration: '4-6hrs', last_run: '2026-02-15', focus: 'Spearphishing, drive-by compromise, weaponized document delivery', mitre: ['T1566.001','T1189','T1204.002','T1059.007'], steps: ['Map org attack surface & crown jewels', 'Query email gateway + endpoint for spearphish indicators', 'Correlate suspicious attachment/link clicks with process creation', 'Validate against known APT TTP patterns'] },
-    { id: 'PB-002', name: 'Lateral Movement Detection', level: 'ADVANCED', duration: '6-8hrs', last_run: '2026-02-20', focus: 'Pass-the-hash, SMB abuse, RDP pivoting, token impersonation', mitre: ['T1550.002','T1021.002','T1021.001','T1134'], steps: ['Enumerate admin share access patterns', 'Detect unusual RDP/WMI/PSRemoting sessions', 'Cross-reference with baseline auth patterns', 'Timeline suspicious account usage across hosts'] },
-    { id: 'PB-003', name: 'C2 Infrastructure Hunt', level: 'INTERMEDIATE', duration: '3-5hrs', last_run: '2026-02-28', focus: 'Beacon patterns, DNS tunneling, domain fronting, JA3 fingerprinting', mitre: ['T1071.001','T1573.001','T1071.004','T1090.004'], steps: ['Profile DNS query patterns for beaconing', 'Analyze outbound HTTP/S traffic for C2 signatures', 'Check for known C2 framework fingerprints', 'Correlate with threat intel IOC feeds'] },
-    { id: 'PB-004', name: 'Insider Threat Indicator Hunt', level: 'ADVANCED', duration: '8-10hrs', last_run: '2026-01-30', focus: 'Data exfiltration, privilege abuse, anomalous access, off-hours activity', mitre: ['T1048','T1078','T1052.001','T1530'], steps: ['Analyze after-hours access patterns', 'Review large data transfer events', 'Check for unauthorized tool usage', 'Cross-reference HR/access anomalies with security events'] }
-  ]
-};
+// HUNT_SEED_DATA removed — all data now comes from SIEMLess DB
+var HUNT_SEED_DATA = { hunts: [], findings: [], pipeline: [], playbooks: [] };
 
-// ─── MITRE ATT&CK Tactics & Technique Map ───────────────────
+// ─── MITRE ATT&CK Tactics & Technique Map (coverage computed dynamically) ───
 var HUNT_MITRE_TACTICS = [
   { id: 'TA0043', name: 'Recon', techniques: [
-    { id: 'T1595', name: 'Active Scanning', coverage: 'gap' },
-    { id: 'T1592', name: 'Gather Victim Host Info', coverage: 'na' },
-    { id: 'T1589', name: 'Gather Victim Identity Info', coverage: 'na' },
-    { id: 'T1591', name: 'Gather Victim Org Info', coverage: 'na' }
+    { id: 'T1595', name: 'Active Scanning' },
+    { id: 'T1592', name: 'Gather Victim Host Info', na: true },
+    { id: 'T1589', name: 'Gather Victim Identity Info', na: true },
+    { id: 'T1591', name: 'Gather Victim Org Info', na: true }
   ]},
   { id: 'TA0042', name: 'Res. Dev.', techniques: [
-    { id: 'T1583', name: 'Acquire Infrastructure', coverage: 'na' },
-    { id: 'T1586', name: 'Compromise Accounts', coverage: 'na' },
-    { id: 'T1587', name: 'Develop Capabilities', coverage: 'na' },
-    { id: 'T1588', name: 'Obtain Capabilities', coverage: 'na' }
+    { id: 'T1583', name: 'Acquire Infrastructure', na: true },
+    { id: 'T1586', name: 'Compromise Accounts', na: true },
+    { id: 'T1587', name: 'Develop Capabilities', na: true },
+    { id: 'T1588', name: 'Obtain Capabilities', na: true }
   ]},
   { id: 'TA0001', name: 'Initial Access', techniques: [
-    { id: 'T1566.001', name: 'Spearphish Attachment', coverage: 'covered', hunts: ['HNT-001'] },
-    { id: 'T1566.002', name: 'Spearphish Link', coverage: 'partial' },
-    { id: 'T1190', name: 'Exploit Public-Facing App', coverage: 'gap' },
-    { id: 'T1133', name: 'External Remote Services', coverage: 'gap' },
-    { id: 'T1200', name: 'Hardware Addition', coverage: 'na' }
+    { id: 'T1566.001', name: 'Spearphish Attachment' },
+    { id: 'T1566.002', name: 'Spearphish Link' },
+    { id: 'T1190', name: 'Exploit Public-Facing App' },
+    { id: 'T1133', name: 'External Remote Services' },
+    { id: 'T1200', name: 'Hardware Addition', na: true }
   ]},
   { id: 'TA0002', name: 'Execution', techniques: [
-    { id: 'T1059.001', name: 'PowerShell', coverage: 'partial' },
-    { id: 'T1059.007', name: 'JavaScript', coverage: 'covered', hunts: ['HNT-001'] },
-    { id: 'T1204.002', name: 'Malicious File', coverage: 'covered', hunts: ['HNT-001'] },
-    { id: 'T1218.011', name: 'Rundll32', coverage: 'covered', hunts: ['HNT-003'] },
-    { id: 'T1218.005', name: 'Mshta', coverage: 'covered', hunts: ['HNT-003'] }
+    { id: 'T1059.001', name: 'PowerShell' },
+    { id: 'T1059.007', name: 'JavaScript' },
+    { id: 'T1204.002', name: 'Malicious File' },
+    { id: 'T1218.011', name: 'Rundll32' },
+    { id: 'T1218.005', name: 'Mshta' }
   ]},
   { id: 'TA0003', name: 'Persistence', techniques: [
-    { id: 'T1547.001', name: 'Registry Run Keys', coverage: 'gap' },
-    { id: 'T1053.005', name: 'Scheduled Task', coverage: 'gap' },
-    { id: 'T1136', name: 'Create Account', coverage: 'gap' },
-    { id: 'T1078', name: 'Valid Accounts', coverage: 'partial' }
+    { id: 'T1547.001', name: 'Registry Run Keys' },
+    { id: 'T1053.005', name: 'Scheduled Task' },
+    { id: 'T1136', name: 'Create Account' },
+    { id: 'T1078', name: 'Valid Accounts' }
   ]},
   { id: 'TA0004', name: 'Priv. Esc.', techniques: [
-    { id: 'T1055', name: 'Process Injection', coverage: 'gap' },
-    { id: 'T1548', name: 'Abuse Elevation Control', coverage: 'gap' },
-    { id: 'T1134', name: 'Access Token Manipulation', coverage: 'gap' },
-    { id: 'T1068', name: 'Exploit for Priv. Esc.', coverage: 'gap' }
+    { id: 'T1055', name: 'Process Injection' },
+    { id: 'T1548', name: 'Abuse Elevation Control' },
+    { id: 'T1134', name: 'Access Token Manipulation' },
+    { id: 'T1068', name: 'Exploit for Priv. Esc.' }
   ]},
   { id: 'TA0005', name: 'Def. Evasion', techniques: [
-    { id: 'T1562.001', name: 'Disable Security Tools', coverage: 'gap' },
-    { id: 'T1070', name: 'Indicator Removal', coverage: 'gap' },
-    { id: 'T1036', name: 'Masquerading', coverage: 'partial' },
-    { id: 'T1027', name: 'Obfuscated Files', coverage: 'gap' }
+    { id: 'T1562.001', name: 'Disable Security Tools' },
+    { id: 'T1070', name: 'Indicator Removal' },
+    { id: 'T1036', name: 'Masquerading' },
+    { id: 'T1027', name: 'Obfuscated Files' }
   ]},
   { id: 'TA0006', name: 'Cred. Access', techniques: [
-    { id: 'T1003.001', name: 'LSASS Memory', coverage: 'covered', hunts: ['graduated→RUL-0138'] },
-    { id: 'T1110', name: 'Brute Force', coverage: 'gap' },
-    { id: 'T1555', name: 'Credentials from PWD Stores', coverage: 'gap' },
-    { id: 'T1212', name: 'Exploit for Cred. Access', coverage: 'gap' }
+    { id: 'T1003.001', name: 'LSASS Memory' },
+    { id: 'T1110', name: 'Brute Force' },
+    { id: 'T1555', name: 'Credentials from PWD Stores' },
+    { id: 'T1212', name: 'Exploit for Cred. Access' }
   ]},
   { id: 'TA0007', name: 'Discovery', techniques: [
-    { id: 'T1087', name: 'Account Discovery', coverage: 'gap' },
-    { id: 'T1046', name: 'Network Service Scan', coverage: 'gap' },
-    { id: 'T1069', name: 'Permission Group Discovery', coverage: 'gap' },
-    { id: 'T1082', name: 'System Info Discovery', coverage: 'gap' }
+    { id: 'T1087', name: 'Account Discovery' },
+    { id: 'T1046', name: 'Network Service Scan' },
+    { id: 'T1069', name: 'Permission Group Discovery' },
+    { id: 'T1082', name: 'System Info Discovery' }
   ]},
   { id: 'TA0008', name: 'Lateral Mvmt', techniques: [
-    { id: 'T1021.001', name: 'Remote Desktop Protocol', coverage: 'partial' },
-    { id: 'T1021.002', name: 'SMB/Windows Admin Shares', coverage: 'covered', hunts: ['graduated→RUL-0142'] },
-    { id: 'T1550.002', name: 'Pass the Hash', coverage: 'gap' },
-    { id: 'T1534', name: 'Internal Spearphishing', coverage: 'gap' }
+    { id: 'T1021.001', name: 'Remote Desktop Protocol' },
+    { id: 'T1021.002', name: 'SMB/Windows Admin Shares' },
+    { id: 'T1550.002', name: 'Pass the Hash' },
+    { id: 'T1534', name: 'Internal Spearphishing' }
   ]},
   { id: 'TA0009', name: 'Collection', techniques: [
-    { id: 'T1005', name: 'Data from Local System', coverage: 'gap' },
-    { id: 'T1039', name: 'Data from Network Share', coverage: 'gap' },
-    { id: 'T1114', name: 'Email Collection', coverage: 'gap' },
-    { id: 'T1119', name: 'Automated Collection', coverage: 'gap' }
+    { id: 'T1005', name: 'Data from Local System' },
+    { id: 'T1039', name: 'Data from Network Share' },
+    { id: 'T1114', name: 'Email Collection' },
+    { id: 'T1119', name: 'Automated Collection' }
   ]},
   { id: 'TA0011', name: 'C2', techniques: [
-    { id: 'T1071.001', name: 'Web Protocols', coverage: 'covered', hunts: ['HNT-002'] },
-    { id: 'T1071.004', name: 'DNS', coverage: 'gap' },
-    { id: 'T1573.001', name: 'Symmetric Cryptography', coverage: 'covered', hunts: ['HNT-002'] },
-    { id: 'T1090.004', name: 'Domain Fronting', coverage: 'gap' }
+    { id: 'T1071.001', name: 'Web Protocols' },
+    { id: 'T1071.004', name: 'DNS' },
+    { id: 'T1573.001', name: 'Symmetric Cryptography' },
+    { id: 'T1090.004', name: 'Domain Fronting' }
   ]},
   { id: 'TA0010', name: 'Exfiltration', techniques: [
-    { id: 'T1041', name: 'Exfil Over C2 Channel', coverage: 'gap' },
-    { id: 'T1048', name: 'Exfil Over Alt Protocol', coverage: 'gap' },
-    { id: 'T1052.001', name: 'USB Exfiltration', coverage: 'gap' },
-    { id: 'T1567', name: 'Exfil to Cloud Storage', coverage: 'gap' }
+    { id: 'T1041', name: 'Exfil Over C2 Channel' },
+    { id: 'T1048', name: 'Exfil Over Alt Protocol' },
+    { id: 'T1052.001', name: 'USB Exfiltration' },
+    { id: 'T1567', name: 'Exfil to Cloud Storage' }
   ]},
   { id: 'TA0040', name: 'Impact', techniques: [
-    { id: 'T1486', name: 'Data Encrypted for Impact', coverage: 'gap' },
-    { id: 'T1490', name: 'Inhibit System Recovery', coverage: 'gap' },
-    { id: 'T1489', name: 'Service Stop', coverage: 'gap' },
-    { id: 'T1529', name: 'System Shutdown/Reboot', coverage: 'na' }
+    { id: 'T1486', name: 'Data Encrypted for Impact' },
+    { id: 'T1490', name: 'Inhibit System Recovery' },
+    { id: 'T1489', name: 'Service Stop' },
+    { id: 'T1529', name: 'System Shutdown/Reboot', na: true }
   ]}
 ];
 
@@ -36770,15 +36888,13 @@ async function _huntLoadDataFromDB() {
       });
     }
 
-    if (data.hunts.length > 0) {
-      console.log('[ThreatHunting] Loaded from SIEMLess DB: ' + data.hunts.length + ' hunts, ' + data.findings.length + ' findings');
-      return data;
-    }
+    console.log('[ThreatHunting] Loaded from SIEMLess DB: ' + data.hunts.length + ' hunts, ' + data.findings.length + ' findings, ' + data.pipeline.length + ' pipeline, ' + data.playbooks.length + ' playbooks');
+    return data;
   } catch (e) {
-    console.warn('[ThreatHunting] SIEMLess DB load failed, using seed data:', e.message);
+    console.warn('[ThreatHunting] SIEMLess DB load failed:', e.message);
   }
-  // Fall back to seed data
-  return JSON.parse(JSON.stringify(HUNT_SEED_DATA));
+  // Return empty structure — no seed data fallback
+  return { hunts: [], findings: [], pipeline: [], playbooks: [] };
 }
 
 function _huntSaveData(data) {
@@ -37780,6 +37896,48 @@ function _huntRenderMitreMatrix() {
   var grid = document.getElementById('hunt-mitre-grid');
   if (!grid) return;
 
+  // Build dynamic coverage map from _huntData
+  var covMap = {}; // technique ID -> { coverage: 'covered'|'partial'|'gap', hunts: [] }
+  if (_huntData) {
+    // Active / running hunts -> covered
+    // Scheduled / paused hunts -> partial
+    // Completed hunts -> covered (graduated)
+    var hunts = _huntData.hunts || [];
+    for (var hi = 0; hi < hunts.length; hi++) {
+      var h = hunts[hi];
+      var mitreArr = h.mitre || [];
+      var hStatus = (h.status || '').toLowerCase();
+      var level = (hStatus === 'running' || hStatus === 'completed') ? 'covered' : 'partial';
+      for (var mi = 0; mi < mitreArr.length; mi++) {
+        var tid = mitreArr[mi];
+        if (!covMap[tid]) covMap[tid] = { coverage: level, hunts: [] };
+        else if (level === 'covered' && covMap[tid].coverage !== 'covered') covMap[tid].coverage = 'covered';
+        covMap[tid].hunts.push(h.id);
+      }
+    }
+    // Cross-reference pipeline with hunts to enrich coverage
+    // Pipeline items link by hunt_name to the hunts (which have MITRE techniques)
+    var pipeline = _huntData.pipeline || [];
+    for (var pi = 0; pi < pipeline.length; pi++) {
+      var p = pipeline[pi];
+      if (p.stage === 'graduated' && p.rule) {
+        // Find matching hunt by name to get MITRE techniques
+        var pName = (p.hunt_name || '').toLowerCase();
+        for (var phi = 0; phi < hunts.length; phi++) {
+          if ((hunts[phi].name || '').toLowerCase().indexOf(pName) !== -1 || pName.indexOf((hunts[phi].name || '').toLowerCase().split(' ')[0]) !== -1) {
+            var pmitreArr = hunts[phi].mitre || [];
+            for (var pmi = 0; pmi < pmitreArr.length; pmi++) {
+              var ptid = pmitreArr[pmi];
+              if (!covMap[ptid]) covMap[ptid] = { coverage: 'covered', hunts: [] };
+              else covMap[ptid].coverage = 'covered';
+              covMap[ptid].hunts.push('graduated\u2192' + p.rule);
+            }
+          }
+        }
+      }
+    }
+  }
+
   grid.innerHTML = '';
   var coveredTotal = 0, partialTotal = 0, gapTotal = 0, naTotal = 0;
 
@@ -37796,8 +37954,17 @@ function _huntRenderMitreMatrix() {
     var techs = tactic.techniques || [];
     for (var tei = 0; tei < techs.length; tei++) {
       var tech = techs[tei];
+      // Compute coverage dynamically
+      var dynCov = covMap[tech.id];
+      var coverage = tech.na ? 'na' : (dynCov ? dynCov.coverage : 'gap');
+      var relatedHunts = dynCov ? dynCov.hunts : [];
+
+      // Attach computed coverage to tech object for modal display
+      tech.coverage = coverage;
+      tech.hunts = relatedHunts;
+
       var techDiv = document.createElement('div');
-      techDiv.className = 'hunt-mitre-tech hunt-mitre-' + tech.coverage;
+      techDiv.className = 'hunt-mitre-tech hunt-mitre-' + coverage;
       techDiv.title = tech.id + ': ' + tech.name;
       techDiv.innerHTML = escapeHtml(tech.id);
       (function(t, tacticId) {
@@ -37805,9 +37972,9 @@ function _huntRenderMitreMatrix() {
       })(tech, tactic.id);
       col.appendChild(techDiv);
 
-      if (tech.coverage === 'covered') coveredTotal++;
-      else if (tech.coverage === 'partial') partialTotal++;
-      else if (tech.coverage === 'gap') gapTotal++;
+      if (coverage === 'covered') coveredTotal++;
+      else if (coverage === 'partial') partialTotal++;
+      else if (coverage === 'gap') gapTotal++;
       else naTotal++;
     }
     grid.appendChild(col);
@@ -37882,15 +38049,16 @@ function huntExportNavigatorJSON() {
     var techs = tactic.techniques || [];
     for (var tei = 0; tei < techs.length; tei++) {
       var tech = techs[tei];
-      if (tech.coverage === 'na') continue;
-      var score = tech.coverage === 'covered' ? 100 : (tech.coverage === 'partial' ? 50 : 0);
-      var color = tech.coverage === 'covered' ? '#10b981' : (tech.coverage === 'partial' ? '#f59e0b' : '#ef4444');
+      var covStatus = tech.coverage || 'gap';
+      if (covStatus === 'na') continue;
+      var score = covStatus === 'covered' ? 100 : (covStatus === 'partial' ? 50 : 0);
+      var color = covStatus === 'covered' ? '#10b981' : (covStatus === 'partial' ? '#f59e0b' : '#ef4444');
       layers.push({
         techniqueID: tech.id.split('.')[0],
         tactic: tactic.id,
         score: score,
         color: color,
-        comment: tech.coverage === 'covered' ? 'Hunted: ' + (tech.hunts || []).join(', ') : tech.coverage
+        comment: covStatus === 'covered' ? 'Hunted: ' + (tech.hunts || []).join(', ') : covStatus
       });
     }
   }
