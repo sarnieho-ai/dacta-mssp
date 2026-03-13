@@ -53679,8 +53679,8 @@ async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
     threatScore: threatScore,
     timestamp: new Date().toISOString(),
     escalationData: { org: org, summary: summary, ticketData: f },
-    inculpatoryEvidence: (inculpatory || []).slice(0, 5),
-    exculpatoryEvidence: (exculpatory || []).slice(0, 5),
+    inculpatoryEvidence: inculpatory || [],
+    exculpatoryEvidence: exculpatory || [],
     metadata: {
       totalRounds: totalRounds,
       org: org,
@@ -56788,34 +56788,64 @@ function populateTopFindings(inculpatory, exculpatory, playbookSteps) {
   // First: add playbook-driven triage actions (actionable guidance)
   (playbookSteps || []).slice(0, 3).forEach(function(step) {
     var txt = typeof step === 'string' ? step : (step.action || step.step || JSON.stringify(step));
-    findings.push({type: 'playbook', text: txt});
+    findings.push({type: 'playbook', text: txt, detail: '', severity: '', source: ''});
   });
 
-  // Then: add top AI-detected evidence
-  (inculpatory || []).slice(0, 3).forEach(function(e) {
-    findings.push({type: 'inculpatory', text: e.title || e.detail || ''});
+  // ALL inculpatory evidence — no truncation
+  (inculpatory || []).forEach(function(e) {
+    findings.push({type: 'inculpatory', text: e.title || e.detail || '', detail: e.detail || '', severity: e.severity || '', source: e.source || ''});
   });
-  (exculpatory || []).slice(0, 2).forEach(function(e) {
-    findings.push({type: 'exculpatory', text: e.title || e.detail || ''});
+  // ALL exculpatory evidence — no truncation
+  (exculpatory || []).forEach(function(e) {
+    findings.push({type: 'exculpatory', text: e.title || e.detail || '', detail: e.detail || '', severity: e.severity || '', source: e.source || ''});
   });
 
-  // Deduplicate and limit to top 5
+  // Deduplicate
   var seen = {};
   findings = findings.filter(function(f) {
     var key = f.text.substring(0, 50);
     if (seen[key]) return false;
     seen[key] = true;
     return f.text.length > 0;
-  }).slice(0, 5);
+  });
 
   if (findings.length === 0) return;
-  el.innerHTML = findings.map(function(finding, i) {
+
+  // Count by type for header
+  var incCount = findings.filter(function(f) { return f.type === 'inculpatory'; }).length;
+  var excCount = findings.filter(function(f) { return f.type === 'exculpatory'; }).length;
+  var pbCount = findings.filter(function(f) { return f.type === 'playbook'; }).length;
+
+  var headerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.06);">';
+  if (incCount > 0) headerHTML += '<span style="font-size:10px;font-weight:600;color:#EF4444;background:rgba(239,68,68,0.08);padding:2px 8px;border-radius:10px;">▲ ' + incCount + ' Inculpatory</span>';
+  if (excCount > 0) headerHTML += '<span style="font-size:10px;font-weight:600;color:#10B981;background:rgba(16,185,129,0.08);padding:2px 8px;border-radius:10px;">▼ ' + excCount + ' Exculpatory</span>';
+  if (pbCount > 0) headerHTML += '<span style="font-size:10px;font-weight:600;color:#6366F1;background:rgba(99,102,241,0.08);padding:2px 8px;border-radius:10px;">▶ ' + pbCount + ' Playbook</span>';
+  headerHTML += '</div>';
+
+  var findingsHTML = findings.map(function(finding, i) {
     var dotColor = finding.type === 'playbook' ? '#6366F1' : finding.type === 'inculpatory' ? '#EF4444' : '#10B981';
     var label = finding.type === 'playbook' ? '▶' : (finding.type === 'inculpatory' ? '▲' : '▼');
-    return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
-      '<span style="font-size:11px;font-weight:700;color:' + dotColor + ';width:18px;flex-shrink:0;">' + label + '</span>' +
-      '<span style="font-size:12px;color:var(--rws-text-secondary);line-height:1.5;">' + highlightEntities(finding.text) + '</span></div>';
+    var severityBadge = '';
+    if (finding.severity) {
+      var svColor = finding.severity === 'critical' ? '#DC2626' : finding.severity === 'high' || finding.severity === 'strong' ? '#EA580C' : finding.severity === 'medium' || finding.severity === 'moderate' ? '#D97706' : '#6B7280';
+      severityBadge = '<span style="font-size:8px;font-weight:600;color:' + svColor + ';background:' + svColor + '15;padding:1px 5px;border-radius:4px;margin-left:6px;text-transform:uppercase;font-family:var(--font-mono);">' + finding.severity + '</span>';
+    }
+    var sourceBadge = '';
+    if (finding.source) {
+      sourceBadge = '<span style="font-size:8px;color:var(--rws-text-muted);font-family:var(--font-mono);margin-left:4px;">' + finding.source.replace(/_/g, ' ') + '</span>';
+    }
+    var detailHTML = '';
+    if (finding.detail && finding.detail !== finding.text) {
+      detailHTML = '<div style="font-size:10px;color:var(--rws-text-muted);line-height:1.5;margin-top:3px;padding-left:28px;">' + highlightEntities(finding.detail) + '</div>';
+    }
+    return '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+      '<div style="display:flex;align-items:flex-start;gap:10px;">' +
+      '<span style="font-size:11px;font-weight:700;color:' + dotColor + ';width:18px;flex-shrink:0;margin-top:2px;">' + label + '</span>' +
+      '<div style="flex:1;"><span style="font-size:12px;color:var(--rws-text-secondary);line-height:1.5;">' + highlightEntities(finding.text) + '</span>' + severityBadge + sourceBadge + '</div></div>' +
+      detailHTML + '</div>';
   }).join('');
+
+  el.innerHTML = headerHTML + findingsHTML;
 }
 
 // ── Deterministic Top Findings population from a cache entry ──
@@ -56878,6 +56908,15 @@ function populateAiSummary(cacheEntry) {
     if (topFinding) {
       summary += '<div style="font-size:11px;color:var(--rws-text-muted);margin-top:6px;padding:8px;background:rgba(239,68,68,0.04);border-left:2px solid #EF4444;border-radius:0 4px 4px 0;">';
       summary += '<strong>Key finding:</strong> ' + highlightEntities(topFinding);
+      summary += '</div>';
+    }
+  }
+  // Include top exculpatory finding for balance
+  if (exc.length > 0) {
+    var topExc = exc[0].title || exc[0].detail || '';
+    if (topExc) {
+      summary += '<div style="font-size:11px;color:var(--rws-text-muted);margin-top:4px;padding:8px;background:rgba(16,185,129,0.04);border-left:2px solid #10B981;border-radius:0 4px 4px 0;">';
+      summary += '<strong>Mitigating:</strong> ' + highlightEntities(topExc);
       summary += '</div>';
     }
   }
@@ -57464,8 +57503,8 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
       overrideVerdict: cacheEntry.overrideVerdict, overrideReason: cacheEntry.overrideReason,
       feedbackRating: cacheEntry.feedbackRating, feedbackText: cacheEntry.feedbackText,
       promptNotes: cacheEntry.promptNotes, metadata: cacheEntry.metadata,
-      inculpatoryEvidence: (cacheEntry.inculpatoryEvidence || []).slice(0, 5),
-      exculpatoryEvidence: (cacheEntry.exculpatoryEvidence || []).slice(0, 5),
+      inculpatoryEvidence: cacheEntry.inculpatoryEvidence || [],
+      exculpatoryEvidence: cacheEntry.exculpatoryEvidence || [],
       sidebarPanels: cacheEntry.sidebarPanels || null,
       escalationData: cacheEntry.escalationData || null,
       analystNotes: cacheEntry.analystNotes || null
@@ -57489,7 +57528,7 @@ async function saveInvestigationCache(ticketKey, cacheEntry) {
       prompt_notes: cacheEntry.promptNotes || null,
       feedback_rating: cacheEntry.feedbackRating || null,
       feedback_text: cacheEntry.feedbackText || null,
-      metadata: Object.assign({}, cacheEntry.metadata || {}, cacheEntry.sidebarPanels ? { sidebarPanels: cacheEntry.sidebarPanels } : {}, cacheEntry.escalationData ? { escalationData: cacheEntry.escalationData } : {}, cacheEntry.inculpatoryEvidence ? { inculpatoryEvidence: (cacheEntry.inculpatoryEvidence || []).slice(0, 5) } : {}, cacheEntry.exculpatoryEvidence ? { exculpatoryEvidence: (cacheEntry.exculpatoryEvidence || []).slice(0, 5) } : {}, cacheEntry.elasticLogs ? { elasticLogs: cacheEntry.elasticLogs } : {}, cacheEntry.iocs ? { iocs: cacheEntry.iocs } : {})
+      metadata: Object.assign({}, cacheEntry.metadata || {}, cacheEntry.sidebarPanels ? { sidebarPanels: cacheEntry.sidebarPanels } : {}, cacheEntry.escalationData ? { escalationData: cacheEntry.escalationData } : {}, cacheEntry.inculpatoryEvidence ? { inculpatoryEvidence: cacheEntry.inculpatoryEvidence } : {}, cacheEntry.exculpatoryEvidence ? { exculpatoryEvidence: cacheEntry.exculpatoryEvidence } : {}, cacheEntry.elasticLogs ? { elasticLogs: cacheEntry.elasticLogs } : {}, cacheEntry.iocs ? { iocs: cacheEntry.iocs } : {})
     }, { onConflict: 'ticket_key' });
     if (resp.error) console.warn('[InvCache] SIEMLess DB upsert error:', resp.error.message);
     else console.log('[InvCache] Saved to SIEMLess DB:', ticketKey);
@@ -62155,8 +62194,8 @@ async function runAIInvestigation(ticketKey, issueData) {
     timestamp: investigatedTimestamp,
     escalationData: { org: org, summary: summary, ticketData: f },
     // Store actual evidence arrays for Top Findings restoration from cache
-    inculpatoryEvidence: (inculpatory || []).slice(0, 5),
-    exculpatoryEvidence: (exculpatory || []).slice(0, 5),
+    inculpatoryEvidence: inculpatory || [],
+    exculpatoryEvidence: exculpatory || [],
     // Store Jira correlation + analyst precedent for Correlated Alerts modal
     jiraCorrelation: (elasticLogs.jiraCorrelation || []),
     analystPrecedent: (elasticLogs.analystPrecedent || []),
