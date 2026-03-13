@@ -59051,7 +59051,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       });
 
       if (_learningCandidates.length > 0) {
-        var _learnKeys = _learningCandidates.slice(0, 6).map(function(jt) { return jt.key; });
+        var _learnKeys = _learningCandidates.slice(0, 10).map(function(jt) { return jt.key; });
         var qDJL = { name: 'Jira Analyst Learning', index: 'Jira (DAC)', query: _learnKeys.join(', '), status: 'running' };
         logs.queryDetails.push(qDJL); logs.queriesRun++;
         try {
@@ -59089,7 +59089,7 @@ async function realElasticLookup(ticketKey, iocs, techniques, issueData) {
       });
       if (_resolvedTickets.length > 0) {
         console.log('[Investigation] Fetching analyst closure notes from ' + _resolvedTickets.length + ' resolved ticket(s)...');
-        var _closurePromises = _resolvedTickets.slice(0, 5).map(function(rt) {
+        var _closurePromises = _resolvedTickets.slice(0, 10).map(function(rt) {
           return fetch('/api/jira?action=comments&key=' + encodeURIComponent(rt.key))
             .then(function(r) { return r.ok ? r.json() : { comments: [] }; })
             .then(function(data) {
@@ -60233,70 +60233,96 @@ async function runAIInvestigation(ticketKey, issueData) {
   }
 
   // Inject Jira cross-ticket correlation as evidence
-  // CRITICAL: Analyze closed ticket verdicts before blindly using as inculpatory
+  // CRITICAL: Classify using ALL available data sources — analyst comments (analystPrecedent),
+  // structured learning (analystLearnings closure_reasoning), AND resolution field.
+  // Resolution field is often null in this Jira instance, so comments/learning are primary.
   var _jcLen = (elasticLogs.jiraCorrelation || []).length;
   if (_jcLen >= 1) {
     var _jcClosed = (elasticLogs.jiraCorrelation || []).filter(function(jt) {
       var s = (jt.status || '').toLowerCase();
-      return s === 'done' || s === 'closed' || s === 'resolved';
+      return s === 'done' || s === 'closed' || s === 'resolved' || s === 'reported to';
     });
     var _jcOpen = _jcLen - _jcClosed.length;
-    // Check analyst precedent comments for FP indicators
+    // FP/TP classification using ALL available data sources
     var _jcFPCount = 0, _jcTPCount = 0, _jcUnknownCount = 0;
-    var _fpPatterns = /false.?positive|fp|benign|noise|noisy|whitelisted|excluded|business.?justified|safe|legitimate|expected|authorized|scheduled|tuning|suppressed/i;
-    var _tpPatterns = /true.?positive|tp|confirmed|malicious|compromised|incident|escalat|containment|isolat/i;
+    var _fpPatterns = /false.?positive|\bclosing as fp\b|\bclosed as fp\b|benign|noise|noisy|whitelisted|excluded|business.?justified|safe|legitimate|expected|authorized|scheduled|tuning|suppressed|no.{0,20}(malicious|suspicious|threat|indicator)/i;
+    var _tpPatterns = /true.?positive|\bclosing as tp\b|\bconfirmed.{0,10}(malicious|threat|compromise)\b|incident|escalat|containment|isolat|blocked.{0,10}malicious/i;
+
+    // Build a lookup of all available analyst text per ticket key
+    // Sources: (1) analystPrecedent comments, (2) analystLearnings closure_reasoning + analyst_notes
+    var _ticketAnalystText = {};
+    (elasticLogs.analystPrecedent || []).forEach(function(ap) {
+      if (!_ticketAnalystText[ap.ticket]) _ticketAnalystText[ap.ticket] = '';
+      _ticketAnalystText[ap.ticket] += ' ' + (ap.text || '');
+    });
+    (elasticLogs.analystLearnings || []).forEach(function(al) {
+      if (!_ticketAnalystText[al.key]) _ticketAnalystText[al.key] = '';
+      _ticketAnalystText[al.key] += ' ' + (al.closure_reasoning || '') + ' ' + (al.analyst_notes || '');
+    });
+
     _jcClosed.forEach(function(jt) {
       var resolution = (jt.resolution || '').toLowerCase();
-      // Check resolution field first
-      if (/won't do|duplicate|cannot reproduce|declined|false|noise/i.test(resolution)) { _jcFPCount++; return; }
-      if (/done|fixed|resolved/i.test(resolution) && _tpPatterns.test(jt.summary || '')) { _jcTPCount++; return; }
-      // Check analyst precedent comments if available
-      var closingComment = '';
-      (elasticLogs.analystPrecedent || []).filter(function(ap) { return ap.ticket === jt.key; }).forEach(function(ap) { closingComment += ' ' + ap.text; });
-      if (_fpPatterns.test(closingComment)) { _jcFPCount++; }
-      else if (_tpPatterns.test(closingComment)) { _jcTPCount++; }
-      else { _jcUnknownCount++; }
+      // Source 1: Check resolution field (often null but check anyway)
+      if (resolution && /won't do|duplicate|cannot reproduce|declined|false|noise/i.test(resolution)) { _jcFPCount++; return; }
+      if (resolution && /done|fixed|resolved/i.test(resolution) && _tpPatterns.test(jt.summary || '')) { _jcTPCount++; return; }
+      // Source 2: Check analyst comments + learning closure_reasoning
+      var analystText = _ticketAnalystText[jt.key] || '';
+      if (analystText.trim().length > 0) {
+        if (_fpPatterns.test(analystText)) { _jcFPCount++; }
+        else if (_tpPatterns.test(analystText)) { _jcTPCount++; }
+        else { _jcUnknownCount++; }
+      } else {
+        // No analyst text available for this ticket — unknown verdict
+        _jcUnknownCount++;
+      }
     });
-    // If no precedent comments, mark all closed as unknown
-    if (_jcClosed.length > 0 && _jcFPCount === 0 && _jcTPCount === 0 && _jcUnknownCount === 0) {
-      _jcUnknownCount = _jcClosed.length;
-    }
+
+    console.log('[Evidence] Jira correlation classification: ' + _jcFPCount + ' FP, ' + _jcTPCount + ' TP, ' + _jcUnknownCount + ' unknown, ' + _jcOpen + ' open (from ' + _jcLen + ' total, ' + Object.keys(_ticketAnalystText).length + ' with analyst text)');
 
     var _jcKeys = elasticLogs.jiraCorrelation.slice(0, 5).map(function(j) { return j.key; }).join(', ');
 
-    // Decision logic: If majority closed as FP → this is a noisy rule (exculpatory)
-    // If majority closed as TP → persistent threat (inculpatory)
-    // If mixed/unknown → neutral with context
-    if (_jcFPCount > 0 && _jcFPCount >= _jcTPCount && _jcFPCount >= (_jcClosed.length * 0.5)) {
-      // Majority FP — this is a noisy rule, not a persistent threat
+    // Decision logic: If majority closed as FP → exculpatory (noisy rule, analysts already reviewed)
+    // If majority closed as TP → inculpatory (persistent confirmed threat)
+    // If unknown/mixed → neutral context for analyst review
+    if (_jcFPCount > 0 && _jcFPCount >= _jcTPCount && _jcFPCount >= (_jcClosed.length * 0.3)) {
+      // FP-dominant — analysts have repeatedly reviewed and closed as FP
       exculpatory.push({
-        title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets — ' + _jcFPCount + '/' + _jcClosed.length + ' closed as FALSE POSITIVE',
+        title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets — ' + _jcFPCount + '/' + _jcClosed.length + ' closed as FALSE POSITIVE by analysts',
         severity: _jcFPCount >= 3 ? 'strong' : 'moderate',
-        source: 'JIRA_CORRELATION',
-        detail: 'Of ' + _jcLen + ' related tickets (same rule + entity), ' + _jcClosed.length + ' are closed. ' + _jcFPCount + ' were closed as FP/noise/benign. This indicates a noisy detection rule for this entity, not a persistent threat. Consider rule tuning. Keys: ' + _jcKeys
+        source: 'ANALYST_PRECEDENT',
+        detail: 'Of ' + _jcLen + ' related tickets (same rule + entity), ' + _jcClosed.length + ' are closed. Analyst closure notes confirm ' + _jcFPCount + ' were determined as false positive/benign. ' + (_jcUnknownCount > 0 ? _jcUnknownCount + ' had no retrievable analyst notes. ' : '') + 'This analyst precedent strongly indicates a noisy detection rule. Consider rule tuning. Keys: ' + _jcKeys
       });
     } else if (_jcTPCount > 0 && _jcTPCount > _jcFPCount) {
-      // Majority TP — genuine persistent threat
+      // TP-dominant — genuine persistent threat confirmed by analysts
       inculpatory.push({
-        title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets — ' + _jcTPCount + ' confirmed TRUE POSITIVE (last 90d)',
+        title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets — ' + _jcTPCount + ' confirmed TRUE POSITIVE by analysts (last 90d)',
         severity: _jcLen >= 3 ? 'high' : 'medium',
-        source: 'JIRA_CORRELATION',
-        detail: _jcLen + ' related tickets match same rule + entity. ' + _jcTPCount + '/' + _jcClosed.length + ' closed tickets were confirmed as True Positive/malicious by analysts. This is a recurring confirmed threat pattern. Keys: ' + _jcKeys
+        source: 'ANALYST_PRECEDENT',
+        detail: _jcLen + ' related tickets match same rule + entity. Analyst closure notes confirm ' + _jcTPCount + '/' + _jcClosed.length + ' as True Positive/malicious. This is a recurring confirmed threat pattern. Keys: ' + _jcKeys
       });
-    } else if (_jcLen >= 3) {
-      // Mixed or unknown verdicts — add as inculpatory but with caveats
+    } else if (_jcUnknownCount > 0 && _jcUnknownCount > _jcFPCount && _jcUnknownCount > _jcTPCount) {
+      // Mostly unknown — cannot determine from available data, keep neutral (NOT inculpatory)
+      // Do NOT treat pattern recurrence alone as inculpatory — analyst comments are the source of truth
+      exculpatory.push({
+        title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets — ' + _jcClosed.length + ' closed (analyst verdicts not retrievable)',
+        severity: 'low',
+        source: 'ANALYST_PRECEDENT',
+        detail: _jcLen + ' related tickets found. ' + _jcClosed.length + ' are closed but analyst closure notes could not be retrieved for ' + _jcUnknownCount + ' of them. Closed tickets without analyst escalation notes typically indicate the alert was reviewed and dismissed. Keys: ' + _jcKeys
+      });
+    } else if (_jcOpen > 0 && _jcOpen >= _jcClosed.length) {
+      // Mostly open — active investigation pattern, genuinely relevant
       inculpatory.push({
-        title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets (verdicts: ' + (_jcTPCount > 0 ? _jcTPCount + ' TP, ' : '') + (_jcFPCount > 0 ? _jcFPCount + ' FP, ' : '') + (_jcOpen > 0 ? _jcOpen + ' open, ' : '') + (_jcUnknownCount > 0 ? _jcUnknownCount + ' unverified' : '') + ')',
-        severity: 'medium',
+        title: 'Jira Cross-Ticket: ' + _jcLen + ' related tickets — ' + _jcOpen + ' still open/under investigation',
+        severity: _jcLen >= 3 ? 'medium' : 'low',
         source: 'JIRA_CORRELATION',
-        detail: _jcLen + ' related tickets found. Closed verdicts: ' + _jcTPCount + ' TP, ' + _jcFPCount + ' FP, ' + _jcUnknownCount + ' unknown/unverified. ' + _jcOpen + ' still open. Pattern requires analyst review — cannot determine persistent threat vs noisy rule without checking closed ticket outcomes. Keys: ' + _jcKeys
+        detail: _jcLen + ' related tickets found. ' + _jcOpen + ' are still open/under investigation, suggesting an active pattern requiring attention. Keys: ' + _jcKeys
       });
     } else {
-      // 1-2 tickets with no clear verdict direction
-      inculpatory.push({
-        title: 'Jira Cross-Ticket: ' + _jcLen + ' related ticket(s) found (same rule + entity)',
+      // Mixed or small count — provide context without assuming inculpatory
+      exculpatory.push({
+        title: 'Jira Cross-Ticket: ' + _jcLen + ' related ticket(s) — mixed/inconclusive verdicts',
         severity: 'low',
-        source: 'JIRA_CORRELATION',
+        source: 'ANALYST_PRECEDENT',
         detail: 'Found ' + _jcLen + ' related ticket(s). ' + (_jcClosed.length > 0 ? 'Closed: ' + _jcFPCount + ' FP, ' + _jcTPCount + ' TP, ' + _jcUnknownCount + ' unknown. ' : '') + (_jcOpen > 0 ? _jcOpen + ' still open. ' : '') + 'Keys: ' + _jcKeys
       });
     }
@@ -60328,11 +60354,11 @@ async function runAIInvestigation(ticketKey, issueData) {
     if (_jiraCorrCount >= 3) tpWeight += 15;
     else tpWeight += 8;
   } else if (typeof _jcFPCount !== 'undefined' && _jcFPCount > _jcTPCount) {
-    // Majority FP → noisy rule, ADD to FP weight instead
-    fpWeight += (_jcFPCount >= 3 ? 15 : 8);
-  } else {
-    // Mixed/unknown → minimal weight, analyst needs to verify
-    if (_jiraCorrCount >= 3) tpWeight += 5;
+    // Majority FP → noisy rule, strong FP weight (analysts have repeatedly reviewed)
+    fpWeight += (_jcFPCount >= 3 ? 20 : 10);
+  } else if (typeof _jcUnknownCount !== 'undefined' && _jcUnknownCount > 0 && _jcUnknownCount > _jcTPCount) {
+    // Unknown/closed without clear verdict → lean FP (closed without escalation = likely dismissed)
+    fpWeight += (_jiraCorrCount >= 3 ? 8 : 3);
   }
 
   // ── TELEMETRY DEPTH CHECK: Detect if verdict is based on lack of evidence rather than confirmed malicious activity ──
@@ -62735,10 +62761,10 @@ function buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs
         sourceBadgeBg = 'rgba(234,88,12,0.15)';
         sourceBadgeColor = '#ea580c';
         sourceBadgeText = '[THREAT INTEL]';
-      } else if (ev.source === 'JIRA_CORRELATION') {
+      } else if (ev.source === 'ANALYST_PRECEDENT' || ev.source === 'JIRA_CORRELATION') {
         sourceBadgeBg = 'rgba(99,102,241,0.15)';
         sourceBadgeColor = '#6366f1';
-        sourceBadgeText = '[TICKET TEXT]';
+        sourceBadgeText = ev.source === 'ANALYST_PRECEDENT' ? '[ANALYST PRECEDENT]' : '[JIRA CORRELATION]';
       } else {
         sourceBadgeBg = 'rgba(245,158,11,0.15)';
         sourceBadgeColor = '#f59e0b';
@@ -62782,6 +62808,11 @@ function buildRound2HTML(inculpatory, exculpatory, iocs, techniques, elasticLogs
         sourceBadgeColor = '#f59e0b';
         sourceBadgeText = '[CONNECTOR OFFLINE]';
         counterIcon = dIcon('warning',14) + '';
+      } else if (ev.source === 'ANALYST_PRECEDENT' || ev.source === 'JIRA_CORRELATION') {
+        sourceBadgeBg = 'rgba(99,102,241,0.15)';
+        sourceBadgeColor = '#6366f1';
+        sourceBadgeText = ev.source === 'ANALYST_PRECEDENT' ? '[ANALYST PRECEDENT]' : '[JIRA CORRELATION]';
+        counterIcon = dIcon('checkCircle',14);
       } else {
         sourceBadgeBg = 'rgba(0,212,255,0.15)';
         sourceBadgeColor = 'var(--cyan)';
