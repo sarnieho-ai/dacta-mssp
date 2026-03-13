@@ -55826,8 +55826,40 @@ async function openInvestigation(ticketKey) {
     // Detect incomplete cache: HTML exists but missing round content (caused by
     // background auto-investigation shadow DOM bug where rounds were placed outside
     // aiInvestigationPanel). Treat as if no usable cache exists.
-    var _hasUsableHTML = cachedResult && cachedResult.html &&
-      (cachedResult.html.indexOf('aiRound') !== -1 || cachedResult.html.length > 15000);
+    // ALSO detect stub/placeholder content from background runs that generated aiRound
+    // wrappers with no actual investigation data inside them.
+    var _hasUsableHTML = cachedResult && cachedResult.html && (function() {
+      var h = cachedResult.html;
+      // Must have aiRound wrappers OR be large enough
+      if (h.indexOf('aiRound') === -1 && h.length < 15000) return false;
+      // Check for actual investigation content markers — not just placeholder stubs
+      var _hasRealContent = (
+        h.indexOf('Inculpatory Evidence') !== -1 ||
+        h.indexOf('Exculpatory Evidence') !== -1 ||
+        h.indexOf('THREAT INTELLIGENCE') !== -1 ||
+        h.indexOf('FINAL ASSESSMENT') !== -1 ||
+        h.indexOf('verdict-banner') !== -1 ||
+        h.indexOf('EXTRACTED IOCS') !== -1 ||
+        h.indexOf('reasoning-item') !== -1 ||
+        h.indexOf('QUERY EXECUTION LOG') !== -1 ||
+        h.indexOf('PLAYBOOK TRIAGE') !== -1 ||
+        h.length > 20000  // Real investigations generate 50k+ HTML
+      );
+      // Detect known placeholder stubs from background runs
+      var _isPlaceholderOnly = (
+        h.indexOf('Background telemetry collection completed') !== -1 &&
+        h.indexOf('Inculpatory Evidence') === -1 &&
+        h.indexOf('FINAL ASSESSMENT') === -1
+      ) || (
+        h.indexOf('synthesis was inconclusive in the background run') !== -1 &&
+        h.indexOf('Inculpatory Evidence') === -1
+      );
+      if (_isPlaceholderOnly) {
+        console.log('[AI Investigation] Cache contains only background placeholder stubs — treating as incomplete');
+        return false;
+      }
+      return _hasRealContent;
+    })();
     if (_hasUsableHTML) {
       // Serve from cache — no LLM credits used
       console.log('[AI Investigation] Serving cached result for ' + ticketKey);
