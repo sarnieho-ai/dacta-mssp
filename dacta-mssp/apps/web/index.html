@@ -57775,6 +57775,16 @@ function saveFeedbackFromModal(ticketKey) {
   if (fbStatusEl) { fbStatusEl.style.display = ''; fbStatusEl.innerHTML = dIcon('check',12) + ' Feedback saved'; fbStatusEl.style.color = '#10b981'; }
 }
 
+// ── Open a correlated ticket in the Investigation page ──
+function openTicket(ticketKey) {
+  if (!ticketKey) return;
+  // Close the Correlated Alerts modal if it's open
+  var modalOverlay = document.getElementById('corrAlertsModalOverlay');
+  if (modalOverlay) modalOverlay.remove();
+  // Navigate to the ticket's investigation
+  openInvestigation(ticketKey);
+}
+
 // ── Correlated Alerts Drill-Down Modal ──
 function openCorrelatedAlertsModal() {
   var ticketKey = _currentInvestigationKey;
