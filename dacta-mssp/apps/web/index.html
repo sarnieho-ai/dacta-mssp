@@ -12990,64 +12990,51 @@ function getThemeTickColor() {
               </div>
             </div>
 
-            <!-- Right: Rule Metadata Sidebar -->
-            <div class="dr-create-sidebar">
+            <!-- Right: Rule Metadata Sidebar (LIVE) -->
+            <div class="dr-create-sidebar" id="rbPropertiesPanel">
               <div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:14px;">Rule Properties</div>
 
               <div class="dr-field-group">
                 <div class="dr-field-label">Rule Type</div>
-                <select class="filter-select" style="width:100%;">
-                  <option>Sigma (Recommended)</option>
-                  <option>YARA</option>
-                  <option>Correlation Rule</option>
-                  <option>Threshold Rule</option>
-                  <option>EQL Native</option>
-                  <option>ML Anomaly Baseline</option>
+                <select class="filter-select" id="rbRuleType" style="width:100%;" onchange="rbUpdateRuleType(this.value)">
+                  <option value="sigma">Sigma (Recommended)</option>
+                  <option value="yara">YARA</option>
+                  <option value="correlation">Correlation Rule</option>
+                  <option value="threshold">Threshold Rule</option>
+                  <option value="eql">EQL Native</option>
+                  <option value="ml">ML Anomaly Baseline</option>
                 </select>
               </div>
 
               <div class="dr-field-group">
                 <div class="dr-field-label">Severity</div>
-                <div style="display:flex;gap:6px;">
-                  <button class="btn btn-xs" style="background:rgba(239,68,68,0.15);color:var(--red-bright);border:1px solid rgba(239,68,68,0.3);">Critical</button>
-                  <button class="btn btn-xs" style="background:rgba(245,158,11,0.15);color:var(--amber);border:1px solid rgba(245,158,11,0.3);">High</button>
-                  <button class="btn btn-xs" style="background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);">Medium</button>
-                  <button class="btn btn-xs" style="background:rgba(100,116,139,0.15);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);">Low</button>
-                </div>
+                <div id="rbSeverityBtns" style="display:flex;gap:6px;"></div>
               </div>
 
               <div class="dr-field-group">
                 <div class="dr-field-label">MITRE ATT&amp;CK Mapping</div>
-                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
-                  <span class="mitre-tag">T1003.001</span>
-                  <button class="btn btn-xs btn-secondary" style="font-size:9px;">+ Add</button>
-                </div>
+                <div id="rbMitreTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;"></div>
               </div>
 
               <div class="dr-field-group">
                 <div class="dr-field-label">Compatible Log Sources</div>
-                <div style="display:flex;flex-wrap:wrap;gap:4px;">
-                  <span class="logsrc-tag windows">Windows Sysmon</span>
-                  <span class="logsrc-tag windows">Windows Security</span>
-                  <span class="logsrc-tag edr">CrowdStrike</span>
-                  <button class="btn btn-xs btn-secondary" style="font-size:9px;">+ Add</button>
-                </div>
+                <div id="rbLogSources" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
               </div>
 
               <div class="dr-field-group">
                 <div class="dr-field-label">Confidence Score</div>
                 <div style="display:flex;align-items:center;gap:8px;">
                   <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;">
-                    <div style="width:92%;height:100%;background:linear-gradient(90deg,var(--green),var(--cyan));border-radius:3px;"></div>
+                    <div id="rbConfBar" style="width:0%;height:100%;background:linear-gradient(90deg,var(--green),var(--cyan));border-radius:3px;transition:width 0.5s;"></div>
                   </div>
-                  <span style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--green);">92%</span>
+                  <span id="rbConfVal" style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--green);">—</span>
                 </div>
               </div>
 
               <div class="dr-field-group">
                 <div class="dr-field-label">Target Client</div>
                 <div style="position:relative;">
-                  <input class="filter-input" id="rbClientInput" placeholder="Type to search clients..." oninput="filterRBClients(this.value)" autocomplete="off" style="width:100%;">
+                  <input class="filter-input" id="rbClientInput" placeholder="Type to search clients..." oninput="rbFilterClients(this.value)" onfocus="rbFilterClients(this.value)" autocomplete="off" style="width:100%;">
                   <div id="rbClientSuggestions" style="position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--bg-surface);border:1px solid var(--border-card);border-radius:0 0 8px 8px;display:none;max-height:200px;overflow-y:auto;"></div>
                 </div>
                 <div id="rbSelectedClients" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"></div>
@@ -13055,37 +13042,28 @@ function getThemeTickColor() {
 
               <div class="dr-field-group">
                 <div class="dr-field-label">Deploy to Client SIEMs</div>
-                <div class="dr-siem-target selected" onclick="this.classList.toggle('selected')">
-                  <div><div class="siem-name">Elastic SIEM (Dacta Global)</div><div class="siem-ver">v8.12.1</div></div>
-                  <div class="dr-siem-check">&#10003;</div>
-                </div>
-                <div class="dr-siem-target selected" onclick="this.classList.toggle('selected')">
-                  <div><div class="siem-name">Elastic SIEM (SPMT)</div><div class="siem-ver">v8.12.1</div></div>
-                  <div class="dr-siem-check">&#10003;</div>
-                </div>
-                <div class="dr-siem-target" onclick="this.classList.toggle('selected')">
-                  <div><div class="siem-name">Elastic SIEM (Global Advisor)</div><div class="siem-ver">v8.12.1</div></div>
-                  <div class="dr-siem-check"></div>
+                <div id="rbSiemTargets" style="display:flex;flex-direction:column;gap:6px;">
+                  <div style="font-size:11px;color:var(--text-muted);padding:8px;">Select a target client above</div>
                 </div>
               </div>
 
               <div class="dr-field-group">
                 <div class="dr-field-label">Threat Actors &amp; Risk</div>
-                <button class="btn btn-xs btn-secondary" onclick="aiGenerateThreats()" style="margin-bottom:8px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="8.5" cy="16" r="1.5"/><circle cx="15.5" cy="16" r="1.5"/><path d="M12 2v4"/><path d="M8 11V9a4 4 0 0 1 8 0v2"/><circle cx="12" cy="2" r="1"/></svg> Generate with AI</button>
+                <button class="btn btn-xs btn-secondary" onclick="rbGenerateThreats()" style="margin-bottom:8px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="8.5" cy="16" r="1.5"/><circle cx="15.5" cy="16" r="1.5"/><path d="M12 2v4"/><path d="M8 11V9a4 4 0 0 1 8 0v2"/><circle cx="12" cy="2" r="1"/></svg> Generate with AI</button>
                 <div id="rbThreatActors" style="display:flex;flex-direction:column;gap:6px;"></div>
               </div>
 
               <div class="dr-field-group">
                 <div class="dr-field-label">False Positive Exclusions</div>
-                <textarea class="esc-input" rows="2" style="width:100%;resize:vertical;font-family:var(--font-mono);font-size:10px;" placeholder="Add known false positive patterns...">MsMpEng.exe, SentinelAgent.exe, CylanceSvc.exe</textarea>
+                <textarea class="esc-input" id="rbFalsePositives" rows="2" style="width:100%;resize:vertical;font-family:var(--font-mono);font-size:10px;" placeholder="Add known false positive patterns..."></textarea>
               </div>
 
               <div style="display:flex;gap:8px;margin-top:16px;">
-                <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="saveAndTestRule()">
+                <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="rbSaveAndTest()">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
                   Save &amp; Test
                 </button>
-                <button class="btn btn-secondary" onclick="saveRuleAsDraft()">Draft</button>
+                <button class="btn btn-secondary" onclick="rbSaveDraft()">Draft</button>
               </div>
             </div>
           </div>
@@ -13513,23 +13491,413 @@ function getThemeTickColor() {
               return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:6px;font-size:10px;color:var(--cyan);">'+c+' <span style="cursor:pointer;opacity:0.6;" onclick="removeRBClient(\''+c+'\')">&times;</span></span>';
             }).join('');
           }
-          // ── AI Threat Actor Generation ─────────────────────────
-          function aiGenerateThreats() {
-            showToast('Analyzing rule patterns for threat actor mapping...');
-            setTimeout(function() {
-              var actorContainer = document.getElementById('rbThreatActors');
-              if(!actorContainer) return;
-              var actors = [
-                { name:'APT41 (Winnti)', desc:'Chinese state-sponsored group targeting gaming, tech. Uses supply chain attacks.', icon:'adversary' },
-                { name:'Scattered Spider', desc:'Social engineering focused group targeting telecom and hospitality.', icon:'adversary' },
-                { name:'LockBit 3.0', desc:'Ransomware-as-a-Service operation with double extortion tactics.', icon:'lock' }
-              ];
-              actorContainer.innerHTML = actors.map(function(a){
-                return '<div class="cr-actor-card" style="margin-bottom:6px;"><div class="actor-icon">'+dIcon(a.icon,16)+'</div><div><div class="actor-name">'+a.name+'</div><div class="actor-desc">'+a.desc+'</div></div></div>';
-              }).join('');
-              showToast('AI threat actor mapping complete');
-            }, 1500);
+          // ═══════════════════════════════════════════════════════════
+          // LIVE RULE PROPERTIES PANEL — all functions prefixed rb*
+          // ═══════════════════════════════════════════════════════════
+          var _rbCurrentRule = null;   // currently loaded rule detail object
+          var _rbSeverity = 'medium';  // current severity selection
+          var _rbMitreTags = [];       // ['T1003.001','T1059']
+          var _rbLogSources = [];      // ['Windows Sysmon','CrowdStrike']
+          var _rbSelectedOrgs = [];    // [{id,name,namespace}]
+          var _rbSelectedSiems = {};   // { orgId: true/false }
+
+          // Severity config
+          var _rbSevConfig = {
+            critical: { color:'var(--red-bright)', bg:'rgba(239,68,68,0.15)', border:'rgba(239,68,68,0.3)' },
+            high:     { color:'var(--amber)',      bg:'rgba(245,158,11,0.15)', border:'rgba(245,158,11,0.3)' },
+            medium:   { color:'#60a5fa',           bg:'rgba(96,165,250,0.15)', border:'rgba(96,165,250,0.3)' },
+            low:      { color:'#94a3b8',           bg:'rgba(100,116,139,0.15)', border:'rgba(100,116,139,0.3)' }
+          };
+
+          // Parse all rule metadata from the IDE code content
+          function rbParseRuleContent() {
+            var code = document.getElementById('drIdeCode');
+            if (!code) return {};
+            var text = code.textContent || '';
+            function extract(name) {
+              var re = new RegExp('^\\s*' + name + '\\s*:\\s*(.+)', 'm');
+              var m = text.match(re); return m ? m[1].trim().replace(/^['"]|['"]$/g,'') : '';
+            }
+            var tags = text.match(/attack\.[a-zA-Z0-9_.]+/gi) || [];
+            var mitre = tags.filter(function(t){ return t.match(/attack\.t\d{4}/i); }).map(function(t){ return t.replace(/attack\./i,'').toUpperCase(); });
+            var tactics = tags.filter(function(t){ return !t.match(/attack\.t\d{4}/i); }).map(function(t){ return t.replace(/attack\./i,''); });
+            // Extract falsepositives list
+            var fpMatch = text.match(/falsepositives:\s*\n((?:\s+-\s+.+\n?)+)/m);
+            var fps = [];
+            if (fpMatch) { fpMatch[1].replace(/^\s*-\s+(.+)/gm, function(m,v){ fps.push(v.trim()); }); }
+            return {
+              title: extract('title'), level: extract('level') || 'medium',
+              status: extract('status'), author: extract('author'),
+              category: extract('category'), product: extract('product'),
+              description: extract('description'),
+              mitre: mitre, tactics: tactics,
+              falsePositives: fps
+            };
           }
+
+          // Populate the entire properties panel from rule data
+          function rbPopulateProperties(ruleDetail) {
+            _rbCurrentRule = ruleDetail;
+            var parsed = rbParseRuleContent();
+
+            // Rule type
+            var typeEl = document.getElementById('rbRuleType');
+            if (typeEl && ruleDetail) {
+              var syntax = (ruleDetail._syntax || ruleDetail.type || 'sigma').toLowerCase();
+              if (syntax.indexOf('sigma') >= 0) typeEl.value = 'sigma';
+              else if (syntax.indexOf('yara') >= 0) typeEl.value = 'yara';
+              else if (syntax.indexOf('eql') >= 0) typeEl.value = 'eql';
+              else typeEl.value = 'sigma';
+            }
+
+            // Severity
+            _rbSeverity = (parsed.level || 'medium').toLowerCase();
+            rbRenderSeverity();
+
+            // MITRE
+            _rbMitreTags = parsed.mitre.length > 0 ? parsed.mitre : (ruleDetail && ruleDetail.mitre && ruleDetail.mitre !== '\u2014' ? [ruleDetail.mitre] : []);
+            rbRenderMitre();
+
+            // Log sources
+            _rbLogSources = [];
+            var cat = (parsed.category || '').toLowerCase();
+            var prod = (parsed.product || '').toLowerCase();
+            if (prod.indexOf('windows') >= 0 || cat.indexOf('process_creation') >= 0 || cat.indexOf('sysmon') >= 0) _rbLogSources.push('Windows Sysmon');
+            if (prod.indexOf('windows') >= 0 || cat.indexOf('security') >= 0) _rbLogSources.push('Windows Security');
+            if (prod.indexOf('crowdstrike') >= 0 || prod.indexOf('falcon') >= 0) _rbLogSources.push('CrowdStrike');
+            if (prod.indexOf('defender') >= 0 || prod.indexOf('m365') >= 0 || prod.indexOf('mde') >= 0) _rbLogSources.push('Microsoft Defender');
+            if (prod.indexOf('linux') >= 0 || cat.indexOf('linux') >= 0) _rbLogSources.push('Linux Syslog');
+            if (prod.indexOf('trend') >= 0 || prod.indexOf('vision') >= 0) _rbLogSources.push('Trend Micro');
+            if (prod.indexOf('fortinet') >= 0 || prod.indexOf('fortigate') >= 0) _rbLogSources.push('Fortinet');
+            if (prod.indexOf('palo') >= 0) _rbLogSources.push('Palo Alto');
+            if (prod.indexOf('heimdal') >= 0) _rbLogSources.push('Heimdal');
+            if (_rbLogSources.length === 0 && cat) _rbLogSources.push(cat);
+            if (_rbLogSources.length === 0 && ruleDetail && ruleDetail._platform) _rbLogSources.push(ruleDetail._platform);
+            rbRenderLogSources();
+
+            // Confidence score
+            var conf = 0;
+            if (ruleDetail && ruleDetail._confidenceScore) conf = ruleDetail._confidenceScore;
+            else conf = rbCalcConfidence(parsed);
+            rbRenderConfidence(conf);
+
+            // False positives
+            var fpEl = document.getElementById('rbFalsePositives');
+            if (fpEl) fpEl.value = parsed.falsePositives.length > 0 ? parsed.falsePositives.join(', ') : '';
+
+            // Target clients — reset
+            _rbSelectedOrgs = [];
+            _rbSelectedSiems = {};
+            rbRenderSelectedOrgs();
+            rbRenderSiemTargets();
+
+            // Threat actors — clear
+            var ta = document.getElementById('rbThreatActors');
+            if (ta) ta.innerHTML = '';
+          }
+
+          // Calculate confidence from rule completeness
+          function rbCalcConfidence(parsed) {
+            var score = 0;
+            if (parsed.title && parsed.title.length > 5) score += 15;
+            if (parsed.description && parsed.description.length > 5) score += 10;
+            if (parsed.level) score += 10;
+            if (parsed.mitre.length > 0) score += 15;
+            if (parsed.category || parsed.product) score += 15;
+            if (parsed.falsePositives.length > 0) score += 10;
+            if (parsed.author) score += 5;
+            if (parsed.status) score += 5;
+            // Check detection block quality
+            var code = document.getElementById('drIdeCode');
+            var text = code ? code.textContent : '';
+            if (text.indexOf('detection:') >= 0 && text.indexOf('selection') >= 0) score += 15;
+            if (text.indexOf('condition:') >= 0) score += 5;
+            if (text.indexOf('TODO') >= 0) score -= 15;
+            return Math.max(0, Math.min(100, score));
+          }
+
+          // ── Severity buttons ──
+          function rbRenderSeverity() {
+            var el = document.getElementById('rbSeverityBtns');
+            if (!el) return;
+            el.innerHTML = '';
+            ['critical','high','medium','low'].forEach(function(sev) {
+              var cfg = _rbSevConfig[sev];
+              var active = sev === _rbSeverity;
+              var btn = document.createElement('button');
+              btn.className = 'btn btn-xs';
+              btn.textContent = sev.charAt(0).toUpperCase() + sev.slice(1);
+              btn.style.background = active ? cfg.bg : 'rgba(255,255,255,0.03)';
+              btn.style.color = active ? cfg.color : 'var(--text-muted)';
+              btn.style.border = '1px solid ' + (active ? cfg.border : 'var(--border-subtle)');
+              btn.style.fontWeight = active ? '700' : '400';
+              btn.onclick = function() { rbSetSeverity(sev); };
+              el.appendChild(btn);
+            });
+          }
+          function rbSetSeverity(sev) {
+            _rbSeverity = sev;
+            rbRenderSeverity();
+            // Update the rule content in the IDE
+            var code = document.getElementById('drIdeCode');
+            if (code) {
+              var text = code.textContent;
+              var updated = text.replace(/^(\s*level:\s*).+/m, '$1' + sev);
+              if (updated !== text) {
+                code.innerHTML = highlightRuleContent(updated, document.getElementById('rbRuleType').value || 'sigma');
+                showToast('Severity updated to ' + sev);
+              }
+            }
+          }
+
+          // ── MITRE tags ──
+          function rbRenderMitre() {
+            var el = document.getElementById('rbMitreTags');
+            if (!el) return;
+            el.innerHTML = '';
+            _rbMitreTags.forEach(function(tag) {
+              el.innerHTML += '<span class="mitre-tag" style="cursor:default;position:relative;padding-right:18px;">' + tag + '<span style="position:absolute;right:4px;top:50%;transform:translateY(-50%);cursor:pointer;opacity:0.5;font-size:12px;" onclick="rbRemoveMitre(\'' + tag + '\')">&times;</span></span>';
+            });
+            el.innerHTML += '<button class="btn btn-xs btn-secondary" style="font-size:9px;" onclick="rbAddMitrePrompt()">+ Add</button>';
+          }
+          function rbRemoveMitre(tag) {
+            _rbMitreTags = _rbMitreTags.filter(function(t){ return t !== tag; });
+            rbRenderMitre();
+            rbUpdateMitreInRule();
+          }
+          function rbAddMitrePrompt() {
+            var val = prompt('Enter MITRE ATT&CK technique ID (e.g. T1059.001):');
+            if (val && val.trim()) {
+              var clean = val.trim().toUpperCase();
+              if (_rbMitreTags.indexOf(clean) === -1) _rbMitreTags.push(clean);
+              rbRenderMitre();
+              rbUpdateMitreInRule();
+            }
+          }
+          function rbUpdateMitreInRule() {
+            var code = document.getElementById('drIdeCode');
+            if (!code) return;
+            var text = code.textContent;
+            // Replace tags section
+            var tagsStr = 'tags:\n' + _rbMitreTags.map(function(t){ return '  - attack.' + t.toLowerCase(); }).join('\n');
+            var updated = text.replace(/tags:[\s\S]*?(?=\n[a-z])/m, tagsStr + '\n');
+            if (updated !== text) {
+              code.innerHTML = highlightRuleContent(updated, document.getElementById('rbRuleType').value || 'sigma');
+            }
+          }
+
+          // ── Log sources ──
+          function rbRenderLogSources() {
+            var el = document.getElementById('rbLogSources');
+            if (!el) return;
+            var tagClassMap = { 'windows':'windows', 'sysmon':'windows', 'security':'windows', 'linux':'linux', 'crowdstrike':'edr', 'defender':'edr', 'trend':'edr', 'heimdal':'edr', 'fortinet':'firewall', 'palo':'firewall', 'fortigate':'firewall' };
+            el.innerHTML = '';
+            _rbLogSources.forEach(function(ls) {
+              var cls = 'edr';
+              var lower = ls.toLowerCase();
+              Object.keys(tagClassMap).forEach(function(k){ if(lower.indexOf(k) >= 0) cls = tagClassMap[k]; });
+              el.innerHTML += '<span class="logsrc-tag ' + cls + '" style="cursor:default;position:relative;padding-right:18px;">' + ls + '<span style="position:absolute;right:4px;top:50%;transform:translateY(-50%);cursor:pointer;opacity:0.5;font-size:12px;" onclick="rbRemoveLogSource(\'' + ls.replace(/'/g,"\\'") + '\')">&times;</span></span>';
+            });
+            el.innerHTML += '<button class="btn btn-xs btn-secondary" style="font-size:9px;" onclick="rbAddLogSourcePrompt()">+ Add</button>';
+          }
+          function rbRemoveLogSource(ls) {
+            _rbLogSources = _rbLogSources.filter(function(l){ return l !== ls; });
+            rbRenderLogSources();
+          }
+          function rbAddLogSourcePrompt() {
+            var val = prompt('Enter compatible log source (e.g. Windows Sysmon, CrowdStrike):');
+            if (val && val.trim()) {
+              if (_rbLogSources.indexOf(val.trim()) === -1) _rbLogSources.push(val.trim());
+              rbRenderLogSources();
+            }
+          }
+
+          // ── Confidence bar ──
+          function rbRenderConfidence(score) {
+            var bar = document.getElementById('rbConfBar');
+            var val = document.getElementById('rbConfVal');
+            if (bar) bar.style.width = score + '%';
+            if (val) {
+              val.textContent = score + '%';
+              val.style.color = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--amber)' : 'var(--red-bright)';
+            }
+          }
+
+          // ── Target client search (live from ORG_CONNECTORS) ──
+          function rbFilterClients(val) {
+            var sug = document.getElementById('rbClientSuggestions');
+            if (!sug) return;
+            if (!val || !val.trim()) { sug.style.display = 'none'; return; }
+            var lower = val.toLowerCase();
+            var results = [];
+            if (typeof ORG_CONNECTORS !== 'undefined') {
+              Object.keys(ORG_CONNECTORS).forEach(function(id) {
+                var org = ORG_CONNECTORS[id];
+                if (org.name.toLowerCase().indexOf(lower) >= 0) {
+                  var alreadySelected = _rbSelectedOrgs.some(function(s){ return s.id === id; });
+                  if (!alreadySelected) results.push({ id: id, name: org.name, namespace: org.namespace, type: org.type });
+                }
+              });
+            }
+            if (results.length === 0) { sug.style.display = 'none'; return; }
+            sug.innerHTML = results.map(function(r) {
+              var badge = r.type === 'internal' ? '<span style="font-size:8px;padding:1px 5px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:3px;color:var(--cyan);margin-left:6px;">Internal</span>'
+                : '<span style="font-size:8px;padding:1px 5px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:3px;color:var(--green);margin-left:6px;">SOCaaS</span>';
+              return '<div style="padding:8px 12px;font-size:11px;color:var(--text-secondary);cursor:pointer;border-bottom:1px solid var(--border-subtle);" onmousedown="rbSelectOrg(\'' + r.id + '\')" onmouseover="this.style.background=\'rgba(0,212,255,0.06)\'" onmouseout="this.style.background=\'\'">' + r.name + badge + '</div>';
+            }).join('');
+            sug.style.display = 'block';
+          }
+          function rbSelectOrg(orgId) {
+            if (typeof ORG_CONNECTORS === 'undefined' || !ORG_CONNECTORS[orgId]) return;
+            var org = ORG_CONNECTORS[orgId];
+            var already = _rbSelectedOrgs.some(function(s){ return s.id === orgId; });
+            if (!already) {
+              _rbSelectedOrgs.push({ id: orgId, name: org.name, namespace: org.namespace });
+              _rbSelectedSiems[orgId] = true; // auto-select SIEM by default
+            }
+            var inp = document.getElementById('rbClientInput'); if (inp) inp.value = '';
+            var sug = document.getElementById('rbClientSuggestions'); if (sug) sug.style.display = 'none';
+            rbRenderSelectedOrgs();
+            rbRenderSiemTargets();
+          }
+          function rbRemoveOrg(orgId) {
+            _rbSelectedOrgs = _rbSelectedOrgs.filter(function(o){ return o.id !== orgId; });
+            delete _rbSelectedSiems[orgId];
+            rbRenderSelectedOrgs();
+            rbRenderSiemTargets();
+          }
+          function rbRenderSelectedOrgs() {
+            var el = document.getElementById('rbSelectedClients');
+            if (!el) return;
+            el.innerHTML = _rbSelectedOrgs.map(function(o) {
+              return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.15);border-radius:6px;font-size:10px;color:var(--cyan);">' + o.name + ' <span style="cursor:pointer;opacity:0.6;" onclick="rbRemoveOrg(\'' + o.id + '\')">&times;</span></span>';
+            }).join('');
+          }
+
+          // ── Deploy to Client SIEMs (live from ORG_CONNECTORS) ──
+          function rbRenderSiemTargets() {
+            var el = document.getElementById('rbSiemTargets');
+            if (!el) return;
+            if (_rbSelectedOrgs.length === 0) {
+              el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px;">Select a target client above</div>';
+              return;
+            }
+            el.innerHTML = '';
+            _rbSelectedOrgs.forEach(function(org) {
+              if (typeof ORG_CONNECTORS === 'undefined' || !ORG_CONNECTORS[org.id]) return;
+              var orgData = ORG_CONNECTORS[org.id];
+              // Find SIEM connector
+              var siem = orgData.connectors.find(function(c){ return c.connector_type === 'siem' && c.is_enabled; });
+              // Find EDR connector
+              var edr = orgData.connectors.find(function(c){ return c.connector_type === 'edr' && c.is_enabled && c.vendor !== 'None'; });
+              var selected = _rbSelectedSiems[org.id] !== false;
+
+              if (siem) {
+                var div = document.createElement('div');
+                div.className = 'dr-siem-target' + (selected ? ' selected' : '');
+                div.onclick = function() {
+                  _rbSelectedSiems[org.id] = !selected;
+                  rbRenderSiemTargets();
+                };
+                div.innerHTML = '<div><div class="siem-name">' + siem.vendor + ' SIEM (' + org.name + ')</div><div class="siem-ver">ns: ' + orgData.namespace + '</div></div>' +
+                  '<div class="dr-siem-check">' + (selected ? '&#10003;' : '') + '</div>';
+                el.appendChild(div);
+              }
+              if (edr) {
+                var edrSel = _rbSelectedSiems[org.id + '_edr'] !== false;
+                var ediv = document.createElement('div');
+                ediv.className = 'dr-siem-target' + (edrSel ? ' selected' : '');
+                ediv.style.borderColor = 'rgba(245,158,11,0.2)';
+                ediv.onclick = function() {
+                  _rbSelectedSiems[org.id + '_edr'] = !edrSel;
+                  rbRenderSiemTargets();
+                };
+                ediv.innerHTML = '<div><div class="siem-name">' + edr.display_name + ' (' + org.name + ')</div><div class="siem-ver">EDR: ' + edr.vendor + '</div></div>' +
+                  '<div class="dr-siem-check">' + (edrSel ? '&#10003;' : '') + '</div>';
+                el.appendChild(ediv);
+              }
+              if (!siem && !edr) {
+                el.innerHTML += '<div style="font-size:10px;color:var(--text-muted);padding:6px 8px;border:1px dashed var(--border-subtle);border-radius:6px;">' + org.name + ' — No SIEM/EDR connector configured</div>';
+              }
+            });
+          }
+
+          // ── Rule type change ──
+          function rbUpdateRuleType(val) {
+            showToast('Rule type set to ' + val);
+            // Switch active IDE tab to match
+            var tabMap = { sigma: 'sigma', eql: 'eql', yara: 'yara' };
+            var tabs = document.querySelectorAll('.dr-ide-tab');
+            if (tabMap[val] && tabs.length > 0) {
+              tabs.forEach(function(t){ t.classList.remove('active'); });
+              var idx = val === 'eql' ? 1 : val === 'yara' ? 3 : 0;
+              if (tabs[idx]) tabs[idx].classList.add('active');
+            }
+          }
+
+          // ── Threat actor generation (from rule MITRE + description) ──
+          function rbGenerateThreats() {
+            var parsed = rbParseRuleContent();
+            showToast('Mapping threat actors from MITRE techniques...');
+            var actorContainer = document.getElementById('rbThreatActors');
+            if (!actorContainer) return;
+            // Map MITRE techniques to known actors
+            var actorMap = {
+              'T1003': [{ name: 'APT29 (Cozy Bear)', desc: 'Russian SVR — credential harvesting and lateral movement' }],
+              'T1059': [{ name: 'APT41 (Winnti)', desc: 'Chinese state-sponsored — command execution via scripting' }],
+              'T1547': [{ name: 'Lazarus Group', desc: 'North Korean APT — persistence via boot/logon autostart' }],
+              'T1486': [{ name: 'LockBit 3.0', desc: 'Ransomware-as-a-Service — data encryption for impact' }],
+              'T1071': [{ name: 'APT28 (Fancy Bear)', desc: 'Russian GRU — C2 via application layer protocols' }],
+              'T1566': [{ name: 'Scattered Spider', desc: 'Social engineering focused group — phishing attacks' }],
+              'T1053': [{ name: 'FIN7', desc: 'Financial crime group — scheduled task/job persistence' }],
+              'T1204': [{ name: 'Emotet Operators', desc: 'Malware distribution — user execution via malicious docs' }]
+            };
+            var matchedActors = [];
+            _rbMitreTags.forEach(function(tag) {
+              var base = tag.split('.')[0];
+              if (actorMap[base]) actorMap[base].forEach(function(a){ if(!matchedActors.some(function(x){return x.name===a.name;})) matchedActors.push(a); });
+            });
+            if (matchedActors.length === 0) {
+              matchedActors.push({ name: 'Unknown / Custom Threat', desc: 'No known APT groups mapped to these techniques. Consider running threat intelligence enrichment.' });
+            }
+            setTimeout(function() {
+              actorContainer.innerHTML = matchedActors.map(function(a) {
+                return '<div style="display:flex;gap:8px;padding:8px 10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.12);border-radius:6px;">' +
+                  '<div style="color:var(--red-bright);font-size:14px;margin-top:1px;">' + dIcon('adversary',16) + '</div>' +
+                  '<div><div style="font-size:11px;font-weight:600;color:var(--text-primary);">' + a.name + '</div>' +
+                  '<div style="font-size:10px;color:var(--text-muted);line-height:1.4;margin-top:2px;">' + a.desc + '</div></div></div>';
+              }).join('');
+              showToast('Mapped ' + matchedActors.length + ' threat actor(s) from MITRE techniques');
+            }, 600);
+          }
+
+          // ── Save & Test (live) ──
+          async function rbSaveAndTest() {
+            var code = document.getElementById('drIdeCode');
+            if (!code || !code.textContent || code.textContent.trim().length < 20) {
+              showToast('No rule content to save — write or load a rule first', 'warn'); return;
+            }
+            showToast('Saving rule...', 'info');
+            await saveRuleToSupabase();
+            // Update deployment targets in DB if orgs selected
+            if (_rbSelectedOrgs.length > 0 && _rbCurrentRule && _rbCurrentRule._dbId && window._dactaSupabase) {
+              var targets = _rbSelectedOrgs.filter(function(o){ return _rbSelectedSiems[o.id] !== false; }).map(function(o){ return o.name; });
+              await window._dactaSupabase.from('detection_rules').update({ deployment_targets: targets }).eq('id', _rbCurrentRule._dbId);
+            }
+            showToast('Rule saved. Opening Test Pipeline...');
+            navigate('rulelab');
+            setTimeout(function(){ if (typeof switchRlTab === 'function') switchRlTab('queue'); }, 200);
+          }
+          async function rbSaveDraft() {
+            var code = document.getElementById('drIdeCode');
+            if (!code || !code.textContent || code.textContent.length < 10) { showToast('No rule content to save', 'warn'); return; }
+            showToast('Saving draft...', 'info');
+            await saveRuleToSupabase();
+            showToast('Rule saved as draft to repository');
+          }
+
+          // ── AI Threat Actor Generation (legacy wrapper) ─────────────────────────
+          function aiGenerateThreats() { rbGenerateThreats(); }
           // ── Log Source Verification ────────────────────────────
           async function verifyLogSource(logSource) {
             try {
@@ -31055,6 +31423,11 @@ async function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
   window._editingRuleInBuilder = false;
   var _m = document.getElementById('drBuilderGreyMask');
   if (_m) _m.style.display = 'none';
+  // Populate live Rule Properties panel from loaded rule data
+  if (typeof rbPopulateProperties === 'function') {
+    var _rpDetail = _ruleDetailCache[ruleId] || { _dbId: ruleId, _syntax: ruleType, type: ruleType, mitre: mitre, severity: severity, name: ruleName };
+    rbPopulateProperties(_rpDetail);
+  }
   showToast('Rule ' + ruleId + ' loaded in Rule Builder \u2014 edit and save');
 }
 
