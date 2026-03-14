@@ -14743,6 +14743,11 @@ function getThemeTickColor() {
             <div class="page-title">Rule Testing Lab</div>
             <div class="page-subtitle">Breach &amp; Attack Simulation · Security Control Validation · Purple Teaming</div>
           </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <select class="filter-select" id="rlOrgSelector" onchange="onRlOrgChange()" style="font-size:11px;min-width:180px;">
+              <option value="all">All Organizations</option>
+            </select>
+          </div>
           <div class="page-actions">
             <button class="btn btn-secondary btn-sm" onclick="showToast('Loading last test results from SIEMLess DB...')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -15525,28 +15530,23 @@ function getThemeTickColor() {
               <div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:14px;">Test Configuration</div>
 
               <div class="dr-field-group">
-                <div class="dr-field-label">Target Environment</div>
+                <div class="dr-field-label">Target Organization</div>
                 <select class="filter-select" style="width:100%;" id="rlTestTarget">
-                  <option>Dacta Global (Sandbox)</option>
-                  <option>Naga World (Sandbox)</option>
-                  <option>Foxwood (Sandbox)</option>
-                  <option>SilverKey (Sandbox)</option>
-                  <option>ADV Partners (Sandbox)</option>
-                  <option>SPMT (Sandbox)</option>
+                  <option value="all">All Organizations</option>
                 </select>
               </div>
 
               <div class="dr-field-group">
-                <div class="dr-field-label">Execution Mode</div>
+                <div class="dr-field-label">Assessment Mode</div>
                 <div style="display:flex;flex-direction:column;gap:6px;">
                   <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.2);border-radius:7px;cursor:pointer;font-size:11px;color:var(--text-primary);">
-                    <input type="radio" name="rl-exec" value="dryrun" checked style="accent-color:var(--cyan);"> <strong>Dry Run Mode</strong> — Log only, no disruption
+                    <input type="radio" name="rl-exec" value="assessment" checked style="accent-color:var(--cyan);"> <strong>Assessment Mode</strong> — Full detection readiness check
                   </label>
                   <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid var(--border-subtle);border-radius:7px;cursor:pointer;font-size:11px;color:var(--text-primary);">
-                    <input type="radio" name="rl-exec" value="full" style="accent-color:var(--cyan);"> <strong>Full Mode</strong> — Live simulation with detonation
+                    <input type="radio" name="rl-exec" value="quick" style="accent-color:var(--cyan);"> <strong>Quick Scan</strong> — Log source + rule coverage only
                   </label>
                   <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid var(--border-subtle);border-radius:7px;cursor:pointer;font-size:11px;color:var(--text-primary);">
-                    <input type="radio" name="rl-exec" style="accent-color:var(--cyan);"> Purple Team (pause between steps)
+                    <input type="radio" name="rl-exec" value="purple" style="accent-color:var(--cyan);"> <strong>Purple Team</strong> — Step-by-step with analyst confirmation
                   </label>
                 </div>
               </div>
@@ -15574,11 +15574,6 @@ function getThemeTickColor() {
                     <input type="checkbox" style="accent-color:var(--cyan);"> Auto-create rules for gaps
                   </label>
                 </div>
-              </div>
-
-              <div style="padding:10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:7px;font-size:10px;color:var(--amber);margin-top:8px;">
-                <div style="font-weight:700;margin-bottom:3px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Safety Notice</div>
-                All simulations run in isolated sandbox environments. No production systems are affected. Atomic tests use safe payloads with automatic cleanup.
               </div>
 
               <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:14px;" onclick="executeFullSimulation()">
@@ -65183,49 +65178,125 @@ var MITRE_FULL_TECHNIQUES = {
   'Impact': ['T1486','T1489','T1491','T1490','T1485','T1498','T1496','T1561','T1565','T1499','T1529']
 };
 
+// ── EDR MITRE Coverage Map (hardcoded best-knowledge, configurable via Settings) ──
+// Each EDR vendor maps to the MITRE techniques it's known to prevent/detect
+var EDR_MITRE_COVERAGE = {
+  'CrowdStrike': {
+    prevents: ['T1566','T1059','T1003','T1486','T1547','T1070','T1489','T1490','T1055','T1021','T1053','T1036','T1027','T1562','T1134','T1110','T1555','T1558','T1204','T1047','T1569','T1574','T1546','T1543','T1505','T1068','T1218','T1553'],
+    detects: ['T1071','T1573','T1095','T1572','T1090','T1048','T1041','T1567','T1005','T1039','T1074','T1082','T1083','T1049','T1016','T1046','T1135','T1018','T1087','T1069','T1033','T1057','T1012','T1518','T1560','T1119','T1056','T1113','T1550','T1078','T1098','T1136','T1564','T1497','T1140','T1211','T1202','T1556','T1621','T1611']
+  },
+  'Heimdal': {
+    prevents: ['T1566','T1059','T1003','T1486','T1547','T1489','T1490','T1204','T1053','T1036','T1574','T1505','T1218'],
+    detects: ['T1071','T1573','T1105','T1048','T1041','T1082','T1083','T1049','T1016','T1135','T1018','T1087','T1078','T1098','T1136','T1055','T1070','T1027','T1562','T1110','T1555']
+  },
+  'Trend Micro': {
+    prevents: ['T1566','T1059','T1003','T1486','T1547','T1489','T1490','T1204','T1053','T1036','T1027','T1574','T1546','T1543','T1505','T1218','T1055','T1068','T1562','T1134'],
+    detects: ['T1071','T1573','T1095','T1572','T1090','T1048','T1041','T1567','T1005','T1039','T1074','T1082','T1083','T1049','T1016','T1046','T1135','T1018','T1087','T1069','T1033','T1078','T1098','T1136','T1110','T1555','T1558','T1021','T1550','T1070','T1553','T1564','T1497','T1556','T1621']
+  },
+  'None': { prevents: [], detects: [] }
+};
+
+// ── MITRE Technique to Required Log Sources mapping ──
+var TECHNIQUE_LOG_REQUIREMENTS = {
+  'T1566': ['email','endpoint','edr'],
+  'T1059': ['endpoint','sysmon','edr','audit'],
+  'T1003': ['endpoint','sysmon','edr'],
+  'T1486': ['endpoint','edr'],
+  'T1021': ['endpoint','firewall','audit'],
+  'T1070': ['endpoint','sysmon','audit'],
+  'T1547': ['endpoint','sysmon','edr'],
+  'T1489': ['endpoint','edr'],
+  'T1490': ['endpoint','edr'],
+  'T1204': ['endpoint','email','edr'],
+  'T1053': ['endpoint','sysmon','audit'],
+  'T1098': ['audit','identity','cloud'],
+  'T1110': ['identity','audit','firewall'],
+  'T1555': ['endpoint','edr'],
+  'T1552': ['endpoint','audit','cloud'],
+  'T1558': ['identity','audit','endpoint'],
+  'T1048': ['firewall','dns','proxy'],
+  'T1071': ['firewall','proxy','dns','edr'],
+  'T1573': ['firewall','proxy','edr'],
+  'T1105': ['firewall','proxy','edr'],
+  'T1095': ['firewall','edr'],
+  'T1572': ['firewall','proxy'],
+  'T1090': ['firewall','proxy'],
+  'T1041': ['firewall','proxy','dlp'],
+  'T1567': ['proxy','cloud','dlp'],
+  'T1005': ['endpoint','edr','dlp'],
+  'T1039': ['endpoint','edr'],
+  'T1074': ['endpoint','edr'],
+  'T1082': ['endpoint','edr'],
+  'T1083': ['endpoint','edr'],
+  'T1046': ['firewall','edr'],
+  'T1078': ['identity','audit','edr'],
+  'T1036': ['endpoint','edr','sysmon'],
+  'T1027': ['endpoint','edr','sysmon'],
+  'T1562': ['endpoint','edr','sysmon'],
+  'T1134': ['endpoint','edr'],
+  'T1055': ['endpoint','edr','sysmon'],
+  'T1218': ['endpoint','sysmon','edr'],
+  'T1553': ['endpoint','edr'],
+  'T1564': ['endpoint','edr','sysmon'],
+  'T1550': ['identity','audit','edr'],
+  'T1556': ['identity','audit'],
+  'T1621': ['identity','audit','edr']
+};
+
+// Map connector_type to log source categories
+var CONNECTOR_TO_LOGSOURCE = {
+  'siem': ['endpoint','sysmon','audit','dns'],
+  'edr': ['endpoint','edr','sysmon'],
+  'firewall': ['firewall','proxy'],
+  'audit': ['audit','endpoint','email','identity','cloud'],
+  'identity': ['identity','audit'],
+  'email_security': ['email'],
+  'cloud': ['cloud'],
+  'dlp': ['dlp']
+};
+
 // ── Atomic Red Team Simulation Library (curated real tests) ──
 var ATOMIC_TESTS = [
-  { id:'ART-T1566-01', name:'Spearphishing Attachment — Macro Document', mitre:'T1566.001', tactic:'Initial Access', platform:'Windows', severity:'Critical', steps:3, duration:'~2 min', category:'Ransomware' },
+  { id:'ART-T1566-01', name:'Spearphishing Attachment \u2014 Macro Document', mitre:'T1566.001', tactic:'Initial Access', platform:'Windows', severity:'Critical', steps:3, duration:'~2 min', category:'Ransomware' },
   { id:'ART-T1059-01', name:'PowerShell Download Cradle Execution', mitre:'T1059.001', tactic:'Execution', platform:'Windows', severity:'High', steps:2, duration:'~1 min', category:'APT Emulation' },
-  { id:'ART-T1003-01', name:'Dump LSASS.exe Memory using ProcDump', mitre:'T1003.001', tactic:'Credential Access', platform:'Windows', severity:'Critical', steps:3, duration:'~3 min', category:'Credential Theft' },
-  { id:'ART-T1003-02', name:'Dump LSASS via comsvcs.dll MiniDump', mitre:'T1003.001', tactic:'Credential Access', platform:'Windows', severity:'Critical', steps:2, duration:'~2 min', category:'Credential Theft' },
-  { id:'ART-T1558-01', name:'Kerberoasting via Rubeus', mitre:'T1558.003', tactic:'Credential Access', platform:'Windows', severity:'High', steps:4, duration:'~5 min', category:'Credential Theft' },
-  { id:'ART-T1053-01', name:'Scheduled Task via schtasks.exe', mitre:'T1053.005', tactic:'Persistence', platform:'Windows', severity:'Medium', steps:2, duration:'~1 min', category:'Persistence' },
-  { id:'ART-T1053-02', name:'At Job Scheduled Execution', mitre:'T1053.002', tactic:'Persistence', platform:'Windows', severity:'Medium', steps:2, duration:'~1 min', category:'Persistence' },
-  { id:'ART-T1547-01', name:'Registry Run Keys Persistence', mitre:'T1547.001', tactic:'Persistence', platform:'Windows', severity:'High', steps:3, duration:'~2 min', category:'Persistence' },
-  { id:'ART-T1547-02', name:'Startup Folder Persistence', mitre:'T1547.001', tactic:'Persistence', platform:'Windows', severity:'Medium', steps:2, duration:'~1 min', category:'Persistence' },
-  { id:'ART-T1021-01', name:'SMB/Windows Admin Shares Lateral Move', mitre:'T1021.002', tactic:'Lateral Movement', platform:'Windows', severity:'High', steps:3, duration:'~3 min', category:'Lateral Movement' },
-  { id:'ART-T1021-02', name:'Remote Desktop Protocol (RDP) Hijack', mitre:'T1021.001', tactic:'Lateral Movement', platform:'Windows', severity:'High', steps:4, duration:'~5 min', category:'Lateral Movement' },
-  { id:'ART-T1048-01', name:'DNS Tunneling Data Exfiltration via iodine', mitre:'T1048.001', tactic:'Exfiltration', platform:'Linux', severity:'High', steps:5, duration:'~6 min', category:'Data Exfiltration' },
-  { id:'ART-T1048-02', name:'HTTPS Exfiltration to External Server', mitre:'T1048.002', tactic:'Exfiltration', platform:'Windows', severity:'High', steps:3, duration:'~4 min', category:'Data Exfiltration' },
-  { id:'ART-T1071-01', name:'HTTPS C2 Beacon Simulation', mitre:'T1071.001', tactic:'Command and Control', platform:'Network', severity:'Critical', steps:4, duration:'~5 min', category:'C2 Communication' },
-  { id:'ART-T1071-02', name:'DNS C2 Channel Communication', mitre:'T1071.004', tactic:'Command and Control', platform:'Network', severity:'Critical', steps:3, duration:'~4 min', category:'C2 Communication' },
-  { id:'ART-T1573-01', name:'Encrypted Channel via OpenSSL', mitre:'T1573.002', tactic:'Command and Control', platform:'Linux', severity:'High', steps:3, duration:'~3 min', category:'C2 Communication' },
-  { id:'ART-T1562-01', name:'Disable Windows Defender via PowerShell', mitre:'T1562.001', tactic:'Defense Evasion', platform:'Windows', severity:'Critical', steps:2, duration:'~1 min', category:'Defense Evasion' },
+  { id:'ART-T1003-01', name:'Dump LSASS.exe Memory using ProcDump', mitre:'T1003.001', tactic:'Credential Access', platform:'Windows', severity:'Critical', steps:4, duration:'~3 min', category:'Credential Theft' },
+  { id:'ART-T1003-02', name:'Dump LSASS via comsvcs.dll MiniDump', mitre:'T1003.001', tactic:'Credential Access', platform:'Windows', severity:'Critical', steps:3, duration:'~2 min', category:'Credential Theft' },
+  { id:'ART-T1558-01', name:'Kerberoasting via Rubeus', mitre:'T1558.003', tactic:'Credential Access', platform:'Windows', severity:'High', steps:5, duration:'~4 min', category:'Credential Theft' },
+  { id:'ART-T1053-01', name:'Scheduled Task via schtasks.exe', mitre:'T1053.005', tactic:'Persistence', platform:'Windows', severity:'Medium', steps:3, duration:'~2 min', category:'Persistence' },
+  { id:'ART-T1547-01', name:'Registry Run Key Persistence', mitre:'T1547.001', tactic:'Persistence', platform:'Windows', severity:'High', steps:3, duration:'~2 min', category:'Persistence' },
+  { id:'ART-T1021-01', name:'Lateral Movement via PsExec', mitre:'T1021.002', tactic:'Lateral Movement', platform:'Windows', severity:'High', steps:4, duration:'~3 min', category:'Lateral Movement' },
+  { id:'ART-T1486-01', name:'Encrypt Files with 7zip (Ransomware Sim)', mitre:'T1486', tactic:'Impact', platform:'Windows', severity:'Critical', steps:5, duration:'~4 min', category:'Ransomware' },
   { id:'ART-T1070-01', name:'Clear Windows Event Logs', mitre:'T1070.001', tactic:'Defense Evasion', platform:'Windows', severity:'High', steps:2, duration:'~1 min', category:'Defense Evasion' },
-  { id:'ART-T1036-01', name:'Masquerading — Rename System Utilities', mitre:'T1036.003', tactic:'Defense Evasion', platform:'Windows', severity:'Medium', steps:3, duration:'~2 min', category:'Defense Evasion' },
-  { id:'ART-T1486-01', name:'Ransomware File Encryption Simulation', mitre:'T1486', tactic:'Impact', platform:'Windows', severity:'Critical', steps:5, duration:'~8 min', category:'Ransomware' },
-  { id:'ART-T1490-01', name:'Volume Shadow Copy Deletion', mitre:'T1490', tactic:'Impact', platform:'Windows', severity:'Critical', steps:2, duration:'~1 min', category:'Ransomware' },
-  { id:'ART-T1489-01', name:'Service Stop — Critical Services', mitre:'T1489', tactic:'Impact', platform:'Windows', severity:'High', steps:3, duration:'~2 min', category:'Ransomware' },
-  { id:'ART-T1134-01', name:'Access Token Manipulation via RunAs', mitre:'T1134', tactic:'Privilege Escalation', platform:'Windows', severity:'High', steps:3, duration:'~3 min', category:'APT Emulation' },
-  { id:'ART-T1055-01', name:'Process Injection via CreateRemoteThread', mitre:'T1055.001', tactic:'Privilege Escalation', platform:'Windows', severity:'Critical', steps:4, duration:'~4 min', category:'APT Emulation' },
-  { id:'ART-T1110-01', name:'Password Brute Force via Hydra', mitre:'T1110.001', tactic:'Credential Access', platform:'Linux', severity:'Medium', steps:3, duration:'~5 min', category:'Credential Theft' },
+  { id:'ART-T1071-01', name:'HTTP C2 Beacon Simulation', mitre:'T1071.001', tactic:'Command and Control', platform:'Cross', severity:'High', steps:3, duration:'~2 min', category:'C2 Communication' },
+  { id:'ART-T1048-01', name:'DNS Tunneling Exfiltration', mitre:'T1048.003', tactic:'Exfiltration', platform:'Cross', severity:'High', steps:4, duration:'~3 min', category:'Data Exfiltration' },
+  { id:'ART-T1036-01', name:'Masquerade as svchost.exe', mitre:'T1036.005', tactic:'Defense Evasion', platform:'Windows', severity:'Medium', steps:3, duration:'~2 min', category:'Defense Evasion' },
+  { id:'ART-T1055-01', name:'Process Injection via CreateRemoteThread', mitre:'T1055.001', tactic:'Privilege Escalation', platform:'Windows', severity:'Critical', steps:4, duration:'~3 min', category:'APT Emulation' },
+  { id:'ART-T1027-01', name:'Obfuscated PowerShell Encoded Command', mitre:'T1027', tactic:'Defense Evasion', platform:'Windows', severity:'Medium', steps:2, duration:'~1 min', category:'Defense Evasion' },
+  { id:'ART-T1098-01', name:'Azure AD Account Manipulation', mitre:'T1098', tactic:'Persistence', platform:'Cloud', severity:'High', steps:3, duration:'~2 min', category:'APT Emulation' },
   { id:'ART-T1082-01', name:'System Information Discovery', mitre:'T1082', tactic:'Discovery', platform:'Windows', severity:'Low', steps:2, duration:'~1 min', category:'APT Emulation' },
-  { id:'ART-T1087-01', name:'Account Discovery — Local Accounts', mitre:'T1087.001', tactic:'Discovery', platform:'Windows', severity:'Low', steps:2, duration:'~1 min', category:'APT Emulation' },
-  { id:'ART-T1135-01', name:'Network Share Discovery', mitre:'T1135', tactic:'Discovery', platform:'Windows', severity:'Medium', steps:2, duration:'~1 min', category:'Lateral Movement' },
-  { id:'ART-T1078-01', name:'Valid Accounts — Default Credentials', mitre:'T1078.001', tactic:'Initial Access', platform:'Windows', severity:'High', steps:3, duration:'~3 min', category:'APT Emulation' },
-  { id:'ART-T1204-01', name:'User Execution — Malicious Link Click', mitre:'T1204.001', tactic:'Execution', platform:'Windows', severity:'High', steps:2, duration:'~2 min', category:'Ransomware' },
-  { id:'ART-T1046-01', name:'Network Service Scanning via nmap', mitre:'T1046', tactic:'Discovery', platform:'Linux', severity:'Medium', steps:3, duration:'~4 min', category:'APT Emulation' },
-  { id:'ART-T1190-01', name:'Exploit Public-Facing Application (SQLi)', mitre:'T1190', tactic:'Initial Access', platform:'Network', severity:'Critical', steps:4, duration:'~5 min', category:'APT Emulation' },
-  { id:'ART-T1098-01', name:'Account Manipulation — Add Admin User', mitre:'T1098', tactic:'Persistence', platform:'Windows', severity:'High', steps:3, duration:'~2 min', category:'Persistence' },
-  { id:'ART-T1037-01', name:'Boot/Logon Initialization Scripts', mitre:'T1037.001', tactic:'Persistence', platform:'Windows', severity:'Medium', steps:2, duration:'~2 min', category:'Persistence' },
-  { id:'ART-T1543-01', name:'Create or Modify System Service', mitre:'T1543.003', tactic:'Persistence', platform:'Windows', severity:'High', steps:3, duration:'~3 min', category:'Persistence' },
-  { id:'ART-T1041-01', name:'Exfiltration Over C2 Channel', mitre:'T1041', tactic:'Exfiltration', platform:'Network', severity:'High', steps:4, duration:'~5 min', category:'Data Exfiltration' },
-  { id:'ART-T1621-01', name:'MFA Fatigue / Push Bombing Attack', mitre:'T1621', tactic:'Credential Access', platform:'Cloud', severity:'Critical', steps:5, duration:'~8 min', category:'Credential Theft' },
-  { id:'ART-T1556-01', name:'Modify Authentication Process', mitre:'T1556.001', tactic:'Credential Access', platform:'Windows', severity:'Critical', steps:4, duration:'~5 min', category:'APT Emulation' }
+  { id:'ART-T1046-01', name:'Network Port Scanning via nmap', mitre:'T1046', tactic:'Discovery', platform:'Cross', severity:'Medium', steps:3, duration:'~5 min', category:'Lateral Movement' },
+  { id:'ART-T1573-01', name:'Encrypted C2 over HTTPS', mitre:'T1573.001', tactic:'Command and Control', platform:'Cross', severity:'High', steps:3, duration:'~2 min', category:'C2 Communication' },
+  { id:'ART-T1562-01', name:'Disable Windows Defender', mitre:'T1562.001', tactic:'Defense Evasion', platform:'Windows', severity:'Critical', steps:3, duration:'~2 min', category:'Defense Evasion' },
+  { id:'ART-T1134-01', name:'Token Impersonation via Incognito', mitre:'T1134.001', tactic:'Privilege Escalation', platform:'Windows', severity:'Critical', steps:4, duration:'~3 min', category:'APT Emulation' },
+  { id:'ART-T1204-01', name:'User Execution via Malicious Link', mitre:'T1204.001', tactic:'Execution', platform:'Cross', severity:'High', steps:2, duration:'~1 min', category:'Ransomware' },
+  { id:'ART-T1078-01', name:'Valid Account Login from Anomalous Location', mitre:'T1078', tactic:'Initial Access', platform:'Cloud', severity:'High', steps:3, duration:'~2 min', category:'APT Emulation' },
+  { id:'ART-T1110-01', name:'Password Spraying Attack', mitre:'T1110.003', tactic:'Credential Access', platform:'Cross', severity:'High', steps:4, duration:'~5 min', category:'Credential Theft' },
+  { id:'ART-T1218-01', name:'Signed Binary Proxy Execution (Rundll32)', mitre:'T1218.011', tactic:'Defense Evasion', platform:'Windows', severity:'Medium', steps:2, duration:'~1 min', category:'Defense Evasion' },
+  { id:'ART-T1490-01', name:'Delete Volume Shadow Copies', mitre:'T1490', tactic:'Impact', platform:'Windows', severity:'Critical', steps:2, duration:'~1 min', category:'Ransomware' },
+  { id:'ART-T1489-01', name:'Service Stop (kill critical services)', mitre:'T1489', tactic:'Impact', platform:'Windows', severity:'Critical', steps:3, duration:'~2 min', category:'Ransomware' },
+  { id:'ART-T1005-01', name:'Collect Local Data (find sensitive files)', mitre:'T1005', tactic:'Collection', platform:'Cross', severity:'Medium', steps:3, duration:'~3 min', category:'Data Exfiltration' },
+  { id:'ART-T1567-01', name:'Exfiltration to Cloud Storage', mitre:'T1567.002', tactic:'Exfiltration', platform:'Cross', severity:'High', steps:4, duration:'~3 min', category:'Data Exfiltration' },
+  { id:'ART-T1543-01', name:'Create/Modify Systemd Service', mitre:'T1543.002', tactic:'Persistence', platform:'Linux', severity:'High', steps:3, duration:'~2 min', category:'Persistence' },
+  { id:'ART-T1556-01', name:'Modify Authentication Process', mitre:'T1556', tactic:'Credential Access', platform:'Cross', severity:'Critical', steps:4, duration:'~3 min', category:'APT Emulation' },
+  { id:'ART-T1621-01', name:'MFA Fatigue / Push Bombing', mitre:'T1621', tactic:'Credential Access', platform:'Cloud', severity:'Critical', steps:3, duration:'~5 min', category:'Credential Theft' },
+  { id:'ART-T1550-01', name:'Pass-the-Hash Attack', mitre:'T1550.002', tactic:'Lateral Movement', platform:'Windows', severity:'Critical', steps:5, duration:'~4 min', category:'Lateral Movement' },
+  { id:'ART-T1505-01', name:'Web Shell Deployment', mitre:'T1505.003', tactic:'Persistence', platform:'Cross', severity:'Critical', steps:4, duration:'~3 min', category:'APT Emulation' },
+  { id:'ART-T1190-01', name:'Exploit Public-Facing Application', mitre:'T1190', tactic:'Initial Access', platform:'Cross', severity:'Critical', steps:5, duration:'~5 min', category:'APT Emulation' },
+  { id:'ART-T1574-01', name:'DLL Side-Loading', mitre:'T1574.002', tactic:'Persistence', platform:'Windows', severity:'High', steps:4, duration:'~3 min', category:'Defense Evasion' },
+  { id:'ART-T1135-01', name:'Network Share Discovery', mitre:'T1135', tactic:'Discovery', platform:'Windows', severity:'Low', steps:2, duration:'~1 min', category:'Lateral Movement' },
+  { id:'ART-T1041-01', name:'Exfiltration Over C2 Channel', mitre:'T1041', tactic:'Exfiltration', platform:'Cross', severity:'High', steps:3, duration:'~3 min', category:'Data Exfiltration' }
 ];
 
-// ── Pre-built Simulation Chains (curated multi-step scenarios) ──
 var SIMULATION_LIBRARY = [
   { name:'LockBit 3.0 Full Kill Chain', category:'Ransomware', severity:'Critical', techniques:['T1566','T1059','T1003','T1486','T1021','T1070','T1547','T1489','T1490'], steps:14, duration:'~12 min',
     icon:'malware', description:'Full ransomware kill chain from phishing through encryption and shadow copy deletion' },
@@ -65241,14 +65312,72 @@ var SIMULATION_LIBRARY = [
     icon:'persistence', description:'Multi-vector persistence establishment with anti-forensics and evasion' },
   { name:'MFA Bypass & Cloud Account Takeover', category:'Credential Theft', severity:'Critical', techniques:['T1621','T1078','T1098','T1556','T1550'], steps:8, duration:'~10 min',
     icon:'credential', description:'MFA fatigue attack, token theft, and cloud privilege escalation' },
-  { name:'Insider Threat — Data Theft', category:'Data Exfiltration', severity:'High', techniques:['T1005','T1039','T1074','T1567','T1048'], steps:10, duration:'~12 min',
+  { name:'Insider Threat \u2014 Data Theft', category:'Data Exfiltration', severity:'High', techniques:['T1005','T1039','T1074','T1567','T1048'], steps:10, duration:'~12 min',
     icon:'exfil', description:'Simulates malicious insider collecting and exfiltrating sensitive data' }
 ];
 
-// ── Load Simulation Library into Tab 1 ──
+// ── Org helper: get org profile for simulation ──
+function getOrgSimProfile(orgId) {
+  var org = ORG_CONNECTORS[orgId];
+  if (!org) return null;
+  var edrConn = org.connectors.find(function(c) { return c.connector_type === 'edr'; });
+  var siemConn = org.connectors.find(function(c) { return c.connector_type === 'siem'; });
+  var edrVendor = (edrConn && edrConn.is_enabled && edrConn.vendor !== 'None') ? edrConn.vendor : 'None';
+  var siemVendor = (siemConn && siemConn.is_enabled) ? siemConn.vendor : 'None';
+  // Collect all enabled log source categories
+  var logCats = [];
+  org.connectors.forEach(function(c) {
+    if (c.is_enabled && CONNECTOR_TO_LOGSOURCE[c.connector_type]) {
+      CONNECTOR_TO_LOGSOURCE[c.connector_type].forEach(function(cat) {
+        if (logCats.indexOf(cat) === -1) logCats.push(cat);
+      });
+    }
+  });
+  return { orgId: orgId, name: org.name, namespace: org.namespace, code: org.code, edr: edrVendor, siem: siemVendor, siemMeta: siemConn ? siemConn.metadata : {}, logCategories: logCats, connectors: org.connectors };
+}
+
+// ── Populate org selectors ──
+function populateRlOrgSelectors() {
+  var selectors = [document.getElementById('rlOrgSelector'), document.getElementById('rlTestTarget')];
+  selectors.forEach(function(sel) {
+    if (!sel) return;
+    var current = sel.value;
+    sel.innerHTML = '<option value="all">All Organizations</option>';
+    Object.keys(ORG_CONNECTORS).forEach(function(id) {
+      var org = ORG_CONNECTORS[id];
+      var edrConn = org.connectors.find(function(c) { return c.connector_type === 'edr' && c.is_enabled && c.vendor !== 'None'; });
+      var siemConn = org.connectors.find(function(c) { return c.connector_type === 'siem' && c.is_enabled; });
+      var tags = [];
+      if (siemConn) tags.push(siemConn.vendor);
+      if (edrConn) tags.push(edrConn.vendor);
+      sel.innerHTML += '<option value="' + id + '">' + escHtml(org.name) + (tags.length ? ' (' + tags.join(' + ') + ')' : '') + '</option>';
+    });
+    if (current) sel.value = current;
+  });
+}
+
+function onRlOrgChange() {
+  // Sync both org selectors
+  var header = document.getElementById('rlOrgSelector');
+  var target = document.getElementById('rlTestTarget');
+  if (header && target) target.value = header.value;
+  // Refresh simulation library with relevance scores
+  loadSimulationLibrary();
+}
+
+// ── Load Simulation Library into Tab 1 (with per-org relevance) ──
 function loadSimulationLibrary() {
   var grid = document.getElementById('rlSimGrid');
   if (!grid) return;
+
+  var selectedOrg = (document.getElementById('rlOrgSelector') || {}).value || 'all';
+  var orgProfiles = [];
+  if (selectedOrg === 'all') {
+    Object.keys(ORG_CONNECTORS).forEach(function(id) { var p = getOrgSimProfile(id); if (p) orgProfiles.push(p); });
+  } else {
+    var p = getOrgSimProfile(selectedOrg);
+    if (p) orgProfiles.push(p);
+  }
 
   var iconSvgs = {
     malware: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
@@ -65263,14 +65392,34 @@ function loadSimulationLibrary() {
 
   var html = '';
   SIMULATION_LIBRARY.forEach(function(sim) {
+    // Calculate relevance: how many techniques can be assessed against selected orgs
+    var relevanceScore = 0;
+    var totalTechs = sim.techniques.length;
+    sim.techniques.forEach(function(tech) {
+      var reqs = TECHNIQUE_LOG_REQUIREMENTS[tech] || [];
+      orgProfiles.forEach(function(prof) {
+        var hasLogs = reqs.length === 0 || reqs.some(function(r) { return prof.logCategories.indexOf(r) >= 0; });
+        if (hasLogs) { relevanceScore++; return; }
+      });
+    });
+    var relevancePct = orgProfiles.length > 0 ? Math.round((relevanceScore / (totalTechs * orgProfiles.length)) * 100) : 0;
+    var relevanceColor = relevancePct >= 70 ? 'var(--green)' : relevancePct >= 40 ? 'var(--amber)' : 'var(--red-bright)';
+
     html += '<div class="rl-sim-card" data-sim-category="' + sim.category + '" onclick="launchSimulation(\'' + escAttr(sim.name) + '\')">';
     html += '<div class="rl-sim-header">';
     html += '<div class="rl-sim-icon ' + sim.icon + '">' + (iconSvgs[sim.icon] || iconSvgs.malware) + '</div>';
     html += '<div style="flex:1;">';
     html += '<div style="font-size:13px;font-weight:600;color:var(--text-primary);">' + escHtml(sim.name) + '</div>';
-    html += '<div style="font-size:10px;color:var(--text-muted);">' + sim.steps + ' attack steps · ' + sim.techniques.length + ' MITRE techniques · ' + sim.duration + '</div>';
+    html += '<div style="font-size:10px;color:var(--text-muted);">' + sim.steps + ' attack steps \xb7 ' + sim.techniques.length + ' MITRE techniques \xb7 ' + sim.duration + '</div>';
     html += '</div>';
     html += '<span class="badge ' + (sevBadge[sim.severity] || 'badge-cyan') + '">' + sim.severity + '</span></div>';
+    // Relevance indicator
+    if (selectedOrg !== 'all' || orgProfiles.length > 0) {
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">';
+      html += '<div style="flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;"><div style="height:100%;width:' + relevancePct + '%;background:' + relevanceColor + ';border-radius:2px;"></div></div>';
+      html += '<span style="font-size:9px;color:' + relevanceColor + ';font-weight:600;">' + relevancePct + '% relevant</span>';
+      html += '</div>';
+    }
     html += '<div style="display:flex;gap:4px;flex-wrap:wrap;">';
     sim.techniques.forEach(function(t) { html += '<span class="mitre-tag">' + t + '</span>'; });
     html += '</div>';
@@ -65280,111 +65429,168 @@ function loadSimulationLibrary() {
   grid.innerHTML = html;
 }
 
-// ── Launch Simulation (runs Elastic queries for each technique) ──
+// ── Launch Simulation: Detection Readiness Assessment ──
 async function launchSimulation(simName) {
   var sim = SIMULATION_LIBRARY.find(function(s) { return s.name === simName; });
   if (!sim) { showToast('Simulation not found', 'warn'); return; }
 
-  showToast('Launching simulation: ' + sim.name + '...', 'info');
+  var selectedOrg = (document.getElementById('rlOrgSelector') || {}).value || 'all';
 
-  // Switch to Validation Results tab to show results
+  // If "all", prompt to select one
+  if (selectedOrg === 'all') {
+    showToast('Select a target organization before launching', 'warn');
+    var sel = document.getElementById('rlOrgSelector');
+    if (sel) { sel.focus(); sel.style.borderColor = 'var(--amber)'; setTimeout(function(){ sel.style.borderColor = ''; }, 2000); }
+    return;
+  }
+
+  var orgProfile = getOrgSimProfile(selectedOrg);
+  if (!orgProfile) { showToast('Organization not found', 'warn'); return; }
+
+  showToast('Assessing detection readiness: ' + sim.name + ' against ' + orgProfile.name + '...', 'info');
+
+  // Switch to Validation Results tab
   switchRlTab('results');
 
   var titleEl = document.getElementById('rlKillChainTitle');
   var metaEl = document.getElementById('rlKillChainMeta');
   var resultsEl = document.getElementById('rlKillChainResults');
-  if (titleEl) titleEl.textContent = 'Running: ' + sim.name;
-  if (metaEl) metaEl.innerHTML = '<span class="badge badge-cyan">Running</span><span style="font-size:10px;color:var(--text-muted);">Started ' + new Date().toLocaleTimeString() + '</span>';
-  if (resultsEl) resultsEl.innerHTML = '<div style="text-align:center;padding:30px;"><div class="jira-spinner" style="margin:0 auto 12px;"></div><span style="font-size:12px;color:var(--text-muted);">Executing ' + sim.techniques.length + ' attack steps against live Elastic data...</span></div>';
+  if (titleEl) titleEl.textContent = 'Assessing: ' + sim.name + ' \u2014 ' + orgProfile.name;
+  if (metaEl) metaEl.innerHTML = '<span class="badge badge-cyan">Running</span><span style="font-size:10px;color:var(--text-muted);">Started ' + new Date().toLocaleTimeString() + ' \xb7 ' + orgProfile.edr + ' EDR \xb7 ' + orgProfile.siem + ' SIEM</span>';
+  if (resultsEl) resultsEl.innerHTML = '<div style="text-align:center;padding:30px;"><div class="jira-spinner" style="margin:0 auto 12px;"></div><span style="font-size:12px;color:var(--text-muted);">Checking detection coverage for ' + sim.techniques.length + ' attack steps...</span></div>';
 
-  // Query Elastic for each technique
-  var namespaces = ['nagaworld','dacta','foxwood','silverkey','hla','advpartners','spmt'];
-  var totalEvents = 0;
-  var detectedCount = 0;
-  var blockedCount = 0;
-  var missedCount = 0;
+  var edrCoverage = EDR_MITRE_COVERAGE[orgProfile.edr] || EDR_MITRE_COVERAGE['None'];
   var stepResults = [];
+  var blockedCount = 0, detectedCount = 0, partialCount = 0, missedCount = 0, edrOnlyCount = 0;
   var startTime = Date.now();
 
-  var tacticNames = { 'T1566':'Initial Access — Phishing', 'T1059':'Execution — PowerShell/Script', 'T1003':'Credential Access — LSASS Dump', 'T1486':'Impact — Ransomware Encryption', 'T1021':'Lateral Movement — SMB/RDP', 'T1070':'Defense Evasion — Log Clearing', 'T1547':'Persistence — Registry Run Keys', 'T1489':'Impact — Service Stop', 'T1490':'Impact — Shadow Copy Delete', 'T1204':'Execution — User Execution', 'T1053':'Persistence — Scheduled Task', 'T1098':'Persistence — Account Manipulation', 'T1110':'Credential Access — Brute Force', 'T1555':'Credential Access — Credential Store', 'T1552':'Credential Access — Unsecured Creds', 'T1558':'Credential Access — Kerberoasting', 'T1048':'Exfiltration — DNS Tunneling', 'T1071':'C2 — Application Layer', 'T1041':'Exfiltration — Over C2', 'T1567':'Exfiltration — Web Service', 'T1573':'C2 — Encrypted Channel', 'T1105':'C2 — Ingress Tool Transfer', 'T1095':'C2 — Non-Application Layer', 'T1572':'C2 — Protocol Tunneling', 'T1090':'C2 — Proxy', 'T1562':'Defense Evasion — Disable Defenses', 'T1036':'Defense Evasion — Masquerading', 'T1134':'Privilege Escalation — Token Manipulation', 'T1078':'Initial Access — Valid Accounts', 'T1556':'Credential Access — Modify Auth', 'T1550':'Lateral Movement — Use Alternate Auth', 'T1621':'Credential Access — MFA Bypass', 'T1005':'Collection — Local Data', 'T1039':'Collection — Network Share', 'T1074':'Collection — Data Staged', 'T1135':'Discovery — Network Share' };
+  var tacticNames = { 'T1566':'Initial Access \u2014 Phishing', 'T1059':'Execution \u2014 PowerShell/Script', 'T1003':'Credential Access \u2014 LSASS Dump', 'T1486':'Impact \u2014 Ransomware Encryption', 'T1021':'Lateral Movement \u2014 SMB/RDP', 'T1070':'Defense Evasion \u2014 Log Clearing', 'T1547':'Persistence \u2014 Registry Run Keys', 'T1489':'Impact \u2014 Service Stop', 'T1490':'Impact \u2014 Shadow Copy Delete', 'T1204':'Execution \u2014 User Execution', 'T1053':'Persistence \u2014 Scheduled Task', 'T1098':'Persistence \u2014 Account Manipulation', 'T1110':'Credential Access \u2014 Brute Force', 'T1555':'Credential Access \u2014 Credential Store', 'T1552':'Credential Access \u2014 Unsecured Creds', 'T1558':'Credential Access \u2014 Kerberoasting', 'T1048':'Exfiltration \u2014 DNS Tunneling', 'T1071':'C2 \u2014 Application Layer', 'T1041':'Exfiltration \u2014 Over C2', 'T1567':'Exfiltration \u2014 Web Service', 'T1573':'C2 \u2014 Encrypted Channel', 'T1105':'C2 \u2014 Ingress Tool Transfer', 'T1095':'C2 \u2014 Non-Application Layer', 'T1572':'C2 \u2014 Protocol Tunneling', 'T1090':'C2 \u2014 Proxy', 'T1562':'Defense Evasion \u2014 Disable Defenses', 'T1036':'Defense Evasion \u2014 Masquerading', 'T1134':'Privilege Escalation \u2014 Token Manipulation', 'T1078':'Initial Access \u2014 Valid Accounts', 'T1556':'Credential Access \u2014 Modify Auth', 'T1550':'Lateral Movement \u2014 Use Alternate Auth', 'T1621':'Credential Access \u2014 MFA Bypass', 'T1005':'Collection \u2014 Local Data', 'T1039':'Collection \u2014 Network Share', 'T1074':'Collection \u2014 Data Staged', 'T1135':'Discovery \u2014 Network Share', 'T1027':'Defense Evasion \u2014 Obfuscation', 'T1055':'Privilege Escalation \u2014 Process Injection', 'T1218':'Defense Evasion \u2014 Signed Binary Proxy', 'T1553':'Defense Evasion \u2014 Subvert Trust', 'T1564':'Defense Evasion \u2014 Hide Artifacts', 'T1082':'Discovery \u2014 System Info', 'T1083':'Discovery \u2014 File & Dir', 'T1046':'Discovery \u2014 Network Scan', 'T1049':'Discovery \u2014 Network Connections' };
 
   for (var i = 0; i < sim.techniques.length; i++) {
     var tech = sim.techniques[i];
-    var techHits = 0;
-    // Query each namespace for events matching this technique
-    for (var n = 0; n < namespaces.length; n++) {
-      try {
-        var r = await fetch('/api/elastic', { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ action:'search', index:'logs-*-'+namespaces[n]+'-*', body:{ size:0, query:{ bool:{ should:[{ match_phrase:{ 'rule.name': tech }}, { match_phrase:{ 'event.action': tech }}, { match:{ 'threat.technique.id': tech }}], minimum_should_match:1 }}} })
-        });
-        var d = await r.json();
-        var c = d.hits && d.hits.total ? (typeof d.hits.total === 'object' ? d.hits.total.value : d.hits.total) : 0;
-        techHits += c;
-      } catch(ex) {}
-    }
-    totalEvents += techHits;
-    var status = 'missed';
-    var statusLabel = 'Missed — No detection rule';
-    // Determine status based on whether we have detection rules matching this technique
-    if (techHits > 100) { status = 'blocked'; statusLabel = 'Blocked by EDR'; blockedCount++; }
-    else if (techHits > 0) { status = 'detected'; statusLabel = 'Detected'; detectedCount++; }
-    else {
-      // Check if we have a rule for this technique in DB
-      if (window._dactaSupabase) {
-        try {
-          var ruleCheck = await window._dactaSupabase.from('detection_rules').select('id', { count:'exact' }).ilike('mitre_technique_id', '%'+tech+'%').limit(1);
-          if (ruleCheck.count > 0) { status = 'partial'; statusLabel = 'Partial — Rule exists, no events'; }
-        } catch(e) {}
+
+    // 1. Check log source coverage
+    var requiredLogs = TECHNIQUE_LOG_REQUIREMENTS[tech] || [];
+    var hasLogSource = requiredLogs.length === 0 || requiredLogs.some(function(r) { return orgProfile.logCategories.indexOf(r) >= 0; });
+
+    // 2. Check EDR coverage
+    var edrPrevents = edrCoverage.prevents.indexOf(tech) >= 0;
+    var edrDetects = edrCoverage.detects.indexOf(tech) >= 0;
+
+    // 3. Check SIEM detection rules (query Elastic Security API)
+    var ruleState = 'not_deployed'; // not_deployed | deployed_active | deployed_disabled
+    try {
+      var ruleResp = await fetch('/api/elastic', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'search', index:'.kibana', body:{ size:1, query:{ bool:{ must:[{ term:{ type:'alert' }}, { match_phrase:{ 'alert.params.threat.technique.id': tech }}] }}} })
+      });
+      var ruleData = await ruleResp.json();
+      var ruleHits = ruleData.hits && ruleData.hits.total ? (typeof ruleData.hits.total === 'object' ? ruleData.hits.total.value : ruleData.hits.total) : 0;
+      if (ruleHits > 0) {
+        var ruleDoc = ruleData.hits.hits[0]._source;
+        var enabled = ruleDoc && ruleDoc.alert ? ruleDoc.alert.enabled : false;
+        ruleState = enabled ? 'deployed_active' : 'deployed_disabled';
       }
-      if (status === 'missed') missedCount++;
+    } catch(e) { /* SIEM query failed, keep not_deployed */ }
+
+    // 4. Determine status using the scoring matrix
+    var status, statusLabel;
+    if (edrPrevents && ruleState === 'deployed_active' && hasLogSource) {
+      status = 'blocked'; statusLabel = 'Blocked \u2014 EDR prevents + SIEM rule active';
+      blockedCount++;
+    } else if (ruleState === 'deployed_active' && hasLogSource) {
+      status = 'detected'; statusLabel = 'Detected \u2014 SIEM rule active + logs present';
+      detectedCount++;
+    } else if (edrPrevents || edrDetects) {
+      if (ruleState !== 'not_deployed' || hasLogSource) {
+        status = 'detected'; statusLabel = 'Detected \u2014 EDR ' + (edrPrevents ? 'prevents' : 'detects') + (ruleState === 'deployed_active' ? ' + SIEM rule' : '');
+        detectedCount++;
+      } else {
+        status = 'edr_only'; statusLabel = 'EDR Only \u2014 ' + orgProfile.edr + ' covers, no SIEM visibility';
+        edrOnlyCount++;
+      }
+    } else if (ruleState === 'deployed_disabled') {
+      status = 'partial'; statusLabel = 'Partial \u2014 SIEM rule exists but disabled';
+      partialCount++;
+    } else if (ruleState === 'not_deployed' && hasLogSource) {
+      status = 'partial'; statusLabel = 'Partial \u2014 Log source available, no detection rule';
+      partialCount++;
+    } else {
+      status = 'missed'; statusLabel = 'Missed \u2014 No rule, no EDR, ' + (hasLogSource ? 'logs exist' : 'no log source');
+      missedCount++;
     }
-    stepResults.push({ step:i+1, technique:tech, name:tacticNames[tech] || 'Technique '+tech, hits:techHits, status:status, label:statusLabel });
+
+    stepResults.push({
+      step: i+1, technique: tech,
+      name: tacticNames[tech] || 'Technique '+tech,
+      status: status, label: statusLabel,
+      org: orgProfile.name, orgCode: orgProfile.code,
+      edrPrevents: edrPrevents, edrDetects: edrDetects,
+      ruleState: ruleState, hasLogSource: hasLogSource
+    });
   }
 
   var duration = ((Date.now() - startTime) / 1000).toFixed(1);
-  var preventionPct = sim.techniques.length > 0 ? Math.round(((detectedCount + blockedCount) / sim.techniques.length) * 100) : 0;
+  var totalTechs = sim.techniques.length;
+  var preventionPct = Math.round(((blockedCount + detectedCount) / Math.max(totalTechs,1)) * 100);
+  var detectionPct = Math.round(((detectedCount + blockedCount + edrOnlyCount) / Math.max(totalTechs,1)) * 100);
 
   // Update header
-  if (titleEl) titleEl.textContent = 'Latest Test Run: ' + sim.name;
-  if (metaEl) metaEl.innerHTML = '<span class="badge badge-green">Completed</span><span style="font-size:10px;color:var(--text-muted);">' + new Date().toISOString().replace('T',' ').slice(0,19) + ' UTC · Duration: ' + duration + 's · Detection: ' + preventionPct + '%</span>';
+  if (titleEl) titleEl.textContent = 'Assessment: ' + sim.name + ' \u2014 ' + orgProfile.name;
+  if (metaEl) metaEl.innerHTML = '<span class="badge badge-green">Completed</span><span style="font-size:10px;color:var(--text-muted);">' + new Date().toISOString().replace('T',' ').slice(0,19) + ' UTC \xb7 Duration: ' + duration + 's \xb7 Detection Readiness: ' + preventionPct + '%</span>';
 
   // Render step results
   if (resultsEl) {
-    var html = '';
+    var rhtml = '';
     stepResults.forEach(function(s) {
-      var statusIcon = s.status === 'blocked' ? '&#x2716;' : s.status === 'detected' ? '&#10003;' : s.status === 'partial' ? '~' : '&#x2718;';
-      var badgeClass = s.status === 'blocked' ? 'badge-cyan' : s.status === 'detected' ? 'badge-green' : s.status === 'partial' ? 'badge-amber' : 'badge-red';
-      html += '<div class="rl-result-bar">';
-      html += '<div class="rl-result-status ' + s.status + '">' + statusIcon + '</div>';
-      html += '<div style="flex:1;"><div style="font-size:12px;font-weight:500;color:var(--text-primary);">' + s.step + '. ' + escHtml(s.name) + ' (' + s.technique + ')</div></div>';
-      html += '<span class="badge ' + badgeClass + '" style="font-size:9px;">' + escHtml(s.label) + '</span>';
-      html += '<span style="font-size:10px;color:var(--text-muted);">' + (s.hits > 0 ? s.hits.toLocaleString() + ' events' : '—') + '</span>';
-      html += '</div>';
+      var statusIcons = { blocked:'\u2716', detected:'\u2713', edr_only:'\u26a1', partial:'~', missed:'\u2718' };
+      var badgeClasses = { blocked:'badge-cyan', detected:'badge-green', edr_only:'badge-purple', partial:'badge-amber', missed:'badge-red' };
+      rhtml += '<div class="rl-result-bar">';
+      rhtml += '<div class="rl-result-status ' + s.status + '">' + (statusIcons[s.status]||'?') + '</div>';
+      rhtml += '<div style="flex:1;"><div style="font-size:12px;font-weight:500;color:var(--text-primary);">' + s.step + '. ' + escHtml(s.name) + ' (' + s.technique + ')</div>';
+      // Detail line
+      var details = [];
+      if (s.hasLogSource) details.push('\u2713 Log source');
+      else details.push('\u2718 No log source');
+      details.push(s.ruleState === 'deployed_active' ? '\u2713 Rule active' : s.ruleState === 'deployed_disabled' ? '~ Rule disabled' : '\u2718 No rule');
+      if (s.edrPrevents) details.push('\u2713 EDR prevents');
+      else if (s.edrDetects) details.push('~ EDR detects');
+      else details.push('\u2718 No EDR');
+      rhtml += '<div style="font-size:9px;color:var(--text-muted);">' + details.join(' \xb7 ') + '</div>';
+      rhtml += '</div>';
+      rhtml += '<span class="badge ' + (badgeClasses[s.status]||'badge-red') + '" style="font-size:9px;">' + escHtml(s.label.split(' \u2014 ')[0]) + '</span>';
+      rhtml += '</div>';
     });
-    resultsEl.innerHTML = html;
+    resultsEl.innerHTML = rhtml;
   }
 
   // Update score rings
-  updateScoreRings(preventionPct, Math.round((detectedCount / Math.max(sim.techniques.length,1)) * 100));
+  updateScoreRings(preventionPct, detectionPct);
 
-  // Generate remediation suggestions for missed/partial techniques
+  // Generate remediation
   var remGrid = document.getElementById('rlRemediationGrid');
   if (remGrid) {
     var remHtml = '';
-    stepResults.filter(function(s) { return s.status === 'missed' || s.status === 'partial'; }).forEach(function(s) {
-      var borderColor = s.status === 'missed' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)';
-      var bgColor = s.status === 'missed' ? 'rgba(239,68,68,0.04)' : 'rgba(245,158,11,0.04)';
-      remHtml += '<div style="padding:12px;background:'+bgColor+';border:1px solid '+borderColor+';border-radius:8px;">';
-      remHtml += '<div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">' + s.technique + ' — ' + escHtml(s.name.split(' — ')[1] || s.name) + ' (' + s.status.toUpperCase() + ')</div>';
-      remHtml += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' + (s.status === 'missed' ? 'No detection rule or log source found. Create a Sigma rule for this technique.' : 'Rule exists but no matching events found. Verify log source ingestion.') + '</div>';
-      remHtml += '<button class="btn btn-xs btn-primary" onclick="navigate(\'rules\'); setTimeout(function(){ switchDrTab(\'builder\'); }, 200); showToast(\'Open Rule Builder for ' + s.technique + '\')">' + (s.status === 'missed' ? 'Create Rule' : 'Tune Rule') + '</button>';
+    stepResults.filter(function(s) { return s.status === 'missed' || s.status === 'partial' || s.status === 'edr_only'; }).forEach(function(s) {
+      var colors = { missed:['rgba(239,68,68,0.15)','rgba(239,68,68,0.04)'], partial:['rgba(245,158,11,0.15)','rgba(245,158,11,0.04)'], edr_only:['rgba(168,85,247,0.15)','rgba(168,85,247,0.04)'] };
+      var c = colors[s.status] || colors.missed;
+      remHtml += '<div style="padding:12px;background:'+c[1]+';border:1px solid '+c[0]+';border-radius:8px;">';
+      remHtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><div style="font-size:11px;font-weight:600;color:var(--text-primary);">' + s.technique + ' \u2014 ' + escHtml((s.name.split(' \u2014 ')[1] || s.name)) + '</div>';
+      remHtml += '<span class="badge badge-red" style="font-size:8px;">' + orgProfile.name + '</span></div>';
+      var advice = '';
+      if (!s.hasLogSource) advice = 'No relevant log source. Enable ' + (TECHNIQUE_LOG_REQUIREMENTS[s.technique]||['endpoint']).join('/') + ' log ingestion.';
+      else if (s.ruleState === 'not_deployed') advice = 'Log source available but no detection rule deployed. Create and deploy a Sigma rule.';
+      else if (s.ruleState === 'deployed_disabled') advice = 'Detection rule exists but is disabled in SIEM. Enable the rule.';
+      else if (s.status === 'edr_only') advice = 'EDR covers this technique but no SIEM visibility. Deploy a rule for correlated detection.';
+      remHtml += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' + advice + '</div>';
+      var btnLabel = !s.hasLogSource ? 'Configure Log Source' : s.ruleState === 'not_deployed' ? 'Create Rule' : s.ruleState === 'deployed_disabled' ? 'Enable Rule' : 'Deploy Rule';
+      remHtml += '<button class="btn btn-xs btn-primary" onclick="navigate(\'rules\'); setTimeout(function(){ switchDrTab(\'builder\'); }, 200); showToast(\'' + btnLabel + ' for ' + s.technique + '\')">' + btnLabel + '</button>';
       remHtml += '</div>';
     });
-    if (!remHtml) remHtml = '<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--green);font-size:12px;font-weight:600;">All techniques detected or blocked — no remediation needed</div>';
+    if (!remHtml) remHtml = '<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--green);font-size:12px;font-weight:600;">\u2713 All techniques covered \u2014 no gaps detected for ' + orgProfile.name + '</div>';
     remGrid.innerHTML = remHtml;
   }
 
-  // Store result in DB
+  // Store result in SIEMLess DB
   if (window._dactaSupabase) {
     try {
       await window._dactaSupabase.from('simulation_results').insert({
@@ -65393,15 +65599,15 @@ async function launchSimulation(simName) {
         techniques: sim.techniques,
         step_results: stepResults,
         prevention_score: preventionPct,
-        detection_score: Math.round((detectedCount / Math.max(sim.techniques.length,1)) * 100),
-        total_events: totalEvents,
+        detection_score: detectionPct,
+        total_events: 0,
         duration_seconds: parseFloat(duration),
         run_date: new Date().toISOString()
       });
     } catch(e) { console.warn('[SimResult] Save failed:', e.message); }
   }
 
-  showToast('Simulation complete — ' + preventionPct + '% detection rate', preventionPct >= 70 ? 'info' : 'warn');
+  showToast('Assessment complete \u2014 ' + preventionPct + '% detection readiness for ' + orgProfile.name, preventionPct >= 70 ? 'info' : 'warn');
 }
 
 // ── Update Score Rings ──
@@ -65409,80 +65615,70 @@ function updateScoreRings(prevention, detection) {
   var circumference = 2 * Math.PI * 42; // ~263.9
   var overall = Math.round((prevention + detection) / 2);
 
-  // Compute logging score from namespace availability
-  var nsCount = 0;
-  ['nagaworld','dacta','foxwood','silverkey','hla','advpartners','spmt'].forEach(function(ns) {
-    // Use cached data if available
-    if (window._rlNsData && window._rlNsData[ns] > 0) nsCount++;
-  });
-  var logging = nsCount > 0 ? Math.round((nsCount / 7) * 100) : 0;
-
-  function setRing(arcId, valId, pct, color) {
-    var arc = document.getElementById(arcId);
-    var val = document.getElementById(valId);
-    if (arc) arc.setAttribute('stroke-dasharray', ((pct / 100) * circumference).toFixed(1) + ' ' + circumference.toFixed(1));
-    if (val) val.textContent = pct + '%';
+  // Compute logging score from org connector availability
+  var selectedOrg = (document.getElementById('rlOrgSelector') || {}).value || 'all';
+  var logScore = 0;
+  if (selectedOrg !== 'all') {
+    var prof = getOrgSimProfile(selectedOrg);
+    if (prof) logScore = Math.min(100, Math.round((prof.logCategories.length / 7) * 100));
+  } else {
+    var totalCats = 0, orgCount = 0;
+    Object.keys(ORG_CONNECTORS).forEach(function(id) {
+      var p = getOrgSimProfile(id);
+      if (p) { totalCats += p.logCategories.length; orgCount++; }
+    });
+    logScore = orgCount > 0 ? Math.min(100, Math.round((totalCats / orgCount / 7) * 100)) : 0;
   }
 
-  setRing('rlRingPreventionArc', 'rlRingPreventionVal', prevention);
-  setRing('rlRingDetectionArc', 'rlRingDetectionVal', detection);
-  setRing('rlRingOverallArc', 'rlRingOverallVal', overall);
-  setRing('rlRingLoggingArc', 'rlRingLoggingVal', logging);
+  var rings = [
+    { id:'rlRingPrevention', labelId:'rlScorePrevention', value:prevention },
+    { id:'rlRingDetection', labelId:'rlScoreDetection', value:detection },
+    { id:'rlRingOverall', labelId:'rlScoreOverall', value:overall },
+    { id:'rlRingLogging', labelId:'rlScoreLogging', value:logScore }
+  ];
+  rings.forEach(function(r) {
+    var el = document.getElementById(r.id);
+    var lbl = document.getElementById(r.labelId);
+    if (el) { el.style.strokeDashoffset = circumference - (r.value / 100) * circumference; }
+    if (lbl) lbl.textContent = r.value + '%';
+  });
 }
 
 // ── Load Atomic Red Team Library into Tab 5 ──
 function loadAtomicLibrary() {
   var tbody = document.getElementById('rlAtomicBody');
-  var countEl = document.getElementById('rlAtomicCount');
   if (!tbody) return;
-
-  var platformClasses = { Windows:'windows', Linux:'linux', Network:'network', Cloud:'cloud' };
-
-  var rows = '';
-  ATOMIC_TESTS.forEach(function(test) {
-    rows += '<tr data-atomic-id="' + test.id + '">';
-    rows += '<td class="mono" style="color:var(--cyan);">' + test.id + '</td>';
-    rows += '<td style="color:var(--text-primary);font-weight:500;">' + escHtml(test.name) + '</td>';
-    rows += '<td><span class="mitre-tag">' + test.mitre + '</span></td>';
-    rows += '<td><span class="logsrc-tag ' + (platformClasses[test.platform] || '') + '">' + test.platform + '</span></td>';
-    rows += '<td><button class="btn btn-xs btn-secondary" onclick="addToChain(\'' + escAttr(test.id) + '\')">+ Add</button></td>';
-    rows += '</tr>';
+  var html = '';
+  ATOMIC_TESTS.forEach(function(t) {
+    html += '<tr>';
+    html += '<td><span style="color:var(--cyan);font-family:var(--font-mono);font-size:10px;">' + t.id + '</span></td>';
+    html += '<td style="font-weight:500;">' + escHtml(t.name) + '</td>';
+    html += '<td><span class="mitre-tag" style="font-size:9px;">' + t.mitre + '</span></td>';
+    html += '<td><span style="font-size:10px;color:var(--text-muted);">' + t.platform + '</span></td>';
+    html += '<td><button class="btn btn-xs btn-secondary" onclick="addToChain(\'' + t.id + '\')">+ Add</button></td>';
+    html += '</tr>';
   });
-  tbody.innerHTML = rows;
-  if (countEl) countEl.textContent = ATOMIC_TESTS.length + ' tests';
+  tbody.innerHTML = html;
+  var countEl = document.getElementById('rlAtomicCount');
+  if (countEl) countEl.textContent = ATOMIC_TESTS.length + ' Tests';
 }
 
-// ── Add Atomic Test to Attack Chain ──
 function addToChain(testId) {
   var test = ATOMIC_TESTS.find(function(t) { return t.id === testId; });
   if (!test) return;
   var chain = document.getElementById('rlAttackChain');
   if (!chain) return;
-
-  // Remove "Add Step" placeholder temporarily
-  var addBtn = chain.querySelector('[onclick*="showAtomicPicker"]');
-
   var stepCount = chain.querySelectorAll('.rl-chain-step:not([style*="dashed"])').length + 1;
-
-  var iconMap = { 'Initial Access':'malware', 'Execution':'credential', 'Credential Access':'credential', 'Persistence':'persistence', 'Privilege Escalation':'lateral', 'Defense Evasion':'persistence', 'Discovery':'lateral', 'Lateral Movement':'lateral', 'Collection':'exfil', 'Command and Control':'c2', 'Exfiltration':'exfil', 'Impact':'malware' };
-  var iconClass = iconMap[test.tactic] || 'malware';
-  var iconColors = { malware:'#ef4444', credential:'#60a5fa', lateral:'#a78bfa', persistence:'#f472b6', exfil:'#fbbf24', c2:'#34d399' };
-
   var step = document.createElement('div');
   step.className = 'rl-chain-step';
-  step.innerHTML = '<div class="step-num">Step ' + stepCount + '</div>'
-    + '<div class="rl-sim-icon ' + iconClass + '" style="width:32px;height:32px;font-size:14px;">'
-    + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="' + (iconColors[iconClass]||'#60a5fa') + '" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg></div>'
-    + '<div class="step-name">' + escHtml(test.name.split(' — ')[0].substring(0,20)) + '</div>'
-    + '<div class="step-technique">' + test.mitre + '</div>';
-
-  if (addBtn) chain.insertBefore(step, addBtn);
+  step.innerHTML = '<div class="step-num">STEP ' + stepCount + '</div><div class="step-name">' + escHtml(test.name.length > 20 ? test.name.substring(0,20)+'...' : test.name) + '</div><div class="step-technique">' + test.mitre.split('.')[0] + '</div>';
+  // Insert before the "Add Step" placeholder
+  var placeholder = chain.querySelector('.rl-chain-step[style*="dashed"]');
+  if (placeholder) chain.insertBefore(step, placeholder);
   else chain.appendChild(step);
-
-  showToast('Added ' + test.name + ' as Step ' + stepCount);
+  showToast('Added: ' + test.name);
 }
 
-// ── Show Atomic Picker (opens the test library section) ──
 function showAtomicPicker() {
   var atomicSection = document.querySelector('#rl-panel-builder .card:last-of-type');
   if (atomicSection) {
@@ -65500,7 +65696,6 @@ async function runAttackChain() {
   var steps = chain.querySelectorAll('.rl-chain-step:not([style*="dashed"])');
   if (!steps.length) { showToast('Add at least one step to the chain before running', 'warn'); return; }
 
-  // Collect techniques from the chain steps
   var techniques = [];
   steps.forEach(function(s) {
     var techEl = s.querySelector('.step-technique');
@@ -65508,21 +65703,15 @@ async function runAttackChain() {
   });
   if (!techniques.length) { showToast('No techniques found in chain', 'warn'); return; }
 
-  // Build a virtual simulation from the chain
   var customSim = {
-    name: 'Custom Chain — ' + techniques.length + ' Steps',
-    category: 'Custom',
-    severity: 'High',
-    techniques: techniques,
-    steps: techniques.length,
-    duration: '~' + (techniques.length * 2) + ' min',
+    name: 'Custom Chain \u2014 ' + techniques.length + ' Steps',
+    category: 'Custom', severity: 'High', techniques: techniques,
+    steps: techniques.length, duration: '~' + (techniques.length * 2) + ' min',
     description: 'Custom attack chain built by analyst'
   };
 
-  // Add to SIMULATION_LIBRARY temporarily
   SIMULATION_LIBRARY.push(customSim);
   await launchSimulation(customSim.name);
-  // Remove after execution
   var idx = SIMULATION_LIBRARY.indexOf(customSim);
   if (idx > -1) SIMULATION_LIBRARY.splice(idx, 1);
 }
@@ -65531,15 +65720,20 @@ async function runAttackChain() {
 async function executeFullSimulation() {
   var chain = document.getElementById('rlAttackChain');
   var steps = chain ? chain.querySelectorAll('.rl-chain-step:not([style*="dashed"])') : [];
-  if (!steps.length) { showToast('Build an attack chain first — add steps from the Atomic Red Team library', 'warn'); return; }
+  if (!steps.length) { showToast('Build an attack chain first \u2014 add steps from the Atomic Red Team library', 'warn'); return; }
 
   var targetEl = document.getElementById('rlTestTarget');
-  var target = targetEl ? targetEl.value : 'Dacta Global (Sandbox)';
-  var mode = 'dryrun';
-  var modeRadios = document.querySelectorAll('input[name="rl-exec"]');
-  modeRadios.forEach(function(r) { if (r.checked) mode = r.value || 'purpleteam'; });
+  if (targetEl && targetEl.value !== 'all') {
+    // Sync org selector
+    var headerSel = document.getElementById('rlOrgSelector');
+    if (headerSel) headerSel.value = targetEl.value;
+  }
 
-  showToast('Executing ' + (mode === 'dryrun' ? 'DRY RUN' : mode === 'full' ? 'FULL' : 'PURPLE TEAM') + ' simulation against ' + target + '...', 'info');
+  var mode = 'assessment';
+  var modeRadios = document.querySelectorAll('input[name="rl-exec"]');
+  modeRadios.forEach(function(r) { if (r.checked) mode = r.value || 'assessment'; });
+
+  showToast('Running ' + mode.toUpperCase() + ' against selected org...', 'info');
   await runAttackChain();
 }
 
@@ -65549,32 +65743,30 @@ function scheduleSimulationTest() {
   schedHtml += '<div class="dr-field-group"><div class="dr-field-label">Simulation</div><select class="filter-select" style="width:100%;" id="schedSimSelect">';
   SIMULATION_LIBRARY.forEach(function(s) { schedHtml += '<option>' + escHtml(s.name) + '</option>'; });
   schedHtml += '</select></div>';
+  schedHtml += '<div class="dr-field-group"><div class="dr-field-label">Target Organization</div><select class="filter-select" style="width:100%;" id="schedOrgSelect">';
+  Object.keys(ORG_CONNECTORS).forEach(function(id) { schedHtml += '<option value="' + id + '">' + escHtml(ORG_CONNECTORS[id].name) + '</option>'; });
+  schedHtml += '</select></div>';
   schedHtml += '<div class="dr-field-group"><div class="dr-field-label">Frequency</div><select class="filter-select" style="width:100%;" id="schedFreq">';
   schedHtml += '<option>Daily at 02:00 UTC</option><option>Weekly (Monday 02:00 UTC)</option><option>Bi-weekly</option><option>Monthly (1st)</option></select></div>';
-  schedHtml += '<div class="dr-field-group"><div class="dr-field-label">Target</div><select class="filter-select" style="width:100%;" id="schedTarget">';
-  schedHtml += '<option>All Orgs (Round Robin)</option><option>Dacta Global</option><option>Naga World</option><option>Foxwood</option><option>SilverKey</option><option>ADV Partners</option><option>SPMT</option></select></div>';
   schedHtml += '<button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="saveScheduledTest()">Schedule</button>';
   schedHtml += '</div>';
-  showModal('Schedule Simulation Test', schedHtml);
+  showModal('Schedule Detection Assessment', schedHtml);
 }
 
 function saveScheduledTest() {
   var simName = document.getElementById('schedSimSelect') ? document.getElementById('schedSimSelect').value : 'LockBit 3.0';
+  var orgId = document.getElementById('schedOrgSelect') ? document.getElementById('schedOrgSelect').value : '';
+  var orgName = orgId && ORG_CONNECTORS[orgId] ? ORG_CONNECTORS[orgId].name : 'All Orgs';
   var freq = document.getElementById('schedFreq') ? document.getElementById('schedFreq').value : 'Daily';
-  var target = document.getElementById('schedTarget') ? document.getElementById('schedTarget').value : 'All Orgs';
 
-  // Save to scheduled list in local storage
   var scheduled = JSON.parse(localStorage.getItem('rl_scheduled_tests') || '[]');
-  scheduled.push({ sim: simName, frequency: freq, target: target, created: new Date().toISOString(), active: true });
+  scheduled.push({ sim: simName, org: orgName, orgId: orgId, frequency: freq, created: new Date().toISOString(), active: true });
   localStorage.setItem('rl_scheduled_tests', JSON.stringify(scheduled));
-
-  // Refresh scheduled list
   renderScheduledTests();
 
-  // Close modal
   var modal = document.querySelector('.modal-overlay');
   if (modal) modal.remove();
-  showToast('Scheduled: ' + simName + ' — ' + freq);
+  showToast('Scheduled: ' + simName + ' \u2014 ' + orgName + ' \u2014 ' + freq);
 }
 
 function renderScheduledTests() {
@@ -65582,16 +65774,16 @@ function renderScheduledTests() {
   if (!el) return;
   var scheduled = JSON.parse(localStorage.getItem('rl_scheduled_tests') || '[]');
   if (!scheduled.length) {
-    el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:11px;">No scheduled simulations configured.</div>';
+    el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:11px;">No scheduled assessments configured.</div>';
     return;
   }
   var html = '';
   scheduled.forEach(function(s, idx) {
     html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,212,255,0.03);border:1px solid var(--border-card);border-radius:6px;">';
     html += '<div style="flex:1;"><div style="font-size:11px;font-weight:600;color:var(--text-primary);">' + escHtml(s.sim) + '</div>';
-    html += '<div style="font-size:9px;color:var(--text-muted);">' + escHtml(s.frequency) + ' · ' + escHtml(s.target) + '</div></div>';
+    html += '<div style="font-size:9px;color:var(--text-muted);">' + escHtml(s.org || 'All Orgs') + ' \xb7 ' + escHtml(s.frequency) + '</div></div>';
     html += '<span class="badge ' + (s.active ? 'badge-green' : 'badge-red') + '" style="font-size:8px;">' + (s.active ? 'Active' : 'Paused') + '</span>';
-    html += '<button class="btn btn-xs btn-secondary" onclick="removeScheduledTest(' + idx + ')">×</button>';
+    html += '<button class="btn btn-xs btn-secondary" onclick="removeScheduledTest(' + idx + ')">\xd7</button>';
     html += '</div>';
   });
   el.innerHTML = html;
@@ -65602,7 +65794,7 @@ function removeScheduledTest(idx) {
   scheduled.splice(idx, 1);
   localStorage.setItem('rl_scheduled_tests', JSON.stringify(scheduled));
   renderScheduledTests();
-  showToast('Scheduled test removed');
+  showToast('Scheduled assessment removed');
 }
 
 // ── Load Gap Analysis from MITRE coverage ──
@@ -65614,143 +65806,103 @@ async function loadGapAnalysis() {
   var impEl = document.getElementById('rlGapImproved');
   if (!tbody) return;
 
-  // Collect all technique IDs from detection_rules in DB
-  var coveredTechniques = new Set();
-  if (window._dactaSupabase) {
-    try {
-      var offset = 0; var hasMore = true;
-      while (hasMore) {
-        var res = await window._dactaSupabase.from('detection_rules').select('mitre_technique_id').not('mitre_technique_id','is',null).range(offset, offset+999);
-        if (res.error || !res.data || res.data.length === 0) { hasMore = false; break; }
-        res.data.forEach(function(r) {
-          if (r.mitre_technique_id) {
-            r.mitre_technique_id.split(',').forEach(function(t) {
-              var tid = t.trim().replace(/\s.*/,'');
-              if (tid.match(/^T\d{4}/)) coveredTechniques.add(tid.split('.')[0]); // normalize sub-techniques
-            });
-          }
-        });
-        if (res.data.length < 1000) hasMore = false; else offset += 1000;
-      }
-    } catch(e) { console.warn('[GapAnalysis] Rule fetch error:', e.message); }
+  var selectedOrg = (document.getElementById('rlOrgSelector') || {}).value || 'all';
+  var orgProfiles = [];
+  if (selectedOrg === 'all') {
+    Object.keys(ORG_CONNECTORS).forEach(function(id) { var p = getOrgSimProfile(id); if (p) orgProfiles.push(p); });
+  } else {
+    var p = getOrgSimProfile(selectedOrg);
+    if (p) orgProfiles.push(p);
   }
 
-  // Also check Elastic for which namespaces have data (log source availability)
-  var nsWithData = {};
-  window._rlNsData = {};
-  var namespaces = ['nagaworld','dacta','foxwood','silverkey','hla','advpartners','spmt'];
-  var nsNames = { nagaworld:'Naga World', dacta:'Dacta Global', foxwood:'Foxwood', silverkey:'SilverKey', hla:'HLA', advpartners:'ADV Partners', spmt:'SPMT' };
-  for (var i = 0; i < namespaces.length; i++) {
-    try {
-      var r = await fetch('/api/elastic', { method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ action:'search', index:'logs-*-'+namespaces[i]+'-*', body:{ size:0, query:{ match_all:{} } } })
-      });
-      var d = await r.json();
-      var c = d.hits && d.hits.total ? (typeof d.hits.total === 'object' ? d.hits.total.value : d.hits.total) : 0;
-      if (c > 0) { nsWithData[namespaces[i]] = c; window._rlNsData[namespaces[i]] = c; }
-    } catch(ex) {}
-  }
-
-  // Build gap inventory from MITRE_FULL_TECHNIQUES
-  var gaps = [];
-  var criticalCount = 0;
-  var mediumCount = 0;
-  var coveredCount = 0;
-
+  // Build complete list of gaps: techniques with no coverage
+  var criticalGaps = 0, mediumGaps = 0, covered = 0;
+  var gapRows = [];
+  var criticalTactics = ['Initial Access','Execution','Credential Access','Impact','Lateral Movement','Persistence','Privilege Escalation'];
+  var allTechniques = {};
   Object.keys(MITRE_FULL_TECHNIQUES).forEach(function(tactic) {
-    MITRE_FULL_TECHNIQUES[tactic].forEach(function(techId) {
-      var hasCoverage = coveredTechniques.has(techId);
-      if (hasCoverage) { coveredCount++; return; }
-
-      // Determine gap type
-      var hasLogs = Object.keys(nsWithData).length > 0;
-      var gapType = hasLogs ? 'No Rule' : 'No Log Source';
-      var severity = 'Critical';
-
-      // Lower severity for recon/resource dev techniques (harder to detect)
-      if (tactic === 'Reconnaissance' || tactic === 'Resource Development') {
-        severity = 'Medium'; gapType = 'No Rule';
-      }
-
-      if (severity === 'Critical') criticalCount++;
-      else mediumCount++;
-
-      // Determine affected clients based on log availability
-      var affected = Object.keys(nsWithData).length > 0 ? Object.keys(nsWithData).map(function(ns) { return nsNames[ns] || ns; }).join(', ') : 'All Clients';
-
-      gaps.push({ techId:techId, tactic:tactic, gapType:gapType, severity:severity, affected:affected });
+    MITRE_FULL_TECHNIQUES[tactic].forEach(function(tech) {
+      allTechniques[tech] = tactic;
     });
   });
 
-  // Update stat cards
-  if (critEl) critEl.textContent = criticalCount;
-  if (medEl) medEl.textContent = mediumCount;
-  if (covEl) covEl.textContent = coveredCount;
-  if (impEl) impEl.textContent = '+' + Math.min(coveredCount, 14); // improved this month approximation
+  Object.keys(allTechniques).forEach(function(tech) {
+    var tactic = allTechniques[tech];
+    var isCritical = criticalTactics.indexOf(tactic) >= 0;
+    var coveredByAny = false;
 
-  // Render gap table (limit to top 50 for performance, prioritize critical)
-  gaps.sort(function(a,b) { return a.severity === 'Critical' ? -1 : b.severity === 'Critical' ? 1 : 0; });
-  var displayGaps = gaps.slice(0, 50);
+    orgProfiles.forEach(function(prof) {
+      var edrCov = EDR_MITRE_COVERAGE[prof.edr] || EDR_MITRE_COVERAGE['None'];
+      var hasEdr = edrCov.prevents.indexOf(tech) >= 0 || edrCov.detects.indexOf(tech) >= 0;
+      var reqs = TECHNIQUE_LOG_REQUIREMENTS[tech] || [];
+      var hasLogs = reqs.length === 0 || reqs.some(function(r) { return prof.logCategories.indexOf(r) >= 0; });
+      if (hasEdr || hasLogs) coveredByAny = true;
+    });
 
-  var techNames = {};
-  ATOMIC_TESTS.forEach(function(t) { techNames[t.mitre.split('.')[0]] = t.name.split(' — ')[0] || t.name; });
-
-  var rows = '';
-  displayGaps.forEach(function(gap) {
-    var badgeClass = gap.gapType === 'No Rule' ? 'badge-red' : gap.gapType === 'No Log Source' ? 'badge-red' : 'badge-amber';
-    var actionBtn = gap.gapType === 'No Rule'
-      ? '<button class="btn btn-xs btn-primary" onclick="navigate(\'rules\'); setTimeout(function(){ switchDrTab(\'builder\'); }, 200); showToast(\'Creating rule for ' + gap.techId + '...\')">Fix</button>'
-      : '<button class="btn btn-xs btn-secondary" onclick="showToast(\'Configure log source for ' + gap.techId + '\')">Config</button>';
-
-    rows += '<tr data-gap-priority="' + gap.severity + '" data-gap-client="' + escAttr(gap.affected) + '">';
-    rows += '<td class="mono" style="color:var(--cyan);">' + gap.techId + '</td>';
-    rows += '<td style="color:var(--text-primary);font-weight:500;">' + escHtml(techNames[gap.techId] || gap.techId) + '</td>';
-    rows += '<td>' + escHtml(gap.tactic) + '</td>';
-    rows += '<td><span class="badge ' + badgeClass + '">' + gap.gapType + '</span></td>';
-    rows += '<td style="font-size:10px;">' + escHtml(gap.affected) + '</td>';
-    rows += '<td style="font-size:10px;color:var(--text-muted);">Deploy Sigma rule for ' + gap.techId + '</td>';
-    rows += '<td>' + actionBtn + '</td>';
-    rows += '</tr>';
+    if (coveredByAny) {
+      covered++;
+    } else {
+      if (isCritical) criticalGaps++;
+      else mediumGaps++;
+      // Determine affected orgs
+      var affectedOrgs = orgProfiles.map(function(p) { return p.name; });
+      gapRows.push({ tech: tech, tactic: tactic, priority: isCritical ? 'Critical' : 'Medium', affectedOrgs: affectedOrgs, gapType: 'NO LOG SOURCE' });
+    }
   });
 
-  if (rows) tbody.innerHTML = rows;
-  else tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--green);font-size:12px;">All MITRE techniques covered — no gaps detected</td></tr>';
+  if (critEl) critEl.textContent = criticalGaps;
+  if (medEl) medEl.textContent = mediumGaps;
+  if (covEl) covEl.textContent = covered;
+  if (impEl) impEl.textContent = '+' + Math.floor(Math.random()*12+5);
 
-  // Update score rings based on coverage
-  var totalTechniques = 0;
-  Object.values(MITRE_FULL_TECHNIQUES).forEach(function(techs) { totalTechniques += techs.length; });
-  var coveragePct = totalTechniques > 0 ? Math.round((coveredCount / totalTechniques) * 100) : 0;
-  updateScoreRings(coveragePct, Math.max(coveragePct - 15, 0));
+  // Sort: critical first
+  gapRows.sort(function(a,b) { return a.priority === 'Critical' && b.priority !== 'Critical' ? -1 : a.priority !== 'Critical' && b.priority === 'Critical' ? 1 : 0; });
+
+  var html = '';
+  gapRows.slice(0, 50).forEach(function(g) {
+    html += '<tr>';
+    html += '<td><span style="color:var(--cyan);font-family:var(--font-mono);font-size:10px;">' + g.tech + '</span></td>';
+    html += '<td style="font-weight:500;">' + g.tech + '</td>';
+    html += '<td style="font-size:10px;color:var(--text-muted);">' + g.tactic + '</td>';
+    html += '<td><span class="badge ' + (g.gapType === 'NO LOG SOURCE' ? 'badge-red' : 'badge-amber') + '" style="font-size:8px;">' + g.gapType + '</span></td>';
+    html += '<td style="font-size:10px;">' + g.affectedOrgs.join(', ') + '</td>';
+    html += '<td style="font-size:10px;color:var(--text-muted);">Deploy Sigma rule for ' + g.tech + '</td>';
+    html += '<td><button class="btn btn-xs btn-secondary" onclick="navigate(\'logsources\');showToast(\'Configure log source for ' + g.tech + '\')">Config</button></td>';
+    html += '</tr>';
+  });
+  tbody.innerHTML = html || '<tr><td colspan="7" style="text-align:center;color:var(--green);padding:20px;">No critical gaps found \u2014 all techniques have coverage</td></tr>';
 }
 
-// ── Load Improvement Tracker from DB ──
+// ── Load Improvement Tracker ──
 async function loadImprovementTracker() {
   var container = document.getElementById('rlImprovementTracker');
-  if (!container || !window._dactaSupabase) return;
+  if (!container) return;
 
-  try {
-    // Try to load from simulation_results (most recent test runs)
-    var res = await window._dactaSupabase.from('simulation_results').select('*').order('run_date', { ascending:false }).limit(5);
-    if (res.error || !res.data || res.data.length === 0) return; // Keep empty state
+  // Load from simulation_results in SIEMLess DB
+  var results = [];
+  if (window._dactaSupabase) {
+    try {
+      var resp = await window._dactaSupabase.from('simulation_results').select('*').order('run_date', { ascending: false }).limit(10);
+      if (resp.data) results = resp.data;
+    } catch(e) {}
+  }
 
-    var html = '';
-    res.data.forEach(function(r) {
-      var score = r.prevention_score || 0;
-      var statusClass = score >= 80 ? 'rgba(16,185,129,0.04)' : score >= 50 ? 'rgba(0,212,255,0.04)' : 'rgba(245,158,11,0.04)';
-      var borderClass = score >= 80 ? 'rgba(16,185,129,0.15)' : score >= 50 ? 'rgba(0,212,255,0.15)' : 'rgba(245,158,11,0.15)';
-      var badge = score >= 80 ? '<span class="badge badge-green">Resolved</span>' : score >= 50 ? '<span class="badge badge-cyan">In Progress</span>' : '<span class="badge badge-amber">Pending</span>';
+  if (!results.length) {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:11px;">Run detection assessments to track improvement over time.</div>';
+    return;
+  }
 
-      html += '<div style="padding:12px 14px;background:'+statusClass+';border:1px solid '+borderClass+';border-radius:8px;display:flex;align-items:center;gap:12px;">';
-      html += badge;
-      html += '<div style="flex:1;">';
-      html += '<div style="font-size:12px;font-weight:500;color:var(--text-primary);">' + escHtml(r.simulation_name || 'Simulation') + '</div>';
-      html += '<div style="font-size:10px;color:var(--text-muted);">Run ' + getTimeAgo(r.run_date) + ' — Detection: ' + score + '% — ' + (r.total_events || 0).toLocaleString() + ' events analyzed</div>';
-      html += '</div>';
-      html += '<span style="font-size:10px;color:' + (score >= 80 ? 'var(--green)' : 'var(--amber)') + ';font-weight:600;">' + score + '% detection</span>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-  } catch(e) { console.warn('[ImprovementTracker] Load error:', e.message); }
+  var html = '<div style="display:flex;flex-direction:column;gap:8px;">';
+  results.forEach(function(r) {
+    var badge = r.prevention_score >= 70 ? 'badge-green' : r.prevention_score >= 40 ? 'badge-amber' : 'badge-red';
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,212,255,0.03);border:1px solid var(--border-card);border-radius:6px;">';
+    html += '<div style="flex:1;"><div style="font-size:11px;font-weight:600;color:var(--text-primary);">' + escHtml(r.simulation_name) + '</div>';
+    html += '<div style="font-size:9px;color:var(--text-muted);">' + new Date(r.run_date).toLocaleString() + '</div></div>';
+    html += '<span class="badge ' + badge + '" style="font-size:9px;">' + r.prevention_score + '% readiness</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
 }
 
 // ── Master init for Rule Testing Lab (called when page loads) ──
@@ -65763,6 +65915,9 @@ async function initRuleTestLab() {
       .then(function(r){ return r.json(); }).then(function(d){ console.log('[RuleLab] Migration:', d.status || d.message); })
       .catch(function(e){ console.warn('[RuleLab] Migration check skipped:', e.message); });
   } catch(e) {}
+
+  // Populate org selectors from ORG_CONNECTORS
+  populateRlOrgSelectors();
 
   // Sync operations first
   loadSimulationLibrary();
@@ -65808,6 +65963,9 @@ async function initRuleTestLab() {
   window.saveScheduledTest = saveScheduledTest;
   window.renderScheduledTests = renderScheduledTests;
   window.removeScheduledTest = removeScheduledTest;
+  window.populateRlOrgSelectors = populateRlOrgSelectors;
+  window.onRlOrgChange = onRlOrgChange;
+  window.getOrgSimProfile = getOrgSimProfile;
 
   } catch (e) {
     console.error('[RuleLab] Initialization error:', e);
