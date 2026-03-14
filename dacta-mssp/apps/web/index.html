@@ -61705,6 +61705,24 @@ async function runAIInvestigation(ticketKey, issueData) {
     actionLabel = 'Manual investigation recommended \u2014 evidence is mixed';
   }
 
+  // ── Detection Rule Verdict Constraints (Heuristic pre-LLM safety net) ──
+  // Apply rule constraints to the heuristic verdict as a safety net.
+  // The LLM Phase 3 also applies constraints, but if LLM fails or doesn't produce a final_verdict,
+  // this ensures high-fidelity rules are never auto-classified as FP by the heuristic alone.
+  var _heuristicRuleConstraints = await _lookupDetectionRuleConstraints(summary);
+  if (_heuristicRuleConstraints) {
+    var _heuristicConstrained = _applyVerdictConstraints(verdict, confidence, _heuristicRuleConstraints);
+    if (_heuristicConstrained.constrained) {
+      console.warn('[Heuristic Constraints] Heuristic verdict overridden by rule constraint: ' + verdict.split('\u2014')[0].trim() + ' -> ' + _heuristicConstrained.verdict + ' | ' + _heuristicConstrained.constraintReason);
+      verdict = 'SUSPICIOUS \u2014 Requires Analyst Review';
+      confidence = _heuristicConstrained.confidence;
+      verdictIcon = dIcon('warning',14) + ''; verdictColor = 'var(--amber)'; verdictBg = 'rgba(245,158,11,0.05)'; verdictBorder = 'rgba(245,158,11,0.3)';
+      actionLabel = 'Manual investigation recommended \u2014 detection rule policy requires analyst review';
+      _fgConstraintApplied = true;
+      _fgConstraintReason = _heuristicConstrained.constraintReason;
+    }
+  }
+
   // Model names per round — multi-model architecture
   var models = ['Claude Sonnet 4 (Investigator)', 'GPT-4o (Synthesizer)', 'Claude Sonnet 4 (Adversarial)'];
   var modelIcons = [dIcon('search',14), dIcon('brain',14) + '', dIcon('warning',14)];
