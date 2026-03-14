@@ -1493,16 +1493,11 @@ export default async function handler(req, res) {
       const ticketKey = req.query.ticket_key || '';
       if (!ticketKey) return res.status(400).json({ error: 'ticket_key required' });
       try {
-        const supabaseUrl = process.env.SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-        if (!supabaseUrl || !supabaseKey) return res.status(200).json({ found: false, ticket_key: ticketKey });
-        const { createClient } = await import('@supabase/supabase-js');
-        const sb = createClient(supabaseUrl, supabaseKey);
-        const { data, error } = await sb.from('investigation_cache')
-          .select('ticket_key,verdict,confidence,investigated_at,override_verdict,override_reason,feedback_rating,prompt_notes,metadata')
-          .eq('ticket_key', ticketKey).single();
-        if (error || !data) return res.status(200).json({ found: false, ticket_key: ticketKey });
-        return res.status(200).json({ found: true, ...data });
+        const rows = await _sbGet('investigation_cache', 'select=ticket_key,verdict,confidence,investigated_at,override_verdict,override_reason,feedback_rating,prompt_notes,metadata,html_content&ticket_key=eq.' + encodeURIComponent(ticketKey) + '&limit=1');
+        if (rows && rows.length > 0) {
+          return res.status(200).json({ found: true, ...rows[0] });
+        }
+        return res.status(200).json({ found: false, ticket_key: ticketKey });
       } catch(e) {
         return res.status(200).json({ found: false, ticket_key: ticketKey, error: e.message });
       }

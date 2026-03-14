@@ -57487,36 +57487,68 @@ async function loadInvestigationCache(ticketKey) {
   var memEntry = _investigationCache[ticketKey];
   if (memEntry && memEntry.html) return memEntry;
   // Try SIEMLess DB (fetches full record including html_content)
+  // First attempt: direct Supabase client (may be blocked by RLS with anon key)
   try {
-    if (!window._supabaseRef) return null;
-    var resp = await window._supabaseRef.from('investigation_cache')
-      .select('*').eq('ticket_key', ticketKey).single();
-    if (resp.data) {
-      var dbMeta = resp.data.metadata || {};
-      var entry = {
-        html: resp.data.html_content || '',
-        verdict: resp.data.verdict || '',
-        confidence: resp.data.confidence || 0,
-        timestamp: resp.data.investigated_at,
-        overrideVerdict: resp.data.override_verdict || null,
-        overrideReason: resp.data.override_reason || null,
-        promptNotes: resp.data.prompt_notes || null,
-        feedbackRating: resp.data.feedback_rating || null,
-        feedbackText: resp.data.feedback_text || null,
-        metadata: dbMeta,
-        sidebarPanels: dbMeta.sidebarPanels || null,
-        escalationData: dbMeta.escalationData || null,
-        inculpatoryEvidence: dbMeta.inculpatoryEvidence || [],
-        exculpatoryEvidence: dbMeta.exculpatoryEvidence || [],
-        elasticLogs: dbMeta.elasticLogs || null,
-        iocs: dbMeta.iocs || null
-      };
-      _investigationCache[ticketKey] = entry;
-      return entry;
+    if (window._supabaseRef) {
+      var resp = await window._supabaseRef.from('investigation_cache')
+        .select('*').eq('ticket_key', ticketKey).single();
+      if (resp.data && resp.data.html_content) {
+        var dbMeta = resp.data.metadata || {};
+        var entry = {
+          html: resp.data.html_content || '',
+          verdict: resp.data.verdict || '',
+          confidence: resp.data.confidence || 0,
+          timestamp: resp.data.investigated_at,
+          overrideVerdict: resp.data.override_verdict || null,
+          overrideReason: resp.data.override_reason || null,
+          promptNotes: resp.data.prompt_notes || null,
+          feedbackRating: resp.data.feedback_rating || null,
+          feedbackText: resp.data.feedback_text || null,
+          metadata: dbMeta,
+          sidebarPanels: dbMeta.sidebarPanels || null,
+          escalationData: dbMeta.escalationData || null,
+          inculpatoryEvidence: dbMeta.inculpatoryEvidence || [],
+          exculpatoryEvidence: dbMeta.exculpatoryEvidence || [],
+          elasticLogs: dbMeta.elasticLogs || null,
+          iocs: dbMeta.iocs || null
+        };
+        _investigationCache[ticketKey] = entry;
+        return entry;
+      }
     }
   } catch(e) {
-    // Table may not exist yet — that's fine, just use in-memory
-    console.log('[InvCache] SIEMLess DB load skipped:', e.message);
+    console.log('[InvCache] Direct SIEMLess DB load failed (RLS):', e.message);
+  }
+  // Fallback: use API proxy with service role key (bypasses RLS)
+  try {
+    var proxyResp = await fetch('/api/jira?action=investigationResult&ticket_key=' + encodeURIComponent(ticketKey));
+    var proxyData = await proxyResp.json();
+    if (proxyData.found && (proxyData.html_content || proxyData.verdict)) {
+      var pMeta = proxyData.metadata || {};
+      var pEntry = {
+        html: proxyData.html_content || '',
+        verdict: proxyData.verdict || '',
+        confidence: proxyData.confidence || 0,
+        timestamp: proxyData.investigated_at,
+        overrideVerdict: proxyData.override_verdict || null,
+        overrideReason: proxyData.override_reason || null,
+        promptNotes: proxyData.prompt_notes || null,
+        feedbackRating: proxyData.feedback_rating || null,
+        feedbackText: proxyData.feedback_text || null,
+        metadata: pMeta,
+        sidebarPanels: pMeta.sidebarPanels || null,
+        escalationData: pMeta.escalationData || null,
+        inculpatoryEvidence: pMeta.inculpatoryEvidence || [],
+        exculpatoryEvidence: pMeta.exculpatoryEvidence || [],
+        elasticLogs: pMeta.elasticLogs || null,
+        iocs: pMeta.iocs || null
+      };
+      _investigationCache[ticketKey] = pEntry;
+      console.log('[InvCache] Loaded via API proxy:', ticketKey, pEntry.html ? '(with HTML)' : '(verdict only)');
+      return pEntry;
+    }
+  } catch(e) {
+    console.log('[InvCache] API proxy load failed:', e.message);
   }
   return null;
 }
