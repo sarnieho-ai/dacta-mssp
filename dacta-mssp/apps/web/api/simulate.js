@@ -567,7 +567,8 @@ function buildAttackEvent(technique, simId, orgNamespace) {
 // ═════════════════════════════════════════════════════
 
 // ── INJECT: Write attack event into Elastic ──
-async function injectEvent(elasticUrl, apiKey, index, doc) {
+// Supports credential fallback: if org-specific key gets auth error, retry with global key
+async function injectEvent(elasticUrl, apiKey, index, doc, fallbackUrl, fallbackKey) {
   const url = `${elasticUrl}/${index}/_doc`;
   const resp = await fetch(url, getFetchOptions({
     method: 'POST',
@@ -578,25 +579,71 @@ async function injectEvent(elasticUrl, apiKey, index, doc) {
     body: JSON.stringify(doc)
   }));
   const data = await resp.json();
+
+  // If auth failed and we have fallback credentials, retry with global key
+  if (!resp.ok && data.error?.type === 'security_exception' && fallbackUrl && fallbackKey && fallbackKey !== apiKey) {
+    console.log('[Simulate] Org SIEM key auth failed, falling back to global credentials');
+    const fbResp = await fetch(`${fallbackUrl}/${index}/_doc`, getFetchOptions({
+      method: 'POST',
+      headers: {
+        'Authorization': `ApiKey ${fallbackKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(doc)
+    }));
+    const fbData = await fbResp.json();
+    return { success: fbResp.ok, id: fbData._id, index: fbData._index, error: fbData.error, usedFallback: true };
+  }
+
   return { success: resp.ok, id: data._id, index: data._index, error: data.error };
 }
 
 // ── VERIFY: Check if alerts were generated for injected events ──
-async function verifyDetection(elasticUrl, apiKey, simId, technique) {
-  // Check Elastic Security alerts (.alerts-security.alerts-*)
+// Also verifies that the injected document exists in the simulation index
+async function verifyDetection(elasticUrl, apiKey, simId, technique, fallbackUrl, fallbackKey) {
+  const effectiveUrl = fallbackUrl || elasticUrl;
+  const effectiveKey = fallbackKey || apiKey;
+
+  // Step 1: Verify injected doc exists in simulation index
+  let docExists = false;
+  try {
+    const docQuery = {
+      size: 1,
+      query: {
+        bool: {
+          must: [
+            { match: { 'dacta.simulation_id': simId } },
+            { match: { 'dacta.simulation_technique': technique } }
+          ]
+        }
+      }
+    };
+    const docResp = await fetch(`${effectiveUrl}/logs-dacta.simulation-*/_search`, getFetchOptions({
+      method: 'POST',
+      headers: { 'Authorization': `ApiKey ${effectiveKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(docQuery)
+    }));
+    const docData = await docResp.json();
+    const docHits = docData.hits?.total?.value ?? docData.hits?.total ?? 0;
+    docExists = docHits > 0;
+  } catch (e) {
+    console.warn('[Simulate] Doc verification failed:', e.message);
+  }
+
+  // Step 2: Check Elastic Security alerts (.alerts-security.alerts-*)
+  // Widen window to 10min to account for detection engine latency
   const alertQuery = {
     size: 5,
     query: {
       bool: {
         should: [
-          // Check if any alert references our simulation marker or technique
           { match_phrase: { 'kibana.alert.rule.threat.technique.id': technique } },
           { match_phrase: { 'threat.technique.id': technique } },
           { match_phrase: { 'signal.rule.threat.technique.id': technique } }
         ],
         minimum_should_match: 1,
         filter: [
-          { range: { '@timestamp': { gte: 'now-5m' } } }
+          { range: { '@timestamp': { gte: 'now-10m' } } }
         ]
       }
     },
@@ -604,44 +651,49 @@ async function verifyDetection(elasticUrl, apiKey, simId, technique) {
   };
 
   try {
-    const resp = await fetch(`${elasticUrl}/.alerts-security.alerts-*/_search`, getFetchOptions({
+    const resp = await fetch(`${effectiveUrl}/.alerts-security.alerts-*/_search`, getFetchOptions({
       method: 'POST',
-      headers: { 'Authorization': `ApiKey ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `ApiKey ${effectiveKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(alertQuery)
     }));
     const data = await resp.json();
-    const hits = data.hits && data.hits.total ? (typeof data.hits.total === 'object' ? data.hits.total.value : data.hits.total) : 0;
+    const hits = data.hits?.total?.value ?? data.hits?.total ?? 0;
     return {
       detected: hits > 0,
       alert_count: hits,
-      alerts: (data.hits && data.hits.hits || []).map(h => ({
+      doc_exists: docExists,
+      alerts: (data.hits?.hits || []).map(h => ({
         rule_name: h._source?.['kibana.alert.rule.name'] || h._source?.signal?.rule?.name || 'Unknown',
         severity: h._source?.['kibana.alert.severity'] || h._source?.signal?.rule?.severity || 'unknown',
         timestamp: h._source?.['@timestamp']
       }))
     };
   } catch (e) {
-    return { detected: false, alert_count: 0, error: e.message };
+    return { detected: false, alert_count: 0, doc_exists: docExists, error: e.message };
   }
 }
 
 // ── CLEANUP: Delete injected simulation documents ──
-async function cleanupSimulation(elasticUrl, apiKey, simId) {
+async function cleanupSimulation(elasticUrl, apiKey, simId, fallbackUrl, fallbackKey) {
+  const effectiveUrl = fallbackUrl || elasticUrl;
+  const effectiveKey = fallbackKey || apiKey;
+
+  // Use match instead of term to handle both keyword and text field mappings
   const deleteQuery = {
     query: {
       bool: {
         must: [
-          { term: { 'dacta.simulation': true } },
-          { term: { 'dacta.simulation_id.keyword': simId } }
+          { match: { 'dacta.simulation': true } },
+          { match: { 'dacta.simulation_id': simId } }
         ]
       }
     }
   };
 
   try {
-    const resp = await fetch(`${elasticUrl}/logs-*/_delete_by_query`, getFetchOptions({
+    const resp = await fetch(`${effectiveUrl}/logs-dacta.simulation-*/_delete_by_query`, getFetchOptions({
       method: 'POST',
-      headers: { 'Authorization': `ApiKey ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `ApiKey ${effectiveKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(deleteQuery)
     }));
     const data = await resp.json();
@@ -674,8 +726,15 @@ export default async function handler(req, res) {
     const orgNamespace = namespace || siem?.metadata?.namespace || 'default';
     const orgIndexPattern = index_pattern || siem?.metadata?.index_pattern || 'logs-*';
 
+    // Fallback credentials: always keep global as backup when org-specific key fails
+    const hasFallback = DEFAULT_ELASTIC_URL && DEFAULT_ELASTIC_API_KEY && DEFAULT_ELASTIC_API_KEY !== apiKey;
+    const fallbackUrl = hasFallback ? DEFAULT_ELASTIC_URL : null;
+    const fallbackKey = hasFallback ? DEFAULT_ELASTIC_API_KEY : null;
+
     if (!elasticUrl || !apiKey) {
-      return res.json({ error: 'No SIEM credentials available for this organization' });
+      if (!DEFAULT_ELASTIC_URL || !DEFAULT_ELASTIC_API_KEY) {
+        return res.json({ error: 'No SIEM credentials available for this organization' });
+      }
     }
 
     switch (action) {
@@ -690,15 +749,22 @@ export default async function handler(req, res) {
         const targetIndex = `logs-dacta.simulation-${orgNamespace}`;
         const results = [];
 
+        let usedFallback = false;
         for (const tech of techniques) {
           const event = buildAttackEvent(tech, simId, orgNamespace);
-          const result = await injectEvent(elasticUrl, apiKey, targetIndex, event);
+          const result = await injectEvent(
+            usedFallback ? (fallbackUrl || elasticUrl) : elasticUrl,
+            usedFallback ? (fallbackKey || apiKey) : apiKey,
+            targetIndex, event, fallbackUrl, fallbackKey
+          );
+          if (result.usedFallback) usedFallback = true; // Stick with fallback for remaining
           results.push({
             technique: tech,
             injected: result.success,
             doc_id: result.id,
             index: result.index,
-            error: result.error
+            error: result.error,
+            usedFallback: result.usedFallback || false
           });
         }
 
@@ -721,7 +787,7 @@ export default async function handler(req, res) {
 
         const verifyResults = [];
         for (const tech of techniques) {
-          const v = await verifyDetection(elasticUrl, apiKey, simulation_id, tech);
+          const v = await verifyDetection(elasticUrl, apiKey, simulation_id, tech, fallbackUrl, fallbackKey);
           verifyResults.push({ technique: tech, ...v });
         }
 
@@ -740,7 +806,7 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: 'Required: simulation_id' });
         }
 
-        const cleanup = await cleanupSimulation(elasticUrl, apiKey, simulation_id);
+        const cleanup = await cleanupSimulation(elasticUrl, apiKey, simulation_id, fallbackUrl, fallbackKey);
         return res.json({ action: 'cleanup', simulation_id, ...cleanup });
       }
 
