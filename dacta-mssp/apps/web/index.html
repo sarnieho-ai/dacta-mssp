@@ -57949,18 +57949,17 @@ function mapVerdictTier(rawVerdict, confidence, threatScore) {
 
   if (isIND) return { code: 'IND', label: 'Insufficient Data', cssClass: 'cached-ind', sortWeight: 3 };
 
+  // When the AI explicitly classifies as TRUE POSITIVE or FALSE POSITIVE,
+  // respect that verdict directly. These are definitive classifications — the
+  // confidence score reflects certainty but should NOT downgrade the verdict
+  // tier. Graduated tiering (LTP/LFP) only applies to SUSPICIOUS verdicts
+  // where the AI hasn't made a definitive call.
   if (isTP) {
-    if (c >= 85) return { code: 'TP', label: 'True Positive', cssClass: 'cached-tp', sortWeight: 0 };
-    if (c >= 65) return { code: 'LTP', label: 'Likely TP', cssClass: 'cached-ltp', sortWeight: 1 };
-    // TP with low confidence → still treat as likely TP (LLM said TP, just unsure)
-    return { code: 'LTP', label: 'Likely TP', cssClass: 'cached-ltp', sortWeight: 1 };
+    return { code: 'TP', label: 'True Positive', cssClass: 'cached-tp', sortWeight: 0 };
   }
 
   if (isFP) {
-    if (c >= 85) return { code: 'FP', label: 'False Positive', cssClass: 'cached-fp', sortWeight: 5 };
-    if (c >= 65) return { code: 'LFP', label: 'Likely FP', cssClass: 'cached-lfp', sortWeight: 4 };
-    // FP with low confidence → still treat as likely FP
-    return { code: 'LFP', label: 'Likely FP', cssClass: 'cached-lfp', sortWeight: 4 };
+    return { code: 'FP', label: 'False Positive', cssClass: 'cached-fp', sortWeight: 5 };
   }
 
   // SUSPICIOUS verdict — the key differentiation logic.
