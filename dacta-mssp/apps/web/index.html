@@ -55451,6 +55451,8 @@ async function openInvestigation(ticketKey) {
     var assignee = f.assignee ? f.assignee.displayName : 'Unassigned';
     var reporter = f.reporter ? f.reporter.displayName : 'Unknown';
     var priority = f.priority ? f.priority.name : 'Unknown';
+    // Store priority globally for verdict tier reconciliation in AI Conclusion
+    window._currentInvestigationPriority = (priority.split(' - ')[0] || 'P3').toUpperCase();
     var status = f.status ? f.status.name : 'Unknown';
     var workCat = f.customfield_10038;
     var workCatStr = workCat && typeof workCat === 'object' ? (workCat.value || '') : (workCat || '');
@@ -57037,7 +57039,31 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
   var fileHits = (elasticLogs.fileEvents || []).filter(function(f){return f.status !== 'CLEAR';}).length;
   var procHits = (elasticLogs.childProcesses || []).filter(function(c){return c.status !== 'CLEAR';}).length;
   var tipHits  = (elasticLogs.openctiResults || []).filter(function(r){return r.found;}).length;
-  var verdictColor = verdict && verdict.includes('TRUE POSITIVE') ? '#ef4444' : (verdict && verdict.includes('FALSE POSITIVE') ? '#10b981' : '#f59e0b');
+
+  // ── Reconcile verdict tier: apply same mapVerdictTier logic as triage badge ──
+  // This ensures the investigation workspace shows the same verdict as the triage queue
+  var _invTS = null;
+  if (verdict && verdict.toUpperCase().indexOf('SUSPICIOUS') !== -1) {
+    var _invPri = window._currentInvestigationPriority || '';
+    if (_invPri === 'P1') _invTS = 78;
+    else if (_invPri === 'P2') _invTS = 62;
+    else if (_invPri === 'P3') _invTS = 42;
+    else if (_invPri === 'P4') _invTS = 25;
+  }
+  var _invTier = mapVerdictTier(verdict, confidence, _invTS);
+  var _tierLabels = {
+    'TP':  { text: 'TRUE POSITIVE \u2014 Confirmed Threat',      color: '#ef4444', action: 'Immediate action required' },
+    'LTP': { text: 'LIKELY TRUE POSITIVE \u2014 Probable Threat', color: '#f97316', action: 'Analyst verification recommended' },
+    'SUS': { text: 'SUSPICIOUS \u2014 Requires Analyst Review',   color: '#f59e0b', action: 'Manual investigation recommended' },
+    'IND': { text: 'INSUFFICIENT DATA \u2014 Telemetry Gaps',     color: '#94a3b8', action: 'Re-investigate with additional data' },
+    'LFP': { text: 'LIKELY FALSE POSITIVE \u2014 Probable Benign',color: '#06b6d4', action: 'Review and close if confirmed' },
+    'FP':  { text: 'FALSE POSITIVE \u2014 Business Justified',    color: '#10b981', action: 'Close as false positive' }
+  };
+  var _tierInfo = _tierLabels[_invTier.code] || _tierLabels['SUS'];
+  var verdictColor = _tierInfo.color;
+  // Use tier-reconciled verdict for display
+  var displayVerdict = _tierInfo.text;
+  var displayAction = _tierInfo.action;
 
   var rows = [
     { label: 'SIEM Events', val: siemTotal > 0 ? siemTotal + ' hits' : '0 hits', color: siemTotal > 0 ? 'var(--amber)' : 'var(--green)' },
@@ -57048,8 +57074,8 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
   ];
 
   resultsEl.innerHTML =
-    (verdict ? '<div style="margin-bottom:8px;padding:5px 10px;background:' + verdictColor + '12;border-radius:5px;border:1px solid ' + verdictColor + '28;display:flex;align-items:center;gap:8px;">' +
-      '<span style="font-size:10px;font-weight:700;color:' + verdictColor + ';">' + verdict + '</span>' +
+    (displayVerdict ? '<div style="margin-bottom:8px;padding:5px 10px;background:' + verdictColor + '12;border-radius:5px;border:1px solid ' + verdictColor + '28;display:flex;align-items:center;gap:8px;">' +
+      '<span style="font-size:10px;font-weight:700;color:' + verdictColor + ';">' + displayVerdict + '</span>' +
       (confidence ? '<span style="font-size:9px;color:var(--text-muted);margin-left:auto;">' + confidence + '% confidence</span>' : '') +
     '</div>' : '') +
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;">' +
@@ -57062,8 +57088,8 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
     '</div>';
 
   var badgeEl = document.getElementById('invSnapshotBadge');
-  if (badgeEl && verdict) {
-    var shortVerdict = verdict.includes('TRUE') ? '⚠ TP' : verdict.includes('FALSE') ? '✓ FP' : '? Unclear';
+  if (badgeEl && displayVerdict) {
+    var shortVerdict = _invTier.code === 'TP' ? '⚠ TP' : _invTier.code === 'LTP' ? '⚠ LTP' : _invTier.code === 'FP' ? '✓ FP' : _invTier.code === 'LFP' ? '✓ LFP' : _invTier.code === 'IND' ? '? IND' : '? SUS';
     badgeEl.textContent = shortVerdict;
     badgeEl.style.background = verdictColor + '20';
     badgeEl.style.color = verdictColor;
@@ -57077,7 +57103,7 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
       { label: 'Elastic SIEM', result: siemTotal > 0 ? siemTotal + ' event' + (siemTotal !== 1 ? 's' : '') : 'No hits', color: siemTotal > 0 ? 'var(--amber)' : 'var(--green)', done: true },
       { label: 'Threat Intelligence', result: tipHits > 0 ? tipHits + ' IOC' + (tipHits !== 1 ? 's' : '') + ' matched' : 'Clean', color: tipHits > 0 ? '#ef4444' : 'var(--green)', done: true },
       { label: 'Network & Firewall', result: netHits > 0 ? netHits + ' suspicious conn' : 'Clean', color: netHits > 0 ? '#8b5cf6' : 'var(--green)', done: true },
-      { label: 'AI Analysis', result: verdict ? verdict.split('\u2014')[0].trim() : 'Complete', color: verdictColor, done: true }
+      { label: 'AI Analysis', result: displayVerdict ? displayVerdict.split('\u2014')[0].trim() : 'Complete', color: verdictColor, done: true }
     ];
     pipeWrap.innerHTML =
       '<div style="font-size:8px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:7px;">Investigation pipeline — completed</div>' +
@@ -57105,9 +57131,9 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
   // ── Update Root Cause Analysis in overview tab ──
   var rcaEl = document.getElementById('rRootCause');
   if (rcaEl && verdict) {
-    var isTP = verdict.includes('TRUE POSITIVE');
-    var isFP = verdict.includes('FALSE POSITIVE');
-    var rcaColor = isTP ? '#EF4444' : isFP ? '#10B981' : '#F59E0B';
+    var isTP = _invTier.code === 'TP' || _invTier.code === 'LTP';
+    var isFP = _invTier.code === 'FP' || _invTier.code === 'LFP';
+    var rcaColor = verdictColor;
     var rcaParts = [];
     if (isTP) {
       rcaParts.push('AI investigation confirmed this as a True Positive with ' + confidence + '% confidence.');
@@ -57131,30 +57157,33 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
     rcaEl.style.fontWeight = '400';
   }
 
-  // ── Wire AI Conclusion into right panel ──
+  // ── Wire AI Conclusion into right panel (uses tier-reconciled verdict) ──
   var conclusionEl = document.getElementById('invSideConclusionContent');
   if (conclusionEl && verdict) {
-    var conclusionIsTP = verdict.includes('TRUE POSITIVE');
-    var conclusionIsFP = verdict.includes('FALSE POSITIVE');
+    var conclusionIsTP = _invTier.code === 'TP' || _invTier.code === 'LTP';
+    var conclusionIsFP = _invTier.code === 'FP' || _invTier.code === 'LFP';
     var conclusionIcon = conclusionIsTP ? '\u26a0\ufe0f' : conclusionIsFP ? '\u2705' : '\u26a0\ufe0f';
-    var conclusionColor = conclusionIsTP ? '#EF4444' : conclusionIsFP ? '#10B981' : '#F59E0B';
-    var conclusionActionLabel = conclusionIsTP ? 'Immediate action required' : conclusionIsFP ? 'Close as false positive / business justified' : 'Manual investigation recommended';
+    var conclusionColor = verdictColor;
+    var conclusionActionLabel = displayAction;
     var conclusionParts = [];
     if (conclusionIsTP) {
-      conclusionParts.push('Confirmed True Positive with ' + confidence + '% confidence.');
+      conclusionParts.push('Confirmed threat with ' + confidence + '% confidence.');
       if (netHits > 0) conclusionParts.push('Suspicious network connections detected.');
       if (tipHits > 0) conclusionParts.push(tipHits + ' TI IOC match' + (tipHits > 1 ? 'es' : '') + ' confirmed.');
       if (procHits > 0) conclusionParts.push('Suspicious child processes detected.');
     } else if (conclusionIsFP) {
-      conclusionParts.push('Determined to be a False Positive with ' + confidence + '% confidence.');
+      conclusionParts.push('Determined to be benign with ' + confidence + '% confidence.');
       conclusionParts.push('No malicious indicators found in SIEM or threat intel.');
+    } else if (_invTier.code === 'IND') {
+      conclusionParts.push('Insufficient data (' + confidence + '% confidence) — telemetry gaps detected.');
+      conclusionParts.push('Re-investigate with additional data sources.');
     } else {
       conclusionParts.push('Inconclusive (' + confidence + '% confidence) — mixed evidence.');
       conclusionParts.push('Manual analysis recommended.');
     }
     conclusionEl.innerHTML =
       '<div style="font-size:12px;color:var(--rws-text-primary);line-height:1.6;">' +
-        conclusionIcon + ' <span style="font-weight:700;color:' + conclusionColor + ';">' + escapeHtml(verdict) + '</span>' +
+        conclusionIcon + ' <span style="font-weight:700;color:' + conclusionColor + ';">' + escapeHtml(displayVerdict) + '</span>' +
         (confidence ? '<span style="font-size:11px;color:var(--rws-text-muted);margin-left:4px;">(' + confidence + '% confidence)</span>' : '') +
       '</div>' +
       '<div style="font-size:11px;color:var(--rws-text-secondary);line-height:1.5;margin-top:8px;">' + escapeHtml(conclusionActionLabel) + '</div>' +
