@@ -53747,6 +53747,91 @@ function _getRelevantOrgConnectors(namespace, connType, sourceRelevance) {
   return sourceRelevance && sourceRelevance.generic ? all : [];
 }
 
+// ── Detection Rule Verdict Constraints ──
+// Looks up the triggering detection rule from DB and determines if the AI verdict
+// should be constrained. Rules with high historical TP rates, configuration change
+// tags, or privilege escalation indicators should never be auto-classified as FP.
+async function _lookupDetectionRuleConstraints(alertSummary) {
+  if (!window._dactaSupabase) return null;
+  try {
+    // Extract the rule name from the alert summary
+    // Format: "SOC Alert Notification - <RULE NAME>"
+    var ruleName = (alertSummary || '').replace(/^SOC Alert Notification\s*[-–—]\s*/i, '').trim();
+    if (!ruleName) return null;
+
+    var res = await window._dactaSupabase.from('detection_rules')
+      .select('id,name,severity,true_positive_count,false_positive_count,tags,mitre_tactic,rule_category,confidence_score')
+      .ilike('name', '%' + ruleName + '%')
+      .limit(1)
+      .maybeSingle();
+
+    if (res.error || !res.data) return null;
+    var rule = res.data;
+
+    // Determine verdict constraints based on rule characteristics
+    var constraints = { ruleName: rule.name, ruleId: rule.id };
+    var tpCount = rule.true_positive_count || 0;
+    var fpCount = rule.false_positive_count || 0;
+    var totalCount = tpCount + fpCount;
+    var tpRate = totalCount > 0 ? (tpCount / totalCount) : 0;
+
+    // HIGH FIDELITY RULE: >80% TP rate with meaningful sample size → never auto-FP
+    if (tpRate >= 0.8 && totalCount >= 5) {
+      constraints.minVerdict = 'SUSPICIOUS';
+      constraints.reason = 'High-fidelity rule: ' + Math.round(tpRate * 100) + '% true positive rate (' + tpCount + '/' + totalCount + ' historical). AI must not dismiss as FP without analyst confirmation.';
+      constraints.blockAutoFP = true;
+    }
+
+    // CONFIGURATION CHANGE / PRIVILEGE rules → always require analyst review
+    var tags = (rule.tags || []).map(function(t) { return t.toLowerCase(); });
+    var isConfigChange = tags.some(function(t) {
+      return t.includes('config-change') || t.includes('privilege') || t.includes('defense-evasion') ||
+             t.includes('credential') || t.includes('persistence') || t.includes('lateral-movement');
+    });
+    if (isConfigChange) {
+      constraints.minVerdict = constraints.minVerdict || 'SUSPICIOUS';
+      constraints.reason = (constraints.reason ? constraints.reason + ' ' : '') +
+        'Rule category (' + tags.join(', ') + ') requires analyst review — configuration changes and privilege events should not be auto-dismissed.';
+      constraints.blockAutoFP = true;
+    }
+
+    // SEVERITY-based floor: high/critical severity rules → minimum SUSPICIOUS
+    if (rule.severity === 'high' || rule.severity === 'critical') {
+      constraints.minVerdict = constraints.minVerdict || 'SUSPICIOUS';
+      constraints.reason = (constraints.reason ? constraints.reason + ' ' : '') +
+        'Rule severity is ' + rule.severity + '.';
+      constraints.blockAutoFP = true;
+    }
+
+    return constraints.minVerdict ? constraints : null;
+  } catch (e) {
+    console.warn('[VerdictConstraints] Rule lookup failed:', e.message);
+    return null;
+  }
+}
+
+// Apply verdict constraints: if the AI says FP but the rule requires higher severity,
+// override to the minimum allowed verdict
+function _applyVerdictConstraints(verdict, confidence, constraints) {
+  if (!constraints || !constraints.blockAutoFP) return { verdict: verdict, confidence: confidence, constrained: false };
+
+  var v = (verdict || '').toUpperCase();
+  var isFP = v.indexOf('FALSE POSITIVE') !== -1 || v === 'FALSE_POSITIVE' || v.indexOf('BUSINESS JUSTIFIED') !== -1;
+  var isLFP = v.indexOf('LIKELY FALSE POSITIVE') !== -1 || v.indexOf('LIKELY FP') !== -1 || v.indexOf('PROBABLE BENIGN') !== -1;
+
+  if (isFP || isLFP) {
+    console.warn('[VerdictConstraints] AI classified as ' + v + ' but rule constraint requires minimum ' + constraints.minVerdict + '. Overriding. Reason: ' + constraints.reason);
+    return {
+      verdict: 'SUSPICIOUS',
+      confidence: Math.max(confidence, 55),
+      constrained: true,
+      constraintReason: constraints.reason
+    };
+  }
+
+  return { verdict: verdict, confidence: confidence, constrained: false };
+}
+
 async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
   var f = issueData.fields || {};
   var summary = f.summary || '';
@@ -53890,6 +53975,24 @@ async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
   var finalVerdict = (phaseResults.phase3 && phaseResults.phase3.final_verdict) || (phaseResults.phase2 && phaseResults.phase2.preliminary_verdict) || (phaseResults.phase1 ? 'SUSPICIOUS' : 'SUSPICIOUS');
   var confidence = (phaseResults.phase3 && phaseResults.phase3.final_confidence) || (phaseResults.phase2 && phaseResults.phase2.confidence) || (phaseResults.phase1 && phaseResults.phase1.confidence) || 0;
 
+  // ── Detection Rule Verdict Constraints ──
+  // Look up the triggering detection rule and apply constraints.
+  // High-fidelity rules, config-change rules, and privilege escalation rules
+  // should never be auto-classified as FP by the AI.
+  var ruleConstraints = await _lookupDetectionRuleConstraints(summary);
+  var _bgConstraintApplied = false;
+  var _bgConstraintReason = '';
+  if (ruleConstraints) {
+    var constrained = _applyVerdictConstraints(finalVerdict, confidence, ruleConstraints);
+    if (constrained.constrained) {
+      console.warn('[AutoInv] Verdict overridden by rule constraint for ' + ticketKey + ': ' + finalVerdict + ' -> ' + constrained.verdict + ' | ' + constrained.constraintReason);
+      finalVerdict = constrained.verdict;
+      confidence = constrained.confidence;
+      _bgConstraintApplied = true;
+      _bgConstraintReason = constrained.constraintReason;
+    }
+  }
+
   // Compute threat_score: prefer LLM-provided, fall back to heuristic
   var threatScore = (phaseResults.phase3 && phaseResults.phase3.threat_score) || (phaseResults.phase2 && phaseResults.phase2.threat_score) || null;
 
@@ -53947,8 +54050,18 @@ async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
       '<span>' + dIcon('dot',14) + ' Inculpatory: ' + inculpatory.length + ' finding' + (inculpatory.length !== 1 ? 's' : '') + '</span>' +
       '<span>' + dIcon('dot',14) + ' Exculpatory: ' + exculpatory.length + ' finding' + (exculpatory.length !== 1 ? 's' : '') + '</span>' +
       '<span>' + actionLabel + '</span>' +
-    '</div>' +
-  '</div>';
+    '</div>';
+
+  // Add rule constraint banner if verdict was overridden by detection rule policy
+  if (_bgConstraintApplied && _bgConstraintReason) {
+    verdictBannerHTML += '<div style="margin-top:8px;padding:8px 10px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);border-radius:6px;">' +
+      '<div style="font-size:10px;font-weight:600;color:var(--cyan);margin-bottom:4px;">' + dIcon('shield',12) + ' Verdict Constrained by Detection Rule Policy</div>' +
+      '<div style="font-size:9px;color:var(--text-muted);">' + escapeHtml(_bgConstraintReason) + '</div>' +
+      '<div style="font-size:9px;color:var(--text-secondary);margin-top:4px;opacity:0.8;">The AI attempted to classify this as benign, but the detection rule\'s historical accuracy and threat category require analyst confirmation before dismissal.</div>' +
+    '</div>';
+  }
+
+  verdictBannerHTML += '</div>';
 
   return {
     html: roundsHTML + verdictBannerHTML,
@@ -61780,6 +61893,10 @@ async function runAIInvestigation(ticketKey, issueData) {
     console.log('[LLM Investigation] Analyst corpus injected: ' + _ac.corpus.length + ' historical investigations for rule "' + (_ac.rule || 'unknown') + '"');
   }
 
+  // Track rule constraint override (set in round 3 foreground path)
+  var _fgConstraintApplied = false;
+  var _fgConstraintReason = '';
+
   // Process each round
   for (var rnd = 1; rnd <= totalRounds; rnd++) {
     // Update pipeline stage to "Processing"
@@ -61950,6 +62067,22 @@ async function runAIInvestigation(ticketKey, issueData) {
               if (_llmResp.result.final_verdict !== _fv) {
                 confidence = Math.min(confidence, 65);
               }
+
+              // ── Detection Rule Verdict Constraints (Foreground) ──
+              // High-fidelity rules, config-change rules, and privilege escalation
+              // rules should never be auto-classified as FP by the AI.
+              var _fgRuleConstraints = await _lookupDetectionRuleConstraints(summary);
+              if (_fgRuleConstraints) {
+                var _fgConstrained = _applyVerdictConstraints(_fv, confidence, _fgRuleConstraints);
+                if (_fgConstrained.constrained) {
+                  console.warn('[FG Investigation] Verdict overridden by rule constraint: ' + _fv + ' -> ' + _fgConstrained.verdict + ' | ' + _fgConstrained.constraintReason);
+                  _fv = _fgConstrained.verdict;
+                  confidence = _fgConstrained.confidence;
+                  _fgConstraintApplied = true;
+                  _fgConstraintReason = _fgConstrained.constraintReason;
+                }
+              }
+
               // Use 6-tier verdict mapping for consistent classification
               var _fgThreatScore = _llmResp.result.threat_score || null;
               var _fgTier = mapVerdictTier(_fv, confidence, _fgThreatScore);
@@ -62176,6 +62309,15 @@ async function runAIInvestigation(ticketKey, issueData) {
     });
     verdictBannerHTML += '</div></div>';
   }
+  // Add rule constraint banner if verdict was overridden by detection rule policy
+  if (_fgConstraintApplied && _fgConstraintReason) {
+    verdictBannerHTML += '<div style="margin-top:8px;padding:8px 10px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);border-radius:6px;">' +
+      '<div style="font-size:10px;font-weight:600;color:var(--cyan);margin-bottom:4px;">' + dIcon('shield',12) + ' Verdict Constrained by Detection Rule Policy</div>' +
+      '<div style="font-size:9px;color:var(--text-muted);">' + escapeHtml(_fgConstraintReason) + '</div>' +
+      '<div style="font-size:9px;color:var(--text-secondary);margin-top:4px;opacity:0.8;">The AI attempted to classify this as benign, but the detection rule\'s historical accuracy and threat category require analyst confirmation before dismissal.</div>' +
+    '</div>';
+  }
+
   // Add Jira correlation summary if found (clickable to open drill-down modal)
   if ((elasticLogs.jiraCorrelation || []).length > 0) {
     verdictBannerHTML += '<div style="margin-top:6px;font-size:9px;color:var(--text-muted);cursor:pointer;" onclick="openCorrelatedAlertsModal()" onmouseover="this.style.color=\'var(--cyan)\'" onmouseout="this.style.color=\'var(--text-muted)\'">' +
