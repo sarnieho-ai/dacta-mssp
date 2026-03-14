@@ -36635,7 +36635,7 @@ async function _huntLoadDataFromDB() {
           events_scanned: h.events_scanned || 0, suspects: h.suspects || 0,
           confirmed: h.confirmed || 0, query: h.query || '',
           created: h.created_at ? h.created_at.substring(0, 10) : '',
-          description: h.description || '', org_id: h.org_id || 'all'
+          desc: h.description || '', org_id: h.org_id || 'all'
         };
       });
     }
@@ -37031,7 +37031,7 @@ function huntEditHunt(idx) {
   _huntSetFieldVal('edit-hunt-hunter', hunt.hunter);
   _huntSetFieldVal('edit-hunt-mitre', (hunt.mitre || []).join(', '));
   _huntSetFieldVal('edit-hunt-query', hunt.query);
-  _huntSetFieldVal('edit-hunt-desc', hunt.desc);
+  _huntSetFieldVal('edit-hunt-desc', hunt.desc || '');
   // Populate client scope selector
   var sel = document.getElementById('edit-hunt-client');
   if (sel && typeof ORG_CONNECTORS !== 'undefined') {
