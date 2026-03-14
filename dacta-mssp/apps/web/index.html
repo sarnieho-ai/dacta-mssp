@@ -43155,6 +43155,17 @@ var ORG_CONNECTORS = {
       { connector_type: 'identity', vendor: 'Microsoft', display_name: 'Azure AD / Entra ID', is_enabled: true, health_status: 'healthy', metadata: { type: 'identity_provider', protocol: 'SAML/OIDC' } },
       { connector_type: 'knowledge_base', vendor: 'Confluence', display_name: 'Confluence KB', is_enabled: true, health_status: 'healthy', metadata: { type: 'knowledge_base', instance: 'dactaglobal-sg.atlassian.net/wiki' } }
     ]
+  },
+  '93281f08-dbad-4d0d-8656-ab7618f373a4': { // Silver Key — Microsoft Defender for Endpoint (from log source: m365_defender.alert-silverkey, m365_defender.incident-silverkey)
+    code: 'SK', name: 'Silver Key', type: 'socaas', namespace: 'silverkey',
+    connectors: [
+      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'silverkey', index_pattern: 'silverkey-*' } },
+      { connector_type: 'edr', vendor: 'Microsoft Defender for Endpoint', display_name: 'Microsoft Defender for Endpoint', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'silverkey', index_pattern: '.ds-logs-m365_defender.alert-silverkey-* .ds-logs-m365_defender.incident-silverkey-*', notes: 'MDE via M365 Defender integration — alerts and incidents indexed in SIEM' } },
+      { connector_type: 'identity', vendor: 'Microsoft', display_name: 'Azure AD / Entra ID', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'silverkey', index_pattern: '.ds-logs-azure.signinlogs-silverkey-* .ds-logs-azure.auditlogs-silverkey-*', notes: 'Entra ID sign-in and audit logs' } },
+      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
+      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } },
+      { connector_type: 'knowledge_base', vendor: 'Confluence', display_name: 'Confluence KB', is_enabled: true, health_status: 'healthy', metadata: { type: 'knowledge_base', instance: 'dactaglobal-sg.atlassian.net/wiki' } }
+    ]
   }
 };
 
@@ -65191,6 +65202,10 @@ var EDR_MITRE_COVERAGE = {
   'Trend Micro': {
     prevents: ['T1566','T1059','T1003','T1486','T1547','T1489','T1490','T1204','T1053','T1036','T1027','T1574','T1546','T1543','T1505','T1218','T1055','T1068','T1562','T1134'],
     detects: ['T1071','T1573','T1095','T1572','T1090','T1048','T1041','T1567','T1005','T1039','T1074','T1082','T1083','T1049','T1016','T1046','T1135','T1018','T1087','T1069','T1033','T1078','T1098','T1136','T1110','T1555','T1558','T1021','T1550','T1070','T1553','T1564','T1497','T1556','T1621']
+  },
+  'Microsoft Defender for Endpoint': {
+    prevents: ['T1566','T1059','T1003','T1486','T1547','T1070','T1489','T1490','T1055','T1021','T1053','T1036','T1027','T1562','T1134','T1110','T1555','T1558','T1204','T1047','T1569','T1574','T1546','T1543','T1505','T1068','T1218','T1553','T1055','T1098','T1078'],
+    detects: ['T1071','T1573','T1095','T1572','T1090','T1048','T1041','T1567','T1005','T1039','T1074','T1082','T1083','T1049','T1016','T1046','T1135','T1018','T1087','T1069','T1033','T1057','T1012','T1518','T1560','T1119','T1056','T1113','T1550','T1136','T1564','T1497','T1140','T1211','T1202','T1556','T1621','T1611']
   },
   'None': { prevents: [], detects: [] }
 };
