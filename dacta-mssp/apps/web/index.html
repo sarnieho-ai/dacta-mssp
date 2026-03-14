@@ -53466,16 +53466,50 @@ async function _buildBackgroundInvestigationCache(ticketKey, issueData) {
     }
   }
 
+  // Build local evidence HTML for fallback display when LLM phases fail
+  var _localEvidenceHTML = (function() {
+    var h = '';
+    if (inculpatory.length > 0) {
+      h += '<div style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:10px;font-weight:600;color:var(--text-primary);">Inculpatory Evidence</span><span class="badge badge-red" style="font-size:9px;">' + inculpatory.length + '</span></div>';
+      inculpatory.slice(0, 5).forEach(function(ev) {
+        h += '<div class="reasoning-item" style="padding:6px 8px;margin-bottom:3px;background:var(--surface-0);border-radius:4px;border-left:3px solid rgba(239,68,68,0.4);">' +
+          '<div style="font-size:10px;color:var(--text-primary);font-weight:600;">' + escapeHtml(ev.finding || ev) + '</div>' +
+          (ev.significance ? '<div style="font-size:9px;color:var(--text-secondary);">' + escapeHtml(ev.significance) + '</div>' : '') +
+        '</div>';
+      });
+      h += '</div>';
+    }
+    if (exculpatory.length > 0) {
+      h += '<div style="margin-bottom:10px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:10px;font-weight:600;color:var(--text-primary);">Exculpatory Evidence</span><span class="badge badge-green" style="font-size:9px;">' + exculpatory.length + '</span></div>';
+      exculpatory.slice(0, 5).forEach(function(ev) {
+        h += '<div style="padding:6px 8px;margin-bottom:3px;background:var(--surface-0);border-radius:4px;border-left:3px solid rgba(16,185,129,0.4);">' +
+          '<div style="font-size:10px;color:var(--text-primary);font-weight:600;">' + escapeHtml(ev.finding || ev) + '</div>' +
+          (ev.significance ? '<div style="font-size:9px;color:var(--text-secondary);">' + escapeHtml(ev.significance) + '</div>' : '') +
+        '</div>';
+      });
+      h += '</div>';
+    }
+    if (techniques.length > 0) {
+      h += '<div style="margin-bottom:8px;"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--amber);margin-bottom:6px;">MITRE ATT&CK Techniques (' + techniques.length + ')</div>';
+      h += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+      techniques.slice(0, 8).forEach(function(t) {
+        h += '<span style="font-size:8px;padding:2px 6px;border-radius:6px;background:rgba(245,158,11,0.08);color:var(--amber);border:1px solid rgba(245,158,11,0.2);">' + (t.id || '') + ' ' + (t.name || '') + '</span>';
+      });
+      h += '</div></div>';
+    }
+    return h || '<div style="font-size:10px;color:var(--text-muted);">No additional evidence collected during pre-investigation.</div>';
+  })();
+
   var roundsHTML = '';
   if (phaseResults.phase1) roundsHTML += buildRoundHTML(1, totalRounds, 'LLM Investigation', 'done', buildLLMRound1HTML(phaseResults.phase1, phase1Calls));
-  else roundsHTML += buildRoundHTML(1, totalRounds, 'LLM Investigation', 'done', '<div style="font-size:10px;color:var(--text-secondary);">Background telemetry collection completed. Analyst should open the ticket for a fresh review.</div>');
+  else roundsHTML += buildRoundHTML(1, totalRounds, 'LLM Investigation', 'done', '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--cyan);margin-bottom:8px;">PRE-INVESTIGATION TELEMETRY</div>' + _localEvidenceHTML);
   if (totalRounds >= 2) {
     if (phaseResults.phase2) roundsHTML += buildRoundHTML(2, totalRounds, 'Evidence Synthesis', 'done', buildLLMRound2HTML(phaseResults.phase2));
-    else roundsHTML += buildRoundHTML(2, totalRounds, 'Evidence Synthesis', 'done', '<div style="font-size:10px;color:var(--text-secondary);">Evidence was collected, but synthesis was inconclusive in the background run.</div>');
+    else roundsHTML += buildRoundHTML(2, totalRounds, 'Evidence Synthesis', 'done', '<div style="font-size:10px;color:var(--text-secondary);">Evidence synthesis pending — will complete during deep investigation.</div>');
   }
   if (totalRounds >= 3) {
     if (phaseResults.phase3) roundsHTML += buildRoundHTML(3, totalRounds, 'Adversarial Challenge', 'done', buildLLMRound3HTML(phaseResults.phase3, phase3Calls));
-    else roundsHTML += buildRoundHTML(3, totalRounds, 'Adversarial Challenge', 'done', '<div style="font-size:10px;color:var(--text-secondary);">Adversarial challenge did not complete in the background run.</div>');
+    else roundsHTML += buildRoundHTML(3, totalRounds, 'Adversarial Challenge', 'done', '<div style="font-size:10px;color:var(--text-secondary);">Adversarial challenge pending — will complete during deep investigation.</div>');
   }
 
   var finalVerdict = (phaseResults.phase3 && phaseResults.phase3.final_verdict) || (phaseResults.phase2 && phaseResults.phase2.preliminary_verdict) || (phaseResults.phase1 ? 'SUSPICIOUS' : 'SUSPICIOUS');
@@ -56323,14 +56357,13 @@ async function openInvestigation(ticketKey) {
         h.indexOf('PLAYBOOK TRIAGE') !== -1 ||
         h.length > 20000  // Real investigations generate 50k+ HTML
       );
-      // Detect known placeholder stubs from background runs
-      var _isPlaceholderOnly = (
-        h.indexOf('Background telemetry collection completed') !== -1 &&
-        h.indexOf('Inculpatory Evidence') === -1 &&
-        h.indexOf('FINAL ASSESSMENT') === -1
-      ) || (
-        h.indexOf('synthesis was inconclusive in the background run') !== -1 &&
-        h.indexOf('Inculpatory Evidence') === -1
+      // Detect known placeholder stubs from background runs (old + new formats)
+      var _hasEvidenceMarkers = h.indexOf('Inculpatory Evidence') !== -1 || h.indexOf('reasoning-item') !== -1 || h.indexOf('INVESTIGATION FINDINGS') !== -1 || h.indexOf('FINAL ASSESSMENT') !== -1;
+      var _isPlaceholderOnly = !_hasEvidenceMarkers && (
+        h.indexOf('Background telemetry collection completed') !== -1 ||
+        h.indexOf('synthesis was inconclusive in the background run') !== -1 ||
+        h.indexOf('PRE-INVESTIGATION TELEMETRY') !== -1 ||
+        h.indexOf('Evidence synthesis pending') !== -1
       );
       if (_isPlaceholderOnly) {
         console.log('[AI Investigation] Cache contains only background placeholder stubs — treating as incomplete');
@@ -56350,13 +56383,43 @@ async function openInvestigation(ticketKey) {
       // Render analyst notes if any were sent from Copilot notepad
       renderAnalystNotesInInvestigation(ticketKey);
     } else if (cachedResult && cachedResult.verdict) {
-      // Verdict exists but HTML is empty/incomplete — auto re-investigate silently
-      // instead of showing a dead-end "Re-investigate" prompt
-      console.log('[AI Investigation] Incomplete/missing cache HTML for ' + ticketKey + ' (verdict: ' + cachedResult.verdict + '). Auto-re-investigating...');
-      // Clear broken cache so fresh results overwrite it
+      // ── Background pre-investigation exists but HTML is incomplete ──
+      // Instead of showing a blank "waiting" screen, render whatever we have
+      // from the background investigation IMMEDIATELY, then silently upgrade
+      // with a full deep investigation in the background.
+      console.log('[AI Investigation] Incomplete cache for ' + ticketKey + ' (verdict: ' + cachedResult.verdict + '). Showing pre-investigation + starting deep analysis...');
+      var invMainContent = document.getElementById('invMainContent');
+      if (invMainContent && cachedResult.html) {
+        // Show existing background results immediately
+        renderCachedInvestigation(ticketKey, cachedResult, invMainContent, issueData);
+        // Replace the cache banner with a "deep investigation running" banner
+        var cacheBanner = document.getElementById('invCacheBanner');
+        if (cacheBanner) {
+          cacheBanner.innerHTML =
+            '<div style="font-size:16px;">' + dIcon('zap',14) + '</div>' +
+            '<div style="flex:1;">' +
+              '<div class="inv-cache-label" style="color:var(--cyan);">Background Pre-Investigation \u2014 Deep Analysis Running</div>' +
+              '<div class="inv-cache-ts">Pre-triage verdict: ' + (cachedResult.verdict || 'Unknown').replace(/.*?—\s*/, '').trim() + ' \u00B7 Upgrading to full investigation...</div>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:6px;"><span class="jira-spinner" style="width:14px;height:14px;"></span><span style="font-size:10px;color:var(--text-muted);">Analyzing</span></div>';
+          cacheBanner.style.borderColor = 'rgba(0,212,255,0.3)';
+          cacheBanner.style.background = 'rgba(0,212,255,0.04)';
+        }
+        _populateTopFindingsFromCache(cachedResult);
+        renderAnalystNotesInInvestigation(ticketKey);
+      } else {
+        // No usable HTML at all — just remove spinner, the investigation below will populate
+        var spinner = document.getElementById('invLoadingSpinner');
+        if (spinner) spinner.remove();
+      }
+      // Run fresh deep investigation in background — when done, it updates cache
+      // and we seamlessly swap in the new results
       delete _investigationCache[ticketKey];
       _forceReinvestigateSet.add(ticketKey);
-      runAIInvestigation(ticketKey, issueData);
+      // Use a slight delay so the pre-investigation renders first
+      setTimeout(function() {
+        runAIInvestigation(ticketKey, issueData);
+      }, 500);
     } else {
       // No cache at all — run fresh AI investigation
       runAIInvestigation(ticketKey, issueData);
@@ -60519,6 +60582,11 @@ async function runAIInvestigation(ticketKey, issueData) {
   if (invMainContent) {
     var invSpinner = document.getElementById('invLoadingSpinner');
     if (invSpinner) invSpinner.remove();
+    // If upgrading from a pre-investigation cache, clear previous cached content
+    if (_forceReinvestigateSet.has(ticketKey)) {
+      invMainContent.innerHTML = '';
+      _forceReinvestigateSet.delete(ticketKey);
+    }
     invMainContent.appendChild(aiPanel);
   } else {
     var livePanel = invPage.querySelector('.prod-investigation-live');
