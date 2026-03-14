@@ -31005,10 +31005,12 @@ function exportRulePack() {
 }
 
 async function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
+  // Pre-set edited flag BEFORE switchDrTab so the splash screen stays hidden
+  var code = document.getElementById('drIdeCode');
+  if (code) code.dataset.edited = '1';
   var mask = document.getElementById('drBuilderGreyMask');
   if (mask) mask.style.display = 'none';
   switchDrTab('builder');
-  var code = document.getElementById('drIdeCode');
   if (code) {
     // Fetch full rule detail on demand (server-side paginated — _ruleContent not in list data)
     showToast('Loading rule content...', 'info');
