@@ -65955,7 +65955,13 @@ async function initRuleTestLab() {
       .catch(function(e){ console.warn('[RuleLab] Migration check skipped:', e.message); });
   } catch(e) {}
 
-  // Populate org selectors from ORG_CONNECTORS
+  // Wait for DB-backed ORG_CONNECTORS merge if not yet completed
+  if (!_orgConnectorsLoadedFromDB && typeof loadOrgConnectorsFromDB === 'function') {
+    console.log('[RuleLab] Awaiting DB org connectors merge...');
+    try { await loadOrgConnectorsFromDB(); } catch(e) { console.warn('[RuleLab] DB org load error:', e.message); }
+  }
+
+  // Populate org selectors from ORG_CONNECTORS (now includes DB + hardcoded merge)
   populateRlOrgSelectors();
 
   // Sync operations first
