@@ -16379,6 +16379,10 @@ function getThemeTickColor() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             Parser Generator
           </button>
+          <button class="lp-tab-btn" data-lptab="catcher" onclick="switchLpTab('catcher')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+            Novelty Catcher
+          </button>
         </div>
 
         <!-- ═══ TAB 1: Unknown Patterns Queue ═══ -->
@@ -17137,6 +17141,467 @@ function getThemeTickColor() {
             renderWizard();
           }
         </script>
+        <!-- ═══ TAB 4: Novelty Catcher ═══ -->
+        <div class="lp-panel" id="lp-panel-catcher">
+          <style>
+            .nc-kpi-row { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+            .nc-kpi { flex:1; min-width:140px; background:rgba(15,23,42,0.5); border:1px solid var(--border-card); border-radius:10px; padding:14px 16px; }
+            .nc-kpi-label { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+            .nc-kpi-value { font-size:22px; font-weight:700; color:var(--text-primary); font-family:var(--font-mono); }
+            .nc-kpi-value.green { color:#22c55e; }
+            .nc-kpi-value.amber { color:#f59e0b; }
+            .nc-kpi-value.red { color:#ef4444; }
+            .nc-kpi-value.cyan { color:var(--cyan); }
+            .nc-fleet-table { width:100%; border-collapse:separate; border-spacing:0; }
+            .nc-fleet-table th { text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; padding:8px 12px; border-bottom:1px solid rgba(255,255,255,0.06); font-weight:600; }
+            .nc-fleet-table td { font-size:12px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.03); color:var(--text-secondary); vertical-align:middle; }
+            .nc-fleet-table tr:hover td { background:rgba(0,212,255,0.02); }
+            .nc-status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; }
+            .nc-status-dot.online { background:#22c55e; box-shadow:0 0 6px rgba(34,197,94,0.4); }
+            .nc-status-dot.learning { background:#f59e0b; box-shadow:0 0 6px rgba(245,158,11,0.4); animation:ncPulse 2s infinite; }
+            .nc-status-dot.offline { background:#ef4444; }
+            .nc-status-dot.pending { background:#64748b; }
+            @keyframes ncPulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+            .nc-badge { font-size:9px; font-weight:700; padding:3px 8px; border-radius:5px; letter-spacing:0.3px; text-transform:uppercase; white-space:nowrap; }
+            .nc-badge.high { background:rgba(239,68,68,0.12); color:#ef4444; border:1px solid rgba(239,68,68,0.25); }
+            .nc-badge.medium { background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); }
+            .nc-badge.low { background:rgba(100,116,139,0.1); color:#94a3b8; border:1px solid rgba(100,116,139,0.2); }
+            .nc-badge.source { background:rgba(168,85,247,0.1); color:#a855f7; border:1px solid rgba(168,85,247,0.2); }
+            .nc-badge.syntax { background:rgba(0,212,255,0.08); color:var(--cyan); border:1px solid rgba(0,212,255,0.15); }
+            .nc-badge.pattern { background:rgba(245,158,11,0.08); color:#f59e0b; border:1px solid rgba(245,158,11,0.15); }
+            .nc-badge.volume { background:rgba(59,130,246,0.08); color:#3b82f6; border:1px solid rgba(59,130,246,0.15); }
+            .nc-alert-card { background:rgba(15,23,42,0.5); border:1px solid var(--border-card); border-radius:8px; padding:12px 14px; margin-bottom:8px; transition:border-color .18s; }
+            .nc-alert-card:hover { border-color:rgba(0,212,255,0.15); }
+            .nc-layout { display:grid; grid-template-columns:1fr 380px; gap:20px; }
+            @media(max-width:1200px) { .nc-layout { grid-template-columns:1fr; } }
+            .nc-section-title { font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+            .nc-action-btn { font-size:10px; padding:4px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); color:var(--text-muted); cursor:pointer; transition:all .15s; white-space:nowrap; }
+            .nc-action-btn:hover { background:rgba(0,212,255,0.06); color:var(--cyan); border-color:rgba(0,212,255,0.2); }
+            .nc-deploy-btn { font-size:11px; padding:8px 16px; border-radius:7px; border:1px solid rgba(0,212,255,0.2); background:rgba(0,212,255,0.06); color:var(--cyan); cursor:pointer; font-weight:600; transition:all .18s; }
+            .nc-deploy-btn:hover { background:rgba(0,212,255,0.12); border-color:rgba(0,212,255,0.35); }
+            .nc-expand-row { display:none; }
+            .nc-expand-row.open { display:table-row; }
+            .nc-expand-cell { padding:0 12px 16px 12px; background:rgba(0,212,255,0.01); }
+            .nc-config-block { font-family:var(--font-mono); font-size:10px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.04); border-radius:6px; padding:10px 14px; color:#94a3b8; white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto; }
+            .nc-modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px); }
+            .nc-modal { background:var(--bg-elevated,#0f172a); border:1px solid var(--border-card); border-radius:14px; width:640px; max-width:90vw; max-height:85vh; overflow-y:auto; padding:28px; }
+            .nc-modal h3 { font-size:16px; font-weight:600; color:var(--text-primary); margin-bottom:16px; }
+            .nc-step-indicator { display:flex; gap:8px; margin-bottom:20px; }
+            .nc-step { flex:1; height:3px; background:rgba(255,255,255,0.06); border-radius:2px; }
+            .nc-step.active { background:var(--cyan); }
+            .nc-step.done { background:#22c55e; }
+          </style>
+
+          <!-- Header -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text-primary);">Catcher Fleet Management</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Deploy, monitor, and configure Novelty Catchers across client environments &mdash; like Splunk Forwarder Management</div>
+            </div>
+            <button class="nc-deploy-btn" onclick="ncOpenDeployWizard()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Deploy Catcher
+            </button>
+          </div>
+
+          <!-- KPI Row -->
+          <div class="nc-kpi-row" id="ncKpiRow">
+            <div class="nc-kpi"><div class="nc-kpi-label">Total Catchers</div><div class="nc-kpi-value" id="ncKpiTotal">6</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">Online</div><div class="nc-kpi-value green" id="ncKpiOnline">4</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">Learning</div><div class="nc-kpi-value amber" id="ncKpiLearning">1</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">Offline</div><div class="nc-kpi-value red" id="ncKpiOffline">1</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">Alerts (24h)</div><div class="nc-kpi-value cyan" id="ncKpiAlerts">22</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">New Sources Detected</div><div class="nc-kpi-value" id="ncKpiNewSources">3</div></div>
+          </div>
+
+          <!-- Main Layout: Fleet Table + Alert Feed -->
+          <div class="nc-layout">
+            <!-- Fleet Table -->
+            <div>
+              <div class="nc-section-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                Deployed Catchers
+              </div>
+              <div style="background:rgba(15,23,42,0.3);border:1px solid var(--border-card);border-radius:10px;overflow:hidden;">
+                <table class="nc-fleet-table" id="ncFleetTable">
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th>Client</th>
+                      <th>Host</th>
+                      <th>Status</th>
+                      <th>Version</th>
+                      <th>Events</th>
+                      <th>Alerts</th>
+                      <th>Heartbeat</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ncFleetBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Alert Feed Sidebar -->
+            <div>
+              <div class="nc-section-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                Recent Novelty Alerts
+                <span style="font-size:9px;color:var(--text-muted);font-weight:400;margin-left:auto;">Last 24h</span>
+              </div>
+              <div id="ncAlertFeed" style="max-height:580px;overflow-y:auto;padding-right:4px;"></div>
+            </div>
+          </div>
+
+          <!-- Deploy Wizard Modal (hidden) -->
+          <div id="ncDeployModal" style="display:none;"></div>
+
+          <!-- Config Editor Modal (hidden) -->
+          <div id="ncConfigModal" style="display:none;"></div>
+
+          <script>
+          /* ── Novelty Catcher — Fleet Management UI ─────────────────── */
+          (function() {
+            // Demo fleet data
+            var ncFleet = [
+              { id:'nc-1', org:'Dacta Global', host:'collector-sg-01', status:'online', version:'v2.0.0', mode:'monitor', events:'1.3B', eventsRaw:1300000000, alerts24h:12, heartbeat:'2 min ago', heartbeatMs:120000, indices:['logs-fortinet_fortigate.log-dacta','logs-m365_defender.alert-dacta','logs-m365_defender.log-dacta','logs-microsoft_defender_endpoint.log-dacta'], config:{syslog_port:5514,learning_hours:168,threshold:0.75} },
+              { id:'nc-2', org:'Naga World', host:'collector-kh-01', status:'online', version:'v2.0.0', mode:'monitor', events:'890M', eventsRaw:890000000, alerts24h:7, heartbeat:'1 min ago', heartbeatMs:60000, indices:['logs-fortinet_fortigate.log-naga','logs-sophos.endpoint-naga'], config:{syslog_port:5514,learning_hours:168,threshold:0.75} },
+              { id:'nc-3', org:'SPMT', host:'collector-sg-02', status:'learning', version:'v2.0.0', mode:'learn', events:'45M', eventsRaw:45000000, alerts24h:0, heartbeat:'30 sec ago', heartbeatMs:30000, learnProgress:42, indices:['logs-trendmicro.visionone-spmt','logs-o365.audit-spmt'], config:{syslog_port:5514,learning_hours:168,threshold:0.75} },
+              { id:'nc-4', org:'ADV Partners', host:'collector-sg-03', status:'online', version:'v2.0.0', mode:'monitor', events:'230M', eventsRaw:230000000, alerts24h:3, heartbeat:'3 min ago', heartbeatMs:180000, indices:['logs-m365_defender.alert-adv','logs-o365.audit-adv'], config:{syslog_port:5514,learning_hours:168,threshold:0.80} },
+              { id:'nc-5', org:'Global Advisor', host:'collector-sg-04', status:'offline', version:'v1.9.0', mode:'monitor', events:'120M', eventsRaw:120000000, alerts24h:0, heartbeat:'47 min ago', heartbeatMs:2820000, indices:['logs-sophos.endpoint-ga'], config:{syslog_port:5514,learning_hours:168,threshold:0.75} },
+              { id:'nc-6', org:'EM Services', host:'—', status:'pending', version:'—', mode:'—', events:'—', eventsRaw:0, alerts24h:0, heartbeat:'—', heartbeatMs:Infinity, indices:[], config:{} },
+            ];
+
+            var ncAlerts = [
+              { time:'2 min ago', org:'Dacta Global', type:'new_log_source', severity:'high', source:'logs-crowdstrike.detection-dacta|crowdstrike|crowdstrike.detection', detail:'Traffic from unregistered source: CrowdStrike Falcon detection events — not in SIEMLess catalog' },
+              { time:'15 min ago', org:'Naga World', type:'syntax_change', severity:'medium', source:'logs-fortinet_fortigate.log-naga|fortigate', detail:'New field detected: fortinet.firewall.threat_feed (string) — not in baseline schema' },
+              { time:'1 hour ago', org:'ADV Partners', type:'pattern_deviation', severity:'medium', source:'logs-m365_defender.alert-adv|m365_defender', detail:'Unseen value for event.action: "MalwarePreventionBlock" — never observed during baseline' },
+              { time:'3 hours ago', org:'Dacta Global', type:'volume_anomaly', severity:'medium', source:'logs-fortinet_fortigate.log-dacta|fortigate', detail:'Event burst detected: 4,500 RPM vs baseline 800 RPM — 5.6x deviation' },
+              { time:'8 hours ago', org:'SPMT', type:'new_log_source', severity:'high', source:'logs-sophos.endpoint-spmt|sophos|sophos.endpoint', detail:'Entirely new source schema: Sophos Endpoint — 34 new fields, format=json' },
+              { time:'12 hours ago', org:'Naga World', type:'syntax_change', severity:'low', source:'logs-fortinet_fortigate.log-naga|fortigate', detail:'Field type change: destination.bytes was int, now string in 3% of events' },
+              { time:'18 hours ago', org:'Dacta Global', type:'pattern_deviation', severity:'medium', source:'logs-entityanalytics_entra_id-dacta|entra_id', detail:'New IP on source.ip: 203.0.113.50 — never seen during baseline, geo=Netherlands' },
+              { time:'22 hours ago', org:'ADV Partners', type:'new_log_source', severity:'high', source:'logs-azure_sentinel.alert-adv|sentinel|sentinel.alert', detail:'Traffic from unregistered source: Azure Sentinel alerts — new SIEM integration detected' },
+            ];
+
+            // Render fleet table
+            window.ncRenderFleet = function() {
+              var tbody = document.getElementById('ncFleetBody');
+              if (!tbody) return;
+              var html = '';
+              ncFleet.forEach(function(c, i) {
+                var statusClass = c.status;
+                var statusLabel = c.status.charAt(0).toUpperCase() + c.status.slice(1);
+                if (c.status === 'learning') statusLabel = 'Learning (' + (c.learnProgress || 0) + '%)';
+                if (c.status === 'pending') statusLabel = 'Pending Deploy';
+
+                html += '<tr style="cursor:pointer;" onclick="ncToggleExpand(' + i + ')">';
+                html += '<td style="width:24px;padding-left:14px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="ncChevron' + i + '" style="transition:transform .15s;transform:rotate(0deg);"><polyline points="9 18 15 12 9 6"/></svg></td>';
+                html += '<td style="font-weight:600;color:var(--text-primary);">' + c.org + '</td>';
+                html += '<td><span style="font-family:var(--font-mono);font-size:11px;">' + c.host + '</span></td>';
+                html += '<td><span class="nc-status-dot ' + statusClass + '"></span>' + statusLabel + '</td>';
+                html += '<td style="font-family:var(--font-mono);">' + c.version + '</td>';
+                html += '<td style="font-family:var(--font-mono);">' + c.events + '</td>';
+                html += '<td>' + (c.alerts24h > 0 ? '<span style="color:var(--cyan);font-weight:600;">' + c.alerts24h + '</span>' : '<span style="color:var(--text-muted);">0</span>') + '</td>';
+                html += '<td style="font-size:11px;color:' + (c.heartbeatMs > 300000 ? '#ef4444' : 'var(--text-muted)') + ';">' + c.heartbeat + '</td>';
+                html += '<td style="white-space:nowrap;">';
+                if (c.status !== 'pending') {
+                  html += '<button class="nc-action-btn" onclick="event.stopPropagation();ncOpenConfig(\'' + c.id + '\')" title="Configure"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09"/></svg></button> ';
+                  html += '<button class="nc-action-btn" onclick="event.stopPropagation();ncViewAlerts(\'' + c.org + '\')" title="View Alerts"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/></svg></button> ';
+                  if (c.status === 'offline') html += '<button class="nc-action-btn" style="color:#f59e0b;" onclick="event.stopPropagation();ncRestart(\'' + c.id + '\')" title="Restart"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>';
+                } else {
+                  html += '<button class="nc-action-btn" style="color:var(--cyan);" onclick="event.stopPropagation();ncOpenDeployWizard(\'' + c.org + '\')">' + '+ Deploy</button>';
+                }
+                html += '</td></tr>';
+
+                // Expand row
+                html += '<tr class="nc-expand-row" id="ncExpand' + i + '"><td colspan="9" class="nc-expand-cell">';
+                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding-top:10px;">';
+                // Recent alerts
+                html += '<div><div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Recent Alerts</div>';
+                var orgAlerts = ncAlerts.filter(function(a){ return a.org === c.org; });
+                if (orgAlerts.length === 0) {
+                  html += '<div style="font-size:11px;color:var(--text-muted);font-style:italic;">No alerts in the last 24h</div>';
+                } else {
+                  orgAlerts.slice(0,3).forEach(function(a) {
+                    html += '<div style="font-size:10px;color:var(--text-secondary);padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.02);">';
+                    html += '<span class="nc-badge ' + ncTypeBadgeClass(a.type) + '">' + ncTypeLabel(a.type) + '</span> ';
+                    html += '<span style="color:var(--text-muted);">' + a.time + '</span> &mdash; ';
+                    html += a.detail.substring(0, 80) + (a.detail.length > 80 ? '...' : '');
+                    html += '</div>';
+                  });
+                }
+                html += '</div>';
+                // Config summary
+                html += '<div><div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Configuration</div>';
+                if (c.config.syslog_port) {
+                  html += '<div style="font-size:10px;color:var(--text-secondary);line-height:1.8;">';
+                  html += 'Syslog Port: <span style="font-family:var(--font-mono);color:var(--cyan);">' + c.config.syslog_port + '</span><br>';
+                  html += 'Threshold: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (c.config.threshold || 0.75) + '</span><br>';
+                  html += 'Learning Period: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (c.config.learning_hours || 168) + 'h</span><br>';
+                  html += 'Monitored Indices: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (c.indices ? c.indices.length : 0) + '</span>';
+                  if (c.status === 'learning') {
+                    html += '<br><div style="margin-top:6px;"><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">Learning Progress</div><div style="background:rgba(255,255,255,0.05);border-radius:4px;height:6px;overflow:hidden;"><div style="background:linear-gradient(90deg,#f59e0b,#22c55e);height:100%;width:' + (c.learnProgress || 0) + '%;border-radius:4px;transition:width 1s;"></div></div></div>';
+                  }
+                  html += '</div>';
+                } else {
+                  html += '<div style="font-size:11px;color:var(--text-muted);font-style:italic;">Not yet configured</div>';
+                }
+                html += '</div></div>';
+                html += '</td></tr>';
+              });
+              tbody.innerHTML = html;
+            };
+
+            // Render alert feed
+            window.ncRenderAlertFeed = function() {
+              var container = document.getElementById('ncAlertFeed');
+              if (!container) return;
+              var html = '';
+              ncAlerts.forEach(function(a, i) {
+                html += '<div class="nc-alert-card">';
+                html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+                html += '<span class="nc-badge ' + ncTypeBadgeClass(a.type) + '">' + ncTypeLabel(a.type) + '</span>';
+                html += '<span class="nc-badge ' + a.severity + '">' + a.severity.toUpperCase() + '</span>';
+                html += '<span style="font-size:10px;color:var(--text-muted);margin-left:auto;">' + a.time + '</span>';
+                html += '</div>';
+                html += '<div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">' + a.org + '</div>';
+                html += '<div style="font-family:var(--font-mono);font-size:9px;color:var(--cyan);margin-bottom:4px;word-break:break-all;">' + a.source + '</div>';
+                html += '<div style="font-size:10px;color:var(--text-secondary);line-height:1.5;">' + a.detail + '</div>';
+                html += '<div style="display:flex;gap:6px;margin-top:8px;">';
+                html += '<button class="nc-action-btn" onclick="ncAckAlert(' + i + ')">Acknowledge</button>';
+                html += '<button class="nc-action-btn" style="color:var(--cyan);" onclick="showToast(\'Opening investigation...\')">' + 'Investigate</button>';
+                html += '</div></div>';
+              });
+              container.innerHTML = html;
+            };
+
+            function ncTypeBadgeClass(type) {
+              if (type === 'new_log_source') return 'source';
+              if (type === 'syntax_change') return 'syntax';
+              if (type === 'pattern_deviation') return 'pattern';
+              if (type === 'volume_anomaly') return 'volume';
+              return '';
+            }
+
+            function ncTypeLabel(type) {
+              if (type === 'new_log_source') return 'NEW SOURCE';
+              if (type === 'syntax_change') return 'SYNTAX CHANGE';
+              if (type === 'pattern_deviation') return 'PATTERN DEVIATION';
+              if (type === 'volume_anomaly') return 'VOLUME ANOMALY';
+              return type.toUpperCase().replace(/_/g, ' ');
+            }
+
+            // Toggle expand row
+            window.ncToggleExpand = function(idx) {
+              var row = document.getElementById('ncExpand' + idx);
+              var chevron = document.getElementById('ncChevron' + idx);
+              if (row) {
+                var isOpen = row.classList.toggle('open');
+                if (chevron) chevron.style.transform = isOpen ? 'rotate(90deg)' : 'rotate(0deg)';
+              }
+            };
+
+            // Acknowledge alert
+            window.ncAckAlert = function(idx) {
+              ncAlerts.splice(idx, 1);
+              ncRenderAlertFeed();
+              showToast('Alert acknowledged');
+            };
+
+            // View alerts filtered by org
+            window.ncViewAlerts = function(org) {
+              showToast('Filtering alerts for ' + org);
+            };
+
+            // Restart catcher
+            window.ncRestart = function(id) {
+              showToast('Restart command sent to catcher ' + id);
+              var c = ncFleet.find(function(f){ return f.id === id; });
+              if (c) { c.status = 'online'; c.heartbeat = 'just now'; c.heartbeatMs = 0; }
+              ncRenderFleet();
+            };
+
+            // Open config editor modal
+            window.ncOpenConfig = function(id) {
+              var c = ncFleet.find(function(f){ return f.id === id; });
+              if (!c) return;
+              var modal = document.getElementById('ncConfigModal');
+              modal.innerHTML = '<div class="nc-modal-overlay" onclick="if(event.target===this)ncCloseConfig()">' +
+                '<div class="nc-modal">' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">' +
+                '<h3 style="margin:0;">Configure Catcher — ' + c.org + '</h3>' +
+                '<button onclick="ncCloseConfig()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">&times;</button>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Hostname</label><input class="filter-input" value="' + c.host + '" style="width:100%;" disabled></div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Mode</label><select class="filter-input" id="ncCfgMode" style="width:100%;"><option value="monitor"' + (c.mode==='monitor'?' selected':'') + '>Monitor</option><option value="learn"' + (c.mode==='learn'?' selected':'') + '>Learn</option></select></div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Syslog Port</label><input class="filter-input" type="number" id="ncCfgPort" value="' + (c.config.syslog_port||5514) + '" style="width:100%;"></div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Novelty Threshold</label><input class="filter-input" type="number" step="0.05" min="0.5" max="1.0" id="ncCfgThreshold" value="' + (c.config.threshold||0.75) + '" style="width:100%;"></div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Learning Period (hours)</label><input class="filter-input" type="number" id="ncCfgLearnHrs" value="' + (c.config.learning_hours||168) + '" style="width:100%;"></div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Cooldown (minutes)</label><input class="filter-input" type="number" id="ncCfgCooldown" value="5" style="width:100%;"></div>' +
+                '</div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Monitored Indices</label>' +
+                '<div class="nc-config-block">' + (c.indices||[]).join('\n') + '</div>' +
+                '</div>' +
+                '<div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end;">' +
+                '<button class="nc-action-btn" onclick="ncCloseConfig()">Cancel</button>' +
+                '<button class="nc-deploy-btn" onclick="ncSaveConfig(\'' + c.id + '\')">Push Config to Catcher</button>' +
+                '</div>' +
+                '</div></div>';
+              modal.style.display = '';
+            };
+            window.ncCloseConfig = function() {
+              document.getElementById('ncConfigModal').style.display = 'none';
+              document.getElementById('ncConfigModal').innerHTML = '';
+            };
+            window.ncSaveConfig = function(id) {
+              var c = ncFleet.find(function(f){ return f.id === id; });
+              if (c) {
+                c.mode = document.getElementById('ncCfgMode').value;
+                c.config.syslog_port = parseInt(document.getElementById('ncCfgPort').value);
+                c.config.threshold = parseFloat(document.getElementById('ncCfgThreshold').value);
+                c.config.learning_hours = parseInt(document.getElementById('ncCfgLearnHrs').value);
+              }
+              ncCloseConfig();
+              ncRenderFleet();
+              showToast('Configuration pushed to catcher — will take effect on next heartbeat');
+            };
+
+            // Deploy wizard
+            var ncWizStep = 0;
+            var ncWizData = { org:'', hostname:'', port:5514, indices:[], learnHours:168 };
+
+            window.ncOpenDeployWizard = function(preselectedOrg) {
+              ncWizStep = 0;
+              ncWizData = { org: preselectedOrg || '', hostname:'', port:5514, indices:[], learnHours:168 };
+              ncRenderWizard();
+            };
+
+            window.ncRenderWizard = function() {
+              var modal = document.getElementById('ncDeployModal');
+              var steps = ['Select Client', 'Configure', 'Review Config', 'Deploy'];
+              var html = '<div class="nc-modal-overlay" onclick="if(event.target===this)ncCloseWizard()">';
+              html += '<div class="nc-modal">';
+              html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><h3 style="margin:0;">Deploy Novelty Catcher</h3><button onclick="ncCloseWizard()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">&times;</button></div>';
+              html += '<div class="nc-step-indicator">';
+              steps.forEach(function(s, i) {
+                var cls = i < ncWizStep ? 'done' : (i === ncWizStep ? 'active' : '');
+                html += '<div class="nc-step ' + cls + '" title="' + s + '"></div>';
+              });
+              html += '</div>';
+              html += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:14px;">Step ' + (ncWizStep+1) + ' of 4: ' + steps[ncWizStep] + '</div>';
+
+              if (ncWizStep === 0) {
+                // Select client
+                var orgs = (window._dactaOrgs || ['Dacta Global','Naga World','SPMT','ADV Partners','Global Advisor','EM Services']).filter(function(o){ return typeof o === 'string'; });
+                html += '<div style="display:grid;gap:8px;">';
+                orgs.forEach(function(org) {
+                  var isSelected = ncWizData.org === org;
+                  html += '<div onclick="ncWizData.org=\'' + org.replace(/'/g,"\\'") + '\';ncRenderWizard()" style="padding:12px 16px;border-radius:8px;border:1px solid ' + (isSelected ? 'var(--cyan)' : 'rgba(255,255,255,0.05)') + ';background:' + (isSelected ? 'rgba(0,212,255,0.06)' : 'rgba(15,23,42,0.3)') + ';cursor:pointer;font-size:12px;color:' + (isSelected ? 'var(--cyan)' : 'var(--text-secondary)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' + org + '</div>';
+                });
+                html += '</div>';
+              } else if (ncWizStep === 1) {
+                // Configure
+                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">';
+                html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Collector Hostname</label><input class="filter-input" id="ncWizHost" value="' + (ncWizData.hostname || 'collector-' + ncWizData.org.toLowerCase().replace(/\s+/g,'-').substring(0,8) + '-01') + '" style="width:100%;" placeholder="e.g. collector-sg-01"></div>';
+                html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Syslog Port</label><input class="filter-input" type="number" id="ncWizPort" value="' + ncWizData.port + '" style="width:100%;"></div>';
+                html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Learning Period (hours)</label><input class="filter-input" type="number" id="ncWizLearn" value="' + ncWizData.learnHours + '" style="width:100%;"></div>';
+                html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Novelty Threshold</label><input class="filter-input" type="number" step="0.05" value="0.75" style="width:100%;"></div>';
+                html += '</div>';
+                html += '<div style="margin-top:14px;"><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Elastic Indices to Monitor (one per line)</label>';
+                html += '<textarea class="filter-input" id="ncWizIndices" style="width:100%;height:120px;font-family:var(--font-mono);font-size:10px;resize:vertical;" placeholder="logs-fortinet_fortigate.log-*\nlogs-m365_defender.alert-*">' + (ncWizData.indices.length > 0 ? ncWizData.indices.join('\n') : '') + '</textarea></div>';
+              } else if (ncWizStep === 2) {
+                // Review YAML config
+                var configYaml = generateDemoConfig(ncWizData);
+                html += '<div class="nc-config-block" style="max-height:340px;">' + escHtml(configYaml) + '</div>';
+              } else if (ncWizStep === 3) {
+                // Deploy instructions
+                html += '<div style="text-align:center;margin-bottom:16px;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div style="font-size:14px;font-weight:600;color:#22c55e;margin-top:8px;">Catcher Registered</div></div>';
+                html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">Deploy the Novelty Catcher on <strong>' + (ncWizData.hostname || 'collector') + '</strong> using these commands:</div>';
+                var cmds = '# 1. Upload package\nscp novelty-catcher-v2.0.0-linux-x64.tar.gz root@' + (ncWizData.hostname||'collector') + ':/tmp/\n\n# 2. Install\nssh root@' + (ncWizData.hostname||'collector') + '\ncd /tmp && tar xzf novelty-catcher-v2.0.0-linux-x64.tar.gz\ncd novelty-catcher-dist && sudo bash install.sh\n\n# 3. Configure credentials\nsudo nano /etc/novelty-catcher/env\n\n# 4. Bootstrap learning\nnovelty-catcher -c /etc/novelty-catcher/config.yaml -m learn-from-elastic --learn-hours ' + ncWizData.learnHours + '\n\n# 5. Start service\nsudo systemctl start novelty-catcher && sudo systemctl enable novelty-catcher';
+                html += '<div class="nc-config-block" style="max-height:250px;">' + escHtml(cmds) + '</div>';
+                html += '<div style="display:flex;gap:8px;margin-top:12px;"><button class="nc-deploy-btn" onclick="ncCopyConfig()">Copy Config YAML</button><button class="nc-deploy-btn" onclick="ncCopyCommands()">Copy Install Commands</button></div>';
+              }
+
+              // Navigation
+              html += '<div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end;">';
+              if (ncWizStep > 0) html += '<button class="nc-action-btn" onclick="ncWizStep--;ncRenderWizard()">Back</button>';
+              if (ncWizStep < 3) {
+                var disabled = (ncWizStep === 0 && !ncWizData.org) ? ' disabled style="opacity:0.4;pointer-events:none;font-size:10px;padding:4px 10px;border-radius:5px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:var(--text-muted);cursor:pointer;"' : '';
+                html += '<button class="nc-deploy-btn" onclick="ncWizNext()"' + disabled + '>Next</button>';
+              } else {
+                html += '<button class="nc-deploy-btn" onclick="ncCloseWizard();showToast(\'Catcher registered — deploy on the collector host\')">Done</button>';
+              }
+              html += '</div>';
+              html += '</div></div>';
+              modal.innerHTML = html;
+              modal.style.display = '';
+            };
+
+            window.ncWizNext = function() {
+              if (ncWizStep === 1) {
+                var hostEl = document.getElementById('ncWizHost');
+                var portEl = document.getElementById('ncWizPort');
+                var learnEl = document.getElementById('ncWizLearn');
+                var indicesEl = document.getElementById('ncWizIndices');
+                if (hostEl) ncWizData.hostname = hostEl.value;
+                if (portEl) ncWizData.port = parseInt(portEl.value) || 5514;
+                if (learnEl) ncWizData.learnHours = parseInt(learnEl.value) || 168;
+                if (indicesEl) ncWizData.indices = indicesEl.value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+              }
+              ncWizStep++;
+              ncRenderWizard();
+            };
+
+            window.ncCloseWizard = function() {
+              document.getElementById('ncDeployModal').style.display = 'none';
+              document.getElementById('ncDeployModal').innerHTML = '';
+            };
+
+            window.ncCopyConfig = function() {
+              var yaml = generateDemoConfig(ncWizData);
+              navigator.clipboard.writeText(yaml).then(function(){ showToast('Config YAML copied to clipboard'); });
+            };
+            window.ncCopyCommands = function() {
+              var cmds = '# Deploy to ' + (ncWizData.hostname||'collector') + '\nscp novelty-catcher-v2.0.0-linux-x64.tar.gz root@' + (ncWizData.hostname||'collector') + ':/tmp/\nssh root@' + (ncWizData.hostname||'collector') + '\ncd /tmp && tar xzf novelty-catcher-v2.0.0-linux-x64.tar.gz\ncd novelty-catcher-dist && sudo bash install.sh\nsudo nano /etc/novelty-catcher/env\nnovelty-catcher -c /etc/novelty-catcher/config.yaml -m learn-from-elastic --learn-hours ' + ncWizData.learnHours + '\nsudo systemctl start novelty-catcher && sudo systemctl enable novelty-catcher';
+              navigator.clipboard.writeText(cmds).then(function(){ showToast('Install commands copied'); });
+            };
+
+            function generateDemoConfig(data) {
+              var indices = data.indices.length > 0 ? data.indices.map(function(i){ return '      - "' + i + '"'; }).join('\n') : '      - "logs-*"';
+              return '# DACTA Novelty Catcher — ' + data.org + '\n# Auto-generated by SIEMLess · ' + new Date().toISOString().split('T')[0] + '\n\nagent:\n  name: "novelty-catcher-' + data.org.toLowerCase().replace(/\s+/g,'-') + '"\n  version: "2.0.0"\n  log_level: "INFO"\n  state_dir: "./state"\n\ninputs:\n  syslog:\n    enabled: true\n    protocol: "udp"\n    host: "0.0.0.0"\n    port: ' + data.port + '\n    forward_to:\n      enabled: true\n      host: "127.0.0.1"\n      port: 514\n\n  elastic:\n    enabled: true\n    url: "${ELASTIC_URL}"\n    api_key: "${ELASTIC_API_KEY}"\n    indices:\n' + indices + '\n    poll_interval_seconds: 60\n\ndetection:\n  baseline:\n    learning_period_hours: ' + data.learnHours + '\n    min_samples: 50\n  scoring:\n    novelty_threshold: 0.75\n    cooldown_minutes: 5\n\noutputs:\n  elastic:\n    enabled: true\n    index: "novelty-alerts-' + data.org.toLowerCase().replace(/\s+/g,'-') + '"\n  siemless:\n    enabled: true\n    url: "https://dacta-siemless.vercel.app"\n    endpoint: "/api/novelty-catcher"\n  file:\n    enabled: true\n    path: "outputs/novelty_alerts.ndjson"\n\nperformance:\n  workers: 2\n  queue_size: 10000';
+            }
+
+            function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+            // Initialize on tab switch
+            var origSwitchLpTab = window.switchLpTab;
+            if (typeof origSwitchLpTab !== 'function') {
+              // switchLpTab might not exist yet — define a safe wrapper
+              window._ncInitDone = false;
+            }
+            // Hook into tab switch to render on first visit
+            var _ncInited = false;
+            var origSwitch = window.switchLpTab;
+            window.switchLpTab = function(tabId) {
+              // Call original
+              document.querySelectorAll('.lp-tab-btn').forEach(function(b){ b.classList.remove('active'); });
+              document.querySelectorAll('.lp-panel').forEach(function(p){ p.classList.remove('active'); });
+              var panel = document.getElementById('lp-panel-' + tabId);
+              if (panel) panel.classList.add('active');
+              var btn = document.querySelector('[data-lptab="' + tabId + '"]');
+              if (btn) btn.classList.add('active');
+              if (tabId === 'catcher' && !_ncInited) {
+                _ncInited = true;
+                ncRenderFleet();
+                ncRenderAlertFeed();
+              }
+            };
+
+          })();
+          </script>
+        </div><!-- end lp-panel-catcher -->
+
       </div><!-- end parsers -->
 
 
