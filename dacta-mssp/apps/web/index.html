@@ -14803,6 +14803,10 @@ function getThemeTickColor() {
             <div class="card-header">
               <span class="card-title">Simulation Library</span>
               <div style="display:flex;gap:8px;align-items:center;">
+                <div id="rlModeToggle" style="display:inline-flex;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);font-size:10px;">
+                  <button onclick="RL_MODE='simulate';document.querySelectorAll('#rlModeToggle button').forEach(function(b){b.style.background='transparent';b.style.color='var(--text-muted)'});this.style.background='rgba(239,68,68,0.2)';this.style.color='var(--red-bright)';" style="padding:4px 10px;border:none;cursor:pointer;background:rgba(239,68,68,0.2);color:var(--red-bright);font-size:10px;font-weight:600;">&#9889; Attack Simulation</button>
+                  <button onclick="RL_MODE='audit';document.querySelectorAll('#rlModeToggle button').forEach(function(b){b.style.background='transparent';b.style.color='var(--text-muted)'});this.style.background='rgba(6,182,212,0.2)';this.style.color='var(--cyan)';" style="padding:4px 10px;border:none;cursor:pointer;background:transparent;color:var(--text-muted);font-size:10px;font-weight:600;">&#x1f50d; Readiness Audit</button>
+                </div>
                 <input class="filter-input" placeholder="Search simulations..." style="width:200px;" id="rlSimSearch" oninput="filterSimulations()">
                 <select class="filter-select" style="font-size:11px;" id="rlSimCategory" onchange="filterSimulations()">
                   <option>All Categories</option>
@@ -65614,7 +65618,7 @@ function loadSimulationLibrary() {
     var relevancePct = orgProfiles.length > 0 ? Math.round((relevanceScore / (totalTechs * orgProfiles.length)) * 100) : 0;
     var relevanceColor = relevancePct >= 70 ? 'var(--green)' : relevancePct >= 40 ? 'var(--amber)' : 'var(--red-bright)';
 
-    html += '<div class="rl-sim-card" data-sim-category="' + sim.category + '" onclick="launchSimulation(\'' + escAttr(sim.name) + '\')">';
+    html += '<div class="rl-sim-card" data-sim-category="' + sim.category + '" onclick="launchSimFromCard(\'' + escAttr(sim.name) + '\')">';
     html += '<div class="rl-sim-header">';
     html += '<div class="rl-sim-icon ' + sim.icon + '">' + (iconSvgs[sim.icon] || iconSvgs.malware) + '</div>';
     html += '<div style="flex:1;">';
@@ -65638,8 +65642,262 @@ function loadSimulationLibrary() {
   grid.innerHTML = html;
 }
 
-// ── Launch Simulation: Detection Readiness Assessment ──
-async function launchSimulation(simName) {
+// ── Tactic Names (shared by both modes) ──
+var tacticNames = { 'T1566':'Initial Access \u2014 Phishing', 'T1059':'Execution \u2014 PowerShell/Script', 'T1003':'Credential Access \u2014 LSASS Dump', 'T1486':'Impact \u2014 Ransomware Encryption', 'T1021':'Lateral Movement \u2014 SMB/RDP', 'T1070':'Defense Evasion \u2014 Log Clearing', 'T1547':'Persistence \u2014 Registry Run Keys', 'T1489':'Impact \u2014 Service Stop', 'T1490':'Impact \u2014 Shadow Copy Delete', 'T1204':'Execution \u2014 User Execution', 'T1053':'Persistence \u2014 Scheduled Task', 'T1098':'Persistence \u2014 Account Manipulation', 'T1110':'Credential Access \u2014 Brute Force', 'T1555':'Credential Access \u2014 Credential Store', 'T1552':'Credential Access \u2014 Unsecured Creds', 'T1558':'Credential Access \u2014 Kerberoasting', 'T1048':'Exfiltration \u2014 DNS Tunneling', 'T1071':'C2 \u2014 Application Layer', 'T1041':'Exfiltration \u2014 Over C2', 'T1567':'Exfiltration \u2014 Web Service', 'T1573':'C2 \u2014 Encrypted Channel', 'T1105':'C2 \u2014 Ingress Tool Transfer', 'T1095':'C2 \u2014 Non-Application Layer', 'T1572':'C2 \u2014 Protocol Tunneling', 'T1090':'C2 \u2014 Proxy', 'T1562':'Defense Evasion \u2014 Disable Defenses', 'T1036':'Defense Evasion \u2014 Masquerading', 'T1134':'Privilege Escalation \u2014 Token Manipulation', 'T1078':'Initial Access \u2014 Valid Accounts', 'T1556':'Credential Access \u2014 Modify Auth', 'T1550':'Lateral Movement \u2014 Use Alternate Auth', 'T1621':'Credential Access \u2014 MFA Bypass', 'T1005':'Collection \u2014 Local Data', 'T1039':'Collection \u2014 Network Share', 'T1074':'Collection \u2014 Data Staged', 'T1135':'Discovery \u2014 Network Share', 'T1027':'Defense Evasion \u2014 Obfuscation', 'T1055':'Privilege Escalation \u2014 Process Injection', 'T1218':'Defense Evasion \u2014 Signed Binary Proxy', 'T1553':'Defense Evasion \u2014 Subvert Trust', 'T1564':'Defense Evasion \u2014 Hide Artifacts', 'T1082':'Discovery \u2014 System Info', 'T1083':'Discovery \u2014 File & Dir', 'T1046':'Discovery \u2014 Network Scan', 'T1049':'Discovery \u2014 Network Connections' };
+
+// ── Launch Mode: Attack Simulation (inject→wait→verify) OR Readiness Audit ──
+var RL_MODE = 'simulate'; // 'simulate' | 'audit'
+
+async function launchSimFromCard(simName) {
+  if (RL_MODE === 'audit') return launchReadinessAudit(simName);
+  return launchAttackSimulation(simName);
+}
+
+// ═══════════════════════════════════════════════════════
+// ATTACK SIMULATION — Real inject→wait→verify→cleanup
+// ═══════════════════════════════════════════════════════
+async function launchAttackSimulation(simName) {
+  var sim = SIMULATION_LIBRARY.find(function(s) { return s.name === simName; });
+  if (!sim) { showToast('Simulation not found', 'warn'); return; }
+
+  var selectedOrg = (document.getElementById('rlOrgSelector') || {}).value || 'all';
+  if (selectedOrg === 'all') { showToast('Select a specific organization to run attack simulation', 'warn'); return; }
+
+  var orgProfile = getOrgSimProfile(selectedOrg);
+  if (!orgProfile) { showToast('Organization profile not found', 'warn'); return; }
+
+  switchRlTab('results');
+
+  var titleEl = document.getElementById('rlKillChainTitle');
+  var metaEl = document.getElementById('rlKillChainMeta');
+  var resultsEl = document.getElementById('rlKillChainResults');
+
+  if (titleEl) titleEl.textContent = 'Attack Simulation: ' + sim.name + ' \u2014 ' + orgProfile.name;
+  if (metaEl) metaEl.innerHTML = '<span class="badge badge-red">\u26a1 SIMULATING</span><span class="badge badge-cyan" style="font-size:8px;margin-left:6px;">LIVE ATTACK</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">Started ' + new Date().toLocaleTimeString() + ' \xb7 ' + orgProfile.siem + ' SIEM \xb7 ' + orgProfile.edr + ' EDR</span>';
+
+  var startTime = Date.now();
+
+  // ── PHASE 1: INJECT ──
+  if (resultsEl) resultsEl.innerHTML = '<div style="text-align:center;padding:30px;"><div class="jira-spinner" style="margin:0 auto 12px;"></div><span style="font-size:12px;color:var(--text-muted);">Phase 1/4 \u2014 Injecting ' + sim.techniques.length + ' attack payloads into ' + orgProfile.siem + ' SIEM...</span></div>';
+
+  var injectResp, injectData;
+  try {
+    injectResp = await fetch('/api/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'inject', org_id: selectedOrg, techniques: sim.techniques, namespace: orgProfile.namespace })
+    });
+    injectData = await injectResp.json();
+  } catch (e) {
+    if (resultsEl) resultsEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--red-bright);">\u2718 Injection failed: ' + escHtml(e.message) + '</div>';
+    return;
+  }
+
+  if (injectData.error) {
+    if (resultsEl) resultsEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--red-bright);">\u2718 Injection error: ' + escHtml(injectData.error) + '</div>';
+    return;
+  }
+
+  var simId = injectData.simulation_id;
+  var injectedCount = injectData.techniques_injected || 0;
+  var failedCount = injectData.techniques_failed || 0;
+  console.log('[AttackSim] Injected ' + injectedCount + ' payloads, ' + failedCount + ' failed. SimID: ' + simId);
+
+  // Show injection results
+  var injectHtml = '<div style="padding:12px;">';
+  injectHtml += '<div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:8px;">\u2713 Phase 1: ' + injectedCount + '/' + sim.techniques.length + ' attack payloads injected into SIEM</div>';
+  (injectData.results || []).forEach(function(r) {
+    var icon = r.injected ? '\u2713' : '\u2718';
+    var color = r.injected ? 'var(--green)' : 'var(--red-bright)';
+    injectHtml += '<div style="font-size:10px;color:' + color + ';padding:2px 0;">' + icon + ' ' + r.technique + (r.injected ? ' \u2192 ' + (r.index || '') : ' \u2014 ' + (r.error ? JSON.stringify(r.error) : 'failed')) + '</div>';
+  });
+  injectHtml += '</div>';
+
+  // ── PHASE 2: WAIT for detection engine ──
+  var waitSeconds = 45;
+  injectHtml += '<div style="text-align:center;padding:16px;"><div class="jira-spinner" style="margin:0 auto 12px;"></div><span id="simWaitCountdown" style="font-size:12px;color:var(--text-muted);">Phase 2/4 \u2014 Waiting ' + waitSeconds + 's for SIEM detection engine to evaluate...</span></div>';
+  if (resultsEl) resultsEl.innerHTML = injectHtml;
+
+  // Countdown
+  for (var w = waitSeconds; w > 0; w--) {
+    var cdEl = document.getElementById('simWaitCountdown');
+    if (cdEl) cdEl.textContent = 'Phase 2/4 \u2014 Waiting ' + w + 's for SIEM detection engine to evaluate...';
+    await new Promise(function(r) { setTimeout(r, 1000); });
+  }
+
+  // ── PHASE 3: VERIFY detection ──
+  if (resultsEl) {
+    var currentHtml = resultsEl.innerHTML.replace(/<div style="text-align:center[^"]*">[\s\S]*?<\/div><\/div>$/, '');
+    resultsEl.innerHTML = currentHtml + '<div style="text-align:center;padding:16px;"><div class="jira-spinner" style="margin:0 auto 12px;"></div><span style="font-size:12px;color:var(--text-muted);">Phase 3/4 \u2014 Verifying detection results...</span></div>';
+  }
+
+  var verifyData;
+  try {
+    var verifyResp = await fetch('/api/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verify', org_id: selectedOrg, techniques: sim.techniques, simulation_id: simId })
+    });
+    verifyData = await verifyResp.json();
+  } catch (e) {
+    verifyData = { results: sim.techniques.map(function(t) { return { technique: t, detected: false, error: e.message }; }), detected_count: 0, missed_count: sim.techniques.length };
+  }
+
+  console.log('[AttackSim] Verification: ' + (verifyData.detected_count || 0) + ' detected, ' + (verifyData.missed_count || 0) + ' missed');
+
+  // Also run the static EDR + rule check for supplementary data
+  var staticCoverage = EDR_MITRE_COVERAGE[orgProfile.edr] || EDR_MITRE_COVERAGE['None'];
+  var edrCoverage = { prevents: staticCoverage.prevents.slice(), detects: staticCoverage.detects.slice() };
+
+  // ── Build combined results ──
+  var stepResults = [];
+  var blockedCount = 0, detectedCount = 0, partialCount = 0, missedCount = 0, edrOnlyCount = 0;
+
+  for (var i = 0; i < sim.techniques.length; i++) {
+    var tech = sim.techniques[i];
+    var injectResult = (injectData.results || []).find(function(r) { return r.technique === tech; }) || {};
+    var verifyResult = (verifyData.results || []).find(function(r) { return r.technique === tech; }) || {};
+
+    var edrPrevents = edrCoverage.prevents.indexOf(tech) >= 0;
+    var edrDetects = edrCoverage.detects.indexOf(tech) >= 0;
+    var siemDetected = verifyResult.detected || false;
+    var alertCount = verifyResult.alert_count || 0;
+    var alertRules = (verifyResult.alerts || []).map(function(a) { return a.rule_name; });
+    var injected = injectResult.injected || false;
+
+    // Scoring: based on actual detection of injected payload
+    var status, statusLabel;
+    if (!injected) {
+      status = 'missed'; statusLabel = 'Injection Failed \u2014 could not inject test payload';
+      missedCount++;
+    } else if (siemDetected && edrPrevents) {
+      status = 'blocked'; statusLabel = 'Blocked \u2014 SIEM alert fired + EDR prevents';
+      blockedCount++;
+    } else if (siemDetected) {
+      status = 'detected'; statusLabel = 'Detected \u2014 SIEM alert fired (' + alertCount + ' alert' + (alertCount !== 1 ? 's' : '') + ')';
+      detectedCount++;
+    } else if (edrPrevents) {
+      status = 'edr_only'; statusLabel = 'EDR Only \u2014 ' + orgProfile.edr + ' would prevent, SIEM missed injected event';
+      edrOnlyCount++;
+    } else if (edrDetects) {
+      status = 'partial'; statusLabel = 'Partial \u2014 EDR detects capability, SIEM missed injected event';
+      partialCount++;
+    } else {
+      status = 'missed'; statusLabel = 'Missed \u2014 No SIEM alert on injected payload, no EDR coverage';
+      missedCount++;
+    }
+
+    stepResults.push({
+      step: i + 1, technique: tech,
+      name: (typeof tacticNames !== 'undefined' && tacticNames[tech]) || 'Technique ' + tech,
+      status: status, label: statusLabel,
+      org: orgProfile.name, orgCode: orgProfile.code,
+      injected: injected, siemDetected: siemDetected,
+      alertCount: alertCount, alertRules: alertRules,
+      edrPrevents: edrPrevents, edrDetects: edrDetects,
+      hasLogSource: true // injection means we have log source
+    });
+  }
+
+  var duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  var totalTechs = sim.techniques.length;
+  var preventionPct = Math.round(((blockedCount + detectedCount) / Math.max(totalTechs, 1)) * 100);
+  var detectionPct = Math.round(((detectedCount + blockedCount + edrOnlyCount) / Math.max(totalTechs, 1)) * 100);
+
+  // Update header
+  if (titleEl) titleEl.textContent = 'Simulation Results: ' + sim.name + ' \u2014 ' + orgProfile.name;
+  if (metaEl) metaEl.innerHTML = '<span class="badge badge-green">Completed</span><span class="badge badge-red" style="font-size:8px;margin-left:6px;">\u26a1 LIVE ATTACK</span><span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC \xb7 Duration: ' + duration + 's \xb7 Detection Rate: ' + preventionPct + '%</span>';
+
+  // Render step results
+  if (resultsEl) {
+    var rhtml = '';
+    stepResults.forEach(function(s) {
+      var statusIcons = { blocked: '\u2716', detected: '\u2713', edr_only: '\u26a1', partial: '~', missed: '\u2718' };
+      var badgeClasses = { blocked: 'badge-cyan', detected: 'badge-green', edr_only: 'badge-purple', partial: 'badge-amber', missed: 'badge-red' };
+      rhtml += '<div class="rl-result-bar">';
+      rhtml += '<div class="rl-result-status ' + s.status + '">' + (statusIcons[s.status] || '?') + '</div>';
+      rhtml += '<div style="flex:1;"><div style="font-size:12px;font-weight:500;color:var(--text-primary);">' + s.step + '. ' + escHtml(s.name) + ' (' + s.technique + ')</div>';
+      // Detail line showing inject/detect/edr status
+      var details = [];
+      details.push(s.injected ? '\u2713 Injected' : '\u2718 Inject failed');
+      details.push(s.siemDetected ? '\u2713 SIEM alert (' + s.alertCount + ')' : '\u2718 No SIEM alert');
+      if (s.edrPrevents) details.push('\u2713 EDR prevents');
+      else if (s.edrDetects) details.push('~ EDR detects');
+      else details.push('\u2718 No EDR');
+      if (s.alertRules && s.alertRules.length > 0) details.push('Rules: ' + s.alertRules.join(', '));
+      rhtml += '<div style="font-size:9px;color:var(--text-muted);">' + details.join(' \xb7 ') + '</div>';
+      rhtml += '</div>';
+      rhtml += '<span class="badge ' + (badgeClasses[s.status] || 'badge-red') + '" style="font-size:9px;">' + escHtml(s.label.split(' \u2014 ')[0]) + '</span>';
+      rhtml += '</div>';
+    });
+    resultsEl.innerHTML = rhtml;
+  }
+
+  // Update score rings
+  updateScoreRings(preventionPct, detectionPct);
+
+  // Generate remediation
+  var remGrid = document.getElementById('rlRemediationGrid');
+  if (remGrid) {
+    var remHtml = '';
+    stepResults.filter(function(s) { return s.status === 'missed' || s.status === 'partial' || s.status === 'edr_only'; }).forEach(function(s) {
+      var colors = { missed: ['rgba(239,68,68,0.15)', 'rgba(239,68,68,0.04)'], partial: ['rgba(245,158,11,0.15)', 'rgba(245,158,11,0.04)'], edr_only: ['rgba(168,85,247,0.15)', 'rgba(168,85,247,0.04)'] };
+      var c = colors[s.status] || colors.missed;
+      remHtml += '<div style="padding:12px;background:' + c[1] + ';border:1px solid ' + c[0] + ';border-radius:8px;">';
+      remHtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><div style="font-size:11px;font-weight:600;color:var(--text-primary);">' + s.technique + ' \u2014 ' + escHtml((s.name.split(' \u2014 ')[1] || s.name)) + '</div>';
+      remHtml += '<span class="badge badge-red" style="font-size:8px;">' + orgProfile.name + '</span></div>';
+      var advice = '';
+      if (!s.injected) advice = 'Payload injection failed. Check SIEM write permissions and API key scopes.';
+      else if (!s.siemDetected && !s.edrPrevents) advice = 'Attack payload injected but NO detection fired. A detection rule needs to be created and deployed.';
+      else if (!s.siemDetected && s.edrDetects) advice = 'EDR has detection capability but SIEM did not alert on injected payload. Deploy a SIEM rule for correlated detection.';
+      else if (s.status === 'edr_only') advice = 'EDR covers this technique but SIEM missed the injected event. Deploy a SIEM correlation rule.';
+      remHtml += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">' + advice + '</div>';
+      var btnLabel = !s.injected ? 'Check SIEM Config' : 'Create Detection Rule';
+      remHtml += '<button class="btn btn-xs btn-primary" onclick="navigate(\'rules\'); setTimeout(function(){ switchDrTab(\'builder\'); }, 200); showToast(\'' + btnLabel + ' for ' + s.technique + '\')">' + btnLabel + '</button>';
+      remHtml += '</div>';
+    });
+    if (!remHtml) remHtml = '<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--green);font-size:12px;font-weight:600;">\u2713 All attack payloads detected \u2014 full detection coverage for ' + orgProfile.name + '</div>';
+    remGrid.innerHTML = remHtml;
+  }
+
+  // ── PHASE 4: CLEANUP ──
+  try {
+    await fetch('/api/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cleanup', org_id: selectedOrg, simulation_id: simId })
+    });
+    console.log('[AttackSim] Cleanup complete for ' + simId);
+  } catch (e) {
+    console.warn('[AttackSim] Cleanup failed:', e.message);
+  }
+
+  // Save to DB
+  if (window._dactaSupabase) {
+    try {
+      await window._dactaSupabase.from('simulation_results').insert({
+        simulation_name: sim.name,
+        category: sim.category,
+        techniques: sim.techniques,
+        step_results: stepResults,
+        prevention_score: preventionPct,
+        detection_score: detectionPct,
+        total_events: injectedCount,
+        duration_seconds: parseFloat(duration),
+        edr_query_source: 'live_simulation',
+        org_id: selectedOrg,
+        run_date: new Date().toISOString()
+      });
+    } catch (e) { console.warn('[SimResult] Save failed:', e.message); }
+  }
+
+  showToast('Attack simulation complete \u2014 ' + preventionPct + '% detection rate for ' + orgProfile.name, preventionPct >= 70 ? 'info' : 'warn');
+}
+
+// ═══════════════════════════════════════════════════════
+// READINESS AUDIT — Static coverage check (original logic)
+// ═══════════════════════════════════════════════════════
+async function launchReadinessAudit(simName) {
   var sim = SIMULATION_LIBRARY.find(function(s) { return s.name === simName; });
   if (!sim) { showToast('Simulation not found', 'warn'); return; }
 
@@ -65712,7 +65970,7 @@ async function launchSimulation(simName) {
   var blockedCount = 0, detectedCount = 0, partialCount = 0, missedCount = 0, edrOnlyCount = 0;
   var startTime = Date.now();
 
-  var tacticNames = { 'T1566':'Initial Access \u2014 Phishing', 'T1059':'Execution \u2014 PowerShell/Script', 'T1003':'Credential Access \u2014 LSASS Dump', 'T1486':'Impact \u2014 Ransomware Encryption', 'T1021':'Lateral Movement \u2014 SMB/RDP', 'T1070':'Defense Evasion \u2014 Log Clearing', 'T1547':'Persistence \u2014 Registry Run Keys', 'T1489':'Impact \u2014 Service Stop', 'T1490':'Impact \u2014 Shadow Copy Delete', 'T1204':'Execution \u2014 User Execution', 'T1053':'Persistence \u2014 Scheduled Task', 'T1098':'Persistence \u2014 Account Manipulation', 'T1110':'Credential Access \u2014 Brute Force', 'T1555':'Credential Access \u2014 Credential Store', 'T1552':'Credential Access \u2014 Unsecured Creds', 'T1558':'Credential Access \u2014 Kerberoasting', 'T1048':'Exfiltration \u2014 DNS Tunneling', 'T1071':'C2 \u2014 Application Layer', 'T1041':'Exfiltration \u2014 Over C2', 'T1567':'Exfiltration \u2014 Web Service', 'T1573':'C2 \u2014 Encrypted Channel', 'T1105':'C2 \u2014 Ingress Tool Transfer', 'T1095':'C2 \u2014 Non-Application Layer', 'T1572':'C2 \u2014 Protocol Tunneling', 'T1090':'C2 \u2014 Proxy', 'T1562':'Defense Evasion \u2014 Disable Defenses', 'T1036':'Defense Evasion \u2014 Masquerading', 'T1134':'Privilege Escalation \u2014 Token Manipulation', 'T1078':'Initial Access \u2014 Valid Accounts', 'T1556':'Credential Access \u2014 Modify Auth', 'T1550':'Lateral Movement \u2014 Use Alternate Auth', 'T1621':'Credential Access \u2014 MFA Bypass', 'T1005':'Collection \u2014 Local Data', 'T1039':'Collection \u2014 Network Share', 'T1074':'Collection \u2014 Data Staged', 'T1135':'Discovery \u2014 Network Share', 'T1027':'Defense Evasion \u2014 Obfuscation', 'T1055':'Privilege Escalation \u2014 Process Injection', 'T1218':'Defense Evasion \u2014 Signed Binary Proxy', 'T1553':'Defense Evasion \u2014 Subvert Trust', 'T1564':'Defense Evasion \u2014 Hide Artifacts', 'T1082':'Discovery \u2014 System Info', 'T1083':'Discovery \u2014 File & Dir', 'T1046':'Discovery \u2014 Network Scan', 'T1049':'Discovery \u2014 Network Connections' };
+  // tacticNames now defined in outer scope
 
   for (var i = 0; i < sim.techniques.length; i++) {
     var tech = sim.techniques[i];
@@ -65963,7 +66221,7 @@ async function runAttackChain() {
   };
 
   SIMULATION_LIBRARY.push(customSim);
-  await launchSimulation(customSim.name);
+  await launchSimFromCard(customSim.name);
   var idx = SIMULATION_LIBRARY.indexOf(customSim);
   if (idx > -1) SIMULATION_LIBRARY.splice(idx, 1);
 }
@@ -66208,7 +66466,10 @@ async function initRuleTestLab() {
   window.loadTestLabStats = loadTestLabStats;
   window.initRuleTestLab = initRuleTestLab;
   window.loadSimulationLibrary = loadSimulationLibrary;
-  window.launchSimulation = launchSimulation;
+  window.launchSimulation = launchSimFromCard;
+  window.launchSimFromCard = launchSimFromCard;
+  window.launchAttackSimulation = launchAttackSimulation;
+  window.launchReadinessAudit = launchReadinessAudit;
   window.loadAtomicLibrary = loadAtomicLibrary;
   window.addToChain = addToChain;
   window.showAtomicPicker = showAtomicPicker;
