@@ -57376,17 +57376,9 @@ function updateInvestigationSnapshot(elasticLogs, iocs, verdict, confidence) {
   var procHits = (elasticLogs.childProcesses || []).filter(function(c){return c.status !== 'CLEAR';}).length;
   var tipHits  = (elasticLogs.openctiResults || []).filter(function(r){return r.found;}).length;
 
-  // ── Reconcile verdict tier: apply same mapVerdictTier logic as triage badge ──
-  // This ensures the investigation workspace shows the same verdict as the triage queue
-  var _invTS = null;
-  if (verdict && verdict.toUpperCase().indexOf('SUSPICIOUS') !== -1) {
-    var _invPri = window._currentInvestigationPriority || '';
-    if (_invPri === 'P1') _invTS = 78;
-    else if (_invPri === 'P2') _invTS = 62;
-    else if (_invPri === 'P3') _invTS = 42;
-    else if (_invPri === 'P4') _invTS = 25;
-  }
-  var _invTier = mapVerdictTier(verdict, confidence, _invTS);
+  // ── Compute verdict tier directly from AI verdict + confidence (no synthetic overrides) ──
+  // This ensures the investigation workspace, triage badge, and sidebar all show the same verdict.
+  var _invTier = mapVerdictTier(verdict, confidence, null);
   var _tierLabels = {
     'TP':  { text: 'TRUE POSITIVE \u2014 Confirmed Threat',      color: '#ef4444', action: 'Immediate action required' },
     'LTP': { text: 'LIKELY TRUE POSITIVE \u2014 Probable Threat', color: '#f97316', action: 'Analyst verification recommended' },
@@ -58005,16 +57997,8 @@ function getTriageAIBadge(ticketKey, priorityShort) {
       return '<span class="tq-ai-badge overridden" title="Analyst override: ' + (cached.overrideVerdict || '') + '">' + dIcon('edit',14) + ' Overridden</span>';
     }
     var ts = cached.threatScore || (cached.metadata && cached.metadata.threatScore);
-    // For legacy cached entries with SUSPICIOUS ~45% and no threat_score,
-    // derive a synthetic threat_score from ticket priority for meaningful differentiation
-    if (!ts && cached.verdict && cached.verdict.toUpperCase().indexOf('SUSPICIOUS') !== -1) {
-      var pShrt = priorityShort || (cached.metadata && cached.metadata.priority) || '';
-      var pUp = pShrt.toUpperCase();
-      if (pUp === 'P1') ts = 78; // P1 + SUS → high threat, maps to LTP
-      else if (pUp === 'P2') ts = 62; // P2 + SUS → moderate-high, maps to SUS
-      else if (pUp === 'P3') ts = 42; // P3 + SUS → moderate-low, maps to IND
-      else if (pUp === 'P4') ts = 25; // P4 + SUS → low, maps to LFP
-    }
+    // Use raw AI verdict + confidence directly. No synthetic priority-based override —
+    // the AI verdict is authoritative and must be consistent across triage, investigation, and sidebar.
     var tier = mapVerdictTier(cached.verdict, cached.confidence, ts);
     var confStr = cached.confidence ? ' ' + cached.confidence + '%' : '';
     return '<span class="tq-ai-badge ' + tier.cssClass + '" title="' + tier.label + confStr + ' — Cached ' + new Date(cached.timestamp).toLocaleString() + '">' + dIcon('check',14) + ' ' + tier.code + (cached.confidence ? ' <span style="opacity:0.7;font-size:8px;">' + cached.confidence + '%</span>' : '') + '</span>';
