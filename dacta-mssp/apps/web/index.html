@@ -43304,10 +43304,35 @@ async function loadOrgConnectorsFromDB() {
       };
     });
     
-    // Replace the global ORG_CONNECTORS with DB-backed data
+    // Merge DB-backed data with hardcoded ORG_CONNECTORS (hardcoded serves as fallback)
+    // For orgs in BOTH sources: merge connectors — DB wins per connector_type, hardcoded fills gaps
+    var _hardcodedOC = JSON.parse(JSON.stringify(ORG_CONNECTORS)); // snapshot before override
+    Object.keys(result).forEach(function(orgId) {
+      var dbOrg = result[orgId];
+      var hcOrg = _hardcodedOC[orgId];
+      if (hcOrg && hcOrg.connectors) {
+        // Find connector_types present in DB result
+        var dbTypes = {};
+        dbOrg.connectors.forEach(function(c) { dbTypes[c.connector_type] = true; });
+        // Add hardcoded connectors for types missing from DB
+        hcOrg.connectors.forEach(function(hc) {
+          if (!dbTypes[hc.connector_type]) {
+            dbOrg.connectors.push(hc);
+            console.log('[OrgConn] Merged hardcoded ' + hc.connector_type + ' (' + hc.vendor + ') for ' + dbOrg.name);
+          }
+        });
+      }
+    });
+    // Also keep hardcoded orgs not found in DB at all
+    Object.keys(_hardcodedOC).forEach(function(hcId) {
+      if (!result[hcId]) {
+        result[hcId] = _hardcodedOC[hcId];
+        console.log('[OrgConn] Keeping hardcoded org not in DB:', _hardcodedOC[hcId].name);
+      }
+    });
     window.ORG_CONNECTORS = result;
     _orgConnectorsLoadedFromDB = true;
-    console.log('[OrgConn] Loaded ' + Object.keys(result).length + ' orgs with ' + connectors.length + ' connectors from DB');
+    console.log('[OrgConn] Loaded ' + Object.keys(result).length + ' orgs (' + connectors.length + ' DB connectors + hardcoded fallbacks) from DB');
   } catch(e) {
     console.warn('[OrgConn] DB load failed, keeping hardcoded data:', e.message);
   }
