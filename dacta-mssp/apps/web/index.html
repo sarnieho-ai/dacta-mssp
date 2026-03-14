@@ -65526,7 +65526,46 @@ async function launchSimulation(simName) {
   if (metaEl) metaEl.innerHTML = '<span class="badge badge-cyan">Running</span><span style="font-size:10px;color:var(--text-muted);">Started ' + new Date().toLocaleTimeString() + ' \xb7 ' + orgProfile.edr + ' EDR \xb7 ' + orgProfile.siem + ' SIEM</span>';
   if (resultsEl) resultsEl.innerHTML = '<div style="text-align:center;padding:30px;"><div class="jira-spinner" style="margin:0 auto 12px;"></div><span style="font-size:12px;color:var(--text-muted);">Checking detection coverage for ' + sim.techniques.length + ' attack steps...</span></div>';
 
-  var edrCoverage = EDR_MITRE_COVERAGE[orgProfile.edr] || EDR_MITRE_COVERAGE['None'];
+  // ── Live EDR API Query (augments static coverage with real detection evidence) ──
+  var staticCoverage = EDR_MITRE_COVERAGE[orgProfile.edr] || EDR_MITRE_COVERAGE['None'];
+  var edrCoverage = { prevents: staticCoverage.prevents.slice(), detects: staticCoverage.detects.slice() };
+  var liveEDRResult = null;
+  var edrQuerySource = 'static'; // 'static' | 'live' | 'live+static'
+  
+  if (orgProfile.edr !== 'None') {
+    try {
+      if (resultsEl) resultsEl.innerHTML = '<div style="text-align:center;padding:30px;"><div class="jira-spinner" style="margin:0 auto 12px;"></div><span style="font-size:12px;color:var(--text-muted);">Querying ' + orgProfile.edr + ' API for live detection data...</span></div>';
+      var edrResp = await fetch('/api/edr-query', { 
+        method:'POST', 
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ org_id: selectedOrg, techniques: sim.techniques })
+      });
+      liveEDRResult = await edrResp.json();
+      
+      if (liveEDRResult && liveEDRResult.live) {
+        // Merge live results with static coverage
+        var liveTechs = liveEDRResult.techniques || {};
+        Object.keys(liveTechs).forEach(function(tech) {
+          var lt = liveTechs[tech];
+          if (lt.prevented > 0 && edrCoverage.prevents.indexOf(tech) < 0) {
+            edrCoverage.prevents.push(tech);
+          }
+          if (lt.detected > 0 && edrCoverage.detects.indexOf(tech) < 0) {
+            edrCoverage.detects.push(tech);
+          }
+        });
+        edrQuerySource = Object.keys(liveTechs).length > 0 ? 'live+static' : 'live';
+        console.log('[RuleLab] Live EDR query returned ' + liveEDRResult.detections + ' detections, ' + Object.keys(liveTechs).length + ' matching techniques');
+      } else {
+        console.log('[RuleLab] Live EDR query unavailable:', liveEDRResult ? liveEDRResult.reason : 'no response');
+      }
+    } catch(edrErr) {
+      console.warn('[RuleLab] Live EDR query failed, using static coverage:', edrErr.message);
+    }
+  }
+  
+  if (resultsEl) resultsEl.innerHTML = '<div style="text-align:center;padding:30px;"><div class="jira-spinner" style="margin:0 auto 12px;"></div><span style="font-size:12px;color:var(--text-muted);">Checking detection coverage for ' + sim.techniques.length + ' attack steps... (' + edrQuerySource + ' EDR data)</span></div>';
+  
   var stepResults = [];
   var blockedCount = 0, detectedCount = 0, partialCount = 0, missedCount = 0, edrOnlyCount = 0;
   var startTime = Date.now();
@@ -65603,7 +65642,8 @@ async function launchSimulation(simName) {
 
   // Update header
   if (titleEl) titleEl.textContent = 'Assessment: ' + sim.name + ' \u2014 ' + orgProfile.name;
-  if (metaEl) metaEl.innerHTML = '<span class="badge badge-green">Completed</span><span style="font-size:10px;color:var(--text-muted);">' + new Date().toISOString().replace('T',' ').slice(0,19) + ' UTC \xb7 Duration: ' + duration + 's \xb7 Detection Readiness: ' + preventionPct + '%</span>';
+  var edrSourceBadge = edrQuerySource === 'live+static' ? '<span class="badge badge-green" style="font-size:8px;margin-left:6px;" title="Live EDR API data merged with static coverage map">\u26a1 LIVE EDR</span>' : edrQuerySource === 'live' ? '<span class="badge badge-cyan" style="font-size:8px;margin-left:6px;" title="Live EDR API queried (no matching techniques)">\u26a1 LIVE</span>' : '<span class="badge badge-amber" style="font-size:8px;margin-left:6px;" title="Static EDR coverage map used — configure API credentials for live data">STATIC</span>';
+  if (metaEl) metaEl.innerHTML = '<span class="badge badge-green">Completed</span>' + edrSourceBadge + '<span style="font-size:10px;color:var(--text-muted);margin-left:6px;">' + new Date().toISOString().replace('T',' ').slice(0,19) + ' UTC \xb7 Duration: ' + duration + 's \xb7 Detection Readiness: ' + preventionPct + '%</span>';
 
   // Render step results
   if (resultsEl) {
@@ -65622,6 +65662,7 @@ async function launchSimulation(simName) {
       if (s.edrPrevents) details.push('\u2713 EDR prevents');
       else if (s.edrDetects) details.push('~ EDR detects');
       else details.push('\u2718 No EDR');
+      if (edrQuerySource !== 'static') details.push('\u26a1 ' + edrQuerySource);
       rhtml += '<div style="font-size:9px;color:var(--text-muted);">' + details.join(' \xb7 ') + '</div>';
       rhtml += '</div>';
       rhtml += '<span class="badge ' + (badgeClasses[s.status]||'badge-red') + '" style="font-size:9px;">' + escHtml(s.label.split(' \u2014 ')[0]) + '</span>';
@@ -65669,6 +65710,8 @@ async function launchSimulation(simName) {
         detection_score: detectionPct,
         total_events: 0,
         duration_seconds: parseFloat(duration),
+        edr_query_source: edrQuerySource,
+        org_id: selectedOrg !== 'all' ? selectedOrg : null,
         run_date: new Date().toISOString()
       });
     } catch(e) { console.warn('[SimResult] Save failed:', e.message); }

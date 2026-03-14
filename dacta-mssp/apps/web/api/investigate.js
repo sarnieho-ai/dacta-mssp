@@ -231,6 +231,22 @@ async function resolveEDRAuth(connector) {
       clientSecret: creds.client_secret || CS_CLIENT_SECRET
     };
   }
+  if (vendor.includes('microsoft') || vendor.includes('defender') || vendor.includes('mde')) {
+    return {
+      vendor: 'mde',
+      baseUrl: connector.api_endpoint || 'https://api.securitycenter.microsoft.com',
+      tenantId: creds.tenant_id || process.env.MDE_TENANT_ID || '',
+      clientId: creds.client_id || process.env.MDE_CLIENT_ID || '',
+      clientSecret: creds.client_secret || process.env.MDE_CLIENT_SECRET || ''
+    };
+  }
+  if (vendor.includes('trend') || vendor.includes('vision')) {
+    return {
+      vendor: 'trendmicro',
+      baseUrl: connector.api_endpoint || 'https://api.xdr.trendmicro.com',
+      apiToken: creds.api_key || creds.token || process.env.TRENDMICRO_API_TOKEN || ''
+    };
+  }
   return null;
 }
 
