@@ -13410,8 +13410,10 @@ function getThemeTickColor() {
             if (tabId === 'builder') {
               var code = document.getElementById('drIdeCode');
               var mask = document.getElementById('drBuilderGreyMask');
-              if (mask && code && (!code.dataset.edited || code.dataset.edited === '0')) {
+              if (mask && code && !window._editingRuleInBuilder && (!code.dataset.edited || code.dataset.edited === '0')) {
                 mask.style.display = 'flex';
+              } else if (mask && window._editingRuleInBuilder) {
+                mask.style.display = 'none';
               }
               loadRBClients();
             }
@@ -31005,12 +31007,15 @@ function exportRulePack() {
 }
 
 async function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
-  // Pre-set edited flag BEFORE switchDrTab so the splash screen stays hidden
+  // Signal that we're editing — prevents switchDrTab from showing the splash
+  window._editingRuleInBuilder = true;
   var code = document.getElementById('drIdeCode');
   if (code) code.dataset.edited = '1';
   var mask = document.getElementById('drBuilderGreyMask');
   if (mask) mask.style.display = 'none';
   switchDrTab('builder');
+  // Force hide mask again after tab switch (belt-and-suspenders)
+  if (mask) mask.style.display = 'none';
   if (code) {
     // Fetch full rule detail on demand (server-side paginated — _ruleContent not in list data)
     showToast('Loading rule content...', 'info');
@@ -31046,6 +31051,10 @@ async function editRuleInBuilder(ruleId, ruleName, ruleType, severity, mitre) {
     code.style.opacity = '1';
     code.dataset.edited = '1';
   }
+  // Clear editing flag, ensure mask stays hidden
+  window._editingRuleInBuilder = false;
+  var _m = document.getElementById('drBuilderGreyMask');
+  if (_m) _m.style.display = 'none';
   showToast('Rule ' + ruleId + ' loaded in Rule Builder \u2014 edit and save');
 }
 
@@ -65231,9 +65240,12 @@ function loadRuleIntoEditor(ruleId) {
     // Navigate to rules page, builder tab
     navigate('rules');
     setTimeout(function() {
-      if (typeof switchDrTab === 'function') switchDrTab('builder');
+      window._editingRuleInBuilder = true;
       var codeEl = document.getElementById('drIdeCode');
+      if (codeEl) codeEl.dataset.edited = '1';
       var mask = document.getElementById('drBuilderGreyMask');
+      if (mask) mask.style.display = 'none';
+      if (typeof switchDrTab === 'function') switchDrTab('builder');
       if (mask) mask.style.display = 'none';
       if (codeEl) {
         codeEl.textContent = res.data.rule_content || '';
@@ -65245,6 +65257,7 @@ function loadRuleIntoEditor(ruleId) {
         }
       }
       showToast('Rule loaded in editor: ' + res.data.name);
+      window._editingRuleInBuilder = false;
     }, 300);
   });
   // Close modal
