@@ -53983,6 +53983,18 @@ async function _bgRunInvestigation(ticketKey) {
     console.log('[AutoInv] Background investigation cached for ' + ticketKey);
   } catch (bgErr) {
     console.warn('[AutoInv] Background investigation failed for ' + ticketKey + ':', bgErr.message);
+    // Save a minimal error cache entry so the badge shows something instead of blank
+    if (!_investigationCache[ticketKey]) {
+      var errEntry = {
+        verdict: 'SUSPICIOUS',
+        confidence: 0,
+        html: '',
+        timestamp: new Date().toISOString(),
+        metadata: { error: bgErr.message, autoInvFailed: true }
+      };
+      _investigationCache[ticketKey] = errEntry;
+      // Don't persist to DB — just in-memory so badge shows and retry can overwrite
+    }
   } finally {
     markInvestigationCompleted(ticketKey);
   }
@@ -53994,7 +54006,8 @@ async function _processAutoInvQueue() {
   while (window._autoInvQueue.length > 0) {
     var key = window._autoInvQueue.shift();
     if (!key) continue;
-    if (_investigationCache && _investigationCache[key]) continue;
+    // Skip if already successfully cached (has HTML content). Allow retry for failed investigations.
+    if (_investigationCache && _investigationCache[key] && _investigationCache[key].html) continue;
     if (window._currentInvestigationKey) { window._autoInvQueue.unshift(key); break; } // pause if analyst opened investigation
     try { await _bgRunInvestigation(key); } catch(e) { /* skip */ }
     await new Promise(function(r) { setTimeout(r, 3500); }); // 3.5s between investigations
@@ -54015,7 +54028,10 @@ function _queueAutoInvestigation(tickets) {
     return sa - sb;
   });
   sorted.forEach(function(t) {
-    if (!(_investigationCache && _investigationCache[t.key]) && window._autoInvQueue.indexOf(t.key) < 0) {
+    // Queue tickets that have no cache, or that failed (no HTML content). Skip already-queued tickets.
+    var _existingCache = _investigationCache && _investigationCache[t.key];
+    var _needsInvestigation = !_existingCache || !_existingCache.html;
+    if (_needsInvestigation && window._autoInvQueue.indexOf(t.key) < 0) {
       window._autoInvQueue.push(t.key);
     }
   });
@@ -58023,6 +58039,10 @@ function getTriageAIBadge(ticketKey, priorityShort) {
   }
   var cached = _investigationCache[ticketKey];
   if (cached) {
+    // If background auto-investigation failed, show a retry badge instead of misleading verdict
+    if (cached.metadata && cached.metadata.autoInvFailed && !cached.confidence) {
+      return '<span class="tq-ai-badge cached-ind" title="Auto-investigation failed — click ticket to investigate" style="cursor:pointer;">' + dIcon('refresh',14) + ' Retry</span>';
+    }
     if (cached.overrideVerdict) {
       return '<span class="tq-ai-badge overridden" title="Analyst override: ' + (cached.overrideVerdict || '') + '">' + dIcon('edit',14) + ' Overridden</span>';
     }
