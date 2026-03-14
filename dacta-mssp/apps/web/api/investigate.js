@@ -1806,7 +1806,12 @@ export default async function handler(req, res) {
       }
     }
 
-    const relevanceSummary = `\n### Source Relevance Guardrails\n- Primary telemetry focus: ${sourceRelevance.mode}\n- Endpoint telemetry allowed: ${sourceRelevance.allowEDR ? 'YES' : 'NO'}\n- Reason: ${sourceRelevance.reason}\n${sourceRelevance.suppressedLogSources && sourceRelevance.suppressedLogSources.length > 0 ? '- Suppress these non-relevant sources unless new evidence makes them relevant: ' + sourceRelevance.suppressedLogSources.map(ls => `${ls.vendor || 'Unknown'} (${ls.source_type || 'unknown'})`).join(', ') : '- No source suppressions identified'}\n- IMPORTANT: Do not count failed or empty irrelevant queries as evidence. Treat unanswered questions as inconclusive and escalate to the analyst for confirmation.`;\n\n    const relevantToolset = buildRelevantInvestigationToolset(sourceRelevance, _currentEDRContext);\n\n    // Build the context message for the LLM\n    const alertBrief = `## Alert Under Investigation: ${ticket_key}
+    const relevanceSummary = `\n### Source Relevance Guardrails\n- Primary telemetry focus: ${sourceRelevance.mode}\n- Endpoint telemetry allowed: ${sourceRelevance.allowEDR ? 'YES' : 'NO'}\n- Reason: ${sourceRelevance.reason}\n${sourceRelevance.suppressedLogSources && sourceRelevance.suppressedLogSources.length > 0 ? '- Suppress these non-relevant sources unless new evidence makes them relevant: ' + sourceRelevance.suppressedLogSources.map(ls => `${ls.vendor || 'Unknown'} (${ls.source_type || 'unknown'})`).join(', ') : '- No source suppressions identified'}\n- IMPORTANT: Do not count failed or empty irrelevant queries as evidence. Treat unanswered questions as inconclusive and escalate to the analyst for confirmation.`;
+
+    const relevantToolset = buildRelevantInvestigationToolset(sourceRelevance, _currentEDRContext);
+
+    // Build the context message for the LLM
+    const alertBrief = `## Alert Under Investigation: ${ticket_key}
 **Summary**: ${alert_context.summary || 'N/A'}
 **Priority**: ${alert_context.priority || 'Unknown'}
 **Organization**: ${alert_context.organization || 'Unknown'}
