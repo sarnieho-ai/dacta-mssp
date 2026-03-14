@@ -28148,11 +28148,11 @@ body.snoc-fullscreen #page-snoc {
               <option value="all">All Organizations</option>
               <option value="9ce7a126-4e9d-434e-b952-f4c4fce56fa1">Dacta Global</option>
               <option value="3a57db8a-7787-414c-9e28-1c14de388d31">Naga World</option>
-              <option value="bc08ccf3-7143-47ff-97af-07b735208186">EM Services</option>
-              <option value="00145232-a625-4b8b-be55-989b35b1c7c2">SP Telecom</option>
-              <option value="a1cffb2a-32f3-4cb6-b29e-3fa40d8e08a6">Toyota Financial</option>
+              <option value="93281f08-dbad-4d0d-8656-ab7618f373a4">Silver Key</option>
               <option value="f6463102-adc3-4bdc-a014-ba197d0fada6">Foxwood Technology</option>
               <option value="b8672c8b-3907-48b0-8c58-b61aa38fbf4b">SPMT</option>
+              <option value="bb0db674-d91f-4a21-9c71-984c10749feb">ADV Partners</option>
+              <option value="3a6e0c3a-0bf7-4614-9299-bb9c02b0507d">Dacta Training</option>
             </select>
 
             <!-- Demo / Live mode toggle -->
@@ -40648,9 +40648,9 @@ async function loadUserManagement() {
 
   var SEED_USERS = [
     { id: 'u1', email: 'admin@dacta.sg',                display_name: 'Admin',                    role: 'admin',   assigned_orgs: ['all'],                                                                                                                    status: 'active', last_login: new Date().toISOString(),                    mfa_enabled: true  },
-    { id: 'u2', email: 'christian.gepanaga@dacta.sg',   display_name: 'Christian Miguel Gepanaga', role: 'soc_l2',  assigned_orgs: ['9ce7a126-4e9d-434e-b952-f4c4fce56fa1','3a57db8a-7787-414c-9e28-1c14de388d31','bc08ccf3-7143-47ff-97af-07b735208186'],     status: 'active', last_login: new Date(Date.now()-1800000).toISOString()  },
-    { id: 'u3', email: 'wendy.melyana@dacta.sg',        display_name: 'Wendy Melyana',             role: 'soc_l1',  assigned_orgs: ['3a57db8a-7787-414c-9e28-1c14de388d31','00145232-a625-4b8b-be55-989b35b1c7c2'],                                           status: 'active', last_login: new Date(Date.now()-3600000).toISOString()  },
-    { id: 'u4', email: 'marcfrance.limasin@dacta.sg',   display_name: 'Marcfrance Limasin',        role: 'soc_l1',  assigned_orgs: ['a1cffb2a-32f3-4cb6-b29e-3fa40d8e08a6','f6463102-adc3-4bdc-a014-ba197d0fada6','65e4e0a3-c81e-4bc4-8576-e7ae5a8fbc02'],     status: 'active', last_login: new Date(Date.now()-7200000).toISOString()  },
+    { id: 'u2', email: 'christian.gepanaga@dacta.sg',   display_name: 'Christian Miguel Gepanaga', role: 'soc_l2',  assigned_orgs: ['9ce7a126-4e9d-434e-b952-f4c4fce56fa1','3a57db8a-7787-414c-9e28-1c14de388d31','93281f08-dbad-4d0d-8656-ab7618f373a4'],     status: 'active', last_login: new Date(Date.now()-1800000).toISOString()  },
+    { id: 'u3', email: 'wendy.melyana@dacta.sg',        display_name: 'Wendy Melyana',             role: 'soc_l1',  assigned_orgs: ['3a57db8a-7787-414c-9e28-1c14de388d31','b8672c8b-3907-48b0-8c58-b61aa38fbf4b'],                                           status: 'active', last_login: new Date(Date.now()-3600000).toISOString()  },
+    { id: 'u4', email: 'marcfrance.limasin@dacta.sg',   display_name: 'Marcfrance Limasin',        role: 'soc_l1',  assigned_orgs: ['bb0db674-d91f-4a21-9c71-984c10749feb','f6463102-adc3-4bdc-a014-ba197d0fada6','3a6e0c3a-0bf7-4614-9299-bb9c02b0507d'],     status: 'active', last_login: new Date(Date.now()-7200000).toISOString()  },
     { id: 'u5', email: 'sarnie.ho@dacta.sg',            display_name: 'Sarnie Ho',                 role: 'soc_mgr', assigned_orgs: ['all'],                                                                                                                    status: 'active', last_login: new Date(Date.now()-600000).toISOString(),  mfa_enabled: true  }
   ];
 
@@ -43100,42 +43100,7 @@ var ORG_CONNECTORS = {
       { connector_type: 'knowledge_base', vendor: 'Confluence', display_name: 'Confluence KB', is_enabled: true, health_status: 'healthy', metadata: { type: 'knowledge_base', instance: 'dactaglobal-sg.atlassian.net/wiki' } }
     ]
   },
-  'bc08ccf3-7143-47ff-97af-07b735208186': { // EM Services
-    code: 'EM', name: 'EM Services', type: 'socaas', namespace: 'emservices',
-    connectors: [
-      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'emservices', index_pattern: 'emservices-*' } },
-      { connector_type: 'edr', vendor: 'CrowdStrike', display_name: 'CrowdStrike Falcon EDR', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'emservices', index_pattern: '.ds-logs-crowdstrike.alert-emservices-*', host_index: '.ds-logs-crowdstrike.host-emservices-*' } },
-      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'emservices', index_pattern: 'logs-panw.panos-emservices-*' } },
-      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
-      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } },
-      { connector_type: 'identity', vendor: 'Microsoft', display_name: 'Azure AD / Entra ID', is_enabled: true, health_status: 'healthy', metadata: { type: 'identity_provider', protocol: 'SAML/OIDC' } },
-      { connector_type: 'knowledge_base', vendor: 'Confluence', display_name: 'Confluence KB', is_enabled: true, health_status: 'healthy', metadata: { type: 'knowledge_base', instance: 'dactaglobal-sg.atlassian.net/wiki' } }
-    ]
-  },
-  '00145232-a625-4b8b-be55-989b35b1c7c2': { // SP Telecom
-    code: 'SP', name: 'SP Telecom', type: 'socaas', namespace: 'sptelecom',
-    connectors: [
-      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'sptelecom', index_pattern: 'sptelecom-*' } },
-      { connector_type: 'edr', vendor: 'CrowdStrike', display_name: 'CrowdStrike Falcon EDR', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'sptelecom', index_pattern: '.ds-logs-crowdstrike.alert-sptelecom-*', host_index: '.ds-logs-crowdstrike.host-sptelecom-*' } },
-      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'sptelecom', index_pattern: 'logs-panw.panos-sptelecom-*' } },
-      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
-      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } },
-      { connector_type: 'identity', vendor: 'Microsoft', display_name: 'Azure AD / Entra ID', is_enabled: true, health_status: 'healthy', metadata: { type: 'identity_provider', protocol: 'SAML/OIDC' } },
-      { connector_type: 'knowledge_base', vendor: 'Confluence', display_name: 'Confluence KB', is_enabled: true, health_status: 'healthy', metadata: { type: 'knowledge_base', instance: 'dactaglobal-sg.atlassian.net/wiki' } }
-    ]
-  },
-  'a1cffb2a-32f3-4cb6-b29e-3fa40d8e08a6': { // Toyota Financial
-    code: 'TF', name: 'Toyota Financial', type: 'socaas', namespace: 'toyotafinancial',
-    connectors: [
-      { connector_type: 'siem', vendor: 'Elastic', display_name: 'Elastic SIEM', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'toyotafinancial', index_pattern: 'toyotafinancial-*' } },
-      { connector_type: 'edr', vendor: 'CrowdStrike', display_name: 'CrowdStrike Falcon EDR', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'toyotafinancial', index_pattern: '.ds-logs-crowdstrike.alert-toyotafinancial-*', host_index: '.ds-logs-crowdstrike.host-toyotafinancial-*' } },
-      { connector_type: 'firewall', vendor: 'Palo Alto', display_name: 'Palo Alto PAN-OS', is_enabled: true, health_status: 'healthy', metadata: { namespace: 'toyotafinancial', index_pattern: 'logs-panw.panos-toyotafinancial-*' } },
-      { connector_type: 'threat_intel', vendor: 'Dacta', display_name: 'DACTA TIP', is_enabled: true, health_status: 'healthy', metadata: { endpoint: 'http://61.13.214.198:8080', type: 'opencti' } },
-      { connector_type: 'ticketing', vendor: 'Atlassian', display_name: 'Jira Service Management', is_enabled: true, health_status: 'healthy', metadata: { instance: 'dactaglobal-sg.atlassian.net', project: 'DAC' } },
-      { connector_type: 'identity', vendor: 'Microsoft', display_name: 'Azure AD / Entra ID', is_enabled: true, health_status: 'healthy', metadata: { type: 'identity_provider', protocol: 'SAML/OIDC' } },
-      { connector_type: 'knowledge_base', vendor: 'Confluence', display_name: 'Confluence KB', is_enabled: true, health_status: 'healthy', metadata: { type: 'knowledge_base', instance: 'dactaglobal-sg.atlassian.net/wiki' } }
-    ]
-  },
+  // EM Services, SP Telecom, Toyota Financial REMOVED — not real orgs in DB
   'f6463102-adc3-4bdc-a014-ba197d0fada6': { // Foxwood — NO EDR, firewall only
     code: 'FW', name: 'Foxwood Technology', type: 'socaas', namespace: 'foxwood',
     connectors: [
@@ -66785,11 +66750,11 @@ function _snocGenerateDemoData() {
   /* ---- Active Incidents ---- */
   var incidents = [
     { sev: 'p1', title: 'Ransomware IOC match on SRV-DC-01',       org: 'Naga World',     time: '14:23', id: 'INC-2026-047' },
-    { sev: 'p2', title: 'Brute-force login attempts — SRV-MAIL-01', org: 'EM Services',    time: '13:58', id: 'INC-2026-046' },
-    { sev: 'p2', title: 'Lateral movement: PsExec across VLANs',    org: 'Toyota Fin.',    time: '13:41', id: 'INC-2026-045' },
+    { sev: 'p2', title: 'Brute-force login attempts — SRV-MAIL-01', org: 'Silver Key',     time: '13:58', id: 'INC-2026-046' },
+    { sev: 'p2', title: 'Lateral movement: PsExec across VLANs',    org: 'ADV Partners',   time: '13:41', id: 'INC-2026-045' },
     { sev: 'p3', title: 'Suspicious outbound DNS (C2 beaconing)',    org: 'SPMT',           time: '13:15', id: 'INC-2026-044' },
     { sev: 'p3', title: 'High memory alert — SRV-MAIL-01 (91%)',    org: 'Dacta Global',   time: '12:50', id: 'INC-2026-043' },
-    { sev: 'p3', title: 'Firewall geo-block: RU/CN IPs blocked',    org: 'SP Telecom',     time: '12:30', id: 'INC-2026-042' },
+    { sev: 'p3', title: 'Firewall geo-block: RU/CN IPs blocked',    org: 'Dacta Training', time: '12:30', id: 'INC-2026-042' },
     { sev: 'p3', title: 'Failed MFA — admin account x3',             org: 'Foxwood Tech.',  time: '12:05', id: 'INC-2026-041' }
   ];
 
