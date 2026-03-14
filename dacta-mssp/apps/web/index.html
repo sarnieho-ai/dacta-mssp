@@ -17469,11 +17469,11 @@ function getThemeTickColor() {
 
             // Deploy wizard
             var ncWizStep = 0;
-            var ncWizData = { org:'', hostname:'', port:5514, indices:[], learnHours:168 };
+            var ncWizData = { org:'', hostname:'', port:5514, indices:[], learnHours:168, platform:'linux' };
 
             window.ncOpenDeployWizard = function(preselectedOrg) {
               ncWizStep = 0;
-              ncWizData = { org: preselectedOrg || '', hostname:'', port:5514, indices:[], learnHours:168 };
+              ncWizData = { org: preselectedOrg || '', hostname:'', port:5514, indices:[], learnHours:168, platform:'linux' };
               ncRenderWizard();
             };
 
@@ -17502,6 +17502,16 @@ function getThemeTickColor() {
                 html += '</div>';
               } else if (ncWizStep === 1) {
                 // Configure
+                html += '<div style="margin-bottom:14px;"><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:6px;">Target Platform</label>';
+                html += '<div style="display:flex;gap:8px;">';
+                var platforms = [{id:'linux',label:'Linux x64',icon:'\uD83D\uDDA5\uFE0F'},{id:'windows',label:'Windows x64',icon:'\uD83E\uDE9F'}];
+                platforms.forEach(function(p){
+                  var sel = ncWizData.platform === p.id;
+                  html += '<div onclick="ncWizData.platform=\'' + p.id + '\';ncRenderWizard()" style="flex:1;padding:10px 14px;border-radius:8px;border:1px solid ' + (sel ? 'var(--cyan)' : 'rgba(255,255,255,0.08)') + ';background:' + (sel ? 'rgba(0,212,255,0.06)' : 'rgba(15,23,42,0.3)') + ';cursor:pointer;text-align:center;">';
+                  html += '<div style="font-size:13px;font-weight:' + (sel?'600':'400') + ';color:' + (sel?'var(--cyan)':'var(--text-secondary)') + ';">' + p.label + '</div>';
+                  html += '</div>';
+                });
+                html += '</div></div>';
                 html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">';
                 html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Collector Hostname</label><input class="filter-input" id="ncWizHost" value="' + (ncWizData.hostname || 'collector-' + ncWizData.org.toLowerCase().replace(/\s+/g,'-').substring(0,8) + '-01') + '" style="width:100%;" placeholder="e.g. collector-sg-01"></div>';
                 html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Syslog Port</label><input class="filter-input" type="number" id="ncWizPort" value="' + ncWizData.port + '" style="width:100%;"></div>';
@@ -17518,7 +17528,12 @@ function getThemeTickColor() {
                 // Deploy instructions
                 html += '<div style="text-align:center;margin-bottom:16px;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div style="font-size:14px;font-weight:600;color:#22c55e;margin-top:8px;">Catcher Registered</div></div>';
                 html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">Deploy the Novelty Catcher on <strong>' + (ncWizData.hostname || 'collector') + '</strong> using these commands:</div>';
-                var cmds = '# 1. Upload package\nscp novelty-catcher-v2.0.0-linux-x64.tar.gz root@' + (ncWizData.hostname||'collector') + ':/tmp/\n\n# 2. Install\nssh root@' + (ncWizData.hostname||'collector') + '\ncd /tmp && tar xzf novelty-catcher-v2.0.0-linux-x64.tar.gz\ncd novelty-catcher-dist && sudo bash install.sh\n\n# 3. Configure credentials\nsudo nano /etc/novelty-catcher/env\n\n# 4. Bootstrap learning\nnovelty-catcher -c /etc/novelty-catcher/config.yaml -m learn-from-elastic --learn-hours ' + ncWizData.learnHours + '\n\n# 5. Start service\nsudo systemctl start novelty-catcher && sudo systemctl enable novelty-catcher';
+                var cmds;
+                if (ncWizData.platform === 'windows') {
+                  cmds = '# === Windows Deployment ===\n\n# 1. Copy package to target host\nCopy-Item novelty-catcher-v2.0.0-windows-x64.zip \\\\' + (ncWizData.hostname||'collector') + '\\C$\\Temp\\\n\n# 2. RDP in and extract\nExpand-Archive C:\\Temp\\novelty-catcher-v2.0.0-windows-x64.zip -DestinationPath C:\\Temp\\novelty-catcher\ncd C:\\Temp\\novelty-catcher\\novelty-catcher-win-dist\n\n# 3. Install (Run PowerShell as Administrator)\npowershell -ExecutionPolicy Bypass -File install-windows.ps1\n\n# 4. Configure credentials\nnotepad "C:\\ProgramData\\DACTA\\Novelty-Catcher\\config\\env.cmd"\n\n# 5. Bootstrap learning\nnovelty-catcher -c "C:\\ProgramData\\DACTA\\Novelty-Catcher\\config\\config.yaml" --mode learn-from-elastic --learn-hours ' + ncWizData.learnHours + '\n\n# 6. Start service\nStart-Service DACTANoveltyCatcher\nSet-Service DACTANoveltyCatcher -StartupType Automatic';
+                } else {
+                  cmds = '# === Linux Deployment ===\n\n# 1. Upload package\nscp novelty-catcher-v2.0.0-linux-x64.tar.gz root@' + (ncWizData.hostname||'collector') + ':/tmp/\n\n# 2. SSH in and install\nssh root@' + (ncWizData.hostname||'collector') + '\ncd /tmp && tar xzf novelty-catcher-v2.0.0-linux-x64.tar.gz\ncd novelty-catcher-dist && sudo bash install.sh\n\n# 3. Configure credentials\nsudo nano /etc/novelty-catcher/env\n\n# 4. Bootstrap learning\nnovelty-catcher -c /etc/novelty-catcher/config.yaml -m learn-from-elastic --learn-hours ' + ncWizData.learnHours + '\n\n# 5. Start service\nsudo systemctl start novelty-catcher && sudo systemctl enable novelty-catcher';
+                }
                 html += '<div class="nc-config-block" style="max-height:250px;">' + escHtml(cmds) + '</div>';
                 html += '<div style="display:flex;gap:8px;margin-top:12px;"><button class="nc-deploy-btn" onclick="ncCopyConfig()">Copy Config YAML</button><button class="nc-deploy-btn" onclick="ncCopyCommands()">Copy Install Commands</button></div>';
               }
