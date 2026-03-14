@@ -53827,7 +53827,7 @@ function _applyVerdictConstraints(verdict, confidence, constraints) {
     console.warn('[VerdictConstraints] AI classified as ' + v + ' but rule constraint requires minimum ' + constraints.minVerdict + '. Overriding. Reason: ' + constraints.reason);
     return {
       verdict: 'SUSPICIOUS',
-      confidence: Math.max(confidence, 55),
+      confidence: 55,  // Fixed at 55% — rule policy override, analyst must determine true confidence
       constrained: true,
       constraintReason: constraints.reason
     };
