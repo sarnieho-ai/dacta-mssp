@@ -43306,19 +43306,27 @@ async function loadOrgConnectorsFromDB() {
     
     // Merge DB-backed data with hardcoded ORG_CONNECTORS (hardcoded serves as fallback)
     // For orgs in BOTH sources: merge connectors — DB wins per connector_type, hardcoded fills gaps
+    // If DB has a connector_type but with vendor='None'/is_enabled=false AND hardcoded has a real vendor, hardcoded overrides
     var _hardcodedOC = JSON.parse(JSON.stringify(ORG_CONNECTORS)); // snapshot before override
     Object.keys(result).forEach(function(orgId) {
       var dbOrg = result[orgId];
       var hcOrg = _hardcodedOC[orgId];
       if (hcOrg && hcOrg.connectors) {
-        // Find connector_types present in DB result
+        // Find connector_types present in DB result (only count enabled/real vendors)
         var dbTypes = {};
-        dbOrg.connectors.forEach(function(c) { dbTypes[c.connector_type] = true; });
-        // Add hardcoded connectors for types missing from DB
+        dbOrg.connectors.forEach(function(c) { dbTypes[c.connector_type] = c; });
+        // Add or override hardcoded connectors for types missing/disabled in DB
         hcOrg.connectors.forEach(function(hc) {
-          if (!dbTypes[hc.connector_type]) {
+          var dbConn = dbTypes[hc.connector_type];
+          if (!dbConn) {
+            // Type missing from DB entirely — add hardcoded
             dbOrg.connectors.push(hc);
             console.log('[OrgConn] Merged hardcoded ' + hc.connector_type + ' (' + hc.vendor + ') for ' + dbOrg.name);
+          } else if (hc.is_enabled && hc.vendor !== 'None' && hc.vendor !== 'Pending' && (!dbConn.is_enabled || dbConn.vendor === 'None' || dbConn.vendor === 'Pending')) {
+            // DB has disabled/None entry but hardcoded has a real vendor — override
+            var idx = dbOrg.connectors.indexOf(dbConn);
+            if (idx >= 0) dbOrg.connectors[idx] = hc;
+            console.log('[OrgConn] Overrode DB ' + hc.connector_type + ' (' + dbConn.vendor + ' → ' + hc.vendor + ') for ' + dbOrg.name);
           }
         });
       }
