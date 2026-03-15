@@ -17315,17 +17315,27 @@ function getThemeTickColor() {
             var ncSelectedOrg = '';
             var ncTablesExist = true;
 
-            // ── Supabase helpers (uses authenticated session via _dactaSupabase) ──
+            // ── API helpers (uses /api/novelty-catcher with service key for reliable access) ──
+            async function ncApiCall(action, params, body) {
+              try {
+                var qs = 'action=' + action;
+                if (params) Object.keys(params).forEach(function(k) { if (params[k]) qs += '&' + k + '=' + encodeURIComponent(params[k]); });
+                var opts = { headers: { 'Content-Type': 'application/json' } };
+                if (body) { opts.method = 'POST'; opts.body = JSON.stringify(Object.assign({ action: action }, body)); }
+                var resp = await fetch(NC_API + '?' + qs, opts);
+                if (!resp.ok) { console.warn('[NC] API error:', resp.status); return null; }
+                return await resp.json();
+              } catch(e) { console.warn('[NC] API exception:', e); return null; }
+            }
+
+            // Supabase-js helpers for direct CRUD (org list, register, update, delete)
             async function ncSbGet(table, queryStr) {
               var sb = ncGetSb();
               if (!sb) return [];
               try {
-                // Parse the query string to build supabase-js query
                 var selectMatch = (queryStr || '').match(/select=([^&]*)/);
-                var selectCols = selectMatch ? selectMatch[1] : '*';
+                var selectCols = selectMatch ? decodeURIComponent(selectMatch[1]) : '*';
                 var q = sb.from(table).select(selectCols);
-
-                // Parse filters
                 var filters = (queryStr || '').split('&').filter(function(p) {
                   return p && !p.startsWith('select=') && !p.startsWith('order=') && !p.startsWith('limit=');
                 });
@@ -17333,22 +17343,17 @@ function getThemeTickColor() {
                   var m = f.match(/^([\w_]+)=eq\.(.+)$/);
                   if (m) q = q.eq(m[1], m[2]);
                 });
-
                 var orderMatch = (queryStr || '').match(/order=([\w_]+)\.(asc|desc)/);
                 if (orderMatch) q = q.order(orderMatch[1], { ascending: orderMatch[2] === 'asc' });
-                else if ((queryStr || '').includes('order=created_at.desc')) q = q.order('created_at', { ascending: false });
-                else if ((queryStr || '').includes('order=name')) q = q.order('name');
-
                 var limitMatch = (queryStr || '').match(/limit=(\d+)/);
                 if (limitMatch) q = q.limit(parseInt(limitMatch[1]));
-
-                var { data, error } = await q;
-                if (error) {
-                  console.warn('[NC] SbGet error:', error.message);
-                  if (error.code === 'PGRST205' || error.message.includes('not found')) ncTablesExist = false;
+                var resp = await q;
+                if (resp.error) {
+                  console.warn('[NC] SbGet error:', resp.error.message);
+                  if (resp.error.code === 'PGRST205' || (resp.error.message||'').includes('not found')) ncTablesExist = false;
                   return [];
                 }
-                return data || [];
+                return resp.data || [];
               } catch(e) { console.warn('[NC] SbGet exception:', e); return []; }
             }
 
@@ -17356,9 +17361,9 @@ function getThemeTickColor() {
               var sb = ncGetSb();
               if (!sb) return null;
               try {
-                var { data, error } = await sb.from(table).insert(body).select();
-                if (error) { console.warn('[NC] SbPost error:', error.message); return null; }
-                return data && data[0] ? data[0] : data;
+                var resp = await sb.from(table).insert(body).select();
+                if (resp.error) { console.warn('[NC] SbPost error:', resp.error.message); return null; }
+                return resp.data && resp.data[0] ? resp.data[0] : resp.data;
               } catch(e) { return null; }
             }
 
@@ -17366,8 +17371,8 @@ function getThemeTickColor() {
               var sb = ncGetSb();
               if (!sb) return false;
               try {
-                var { error } = await sb.from(table).update(body).eq(matchCol, matchVal);
-                if (error) { console.warn('[NC] SbPatch error:', error.message); return false; }
+                var resp = await sb.from(table).update(body).eq(matchCol, matchVal);
+                if (resp.error) { console.warn('[NC] SbPatch error:', resp.error.message); return false; }
                 return true;
               } catch(e) { return false; }
             }
@@ -17376,15 +17381,16 @@ function getThemeTickColor() {
               var sb = ncGetSb();
               if (!sb) return false;
               try {
-                var { error } = await sb.from(table).delete().eq(matchCol, matchVal);
-                if (error) { console.warn('[NC] SbDelete error:', error.message); return false; }
+                var resp = await sb.from(table).delete().eq(matchCol, matchVal);
+                if (resp.error) { console.warn('[NC] SbDelete error:', resp.error.message); return false; }
                 return true;
               } catch(e) { return false; }
             }
 
-            // ── Load orgs ──
+            // ── Load orgs (via API for reliable access) ──
             async function ncLoadOrgs() {
-              ncOrgs = await ncSbGet('organizations', 'select=id,name,short_name&order=name');
+              var result = await ncApiCall('orgs', {});
+              ncOrgs = (result && Array.isArray(result.orgs)) ? result.orgs : [];
               var sel = document.getElementById('ncOrgFilter');
               if (!sel || !ncOrgs.length) return;
               sel.innerHTML = '<option value="">All Organizations</option>';
@@ -17393,19 +17399,17 @@ function getThemeTickColor() {
               });
             }
 
-            // ── Load fleet (live from DB) ──
+            // ── Load fleet (live via API — uses service key for reliable FK joins) ──
             async function ncLoadFleet() {
-              var query = 'select=*,organizations(name,short_name)&order=created_at.desc';
-              if (ncSelectedOrg) query += '&org_id=eq.' + ncSelectedOrg;
-              var data = await ncSbGet('novelty_catchers', query);
-              if (!Array.isArray(data)) data = [];
+              var params = {};
+              if (ncSelectedOrg) params.org_id = ncSelectedOrg;
+              var result = await ncApiCall('fleet', params);
+              var data = (result && Array.isArray(result.catchers)) ? result.catchers : [];
 
-              // Mark offline if no heartbeat in 5 min
+              if (data.length === 0 && !result) { ncTablesExist = false; }
+              else { ncTablesExist = true; }
+
               ncFleet = data.map(function(c) {
-                if (c.last_heartbeat) {
-                  var diff = Date.now() - new Date(c.last_heartbeat).getTime();
-                  if (diff > 5 * 60 * 1000 && c.status !== 'pending') c.status = 'offline';
-                }
                 c._orgName = (c.organizations && c.organizations.name) || 'Unknown';
                 return c;
               });
@@ -17414,12 +17418,12 @@ function getThemeTickColor() {
               ncUpdateKPIs();
             }
 
-            // ── Load alerts (live from DB) ──
+            // ── Load alerts (live via API — uses service key for reliable FK joins) ──
             async function ncLoadAlerts() {
-              var query = 'select=*,novelty_catchers(hostname,organizations(name))&order=created_at.desc&limit=50';
-              if (ncSelectedOrg) query += '&org_id=eq.' + ncSelectedOrg;
-              var data = await ncSbGet('novelty_alerts', query);
-              ncAlerts = Array.isArray(data) ? data : [];
+              var params = { limit: '50' };
+              if (ncSelectedOrg) params.org_id = ncSelectedOrg;
+              var result = await ncApiCall('alerts_feed', params);
+              ncAlerts = (result && Array.isArray(result.alerts)) ? result.alerts : [];
               ncRenderAlertFeed();
             }
 
@@ -17587,15 +17591,15 @@ function getThemeTickColor() {
             };
 
             window.ncAckAlert = async function(alertId) {
-              var ok = await ncSbPatch('novelty_alerts', 'id', alertId, { acknowledged: true });
-              if (ok) { showToast('Alert acknowledged'); ncLoadAlerts(); }
+              var result = await ncApiCall('ack_alert', {}, { alert_id: alertId });
+              if (result && result.ok) { showToast('Alert acknowledged'); ncLoadAlerts(); }
               else showToast('Failed to acknowledge alert');
             };
 
             window.ncDeleteCatcher = async function(id, hostname) {
               if (!confirm('Delete catcher "' + hostname + '"? This cannot be undone.')) return;
-              var ok = await ncSbDelete('novelty_catchers', 'id', id);
-              if (ok) { showToast('Catcher deleted'); ncRefreshFleet(); }
+              var result = await ncApiCall('delete_catcher', {}, { catcher_id: id });
+              if (result && result.ok) { showToast('Catcher deleted'); ncRefreshFleet(); }
               else showToast('Failed to delete catcher');
             };
 
@@ -17651,18 +17655,15 @@ function getThemeTickColor() {
                 cooldown_minutes: parseInt(document.getElementById('ncCfgCooldown').value) || 5
               };
               var newMode = document.getElementById('ncCfgMode').value;
-              var newIndices = document.getElementById('ncCfgIndices').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
 
-              var ok = await ncSbPatch('novelty_catchers', 'id', id, {
+              var result = await ncApiCall('update_config', {}, {
+                catcher_id: id,
                 config: newConfig,
-                mode: newMode,
-                status: newMode === 'learn' ? 'learning' : 'online',
-                indices: newIndices,
-                updated_at: new Date().toISOString()
+                mode: newMode
               });
 
               ncCloseConfig();
-              if (ok) { showToast('Configuration pushed — takes effect on next heartbeat'); ncLoadFleet(); }
+              if (result && result.ok) { showToast('Configuration pushed — takes effect on next heartbeat'); ncLoadFleet(); }
               else showToast('Failed to push configuration');
             };
 
@@ -17779,24 +17780,19 @@ function getThemeTickColor() {
             window.ncWizNext = async function() {
               if (ncWizStep === 1) ncCaptureStep1();
 
-              // On step 2→3 transition: register the catcher in DB
+              // On step 2→3 transition: register the catcher in DB via API
               if (ncWizStep === 2) {
                 showToast('Registering catcher...');
-                var result = await ncSbPost('novelty_catchers', {
+                var result = await ncApiCall('register', {}, {
                   org_id: ncWizData.org_id,
                   hostname: ncWizData.hostname || 'collector-01',
-                  version: '2.0.0',
-                  mode: 'learn',
-                  status: 'pending',
-                  platform: ncWizData.platform,
                   config: {
                     syslog_port: ncWizData.port,
                     threshold: ncWizData.threshold,
                     learning_hours: ncWizData.learnHours
-                  },
-                  indices: ncWizData.indices
+                  }
                 });
-                if (!result) {
+                if (!result || !result.ok) {
                   showToast('Failed to register catcher — check if DB tables exist');
                   return;
                 }

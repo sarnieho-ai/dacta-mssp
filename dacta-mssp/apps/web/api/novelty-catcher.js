@@ -98,6 +98,12 @@ export default async function handler(req, res) {
         return res.status(200).json(result.data[0]);
       }
 
+      // ── UI → SIEMLess: Get Orgs List ──
+      case 'orgs': {
+        const orgResult = await supabaseRequest('GET', 'organizations?select=id,name,short_name&order=name');
+        return res.status(200).json({ orgs: orgResult.data || [] });
+      }
+
       // ── UI → SIEMLess: Get Fleet Status ──
       case 'fleet': {
         const org_id = req.query.org_id;
@@ -131,7 +137,7 @@ export default async function handler(req, res) {
 
       // ── UI → SIEMLess: Register New Catcher ──
       case 'register': {
-        const { org_id, hostname, config } = req.body;
+        const { org_id, hostname, config, platform, indices } = req.body;
         if (!org_id || !hostname) return res.status(400).json({ error: 'Missing org_id or hostname' });
 
         const result = await supabaseRequest('POST', 'novelty_catchers', {
@@ -140,19 +146,25 @@ export default async function handler(req, res) {
           version: '2.0.0',
           mode: 'learn',
           status: 'pending',
+          platform: platform || 'linux',
           config: config || {},
+          indices: indices || [],
         });
         return res.status(201).json({ ok: true, catcher: result.data?.[0] });
       }
 
       // ── UI → SIEMLess: Update Catcher Config ──
       case 'update_config': {
-        const { catcher_id, config, mode } = req.body;
+        const { catcher_id, config, mode, indices } = req.body;
         if (!catcher_id) return res.status(400).json({ error: 'Missing catcher_id' });
 
         const updates = { updated_at: new Date().toISOString() };
         if (config) updates.config = config;
-        if (mode) updates.mode = mode;
+        if (mode) {
+          updates.mode = mode;
+          updates.status = mode === 'learn' ? 'learning' : 'online';
+        }
+        if (indices) updates.indices = indices;
 
         await supabaseRequest('PATCH', `novelty_catchers?id=eq.${catcher_id}`, updates);
         return res.status(200).json({ ok: true });
@@ -167,6 +179,18 @@ export default async function handler(req, res) {
           acknowledged: true,
         });
         return res.status(200).json({ ok: true });
+      }
+
+      // ── UI → SIEMLess: Delete Catcher ──
+      case 'delete_catcher': {
+        const { catcher_id: delId } = req.body;
+        if (!delId) return res.status(400).json({ error: 'Missing catcher_id' });
+
+        // Delete associated alerts first
+        await supabaseRequest('DELETE', `novelty_alerts?catcher_id=eq.${delId}`);
+        // Delete the catcher
+        const delResult = await supabaseRequest('DELETE', `novelty_catchers?id=eq.${delId}`);
+        return res.status(200).json({ ok: delResult.ok });
       }
 
       // ── UI → SIEMLess: Generate Deploy Config ──
