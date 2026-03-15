@@ -17214,28 +17214,43 @@ function getThemeTickColor() {
             .nc-step { flex:1; height:3px; background:rgba(255,255,255,0.06); border-radius:2px; }
             .nc-step.active { background:var(--cyan); }
             .nc-step.done { background:#22c55e; }
+            .nc-org-filter-bar { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+            .nc-org-select { background:rgba(15,23,42,0.6); border:1px solid var(--border-card); border-radius:7px; color:var(--text-secondary); font-size:11px; padding:6px 12px; font-family:inherit; cursor:pointer; min-width:180px; }
+            .nc-org-select:focus { border-color:var(--cyan); outline:none; }
+            .nc-empty-state { text-align:center; padding:40px 20px; color:var(--text-muted); }
+            .nc-empty-state svg { margin-bottom:12px; opacity:0.4; }
+            .nc-empty-state p { font-size:12px; margin:4px 0; }
+            .nc-loading { text-align:center; padding:30px; color:var(--text-muted); font-size:11px; }
           </style>
 
-          <!-- Header -->
+          <!-- Header with org filter -->
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
             <div>
               <div style="font-size:13px;font-weight:600;color:var(--text-primary);">Catcher Fleet Management</div>
-              <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Deploy, monitor, and configure Novelty Catchers across client environments &mdash; like Splunk Forwarder Management</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Deploy, monitor, and configure Novelty Catchers across client environments</div>
             </div>
-            <button class="nc-deploy-btn" onclick="ncOpenDeployWizard()">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Deploy Catcher
-            </button>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <select class="nc-org-select" id="ncOrgFilter" onchange="ncFilterByOrg()">
+                <option value="">All Organizations</option>
+              </select>
+              <button class="nc-action-btn" onclick="ncRefreshFleet()" title="Refresh">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              </button>
+              <button class="nc-deploy-btn" onclick="ncOpenDeployWizard()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Deploy Catcher
+              </button>
+            </div>
           </div>
 
           <!-- KPI Row -->
           <div class="nc-kpi-row" id="ncKpiRow">
-            <div class="nc-kpi"><div class="nc-kpi-label">Total Catchers</div><div class="nc-kpi-value" id="ncKpiTotal">6</div></div>
-            <div class="nc-kpi"><div class="nc-kpi-label">Online</div><div class="nc-kpi-value green" id="ncKpiOnline">4</div></div>
-            <div class="nc-kpi"><div class="nc-kpi-label">Learning</div><div class="nc-kpi-value amber" id="ncKpiLearning">1</div></div>
-            <div class="nc-kpi"><div class="nc-kpi-label">Offline</div><div class="nc-kpi-value red" id="ncKpiOffline">1</div></div>
-            <div class="nc-kpi"><div class="nc-kpi-label">Alerts (24h)</div><div class="nc-kpi-value cyan" id="ncKpiAlerts">22</div></div>
-            <div class="nc-kpi"><div class="nc-kpi-label">New Sources Detected</div><div class="nc-kpi-value" id="ncKpiNewSources">3</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">Total Catchers</div><div class="nc-kpi-value" id="ncKpiTotal">—</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">Online</div><div class="nc-kpi-value green" id="ncKpiOnline">—</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">Learning</div><div class="nc-kpi-value amber" id="ncKpiLearning">—</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">Offline</div><div class="nc-kpi-value red" id="ncKpiOffline">—</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">Alerts (24h)</div><div class="nc-kpi-value cyan" id="ncKpiAlerts">—</div></div>
+            <div class="nc-kpi"><div class="nc-kpi-label">New Sources Detected</div><div class="nc-kpi-value" id="ncKpiNewSources">—</div></div>
           </div>
 
           <!-- Main Layout: Fleet Table + Alert Feed -->
@@ -17261,7 +17276,9 @@ function getThemeTickColor() {
                       <th>Actions</th>
                     </tr>
                   </thead>
-                  <tbody id="ncFleetBody"></tbody>
+                  <tbody id="ncFleetBody">
+                    <tr><td colspan="9" class="nc-loading">Loading fleet data...</td></tr>
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -17273,7 +17290,9 @@ function getThemeTickColor() {
                 Recent Novelty Alerts
                 <span style="font-size:9px;color:var(--text-muted);font-weight:400;margin-left:auto;">Last 24h</span>
               </div>
-              <div id="ncAlertFeed" style="max-height:580px;overflow-y:auto;padding-right:4px;"></div>
+              <div id="ncAlertFeed" style="max-height:580px;overflow-y:auto;padding-right:4px;">
+                <div class="nc-loading">Loading alerts...</div>
+              </div>
             </div>
           </div>
 
@@ -17284,121 +17303,172 @@ function getThemeTickColor() {
           <div id="ncConfigModal" style="display:none;"></div>
 
           <script>
-          /* ── Novelty Catcher — Fleet Management UI ─────────────────── */
+          /* ── Novelty Catcher — Fleet Management UI (LIVE DATA) ─────────────────── */
           (function() {
-            // Demo fleet data
-            var ncFleet = [
-              { id:'nc-1', org:'Dacta Global', host:'collector-sg-01', status:'online', version:'v2.0.0', mode:'monitor', events:'1.3B', eventsRaw:1300000000, alerts24h:12, heartbeat:'2 min ago', heartbeatMs:120000, indices:['logs-fortinet_fortigate.log-dacta','logs-m365_defender.alert-dacta','logs-m365_defender.log-dacta','logs-microsoft_defender_endpoint.log-dacta'], config:{syslog_port:5514,learning_hours:168,threshold:0.75} },
-              { id:'nc-2', org:'Naga World', host:'collector-kh-01', status:'online', version:'v2.0.0', mode:'monitor', events:'890M', eventsRaw:890000000, alerts24h:7, heartbeat:'1 min ago', heartbeatMs:60000, indices:['logs-fortinet_fortigate.log-naga','logs-sophos.endpoint-naga'], config:{syslog_port:5514,learning_hours:168,threshold:0.75} },
-              { id:'nc-3', org:'SPMT', host:'collector-sg-02', status:'learning', version:'v2.0.0', mode:'learn', events:'45M', eventsRaw:45000000, alerts24h:0, heartbeat:'30 sec ago', heartbeatMs:30000, learnProgress:42, indices:['logs-trendmicro.visionone-spmt','logs-o365.audit-spmt'], config:{syslog_port:5514,learning_hours:168,threshold:0.75} },
-              { id:'nc-4', org:'ADV Partners', host:'collector-sg-03', status:'online', version:'v2.0.0', mode:'monitor', events:'230M', eventsRaw:230000000, alerts24h:3, heartbeat:'3 min ago', heartbeatMs:180000, indices:['logs-m365_defender.alert-adv','logs-o365.audit-adv'], config:{syslog_port:5514,learning_hours:168,threshold:0.80} },
-              { id:'nc-5', org:'Global Advisor', host:'collector-sg-04', status:'offline', version:'v1.9.0', mode:'monitor', events:'120M', eventsRaw:120000000, alerts24h:0, heartbeat:'47 min ago', heartbeatMs:2820000, indices:['logs-sophos.endpoint-ga'], config:{syslog_port:5514,learning_hours:168,threshold:0.75} },
-              { id:'nc-6', org:'EM Services', host:'—', status:'pending', version:'—', mode:'—', events:'—', eventsRaw:0, alerts24h:0, heartbeat:'—', heartbeatMs:Infinity, indices:[], config:{} },
-            ];
+            var NC_API = '/api/novelty-catcher';
+            var SB_URL = 'https://qiqrizggitcqwkwshmfy.supabase.co';
+            var SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpcXJpemdnaXRjcXdrd3NobWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNzkzMjEsImV4cCI6MjA4NzY1NTMyMX0.ZNN47SWAYvAzzY5Dn6VCYV8nzrTrqvvybp2aF4NFHCA';
 
-            var ncAlerts = [
-              { time:'2 min ago', org:'Dacta Global', type:'new_log_source', severity:'high', source:'logs-crowdstrike.detection-dacta|crowdstrike|crowdstrike.detection', detail:'Traffic from unregistered source: CrowdStrike Falcon detection events — not in SIEMLess catalog' },
-              { time:'15 min ago', org:'Naga World', type:'syntax_change', severity:'medium', source:'logs-fortinet_fortigate.log-naga|fortigate', detail:'New field detected: fortinet.firewall.threat_feed (string) — not in baseline schema' },
-              { time:'1 hour ago', org:'ADV Partners', type:'pattern_deviation', severity:'medium', source:'logs-m365_defender.alert-adv|m365_defender', detail:'Unseen value for event.action: "MalwarePreventionBlock" — never observed during baseline' },
-              { time:'3 hours ago', org:'Dacta Global', type:'volume_anomaly', severity:'medium', source:'logs-fortinet_fortigate.log-dacta|fortigate', detail:'Event burst detected: 4,500 RPM vs baseline 800 RPM — 5.6x deviation' },
-              { time:'8 hours ago', org:'SPMT', type:'new_log_source', severity:'high', source:'logs-sophos.endpoint-spmt|sophos|sophos.endpoint', detail:'Entirely new source schema: Sophos Endpoint — 34 new fields, format=json' },
-              { time:'12 hours ago', org:'Naga World', type:'syntax_change', severity:'low', source:'logs-fortinet_fortigate.log-naga|fortigate', detail:'Field type change: destination.bytes was int, now string in 3% of events' },
-              { time:'18 hours ago', org:'Dacta Global', type:'pattern_deviation', severity:'medium', source:'logs-entityanalytics_entra_id-dacta|entra_id', detail:'New IP on source.ip: 203.0.113.50 — never seen during baseline, geo=Netherlands' },
-              { time:'22 hours ago', org:'ADV Partners', type:'new_log_source', severity:'high', source:'logs-azure_sentinel.alert-adv|sentinel|sentinel.alert', detail:'Traffic from unregistered source: Azure Sentinel alerts — new SIEM integration detected' },
-            ];
+            // State
+            var ncFleet = [];
+            var ncAlerts = [];
+            var ncOrgs = [];
+            var ncSelectedOrg = '';
+            var ncTablesExist = true;
 
-            // Render fleet table
-            window.ncRenderFleet = function() {
-              var tbody = document.getElementById('ncFleetBody');
-              if (!tbody) return;
-              var html = '';
-              ncFleet.forEach(function(c, i) {
-                var statusClass = c.status;
-                var statusLabel = c.status.charAt(0).toUpperCase() + c.status.slice(1);
-                if (c.status === 'learning') statusLabel = 'Learning (' + (c.learnProgress || 0) + '%)';
-                if (c.status === 'pending') statusLabel = 'Pending Deploy';
+            // ── API helpers ──
+            async function ncApiFetch(action, params) {
+              var qs = 'action=' + action;
+              if (params) Object.keys(params).forEach(function(k) { if (params[k]) qs += '&' + k + '=' + encodeURIComponent(params[k]); });
+              try {
+                var r = await fetch(NC_API + '?' + qs);
+                return await r.json();
+              } catch(e) { console.warn('[NC] API error:', e); return null; }
+            }
 
-                html += '<tr style="cursor:pointer;" onclick="ncToggleExpand(' + i + ')">';
-                html += '<td style="width:24px;padding-left:14px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="ncChevron' + i + '" style="transition:transform .15s;transform:rotate(0deg);"><polyline points="9 18 15 12 9 6"/></svg></td>';
-                html += '<td style="font-weight:600;color:var(--text-primary);">' + c.org + '</td>';
-                html += '<td><span style="font-family:var(--font-mono);font-size:11px;">' + c.host + '</span></td>';
-                html += '<td><span class="nc-status-dot ' + statusClass + '"></span>' + statusLabel + '</td>';
-                html += '<td style="font-family:var(--font-mono);">' + c.version + '</td>';
-                html += '<td style="font-family:var(--font-mono);">' + c.events + '</td>';
-                html += '<td>' + (c.alerts24h > 0 ? '<span style="color:var(--cyan);font-weight:600;">' + c.alerts24h + '</span>' : '<span style="color:var(--text-muted);">0</span>') + '</td>';
-                html += '<td style="font-size:11px;color:' + (c.heartbeatMs > 300000 ? '#ef4444' : 'var(--text-muted)') + ';">' + c.heartbeat + '</td>';
-                html += '<td style="white-space:nowrap;">';
-                if (c.status !== 'pending') {
-                  html += '<button class="nc-action-btn" onclick="event.stopPropagation();ncOpenConfig(\'' + c.id + '\')" title="Configure"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09"/></svg></button> ';
-                  html += '<button class="nc-action-btn" onclick="event.stopPropagation();ncViewAlerts(\'' + c.org + '\')" title="View Alerts"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/></svg></button> ';
-                  if (c.status === 'offline') html += '<button class="nc-action-btn" style="color:#f59e0b;" onclick="event.stopPropagation();ncRestart(\'' + c.id + '\')" title="Restart"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>';
-                } else {
-                  html += '<button class="nc-action-btn" style="color:var(--cyan);" onclick="event.stopPropagation();ncOpenDeployWizard(\'' + c.org + '\')">' + '+ Deploy</button>';
+            async function ncApiPost(action, body) {
+              try {
+                var r = await fetch(NC_API, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(Object.assign({ action: action }, body))
+                });
+                return await r.json();
+              } catch(e) { console.warn('[NC] API POST error:', e); return null; }
+            }
+
+            // Direct Supabase REST for reads (faster, no cold start)
+            async function ncSbGet(table, query) {
+              try {
+                var r = await fetch(SB_URL + '/rest/v1/' + table + '?' + (query || ''), {
+                  headers: { 'apikey': SB_ANON, 'Authorization': 'Bearer ' + SB_ANON }
+                });
+                if (!r.ok) {
+                  if (r.status === 404 || r.status === 400) { ncTablesExist = false; }
+                  return [];
                 }
-                html += '</td></tr>';
+                return await r.json();
+              } catch(e) { return []; }
+            }
 
-                // Expand row
-                html += '<tr class="nc-expand-row" id="ncExpand' + i + '"><td colspan="9" class="nc-expand-cell">';
-                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding-top:10px;">';
-                // Recent alerts
-                html += '<div><div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Recent Alerts</div>';
-                var orgAlerts = ncAlerts.filter(function(a){ return a.org === c.org; });
-                if (orgAlerts.length === 0) {
-                  html += '<div style="font-size:11px;color:var(--text-muted);font-style:italic;">No alerts in the last 24h</div>';
-                } else {
-                  orgAlerts.slice(0,3).forEach(function(a) {
-                    html += '<div style="font-size:10px;color:var(--text-secondary);padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.02);">';
-                    html += '<span class="nc-badge ' + ncTypeBadgeClass(a.type) + '">' + ncTypeLabel(a.type) + '</span> ';
-                    html += '<span style="color:var(--text-muted);">' + a.time + '</span> &mdash; ';
-                    html += a.detail.substring(0, 80) + (a.detail.length > 80 ? '...' : '');
-                    html += '</div>';
-                  });
-                }
-                html += '</div>';
-                // Config summary
-                html += '<div><div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Configuration</div>';
-                if (c.config.syslog_port) {
-                  html += '<div style="font-size:10px;color:var(--text-secondary);line-height:1.8;">';
-                  html += 'Syslog Port: <span style="font-family:var(--font-mono);color:var(--cyan);">' + c.config.syslog_port + '</span><br>';
-                  html += 'Threshold: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (c.config.threshold || 0.75) + '</span><br>';
-                  html += 'Learning Period: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (c.config.learning_hours || 168) + 'h</span><br>';
-                  html += 'Monitored Indices: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (c.indices ? c.indices.length : 0) + '</span>';
-                  if (c.status === 'learning') {
-                    html += '<br><div style="margin-top:6px;"><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">Learning Progress</div><div style="background:rgba(255,255,255,0.05);border-radius:4px;height:6px;overflow:hidden;"><div style="background:linear-gradient(90deg,#f59e0b,#22c55e);height:100%;width:' + (c.learnProgress || 0) + '%;border-radius:4px;transition:width 1s;"></div></div></div>';
-                  }
-                  html += '</div>';
-                } else {
-                  html += '<div style="font-size:11px;color:var(--text-muted);font-style:italic;">Not yet configured</div>';
-                }
-                html += '</div></div>';
-                html += '</td></tr>';
+            async function ncSbPost(table, body) {
+              try {
+                var r = await fetch(SB_URL + '/rest/v1/' + table, {
+                  method: 'POST',
+                  headers: {
+                    'apikey': SB_ANON,
+                    'Authorization': 'Bearer ' + SB_ANON,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                  },
+                  body: JSON.stringify(body)
+                });
+                if (!r.ok) return null;
+                var data = await r.json();
+                return data && data[0] ? data[0] : data;
+              } catch(e) { return null; }
+            }
+
+            async function ncSbPatch(table, matchCol, matchVal, body) {
+              try {
+                var r = await fetch(SB_URL + '/rest/v1/' + table + '?' + matchCol + '=eq.' + matchVal, {
+                  method: 'PATCH',
+                  headers: {
+                    'apikey': SB_ANON,
+                    'Authorization': 'Bearer ' + SB_ANON,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                  },
+                  body: JSON.stringify(body)
+                });
+                return r.ok;
+              } catch(e) { return false; }
+            }
+
+            async function ncSbDelete(table, matchCol, matchVal) {
+              try {
+                var r = await fetch(SB_URL + '/rest/v1/' + table + '?' + matchCol + '=eq.' + matchVal, {
+                  method: 'DELETE',
+                  headers: { 'apikey': SB_ANON, 'Authorization': 'Bearer ' + SB_ANON }
+                });
+                return r.ok;
+              } catch(e) { return false; }
+            }
+
+            // ── Load orgs ──
+            async function ncLoadOrgs() {
+              ncOrgs = await ncSbGet('organizations', 'select=id,name,short_name&order=name');
+              var sel = document.getElementById('ncOrgFilter');
+              if (!sel || !ncOrgs.length) return;
+              sel.innerHTML = '<option value="">All Organizations</option>';
+              ncOrgs.forEach(function(o) {
+                sel.innerHTML += '<option value="' + o.id + '">' + o.name + '</option>';
               });
-              tbody.innerHTML = html;
-            };
+            }
 
-            // Render alert feed
-            window.ncRenderAlertFeed = function() {
-              var container = document.getElementById('ncAlertFeed');
-              if (!container) return;
-              var html = '';
-              ncAlerts.forEach(function(a, i) {
-                html += '<div class="nc-alert-card">';
-                html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
-                html += '<span class="nc-badge ' + ncTypeBadgeClass(a.type) + '">' + ncTypeLabel(a.type) + '</span>';
-                html += '<span class="nc-badge ' + a.severity + '">' + a.severity.toUpperCase() + '</span>';
-                html += '<span style="font-size:10px;color:var(--text-muted);margin-left:auto;">' + a.time + '</span>';
-                html += '</div>';
-                html += '<div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">' + a.org + '</div>';
-                html += '<div style="font-family:var(--font-mono);font-size:9px;color:var(--cyan);margin-bottom:4px;word-break:break-all;">' + a.source + '</div>';
-                html += '<div style="font-size:10px;color:var(--text-secondary);line-height:1.5;">' + a.detail + '</div>';
-                html += '<div style="display:flex;gap:6px;margin-top:8px;">';
-                html += '<button class="nc-action-btn" onclick="ncAckAlert(' + i + ')">Acknowledge</button>';
-                html += '<button class="nc-action-btn" style="color:var(--cyan);" onclick="showToast(\'Opening investigation...\')">' + 'Investigate</button>';
-                html += '</div></div>';
+            // ── Load fleet (live from DB) ──
+            async function ncLoadFleet() {
+              var query = 'select=*,organizations(name,short_name)&order=created_at.desc';
+              if (ncSelectedOrg) query += '&org_id=eq.' + ncSelectedOrg;
+              var data = await ncSbGet('novelty_catchers', query);
+              if (!Array.isArray(data)) data = [];
+
+              // Mark offline if no heartbeat in 5 min
+              ncFleet = data.map(function(c) {
+                if (c.last_heartbeat) {
+                  var diff = Date.now() - new Date(c.last_heartbeat).getTime();
+                  if (diff > 5 * 60 * 1000 && c.status !== 'pending') c.status = 'offline';
+                }
+                c._orgName = (c.organizations && c.organizations.name) || 'Unknown';
+                return c;
               });
-              container.innerHTML = html;
-            };
 
+              ncRenderFleet();
+              ncUpdateKPIs();
+            }
+
+            // ── Load alerts (live from DB) ──
+            async function ncLoadAlerts() {
+              var query = 'select=*,novelty_catchers(hostname,organizations(name))&order=created_at.desc&limit=50';
+              if (ncSelectedOrg) query += '&org_id=eq.' + ncSelectedOrg;
+              var data = await ncSbGet('novelty_alerts', query);
+              ncAlerts = Array.isArray(data) ? data : [];
+              ncRenderAlertFeed();
+            }
+
+            // ── KPIs ──
+            function ncUpdateKPIs() {
+              var total = ncFleet.length;
+              var online = ncFleet.filter(function(c){ return c.status === 'online'; }).length;
+              var learning = ncFleet.filter(function(c){ return c.status === 'learning'; }).length;
+              var offline = ncFleet.filter(function(c){ return c.status === 'offline'; }).length;
+              var alerts = ncFleet.reduce(function(sum, c){ return sum + (c.alerts_24h || 0); }, 0);
+              var newSources = ncAlerts.filter(function(a){ return a.alert_type === 'new_log_source' && !a.acknowledged; }).length;
+
+              document.getElementById('ncKpiTotal').textContent = total;
+              document.getElementById('ncKpiOnline').textContent = online;
+              document.getElementById('ncKpiLearning').textContent = learning;
+              document.getElementById('ncKpiOffline').textContent = offline;
+              document.getElementById('ncKpiAlerts').textContent = alerts;
+              document.getElementById('ncKpiNewSources').textContent = newSources;
+            }
+
+            // ── Format helpers ──
+            function ncFormatEvents(n) {
+              if (!n || n === 0) return '—';
+              if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+              if (n >= 1e6) return (n / 1e6).toFixed(0) + 'M';
+              if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+              return String(n);
+            }
+            function ncTimeAgo(ts) {
+              if (!ts) return '—';
+              var diff = Date.now() - new Date(ts).getTime();
+              if (diff < 60000) return Math.floor(diff/1000) + ' sec ago';
+              if (diff < 3600000) return Math.floor(diff/60000) + ' min ago';
+              if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+              return Math.floor(diff/86400000) + 'd ago';
+            }
             function ncTypeBadgeClass(type) {
               if (type === 'new_log_source') return 'source';
               if (type === 'syntax_change') return 'syntax';
@@ -17406,16 +17476,120 @@ function getThemeTickColor() {
               if (type === 'volume_anomaly') return 'volume';
               return '';
             }
-
             function ncTypeLabel(type) {
               if (type === 'new_log_source') return 'NEW SOURCE';
-              if (type === 'syntax_change') return 'SYNTAX CHANGE';
-              if (type === 'pattern_deviation') return 'PATTERN DEVIATION';
-              if (type === 'volume_anomaly') return 'VOLUME ANOMALY';
-              return type.toUpperCase().replace(/_/g, ' ');
+              if (type === 'syntax_change') return 'SYNTAX';
+              if (type === 'pattern_deviation') return 'PATTERN';
+              if (type === 'volume_anomaly') return 'VOLUME';
+              return (type || '').toUpperCase().replace(/_/g, ' ');
             }
+            function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-            // Toggle expand row
+            // ── Render fleet table ──
+            window.ncRenderFleet = function() {
+              var tbody = document.getElementById('ncFleetBody');
+              if (!tbody) return;
+
+              if (!ncTablesExist) {
+                tbody.innerHTML = '<tr><td colspan="9" class="nc-empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg><p style="font-weight:600;color:var(--text-secondary);">Database tables not yet created</p><p>Run the migration SQL in SIEMLess DB SQL Editor to create novelty_catchers and novelty_alerts tables.</p></td></tr>';
+                return;
+              }
+
+              if (ncFleet.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="nc-empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><p style="font-weight:600;color:var(--text-secondary);">No catchers deployed yet</p><p>Click <strong>Deploy Catcher</strong> to register your first Novelty Catcher.</p></td></tr>';
+                return;
+              }
+
+              var html = '';
+              ncFleet.forEach(function(c, i) {
+                var statusClass = c.status || 'pending';
+                var statusLabel = statusClass.charAt(0).toUpperCase() + statusClass.slice(1);
+                if (statusClass === 'learning') statusLabel = 'Learning (' + (c.learn_progress || 0) + '%)';
+                if (statusClass === 'pending') statusLabel = 'Pending Deploy';
+
+                html += '<tr style="cursor:pointer;" onclick="ncToggleExpand(' + i + ')">';
+                html += '<td style="width:24px;padding-left:14px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="ncChevron' + i + '" style="transition:transform .15s;"><polyline points="9 18 15 12 9 6"/></svg></td>';
+                html += '<td style="font-weight:600;color:var(--text-primary);">' + escHtml(c._orgName) + '</td>';
+                html += '<td><span style="font-family:var(--font-mono);font-size:11px;">' + escHtml(c.hostname) + '</span></td>';
+                html += '<td><span class="nc-status-dot ' + statusClass + '"></span>' + statusLabel + '</td>';
+                html += '<td style="font-family:var(--font-mono);">' + escHtml(c.version || '—') + '</td>';
+                html += '<td style="font-family:var(--font-mono);">' + ncFormatEvents(c.events_processed) + '</td>';
+                html += '<td>' + (c.alerts_24h > 0 ? '<span style="color:var(--cyan);font-weight:600;">' + c.alerts_24h + '</span>' : '<span style="color:var(--text-muted);">0</span>') + '</td>';
+                html += '<td style="font-size:11px;color:' + ((c.last_heartbeat && (Date.now() - new Date(c.last_heartbeat).getTime()) > 300000) ? '#ef4444' : 'var(--text-muted)') + ';">' + ncTimeAgo(c.last_heartbeat) + '</td>';
+                html += '<td style="white-space:nowrap;">';
+                if (c.status !== 'pending') {
+                  html += '<button class="nc-action-btn" onclick="event.stopPropagation();ncOpenConfig(\'' + c.id + '\')" title="Configure"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09"/></svg></button> ';
+                  html += '<button class="nc-action-btn" onclick="event.stopPropagation();ncDeleteCatcher(\'' + c.id + '\',\'' + escHtml(c.hostname) + '\')" title="Delete" style="color:#ef4444;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>';
+                } else {
+                  html += '<button class="nc-action-btn" style="color:var(--cyan);" onclick="event.stopPropagation();ncOpenDeployWizard(\'' + (c.org_id || '') + '\')">' + '+ Deploy</button>';
+                  html += ' <button class="nc-action-btn" onclick="event.stopPropagation();ncDeleteCatcher(\'' + c.id + '\',\'' + escHtml(c.hostname) + '\')" title="Delete" style="color:#ef4444;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>';
+                }
+                html += '</td></tr>';
+
+                // Expand row
+                html += '<tr class="nc-expand-row" id="ncExpand' + i + '"><td colspan="9" class="nc-expand-cell">';
+                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding-top:10px;">';
+                // Config summary
+                html += '<div><div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Configuration</div>';
+                var cfg = c.config || {};
+                html += '<div style="font-size:10px;color:var(--text-secondary);line-height:1.8;">';
+                html += 'Platform: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (c.platform || 'linux') + '</span><br>';
+                html += 'Syslog Port: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (cfg.syslog_port || 5514) + '</span><br>';
+                html += 'Threshold: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (cfg.threshold || 0.75) + '</span><br>';
+                html += 'Learning Period: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (cfg.learning_hours || 168) + 'h</span><br>';
+                html += 'Monitored Indices: <span style="font-family:var(--font-mono);color:var(--cyan);">' + (c.indices ? c.indices.length : 0) + '</span>';
+                if (c.status === 'learning') {
+                  html += '<br><div style="margin-top:6px;"><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">Learning Progress</div><div style="background:rgba(255,255,255,0.05);border-radius:4px;height:6px;overflow:hidden;"><div style="background:linear-gradient(90deg,#f59e0b,#22c55e);height:100%;width:' + (c.learn_progress || 0) + '%;border-radius:4px;"></div></div></div>';
+                }
+                html += '</div></div>';
+                // Indices list
+                html += '<div><div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Monitored Indices</div>';
+                if (c.indices && c.indices.length > 0) {
+                  html += '<div class="nc-config-block" style="max-height:120px;">' + c.indices.join('\n') + '</div>';
+                } else {
+                  html += '<div style="font-size:11px;color:var(--text-muted);font-style:italic;">No indices configured</div>';
+                }
+                html += '</div></div>';
+                html += '</td></tr>';
+              });
+              tbody.innerHTML = html;
+            };
+
+            // ── Render alert feed ──
+            window.ncRenderAlertFeed = function() {
+              var container = document.getElementById('ncAlertFeed');
+              if (!container) return;
+
+              if (ncAlerts.length === 0) {
+                container.innerHTML = '<div class="nc-empty-state" style="padding:20px;"><p>No alerts in the last 24 hours</p></div>';
+                return;
+              }
+
+              var html = '';
+              ncAlerts.forEach(function(a) {
+                var orgName = '—';
+                if (a.novelty_catchers && a.novelty_catchers.organizations) orgName = a.novelty_catchers.organizations.name;
+                html += '<div class="nc-alert-card">';
+                html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+                html += '<span class="nc-badge ' + ncTypeBadgeClass(a.alert_type) + '">' + ncTypeLabel(a.alert_type) + '</span>';
+                html += '<span class="nc-badge ' + (a.severity || 'medium') + '">' + (a.severity || 'medium').toUpperCase() + '</span>';
+                html += '<span style="font-size:10px;color:var(--text-muted);margin-left:auto;">' + ncTimeAgo(a.created_at) + '</span>';
+                html += '</div>';
+                html += '<div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">' + escHtml(orgName) + '</div>';
+                html += '<div style="font-family:var(--font-mono);font-size:9px;color:var(--cyan);margin-bottom:4px;word-break:break-all;">' + escHtml(a.source_key) + '</div>';
+                html += '<div style="font-size:10px;color:var(--text-secondary);line-height:1.5;">' + escHtml(a.detail) + '</div>';
+                html += '<div style="display:flex;gap:6px;margin-top:8px;">';
+                if (!a.acknowledged) {
+                  html += '<button class="nc-action-btn" onclick="ncAckAlert(\'' + a.id + '\')">Acknowledge</button>';
+                } else {
+                  html += '<span style="font-size:9px;color:var(--text-muted);">✓ Acknowledged</span>';
+                }
+                html += '</div></div>';
+              });
+              container.innerHTML = html;
+            };
+
+            // ── Actions ──
             window.ncToggleExpand = function(idx) {
               var row = document.getElementById('ncExpand' + idx);
               var chevron = document.getElementById('ncChevron' + idx);
@@ -17425,47 +17599,51 @@ function getThemeTickColor() {
               }
             };
 
-            // Acknowledge alert
-            window.ncAckAlert = function(idx) {
-              ncAlerts.splice(idx, 1);
-              ncRenderAlertFeed();
-              showToast('Alert acknowledged');
+            window.ncAckAlert = async function(alertId) {
+              var ok = await ncSbPatch('novelty_alerts', 'id', alertId, { acknowledged: true });
+              if (ok) { showToast('Alert acknowledged'); ncLoadAlerts(); }
+              else showToast('Failed to acknowledge alert');
             };
 
-            // View alerts filtered by org
-            window.ncViewAlerts = function(org) {
-              showToast('Filtering alerts for ' + org);
+            window.ncDeleteCatcher = async function(id, hostname) {
+              if (!confirm('Delete catcher "' + hostname + '"? This cannot be undone.')) return;
+              var ok = await ncSbDelete('novelty_catchers', 'id', id);
+              if (ok) { showToast('Catcher deleted'); ncRefreshFleet(); }
+              else showToast('Failed to delete catcher');
             };
 
-            // Restart catcher
-            window.ncRestart = function(id) {
-              showToast('Restart command sent to catcher ' + id);
-              var c = ncFleet.find(function(f){ return f.id === id; });
-              if (c) { c.status = 'online'; c.heartbeat = 'just now'; c.heartbeatMs = 0; }
-              ncRenderFleet();
+            window.ncFilterByOrg = function() {
+              ncSelectedOrg = document.getElementById('ncOrgFilter').value;
+              ncRefreshFleet();
             };
 
-            // Open config editor modal
+            window.ncRefreshFleet = function() {
+              ncLoadFleet();
+              ncLoadAlerts();
+            };
+
+            // ── Config Editor ──
             window.ncOpenConfig = function(id) {
               var c = ncFleet.find(function(f){ return f.id === id; });
               if (!c) return;
+              var cfg = c.config || {};
               var modal = document.getElementById('ncConfigModal');
               modal.innerHTML = '<div class="nc-modal-overlay" onclick="if(event.target===this)ncCloseConfig()">' +
                 '<div class="nc-modal">' +
                 '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">' +
-                '<h3 style="margin:0;">Configure Catcher — ' + c.org + '</h3>' +
+                '<h3 style="margin:0;">Configure Catcher — ' + escHtml(c._orgName) + '</h3>' +
                 '<button onclick="ncCloseConfig()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">&times;</button>' +
                 '</div>' +
                 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">' +
-                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Hostname</label><input class="filter-input" value="' + c.host + '" style="width:100%;" disabled></div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Hostname</label><input class="filter-input" value="' + escHtml(c.hostname) + '" style="width:100%;" disabled></div>' +
                 '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Mode</label><select class="filter-input" id="ncCfgMode" style="width:100%;"><option value="monitor"' + (c.mode==='monitor'?' selected':'') + '>Monitor</option><option value="learn"' + (c.mode==='learn'?' selected':'') + '>Learn</option></select></div>' +
-                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Syslog Port</label><input class="filter-input" type="number" id="ncCfgPort" value="' + (c.config.syslog_port||5514) + '" style="width:100%;"></div>' +
-                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Novelty Threshold</label><input class="filter-input" type="number" step="0.05" min="0.5" max="1.0" id="ncCfgThreshold" value="' + (c.config.threshold||0.75) + '" style="width:100%;"></div>' +
-                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Learning Period (hours)</label><input class="filter-input" type="number" id="ncCfgLearnHrs" value="' + (c.config.learning_hours||168) + '" style="width:100%;"></div>' +
-                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Cooldown (minutes)</label><input class="filter-input" type="number" id="ncCfgCooldown" value="5" style="width:100%;"></div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Syslog Port</label><input class="filter-input" type="number" id="ncCfgPort" value="' + (cfg.syslog_port||5514) + '" style="width:100%;"></div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Novelty Threshold</label><input class="filter-input" type="number" step="0.05" min="0.5" max="1.0" id="ncCfgThreshold" value="' + (cfg.threshold||0.75) + '" style="width:100%;"></div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Learning Period (hours)</label><input class="filter-input" type="number" id="ncCfgLearnHrs" value="' + (cfg.learning_hours||168) + '" style="width:100%;"></div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Cooldown (minutes)</label><input class="filter-input" type="number" id="ncCfgCooldown" value="' + (cfg.cooldown_minutes||5) + '" style="width:100%;"></div>' +
                 '</div>' +
-                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Monitored Indices</label>' +
-                '<div class="nc-config-block">' + (c.indices||[]).join('\n') + '</div>' +
+                '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Monitored Indices (one per line)</label>' +
+                '<textarea class="filter-input" id="ncCfgIndices" style="width:100%;height:100px;font-family:var(--font-mono);font-size:10px;resize:vertical;">' + (c.indices||[]).join('\n') + '</textarea>' +
                 '</div>' +
                 '<div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end;">' +
                 '<button class="nc-action-btn" onclick="ncCloseConfig()">Cancel</button>' +
@@ -17478,26 +17656,41 @@ function getThemeTickColor() {
               document.getElementById('ncConfigModal').style.display = 'none';
               document.getElementById('ncConfigModal').innerHTML = '';
             };
-            window.ncSaveConfig = function(id) {
-              var c = ncFleet.find(function(f){ return f.id === id; });
-              if (c) {
-                c.mode = document.getElementById('ncCfgMode').value;
-                c.config.syslog_port = parseInt(document.getElementById('ncCfgPort').value);
-                c.config.threshold = parseFloat(document.getElementById('ncCfgThreshold').value);
-                c.config.learning_hours = parseInt(document.getElementById('ncCfgLearnHrs').value);
-              }
+            window.ncSaveConfig = async function(id) {
+              var newConfig = {
+                syslog_port: parseInt(document.getElementById('ncCfgPort').value) || 5514,
+                threshold: parseFloat(document.getElementById('ncCfgThreshold').value) || 0.75,
+                learning_hours: parseInt(document.getElementById('ncCfgLearnHrs').value) || 168,
+                cooldown_minutes: parseInt(document.getElementById('ncCfgCooldown').value) || 5
+              };
+              var newMode = document.getElementById('ncCfgMode').value;
+              var newIndices = document.getElementById('ncCfgIndices').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+
+              var ok = await ncSbPatch('novelty_catchers', 'id', id, {
+                config: newConfig,
+                mode: newMode,
+                status: newMode === 'learn' ? 'learning' : 'online',
+                indices: newIndices,
+                updated_at: new Date().toISOString()
+              });
+
               ncCloseConfig();
-              ncRenderFleet();
-              showToast('Configuration pushed to catcher — will take effect on next heartbeat');
+              if (ok) { showToast('Configuration pushed — takes effect on next heartbeat'); ncLoadFleet(); }
+              else showToast('Failed to push configuration');
             };
 
-            // Deploy wizard
+            // ── Deploy Wizard ──
             var ncWizStep = 0;
-            var ncWizData = { org:'', hostname:'', port:5514, indices:[], learnHours:168, platform:'linux' };
+            var ncWizData = { org_id:'', org_name:'', hostname:'', port:5514, indices:[], learnHours:168, platform:'linux', threshold:0.75 };
 
-            window.ncOpenDeployWizard = function(preselectedOrg) {
+            window.ncOpenDeployWizard = function(preselectedOrgId) {
               ncWizStep = 0;
-              ncWizData = { org: preselectedOrg || '', hostname:'', port:5514, indices:[], learnHours:168, platform:'linux' };
+              ncWizData = { org_id: preselectedOrgId || '', org_name:'', hostname:'', port:5514, indices:[], learnHours:168, platform:'linux', threshold:0.75 };
+              // Set org_name if preselected
+              if (preselectedOrgId) {
+                var org = ncOrgs.find(function(o){ return o.id === preselectedOrgId; });
+                if (org) ncWizData.org_name = org.name;
+              }
               ncRenderWizard();
             };
 
@@ -17516,60 +17709,54 @@ function getThemeTickColor() {
               html += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:14px;">Step ' + (ncWizStep+1) + ' of 4: ' + steps[ncWizStep] + '</div>';
 
               if (ncWizStep === 0) {
-                // Select client
-                var orgs = (window._dactaOrgs || ['Dacta Global','Naga World','SPMT','ADV Partners','Global Advisor','EM Services']).filter(function(o){ return typeof o === 'string'; });
                 html += '<div style="display:grid;gap:8px;">';
-                orgs.forEach(function(org) {
-                  var isSelected = ncWizData.org === org;
-                  html += '<div onclick="ncWizData.org=\'' + org.replace(/'/g,"\\'") + '\';ncRenderWizard()" style="padding:12px 16px;border-radius:8px;border:1px solid ' + (isSelected ? 'var(--cyan)' : 'rgba(255,255,255,0.05)') + ';background:' + (isSelected ? 'rgba(0,212,255,0.06)' : 'rgba(15,23,42,0.3)') + ';cursor:pointer;font-size:12px;color:' + (isSelected ? 'var(--cyan)' : 'var(--text-secondary)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' + org + '</div>';
+                ncOrgs.forEach(function(org) {
+                  var isSelected = ncWizData.org_id === org.id;
+                  html += '<div onclick="ncSelectWizOrg(\'' + org.id + '\',\'' + org.name.replace(/'/g,"\\'") + '\')" style="padding:12px 16px;border-radius:8px;border:1px solid ' + (isSelected ? 'var(--cyan)' : 'rgba(255,255,255,0.05)') + ';background:' + (isSelected ? 'rgba(0,212,255,0.06)' : 'rgba(15,23,42,0.3)') + ';cursor:pointer;font-size:12px;color:' + (isSelected ? 'var(--cyan)' : 'var(--text-secondary)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' + escHtml(org.name) + '</div>';
                 });
                 html += '</div>';
               } else if (ncWizStep === 1) {
-                // Configure
                 html += '<div style="margin-bottom:14px;"><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:6px;">Target Platform</label>';
                 html += '<div style="display:flex;gap:8px;">';
-                var platforms = [{id:'linux',label:'Linux x64',icon:'\uD83D\uDDA5\uFE0F'},{id:'windows',label:'Windows x64',icon:'\uD83E\uDE9F'}];
-                platforms.forEach(function(p){
+                [{id:'linux',label:'Linux x64'},{id:'windows',label:'Windows x64'}].forEach(function(p){
                   var sel = ncWizData.platform === p.id;
                   html += '<div onclick="ncWizData.platform=\'' + p.id + '\';ncRenderWizard()" style="flex:1;padding:10px 14px;border-radius:8px;border:1px solid ' + (sel ? 'var(--cyan)' : 'rgba(255,255,255,0.08)') + ';background:' + (sel ? 'rgba(0,212,255,0.06)' : 'rgba(15,23,42,0.3)') + ';cursor:pointer;text-align:center;">';
-                  html += '<div style="font-size:13px;font-weight:' + (sel?'600':'400') + ';color:' + (sel?'var(--cyan)':'var(--text-secondary)') + ';">' + p.label + '</div>';
-                  html += '</div>';
+                  html += '<div style="font-size:13px;font-weight:' + (sel?'600':'400') + ';color:' + (sel?'var(--cyan)':'var(--text-secondary)') + ';">' + p.label + '</div></div>';
                 });
                 html += '</div></div>';
+                var defHost = ncWizData.hostname || 'collector-' + ncWizData.org_name.toLowerCase().replace(/\s+/g,'-').substring(0,8) + '-01';
                 html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">';
-                html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Collector Hostname</label><input class="filter-input" id="ncWizHost" value="' + (ncWizData.hostname || 'collector-' + ncWizData.org.toLowerCase().replace(/\s+/g,'-').substring(0,8) + '-01') + '" style="width:100%;" placeholder="e.g. collector-sg-01"></div>';
+                html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Collector Hostname</label><input class="filter-input" id="ncWizHost" value="' + escHtml(defHost) + '" style="width:100%;"></div>';
                 html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Syslog Port</label><input class="filter-input" type="number" id="ncWizPort" value="' + ncWizData.port + '" style="width:100%;"></div>';
                 html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Learning Period (hours)</label><input class="filter-input" type="number" id="ncWizLearn" value="' + ncWizData.learnHours + '" style="width:100%;"></div>';
-                html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Novelty Threshold</label><input class="filter-input" type="number" step="0.05" value="0.75" style="width:100%;"></div>';
+                html += '<div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Novelty Threshold</label><input class="filter-input" type="number" step="0.05" id="ncWizThreshold" value="' + ncWizData.threshold + '" style="width:100%;"></div>';
                 html += '</div>';
                 html += '<div style="margin-top:14px;"><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;">Elastic Indices to Monitor (one per line)</label>';
                 html += '<textarea class="filter-input" id="ncWizIndices" style="width:100%;height:120px;font-family:var(--font-mono);font-size:10px;resize:vertical;" placeholder="logs-fortinet_fortigate.log-*\nlogs-m365_defender.alert-*">' + (ncWizData.indices.length > 0 ? ncWizData.indices.join('\n') : '') + '</textarea></div>';
               } else if (ncWizStep === 2) {
-                // Review YAML config
-                var configYaml = generateDemoConfig(ncWizData);
+                var configYaml = ncGenerateConfig(ncWizData);
                 html += '<div class="nc-config-block" style="max-height:340px;">' + escHtml(configYaml) + '</div>';
               } else if (ncWizStep === 3) {
-                // Deploy instructions
-                html += '<div style="text-align:center;margin-bottom:16px;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div style="font-size:14px;font-weight:600;color:#22c55e;margin-top:8px;">Catcher Registered</div></div>';
-                html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">Deploy the Novelty Catcher on <strong>' + (ncWizData.hostname || 'collector') + '</strong> using these commands:</div>';
+                html += '<div style="text-align:center;margin-bottom:16px;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div style="font-size:14px;font-weight:600;color:#22c55e;margin-top:8px;">Catcher Registered in SIEMLess DB</div></div>';
+                html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">Deploy the Novelty Catcher on <strong>' + escHtml(ncWizData.hostname || 'collector') + '</strong> (' + ncWizData.platform + ') using these commands:</div>';
                 var cmds;
                 if (ncWizData.platform === 'windows') {
-                  cmds = '# === Windows Deployment ===\n\n# 1. Copy package to target host\nCopy-Item novelty-catcher-v2.0.0-windows-x64.zip \\\\' + (ncWizData.hostname||'collector') + '\\C$\\Temp\\\n\n# 2. RDP in and extract\nExpand-Archive C:\\Temp\\novelty-catcher-v2.0.0-windows-x64.zip -DestinationPath C:\\Temp\\novelty-catcher\ncd C:\\Temp\\novelty-catcher\\novelty-catcher-win-dist\n\n# 3. Install (Run PowerShell as Administrator)\npowershell -ExecutionPolicy Bypass -File install-windows.ps1\n\n# 4. Configure credentials\nnotepad "C:\\ProgramData\\DACTA\\Novelty-Catcher\\config\\env.cmd"\n\n# 5. Bootstrap learning\nnovelty-catcher -c "C:\\ProgramData\\DACTA\\Novelty-Catcher\\config\\config.yaml" --mode learn-from-elastic --learn-hours ' + ncWizData.learnHours + '\n\n# 6. Start service\nStart-Service DACTANoveltyCatcher\nSet-Service DACTANoveltyCatcher -StartupType Automatic';
+                  cmds = '# === Windows Deployment ===\n\n# 1. Copy package to target\nCopy-Item novelty-catcher-v2.0.0-windows-x64.zip \\\\' + escHtml(ncWizData.hostname||'collector') + '\\C$\\Temp\\\n\n# 2. RDP in and extract\nExpand-Archive C:\\Temp\\novelty-catcher-v2.0.0-windows-x64.zip -DestinationPath C:\\Temp\\novelty-catcher\ncd C:\\Temp\\novelty-catcher\\novelty-catcher-win-dist\n\n# 3. Install (Run PowerShell as Administrator)\npowershell -ExecutionPolicy Bypass -File install-windows.ps1\n\n# 4. Configure credentials\nnotepad "C:\\ProgramData\\DACTA\\Novelty-Catcher\\config\\env.cmd"\n\n# 5. Bootstrap learning\nnovelty-catcher -c "C:\\ProgramData\\DACTA\\Novelty-Catcher\\config\\config.yaml" --mode learn-from-elastic --learn-hours ' + ncWizData.learnHours + '\n\n# 6. Start service\nStart-Service DACTANoveltyCatcher';
                 } else {
-                  cmds = '# === Linux Deployment ===\n\n# 1. Upload package\nscp novelty-catcher-v2.0.0-linux-x64.tar.gz root@' + (ncWizData.hostname||'collector') + ':/tmp/\n\n# 2. SSH in and install\nssh root@' + (ncWizData.hostname||'collector') + '\ncd /tmp && tar xzf novelty-catcher-v2.0.0-linux-x64.tar.gz\ncd novelty-catcher-dist && sudo bash install.sh\n\n# 3. Configure credentials\nsudo nano /etc/novelty-catcher/env\n\n# 4. Bootstrap learning\nnovelty-catcher -c /etc/novelty-catcher/config.yaml -m learn-from-elastic --learn-hours ' + ncWizData.learnHours + '\n\n# 5. Start service\nsudo systemctl start novelty-catcher && sudo systemctl enable novelty-catcher';
+                  cmds = '# === Linux Deployment ===\n\n# 1. Upload package\nscp novelty-catcher-v2.0.0-linux-x64.tar.gz root@' + escHtml(ncWizData.hostname||'collector') + ':/tmp/\n\n# 2. SSH in and install\nssh root@' + escHtml(ncWizData.hostname||'collector') + '\ncd /tmp && tar xzf novelty-catcher-v2.0.0-linux-x64.tar.gz\ncd novelty-catcher-dist && sudo bash install.sh\n\n# 3. Configure credentials\nsudo nano /etc/novelty-catcher/env\n\n# 4. Bootstrap learning\nnovelty-catcher -c /etc/novelty-catcher/config.yaml -m learn-from-elastic --learn-hours ' + ncWizData.learnHours + '\n\n# 5. Start service\nsudo systemctl start novelty-catcher && sudo systemctl enable novelty-catcher';
                 }
                 html += '<div class="nc-config-block" style="max-height:250px;">' + escHtml(cmds) + '</div>';
-                html += '<div style="display:flex;gap:8px;margin-top:12px;"><button class="nc-deploy-btn" onclick="ncCopyConfig()">Copy Config YAML</button><button class="nc-deploy-btn" onclick="ncCopyCommands()">Copy Install Commands</button></div>';
+                html += '<div style="display:flex;gap:8px;margin-top:12px;"><button class="nc-deploy-btn" onclick="ncCopyToClipboard(ncGenerateConfig(ncWizData))">Copy Config YAML</button></div>';
               }
 
               // Navigation
               html += '<div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end;">';
-              if (ncWizStep > 0) html += '<button class="nc-action-btn" onclick="ncWizStep--;ncRenderWizard()">Back</button>';
+              if (ncWizStep > 0) html += '<button class="nc-action-btn" onclick="ncWizBack()">Back</button>';
               if (ncWizStep < 3) {
-                var disabled = (ncWizStep === 0 && !ncWizData.org) ? ' disabled style="opacity:0.4;pointer-events:none;font-size:10px;padding:4px 10px;border-radius:5px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:var(--text-muted);cursor:pointer;"' : '';
-                html += '<button class="nc-deploy-btn" onclick="ncWizNext()"' + disabled + '>Next</button>';
+                var canProceed = (ncWizStep === 0) ? !!ncWizData.org_id : true;
+                html += '<button class="nc-deploy-btn" onclick="ncWizNext()" ' + (canProceed ? '' : 'disabled style="opacity:0.4;pointer-events:none;"') + '>Next</button>';
               } else {
-                html += '<button class="nc-deploy-btn" onclick="ncCloseWizard();showToast(\'Catcher registered — deploy on the collector host\')">Done</button>';
+                html += '<button class="nc-deploy-btn" onclick="ncCloseWizard()">Done</button>';
               }
               html += '</div>';
               html += '</div></div>';
@@ -17577,17 +17764,59 @@ function getThemeTickColor() {
               modal.style.display = '';
             };
 
-            window.ncWizNext = function() {
-              if (ncWizStep === 1) {
-                var hostEl = document.getElementById('ncWizHost');
-                var portEl = document.getElementById('ncWizPort');
-                var learnEl = document.getElementById('ncWizLearn');
-                var indicesEl = document.getElementById('ncWizIndices');
-                if (hostEl) ncWizData.hostname = hostEl.value;
-                if (portEl) ncWizData.port = parseInt(portEl.value) || 5514;
-                if (learnEl) ncWizData.learnHours = parseInt(learnEl.value) || 168;
-                if (indicesEl) ncWizData.indices = indicesEl.value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+            window.ncSelectWizOrg = function(orgId, orgName) {
+              ncWizData.org_id = orgId;
+              ncWizData.org_name = orgName;
+              ncRenderWizard();
+            };
+
+            window.ncWizBack = function() {
+              if (ncWizStep === 1) ncCaptureStep1();
+              ncWizStep--;
+              ncRenderWizard();
+            };
+
+            function ncCaptureStep1() {
+              var h = document.getElementById('ncWizHost');
+              var p = document.getElementById('ncWizPort');
+              var l = document.getElementById('ncWizLearn');
+              var t = document.getElementById('ncWizThreshold');
+              var idx = document.getElementById('ncWizIndices');
+              if (h) ncWizData.hostname = h.value;
+              if (p) ncWizData.port = parseInt(p.value) || 5514;
+              if (l) ncWizData.learnHours = parseInt(l.value) || 168;
+              if (t) ncWizData.threshold = parseFloat(t.value) || 0.75;
+              if (idx) ncWizData.indices = idx.value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+            }
+
+            window.ncWizNext = async function() {
+              if (ncWizStep === 1) ncCaptureStep1();
+
+              // On step 2→3 transition: register the catcher in DB
+              if (ncWizStep === 2) {
+                showToast('Registering catcher...');
+                var result = await ncSbPost('novelty_catchers', {
+                  org_id: ncWizData.org_id,
+                  hostname: ncWizData.hostname || 'collector-01',
+                  version: '2.0.0',
+                  mode: 'learn',
+                  status: 'pending',
+                  platform: ncWizData.platform,
+                  config: {
+                    syslog_port: ncWizData.port,
+                    threshold: ncWizData.threshold,
+                    learning_hours: ncWizData.learnHours
+                  },
+                  indices: ncWizData.indices
+                });
+                if (!result) {
+                  showToast('Failed to register catcher — check if DB tables exist');
+                  return;
+                }
+                showToast('Catcher registered successfully');
+                ncLoadFleet(); // Refresh fleet table
               }
+
               ncWizStep++;
               ncRenderWizard();
             };
@@ -17597,33 +17826,19 @@ function getThemeTickColor() {
               document.getElementById('ncDeployModal').innerHTML = '';
             };
 
-            window.ncCopyConfig = function() {
-              var yaml = generateDemoConfig(ncWizData);
-              navigator.clipboard.writeText(yaml).then(function(){ showToast('Config YAML copied to clipboard'); });
-            };
-            window.ncCopyCommands = function() {
-              var cmds = '# Deploy to ' + (ncWizData.hostname||'collector') + '\nscp novelty-catcher-v2.0.0-linux-x64.tar.gz root@' + (ncWizData.hostname||'collector') + ':/tmp/\nssh root@' + (ncWizData.hostname||'collector') + '\ncd /tmp && tar xzf novelty-catcher-v2.0.0-linux-x64.tar.gz\ncd novelty-catcher-dist && sudo bash install.sh\nsudo nano /etc/novelty-catcher/env\nnovelty-catcher -c /etc/novelty-catcher/config.yaml -m learn-from-elastic --learn-hours ' + ncWizData.learnHours + '\nsudo systemctl start novelty-catcher && sudo systemctl enable novelty-catcher';
-              navigator.clipboard.writeText(cmds).then(function(){ showToast('Install commands copied'); });
+            window.ncCopyToClipboard = function(text) {
+              navigator.clipboard.writeText(text).then(function(){ showToast('Copied to clipboard'); });
             };
 
-            function generateDemoConfig(data) {
+            window.ncGenerateConfig = function(data) {
               var indices = data.indices.length > 0 ? data.indices.map(function(i){ return '      - "' + i + '"'; }).join('\n') : '      - "logs-*"';
-              return '# DACTA Novelty Catcher — ' + data.org + '\n# Auto-generated by SIEMLess · ' + new Date().toISOString().split('T')[0] + '\n\nagent:\n  name: "novelty-catcher-' + data.org.toLowerCase().replace(/\s+/g,'-') + '"\n  version: "2.0.0"\n  log_level: "INFO"\n  state_dir: "./state"\n\ninputs:\n  syslog:\n    enabled: true\n    protocol: "udp"\n    host: "0.0.0.0"\n    port: ' + data.port + '\n    forward_to:\n      enabled: true\n      host: "127.0.0.1"\n      port: 514\n\n  elastic:\n    enabled: true\n    url: "${ELASTIC_URL}"\n    api_key: "${ELASTIC_API_KEY}"\n    indices:\n' + indices + '\n    poll_interval_seconds: 60\n\ndetection:\n  baseline:\n    learning_period_hours: ' + data.learnHours + '\n    min_samples: 50\n  scoring:\n    novelty_threshold: 0.75\n    cooldown_minutes: 5\n\noutputs:\n  elastic:\n    enabled: true\n    index: "novelty-alerts-' + data.org.toLowerCase().replace(/\s+/g,'-') + '"\n  siemless:\n    enabled: true\n    url: "https://dacta-siemless.vercel.app"\n    endpoint: "/api/novelty-catcher"\n  file:\n    enabled: true\n    path: "outputs/novelty_alerts.ndjson"\n\nperformance:\n  workers: 2\n  queue_size: 10000';
-            }
+              return '# DACTA Novelty Catcher \u2014 ' + (data.org_name || 'Client') + '\n# Auto-generated by SIEMLess \u00b7 ' + new Date().toISOString().split('T')[0] + '\n\nagent:\n  name: "novelty-catcher-' + (data.org_name || 'client').toLowerCase().replace(/\s+/g,'-') + '"\n  version: "2.0.0"\n  log_level: "INFO"\n  state_dir: "./state"\n\ninputs:\n  syslog:\n    enabled: true\n    protocol: "udp"\n    host: "0.0.0.0"\n    port: ' + data.port + '\n    forward_to:\n      enabled: true\n      host: "127.0.0.1"\n      port: 514\n\n  elastic:\n    enabled: true\n    url: "${ELASTIC_URL}"\n    api_key: "${ELASTIC_API_KEY}"\n    indices:\n' + indices + '\n    poll_interval_seconds: 60\n\ndetection:\n  baseline:\n    learning_period_hours: ' + data.learnHours + '\n    min_samples: 50\n  scoring:\n    novelty_threshold: ' + data.threshold + '\n    cooldown_minutes: 5\n\noutputs:\n  elastic:\n    enabled: true\n    index: "novelty-alerts-' + (data.org_name || 'client').toLowerCase().replace(/\s+/g,'-') + '"\n  siemless:\n    enabled: true\n    url: "https://dacta-siemless.vercel.app"\n    endpoint: "/api/novelty-catcher"\n  file:\n    enabled: true\n    path: "outputs/novelty_alerts.ndjson"\n\nperformance:\n  workers: 2\n  queue_size: 10000';
+            };
 
-            function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-            // Initialize on tab switch
-            var origSwitchLpTab = window.switchLpTab;
-            if (typeof origSwitchLpTab !== 'function') {
-              // switchLpTab might not exist yet — define a safe wrapper
-              window._ncInitDone = false;
-            }
-            // Hook into tab switch to render on first visit
+            // ── Initialize on tab switch ──
             var _ncInited = false;
             var origSwitch = window.switchLpTab;
             window.switchLpTab = function(tabId) {
-              // Call original
               document.querySelectorAll('.lp-tab-btn').forEach(function(b){ b.classList.remove('active'); });
               document.querySelectorAll('.lp-panel').forEach(function(p){ p.classList.remove('active'); });
               var panel = document.getElementById('lp-panel-' + tabId);
@@ -17632,8 +17847,9 @@ function getThemeTickColor() {
               if (btn) btn.classList.add('active');
               if (tabId === 'catcher' && !_ncInited) {
                 _ncInited = true;
-                ncRenderFleet();
-                ncRenderAlertFeed();
+                ncLoadOrgs();
+                ncLoadFleet();
+                ncLoadAlerts();
               }
             };
 
