@@ -17306,8 +17306,7 @@ function getThemeTickColor() {
           /* ── Novelty Catcher — Fleet Management UI (LIVE DATA) ─────────────────── */
           (function() {
             var NC_API = '/api/novelty-catcher';
-            var SB_URL = 'https://qiqrizggitcqwkwshmfy.supabase.co';
-            var SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpcXJpemdnaXRjcXdrd3NobWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNzkzMjEsImV4cCI6MjA4NzY1NTMyMX0.ZNN47SWAYvAzzY5Dn6VCYV8nzrTrqvvybp2aF4NFHCA';
+            function ncGetSb() { return window._dactaSupabase || window._supabaseRef; }
 
             // State
             var ncFleet = [];
@@ -17316,82 +17315,70 @@ function getThemeTickColor() {
             var ncSelectedOrg = '';
             var ncTablesExist = true;
 
-            // ── API helpers ──
-            async function ncApiFetch(action, params) {
-              var qs = 'action=' + action;
-              if (params) Object.keys(params).forEach(function(k) { if (params[k]) qs += '&' + k + '=' + encodeURIComponent(params[k]); });
+            // ── Supabase helpers (uses authenticated session via _dactaSupabase) ──
+            async function ncSbGet(table, queryStr) {
+              var sb = ncGetSb();
+              if (!sb) return [];
               try {
-                var r = await fetch(NC_API + '?' + qs);
-                return await r.json();
-              } catch(e) { console.warn('[NC] API error:', e); return null; }
-            }
+                // Parse the query string to build supabase-js query
+                var selectMatch = (queryStr || '').match(/select=([^&]*)/);
+                var selectCols = selectMatch ? selectMatch[1] : '*';
+                var q = sb.from(table).select(selectCols);
 
-            async function ncApiPost(action, body) {
-              try {
-                var r = await fetch(NC_API, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(Object.assign({ action: action }, body))
+                // Parse filters
+                var filters = (queryStr || '').split('&').filter(function(p) {
+                  return p && !p.startsWith('select=') && !p.startsWith('order=') && !p.startsWith('limit=');
                 });
-                return await r.json();
-              } catch(e) { console.warn('[NC] API POST error:', e); return null; }
-            }
+                filters.forEach(function(f) {
+                  var m = f.match(/^([\w_]+)=eq\.(.+)$/);
+                  if (m) q = q.eq(m[1], m[2]);
+                });
 
-            // Direct Supabase REST for reads (faster, no cold start)
-            async function ncSbGet(table, query) {
-              try {
-                var r = await fetch(SB_URL + '/rest/v1/' + table + '?' + (query || ''), {
-                  headers: { 'apikey': SB_ANON, 'Authorization': 'Bearer ' + SB_ANON }
-                });
-                if (!r.ok) {
-                  if (r.status === 404 || r.status === 400) { ncTablesExist = false; }
+                var orderMatch = (queryStr || '').match(/order=([\w_]+)\.(asc|desc)/);
+                if (orderMatch) q = q.order(orderMatch[1], { ascending: orderMatch[2] === 'asc' });
+                else if ((queryStr || '').includes('order=created_at.desc')) q = q.order('created_at', { ascending: false });
+                else if ((queryStr || '').includes('order=name')) q = q.order('name');
+
+                var limitMatch = (queryStr || '').match(/limit=(\d+)/);
+                if (limitMatch) q = q.limit(parseInt(limitMatch[1]));
+
+                var { data, error } = await q;
+                if (error) {
+                  console.warn('[NC] SbGet error:', error.message);
+                  if (error.code === 'PGRST205' || error.message.includes('not found')) ncTablesExist = false;
                   return [];
                 }
-                return await r.json();
-              } catch(e) { return []; }
+                return data || [];
+              } catch(e) { console.warn('[NC] SbGet exception:', e); return []; }
             }
 
             async function ncSbPost(table, body) {
+              var sb = ncGetSb();
+              if (!sb) return null;
               try {
-                var r = await fetch(SB_URL + '/rest/v1/' + table, {
-                  method: 'POST',
-                  headers: {
-                    'apikey': SB_ANON,
-                    'Authorization': 'Bearer ' + SB_ANON,
-                    'Content-Type': 'application/json',
-                    'Prefer': 'return=representation'
-                  },
-                  body: JSON.stringify(body)
-                });
-                if (!r.ok) return null;
-                var data = await r.json();
+                var { data, error } = await sb.from(table).insert(body).select();
+                if (error) { console.warn('[NC] SbPost error:', error.message); return null; }
                 return data && data[0] ? data[0] : data;
               } catch(e) { return null; }
             }
 
             async function ncSbPatch(table, matchCol, matchVal, body) {
+              var sb = ncGetSb();
+              if (!sb) return false;
               try {
-                var r = await fetch(SB_URL + '/rest/v1/' + table + '?' + matchCol + '=eq.' + matchVal, {
-                  method: 'PATCH',
-                  headers: {
-                    'apikey': SB_ANON,
-                    'Authorization': 'Bearer ' + SB_ANON,
-                    'Content-Type': 'application/json',
-                    'Prefer': 'return=representation'
-                  },
-                  body: JSON.stringify(body)
-                });
-                return r.ok;
+                var { error } = await sb.from(table).update(body).eq(matchCol, matchVal);
+                if (error) { console.warn('[NC] SbPatch error:', error.message); return false; }
+                return true;
               } catch(e) { return false; }
             }
 
             async function ncSbDelete(table, matchCol, matchVal) {
+              var sb = ncGetSb();
+              if (!sb) return false;
               try {
-                var r = await fetch(SB_URL + '/rest/v1/' + table + '?' + matchCol + '=eq.' + matchVal, {
-                  method: 'DELETE',
-                  headers: { 'apikey': SB_ANON, 'Authorization': 'Bearer ' + SB_ANON }
-                });
-                return r.ok;
+                var { error } = await sb.from(table).delete().eq(matchCol, matchVal);
+                if (error) { console.warn('[NC] SbDelete error:', error.message); return false; }
+                return true;
               } catch(e) { return false; }
             }
 
