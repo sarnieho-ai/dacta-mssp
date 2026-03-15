@@ -104,6 +104,15 @@ export default async function handler(req, res) {
         return res.status(200).json({ orgs: orgResult.data || [] });
       }
 
+      // ── UI → SIEMLess: Get Log Sources for an Org ──
+      case 'log_sources': {
+        const lsOrgId = req.query.org_id;
+        let lsPath = 'client_log_sources?select=id,source_name,vendor,source_type,status&order=source_name';
+        if (lsOrgId) lsPath += `&org_id=eq.${lsOrgId}`;
+        const lsResult = await supabaseRequest('GET', lsPath);
+        return res.status(200).json({ log_sources: lsResult.data || [] });
+      }
+
       // ── UI → SIEMLess: Get Fleet Status ──
       case 'fleet': {
         const org_id = req.query.org_id;
