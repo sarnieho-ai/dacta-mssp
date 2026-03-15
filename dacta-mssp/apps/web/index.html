@@ -390,6 +390,30 @@
   background: #ffffff;
   border: 1px solid rgba(0,0,0,0.08);
 }
+[data-theme="light"] .snoc-panel {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+[data-theme="light"] .snoc-service-card {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+[data-theme="light"] .snoc-timeline-panel {
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+[data-theme="light"] .snoc-topology-wrap {
+  background: #fafbfc;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+[data-theme="light"] .snoc-topo-badge {
+  background: rgba(255,255,255,0.9);
+}
+[data-theme="light"] .snoc-mitre-section,
+[data-theme="light"] .snoc-observability-section,
+[data-theme="light"] .snoc-service-health-section {
+  border: 1px solid rgba(0,0,0,0.08);
+}
 
 /* ---- Detection Rules ---- */
 [data-theme="light"] .dr-rule-card {
@@ -26739,12 +26763,11 @@ Analyst: K. Rasmussen | 2026-02-28
         </style>
 
 <style>
-/* =====================================================
-   SNOC — Security & Network Operations Center
-   ===================================================== */
 /* ============================================================
    SNOC — Security & Network Operations Center
    All styles prefixed with .snoc- to avoid collisions
+   5-Layer Architecture: Service Health, Infra/Network,
+   Observability, Security Ops, Unified Timeline
    ============================================================ */
 
 /* ---- Page Layout ---- */
@@ -26799,6 +26822,31 @@ body.snoc-fullscreen #page-snoc {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* ---- Auto-refresh indicator ---- */
+.snoc-refresh-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+.snoc-refresh-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(0,212,255,0.2);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: snocSpin 1s linear infinite;
+}
+@keyframes snocSpin {
+  to { transform: rotate(360deg); }
 }
 
 /* ---- SNOC Org Selector ---- */
@@ -26889,7 +26937,7 @@ body.snoc-fullscreen #page-snoc {
 /* ---- KPI Bar ---- */
 .snoc-kpi-bar {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(12, 1fr);
   gap: 8px;
   margin-bottom: 16px;
 }
@@ -26917,6 +26965,7 @@ body.snoc-fullscreen #page-snoc {
   opacity: 0.4;
 }
 .snoc-kpi-card.sec::before { background: var(--red); opacity: 0.5; }
+.snoc-kpi-card.obs::before { background: #a78bfa; opacity: 0.5; }
 .snoc-kpi-card:hover { border-color: rgba(0,212,255,0.2); }
 .snoc-kpi-label {
   font-size: 9px;
@@ -26941,6 +26990,7 @@ body.snoc-fullscreen #page-snoc {
 .snoc-kpi-value.green { color: var(--green); }
 .snoc-kpi-value.amber { color: var(--amber); }
 .snoc-kpi-value.red { color: var(--red-bright); }
+.snoc-kpi-value.purple { color: #a78bfa; }
 .snoc-kpi-sub {
   font-size: 10px;
   color: var(--text-muted);
@@ -26962,11 +27012,6 @@ body.snoc-fullscreen #page-snoc {
 .snoc-kpi-sev.p1 { background: rgba(239,68,68,0.15); color: var(--red-bright); }
 .snoc-kpi-sev.p2 { background: rgba(245,158,11,0.15); color: var(--amber); }
 .snoc-kpi-sev.p3 { background: rgba(249,115,22,0.12); color: #fb923c; }
-.snoc-kpi-divider {
-  grid-column: span 1;
-  border-left: 1px solid var(--border-subtle);
-  margin: 0 4px;
-}
 .snoc-trend-up { color: var(--green); font-size: 10px; }
 .snoc-trend-down { color: var(--red-bright); font-size: 10px; }
 .snoc-sparkline {
@@ -26983,6 +27028,155 @@ body.snoc-fullscreen #page-snoc {
   width: 1px;
   background: var(--border-subtle);
   margin: 0 4px;
+}
+
+/* ---- Collapsible Section ---- */
+.snoc-collapsible-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 8px;
+}
+.snoc-collapsible-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.snoc-collapsible-title .snoc-section-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.snoc-chevron {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+  font-size: 12px;
+  text-align: center;
+  line-height: 16px;
+}
+.snoc-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+.snoc-collapsible-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+.snoc-collapsible-body {
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.snoc-collapsible-body.collapsed {
+  max-height: 0 !important;
+  overflow: hidden;
+}
+
+/* ---- Service Health Strip (Layer 1) ---- */
+.snoc-service-health-section {
+  margin-bottom: 12px;
+}
+.snoc-service-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.snoc-service-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  transition: border-color 0.15s;
+  cursor: default;
+}
+.snoc-service-card:hover { border-color: rgba(0,212,255,0.2); }
+.snoc-service-health-ring {
+  width: 40px;
+  height: 40px;
+  position: relative;
+  flex-shrink: 0;
+}
+.snoc-service-health-ring canvas {
+  width: 40px;
+  height: 40px;
+}
+.snoc-service-health-pct {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.snoc-service-info {
+  flex: 1;
+  min-width: 0;
+}
+.snoc-service-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.snoc-service-status {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.snoc-service-org-tag {
+  font-size: 8px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0,212,255,0.08);
+  color: var(--cyan);
+  display: inline-block;
+}
+.snoc-service-warnings {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--amber);
+}
+.snoc-service-critical {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--red-bright);
+}
+
+/* Service Map Canvas */
+.snoc-service-map-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  min-height: 180px;
+}
+#snocServiceMapCanvas {
+  display: block;
+  width: 100%;
+  height: 180px;
+  cursor: default;
 }
 
 /* ---- Main 3-col Layout ---- */
@@ -27030,6 +27224,7 @@ body.snoc-fullscreen #page-snoc {
 }
 .snoc-panel-title .dot.red { background: var(--red); box-shadow: 0 0 6px var(--red); }
 .snoc-panel-title .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.snoc-panel-title .dot.purple { background: #a78bfa; box-shadow: 0 0 6px #a78bfa; }
 .snoc-panel-body {
   flex: 1;
   overflow: hidden;
@@ -27125,6 +27320,15 @@ body.snoc-fullscreen #page-snoc {
 }
 .snoc-cpu-bar-fill.warn { background: var(--amber); }
 .snoc-cpu-bar-fill.danger { background: var(--red); }
+.snoc-org-tag-cell {
+  font-size: 8px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(0,212,255,0.08);
+  color: var(--cyan);
+  white-space: nowrap;
+}
 
 /* Bandwidth utilization chart panel */
 .snoc-bw-chart-wrap {
@@ -27177,6 +27381,17 @@ body.snoc-fullscreen #page-snoc {
   font-family: var(--font-mono);
   flex-shrink: 0;
 }
+.snoc-bw-util-pct {
+  font-size: 9px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.snoc-bw-util-pct.green { color: var(--green); }
+.snoc-bw-util-pct.amber { color: var(--amber); }
+.snoc-bw-util-pct.red { color: var(--red-bright); }
 
 /* VPN Tunnel status */
 .snoc-vpn-list {
@@ -27396,7 +27611,23 @@ body.snoc-fullscreen #page-snoc {
 .snoc-inc-sev.p3 { background: rgba(249,115,22,0.12); color: #fb923c; border: 1px solid rgba(249,115,22,0.25); }
 .snoc-inc-body { flex: 1; min-width: 0; }
 .snoc-inc-title { font-size: 11px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.snoc-inc-meta { font-size: 9px; color: var(--text-muted); margin-top: 1px; display: flex; gap: 8px; }
+.snoc-inc-meta { font-size: 9px; color: var(--text-muted); margin-top: 1px; display: flex; gap: 8px; align-items: center; }
+.snoc-inc-investigate-btn {
+  font-size: 8px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0,212,255,0.1);
+  color: var(--cyan);
+  border: 1px solid rgba(0,212,255,0.2);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.snoc-inc-investigate-btn:hover {
+  background: rgba(0,212,255,0.2);
+}
 
 /* Firewall Event Log */
 .snoc-fw-log {
@@ -27491,6 +27722,14 @@ body.snoc-fullscreen #page-snoc {
   text-align: right;
   flex-shrink: 0;
 }
+.snoc-ioc-lastseen {
+  font-size: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  width: 42px;
+  text-align: right;
+  flex-shrink: 0;
+}
 
 /* ---- Threat Map small ---- */
 .snoc-threat-map-wrap {
@@ -27501,6 +27740,196 @@ body.snoc-fullscreen #page-snoc {
   width: 100%;
   display: block;
   border-radius: 4px;
+}
+
+/* ---- Observability Section (Layer 3) ---- */
+.snoc-observability-section {
+  margin-bottom: 12px;
+}
+.snoc-obs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.snoc-obs-grid-full {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+/* SLO table */
+.snoc-slo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+.snoc-slo-table th {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 5px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.snoc-slo-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+.snoc-slo-status {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.snoc-slo-status.on-track { background: rgba(16,185,129,0.15); color: var(--green); }
+.snoc-slo-status.at-risk { background: rgba(245,158,11,0.15); color: var(--amber); }
+.snoc-slo-status.breached { background: rgba(239,68,68,0.15); color: var(--red-bright); }
+.snoc-slo-budget-bar {
+  width: 50px;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.snoc-slo-budget-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--green);
+}
+.snoc-slo-budget-fill.low { background: var(--amber); }
+.snoc-slo-budget-fill.critical { background: var(--red); }
+
+/* APM transactions table */
+.snoc-apm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+.snoc-apm-table th {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 4px 6px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.snoc-apm-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-family: var(--font-mono);
+}
+.snoc-apm-sparkline {
+  width: 40px;
+  height: 14px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Anomaly feed */
+.snoc-anomaly-feed {
+  padding: 6px 0;
+  overflow-y: auto;
+  flex: 1;
+  max-height: 200px;
+}
+.snoc-anomaly-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-size: 10px;
+}
+.snoc-anomaly-sev {
+  font-size: 7px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.snoc-anomaly-sev.high { background: rgba(239,68,68,0.15); color: var(--red-bright); }
+.snoc-anomaly-sev.medium { background: rgba(245,158,11,0.15); color: var(--amber); }
+.snoc-anomaly-sev.low { background: rgba(139,92,246,0.12); color: #a78bfa; }
+.snoc-anomaly-desc {
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.snoc-anomaly-time {
+  font-size: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+/* Log Volume Chart */
+.snoc-log-volume-wrap {
+  padding: 8px 10px;
+  flex: 1;
+}
+#snocLogVolumeChart {
+  max-height: 140px;
+}
+
+/* ---- MITRE ATT&CK Heatmap ---- */
+.snoc-mitre-section {
+  margin-bottom: 12px;
+}
+.snoc-mitre-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 12px;
+}
+.snoc-mitre-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  border-radius: 4px;
+  min-width: 90px;
+  flex: 1;
+  border: 1px solid rgba(255,255,255,0.04);
+  cursor: default;
+  transition: border-color 0.15s;
+}
+.snoc-mitre-cell:hover { border-color: rgba(255,255,255,0.1); }
+.snoc-mitre-id {
+  font-size: 8px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.snoc-mitre-name {
+  font-size: 9px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+.snoc-mitre-count {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
 }
 
 /* ---- Bottom Section: Unified Timeline ---- */
@@ -27519,6 +27948,8 @@ body.snoc-fullscreen #page-snoc {
   justify-content: space-between;
   padding: 8px 14px;
   border-bottom: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .snoc-timeline-title {
   font-size: 10px;
@@ -27529,6 +27960,44 @@ body.snoc-fullscreen #page-snoc {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.snoc-timeline-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.snoc-tl-filter-chip {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.snoc-tl-filter-chip.active {
+  background: rgba(0,212,255,0.1);
+  color: var(--cyan);
+  border-color: rgba(0,212,255,0.3);
+}
+.snoc-tl-filter-chip:hover {
+  border-color: rgba(0,212,255,0.2);
+  color: var(--text-secondary);
+}
+.snoc-tl-org-filter {
+  font-size: 9px;
+  padding: 2px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  cursor: pointer;
 }
 .snoc-timeline-legend {
   display: flex;
@@ -27548,10 +28017,12 @@ body.snoc-fullscreen #page-snoc {
 }
 .snoc-tl-legend-dot.net { background: var(--cyan); }
 .snoc-tl-legend-dot.sec { background: var(--red-bright); }
+.snoc-tl-legend-dot.obs { background: #a78bfa; }
+.snoc-tl-legend-dot.svc { background: var(--green); }
 
 .snoc-timeline-body {
   padding: 8px 0;
-  height: 140px;
+  height: 180px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -27568,6 +28039,13 @@ body.snoc-fullscreen #page-snoc {
   transition: background 0.1s;
 }
 .snoc-tl-event:hover { background: rgba(255,255,255,0.02); }
+.snoc-tl-event.critical-pulse {
+  animation: snocTlPulse 2s ease-in-out infinite;
+}
+@keyframes snocTlPulse {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(239,68,68,0.05); }
+}
 .snoc-tl-dot {
   width: 7px;
   height: 7px;
@@ -27576,9 +28054,24 @@ body.snoc-fullscreen #page-snoc {
 }
 .snoc-tl-dot.net { background: var(--cyan); box-shadow: 0 0 4px var(--cyan); }
 .snoc-tl-dot.sec { background: var(--red); box-shadow: 0 0 4px var(--red); animation: snocPulse 2s ease-in-out infinite; }
+.snoc-tl-dot.obs { background: #a78bfa; box-shadow: 0 0 4px #a78bfa; }
+.snoc-tl-dot.svc { background: var(--green); box-shadow: 0 0 4px var(--green); }
 .snoc-tl-time { color: var(--text-muted); font-family: var(--font-mono); font-size: 9px; width: 58px; flex-shrink: 0; }
 .snoc-tl-icon { width: 16px; text-align: center; flex-shrink: 0; font-size: 11px; }
 .snoc-tl-desc { flex: 1; color: var(--text-secondary); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snoc-tl-org {
+  font-size: 8px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(0,212,255,0.08);
+  color: var(--cyan);
+  flex-shrink: 0;
+  max-width: 65px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .snoc-tl-sev {
   font-size: 8px;
   font-weight: 600;
@@ -27593,6 +28086,42 @@ body.snoc-fullscreen #page-snoc {
 .snoc-tl-sev.warn { background: rgba(245,158,11,0.15); color: var(--amber); }
 .snoc-tl-sev.crit { background: rgba(239,68,68,0.15); color: var(--red-bright); }
 .snoc-tl-sev.ok { background: rgba(16,185,129,0.12); color: var(--green); }
+
+/* Episode grouping */
+.snoc-tl-episode {
+  border-left: 2px solid rgba(239,68,68,0.3);
+  margin: 4px 14px;
+  padding-left: 10px;
+}
+.snoc-tl-episode-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.snoc-tl-episode-header:hover { color: var(--cyan); }
+.snoc-tl-episode-chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+.snoc-tl-episode-chevron.collapsed { transform: rotate(-90deg); }
+.snoc-tl-episode-count {
+  font-size: 8px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(239,68,68,0.12);
+  color: var(--red-bright);
+}
+.snoc-tl-episode-body {
+  overflow: hidden;
+}
+.snoc-tl-episode-body.collapsed { display: none; }
 
 /* ---- PRTG Live Mode panel ---- */
 .snoc-prtg-connect-wrap {
@@ -27686,16 +28215,6 @@ body.snoc-fullscreen #page-snoc {
 }
 #snocLatencyChart { max-height: 90px; }
 
-/* ---- Responsive tweaks ---- */
-@media (max-width: 1400px) {
-  .snoc-kpi-bar { grid-template-columns: repeat(4, 1fr); }
-  .snoc-main-grid { grid-template-columns: 1fr 1fr; }
-  .snoc-center-col { grid-column: 1 / -1; order: -1; }
-}
-@media (max-width: 1100px) {
-  .snoc-main-grid { grid-template-columns: 1fr; }
-}
-
 /* ---- Latency section ---- */
 .snoc-latency-wrap {
   padding: 8px 12px;
@@ -27728,6 +28247,46 @@ body.snoc-fullscreen #page-snoc {
 }
 .snoc-lat-mini-val { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .snoc-lat-mini-label { font-size: 9px; color: var(--text-muted); }
+
+/* ---- Responsive tweaks ---- */
+@media (max-width: 1600px) {
+  .snoc-kpi-bar { grid-template-columns: repeat(6, 1fr); }
+}
+@media (max-width: 1400px) {
+  .snoc-kpi-bar { grid-template-columns: repeat(4, 1fr); }
+  .snoc-main-grid { grid-template-columns: 1fr 1fr; }
+  .snoc-center-col { grid-column: 1 / -1; order: -1; }
+  .snoc-obs-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 1100px) {
+  .snoc-main-grid { grid-template-columns: 1fr; }
+  .snoc-obs-grid { grid-template-columns: 1fr; }
+}
+
+/* ---- JS-generated component styles ---- */
+.snoc-svc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.snoc-svc-icon { font-size: 18px; opacity: 0.8; }
+.snoc-svc-ring { position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+.snoc-svc-score { position: absolute; font-family: var(--font-display); font-size: 13px; font-weight: 700; }
+.snoc-svc-name { font-size: 10px; font-weight: 600; color: var(--text-primary); letter-spacing: 0.02em; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snoc-svc-status { font-size: 9px; color: var(--text-muted); margin-bottom: 4px; }
+.snoc-svc-org { font-size: 8px; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snoc-anomaly-icon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
+.snoc-anomaly-body { flex: 1; min-width: 0; }
+.snoc-anomaly-meta { display: flex; gap: 8px; margin-top: 2px; font-size: 9px; color: var(--text-muted); }
+.snoc-mitre-tactic { font-size: 8px; color: var(--text-muted); font-family: var(--font-mono); letter-spacing: 0.04em; margin-top: 2px; }
+.snoc-tl-episode-title { flex: 1; font-size: 10px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snoc-inc-investigate { background: none; border: 1px solid rgba(0,212,255,0.2); border-radius: 4px; color: var(--cyan); font-size: 12px; cursor: pointer; padding: 2px 6px; flex-shrink: 0; transition: background 0.15s; }
+.snoc-inc-investigate:hover { background: rgba(0,212,255,0.1); }
+.snoc-ioc-lastseen { font-size: 8px; color: var(--text-muted); font-family: var(--font-mono); width: 35px; text-align: right; flex-shrink: 0; }
+
+/* SLO Budget Bar */
+.snoc-slo-budget-bar { width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; margin-bottom: 2px; }
+.snoc-slo-budget-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+.snoc-slo-budget-fill.on-track { background: var(--green); }
+.snoc-slo-budget-fill.at-risk { background: var(--amber); }
+.snoc-slo-budget-fill.breached { background: var(--red); }
+
 </style>
 
         <div class="page-header">
@@ -28981,6 +29540,8 @@ body.snoc-fullscreen #page-snoc {
 
       <!-- =====================================================
            PAGE: SNOC — Security & Network Operations Center
+           5-Layer Architecture: Service Health | Infra/Network |
+           Observability | Security Ops | Unified Timeline
            ===================================================== -->
       <div class="page" id="page-snoc">
 
@@ -28993,16 +29554,16 @@ body.snoc-fullscreen #page-snoc {
             <div class="snoc-subtitle">Unified security and network telemetry &mdash; DACTA Fusion Center</div>
           </div>
           <div class="snoc-header-actions">
-            <!-- Client Org Selector -->
+
+            <!-- Auto-refresh indicator -->
+            <div class="snoc-refresh-indicator" id="snocRefreshIndicator">
+              <div class="snoc-refresh-spinner"></div>
+              <span id="snocRefreshCountdown">60s</span>
+            </div>
+
+            <!-- Client Org Selector (populated by JS from Supabase) -->
             <select class="snoc-org-select" id="snocOrgSelect" onchange="_snocOnOrgChange(this.value)">
               <option value="all">All Organizations</option>
-              <option value="9ce7a126-4e9d-434e-b952-f4c4fce56fa1">Dacta Global</option>
-              <option value="3a57db8a-7787-414c-9e28-1c14de388d31">Naga World</option>
-              <option value="93281f08-dbad-4d0d-8656-ab7618f373a4">Silver Key</option>
-              <option value="f6463102-adc3-4bdc-a014-ba197d0fada6">Foxwood Technology</option>
-              <option value="b8672c8b-3907-48b0-8c58-b61aa38fbf4b">SPMT</option>
-              <option value="bb0db674-d91f-4a21-9c71-984c10749feb">ADV Partners</option>
-              <option value="3a6e0c3a-0bf7-4614-9299-bb9c02b0507d">Dacta Training</option>
             </select>
 
             <!-- Demo / Live mode toggle -->
@@ -29024,9 +29585,10 @@ body.snoc-fullscreen #page-snoc {
         </div><!-- end snoc-header -->
 
         <!-- ====================================================
-             TOP KPI BAR  (8 cards: 4 Network + 4 Security)
+             TOP KPI BAR  (12 cards: 4 Network + 4 Security + 4 Observability)
              ==================================================== -->
         <div class="snoc-kpi-bar" id="snocKpiBar">
+
           <!-- Network KPIs -->
           <div class="snoc-kpi-card" id="snocKpiDevices">
             <div class="snoc-kpi-label">&#x1F5A7; Total Devices</div>
@@ -29098,10 +29660,73 @@ body.snoc-fullscreen #page-snoc {
             </div>
             <div class="snoc-kpi-sub">Detect&nbsp;/&nbsp;Respond</div>
           </div>
+
+          <!-- Observability KPIs -->
+          <div class="snoc-kpi-card obs" id="snocKpiSloCompliance">
+            <div class="snoc-kpi-label">&#x1F3AF; SLO Compliance</div>
+            <div class="snoc-kpi-value purple" id="snocKpiSloVal">96.2<span style="font-size:12px;color:var(--text-muted);">%</span></div>
+            <div class="snoc-kpi-sub">
+              <span id="snocKpiSloSub">6 SLOs tracked</span>
+            </div>
+          </div>
+
+          <div class="snoc-kpi-card obs" id="snocKpiErrorRate">
+            <div class="snoc-kpi-label">&#x26A1; Error Rate</div>
+            <div class="snoc-kpi-value purple" id="snocKpiErrVal">0.42<span style="font-size:12px;color:var(--text-muted);">%</span></div>
+            <div class="snoc-kpi-sub">
+              <span id="snocKpiErrSub">p99: 320ms</span>
+            </div>
+          </div>
+
+          <div class="snoc-kpi-card obs" id="snocKpiAnomalies">
+            <div class="snoc-kpi-label">&#x1F52E; Anomalies</div>
+            <div class="snoc-kpi-value purple" id="snocKpiAnomalyVal">5</div>
+            <div class="snoc-kpi-sub">
+              <span id="snocKpiAnomalySub">3 high, 2 medium</span>
+            </div>
+          </div>
+
+          <div class="snoc-kpi-card obs" id="snocKpiLogVolume">
+            <div class="snoc-kpi-label">&#x1F4CA; Log Volume</div>
+            <div class="snoc-kpi-value purple" id="snocKpiLogVal">2.4<span style="font-size:12px;color:var(--text-muted);">M</span></div>
+            <div class="snoc-kpi-sub">
+              <span id="snocKpiLogSub">Events / 24h</span>
+            </div>
+          </div>
+
         </div><!-- end snoc-kpi-bar -->
 
         <!-- ====================================================
-             MAIN 3-COLUMN GRID
+             LAYER 1: SERVICE HEALTH INTELLIGENCE (Collapsible)
+             ==================================================== -->
+        <div class="snoc-service-health-section" id="snocServiceHealthSection">
+          <div class="snoc-collapsible-header" onclick="_snocToggleCollapse('snocServiceHealthBody')">
+            <div class="snoc-collapsible-title">
+              <span class="snoc-section-dot" style="background:var(--green);box-shadow:0 0 6px var(--green);"></span>
+              Layer 1 &mdash; Service Health Intelligence
+            </div>
+            <span class="snoc-chevron" id="snocServiceHealthChevron">&#x25BC;</span>
+            <div class="snoc-collapsible-line"></div>
+            <span class="snoc-panel-badge" id="snocServiceHealthBadge">7 services</span>
+          </div>
+          <div class="snoc-collapsible-body" id="snocServiceHealthBody" style="max-height:500px;">
+
+            <!-- Service cards strip -->
+            <div class="snoc-service-strip" id="snocServiceStrip">
+              <!-- populated by JS: one .snoc-service-card per service -->
+            </div>
+
+            <!-- Service Map Canvas (dependency graph with animated particles) -->
+            <div class="snoc-service-map-wrap">
+              <canvas id="snocServiceMapCanvas"></canvas>
+            </div>
+
+          </div>
+        </div><!-- end service-health-section -->
+
+        <!-- ====================================================
+             LAYER 2+4: MAIN 3-COLUMN GRID
+             Infrastructure & Network (left+center) + Security Ops (right)
              ==================================================== -->
         <div class="snoc-main-grid" id="snocMainGrid">
 
@@ -29110,7 +29735,7 @@ body.snoc-fullscreen #page-snoc {
                ===================================== -->
           <div class="snoc-left-col" id="snocLeftCol">
 
-            <!-- 1. Device Health Table -->
+            <!-- 1. Device Health Table (Enhanced with Org column) -->
             <div class="snoc-panel" style="flex:0 0 auto;">
               <div class="snoc-panel-hdr">
                 <div class="snoc-panel-title">
@@ -29127,6 +29752,7 @@ body.snoc-fullscreen #page-snoc {
                       <tr>
                         <th></th>
                         <th>Device</th>
+                        <th>Org</th>
                         <th>IP</th>
                         <th>CPU</th>
                         <th>MEM</th>
@@ -29141,13 +29767,13 @@ body.snoc-fullscreen #page-snoc {
               </div>
             </div>
 
-            <!-- 2. Bandwidth Utilization -->
+            <!-- 2. Bandwidth Utilization (Enhanced with utilization %) -->
             <div class="snoc-panel" style="flex:0 0 auto;">
               <div class="snoc-panel-hdr">
                 <div class="snoc-panel-title">
                   <span class="dot"></span> Top Interfaces by Bandwidth
                 </div>
-                <div style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">IN &#x2014; OUT</div>
+                <div style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">IN &#x2014; OUT &#x2014; UTIL%</div>
               </div>
               <div class="snoc-panel-body">
                 <div class="snoc-bw-chart-wrap" id="snocBwBars">
@@ -29156,13 +29782,13 @@ body.snoc-fullscreen #page-snoc {
               </div>
             </div>
 
-            <!-- 3. Latency & Packet Loss -->
+            <!-- 3. Latency, Packet Loss & Jitter (Enhanced with jitter) -->
             <div class="snoc-panel" style="flex:0 0 auto;">
               <div class="snoc-panel-hdr">
                 <div class="snoc-panel-title">
-                  <span class="dot"></span> Latency &amp; Packet Loss
+                  <span class="dot"></span> Latency, Loss &amp; Jitter
                 </div>
-                <div style="font-size:9px;color:var(--text-muted);" id="snocLatAvg">Avg: 3.2ms</div>
+                <div style="font-size:9px;color:var(--text-muted);" id="snocLatAvg">Avg: 3.2ms | Jitter: 0.8ms</div>
               </div>
               <div class="snoc-panel-body">
                 <div class="snoc-latency-chart-wrap">
@@ -29291,7 +29917,7 @@ body.snoc-fullscreen #page-snoc {
                ===================================== -->
           <div class="snoc-right-col" id="snocRightCol">
 
-            <!-- 1. Active Incidents -->
+            <!-- 1. Active Incidents (Enhanced: org column, investigate button) -->
             <div class="snoc-panel" style="flex:0 0 auto;">
               <div class="snoc-panel-hdr">
                 <div class="snoc-panel-title">
@@ -29306,7 +29932,7 @@ body.snoc-fullscreen #page-snoc {
               </div>
             </div>
 
-            <!-- 2. Threat Map -->
+            <!-- 2. Threat Map (Enhanced: attack lines to Singapore) -->
             <div class="snoc-panel" style="flex:0 0 auto;">
               <div class="snoc-panel-hdr">
                 <div class="snoc-panel-title">
@@ -29338,7 +29964,7 @@ body.snoc-fullscreen #page-snoc {
               </div>
             </div>
 
-            <!-- 4. IOC Watchlist -->
+            <!-- 4. IOC Watchlist (Enhanced: Last Seen column) -->
             <div class="snoc-panel" style="flex:0 0 auto;">
               <div class="snoc-panel-hdr">
                 <div class="snoc-panel-title">
@@ -29358,7 +29984,143 @@ body.snoc-fullscreen #page-snoc {
         </div><!-- end snoc-main-grid -->
 
         <!-- ====================================================
-             BOTTOM: UNIFIED EVENT TIMELINE
+             LAYER 3: OBSERVABILITY (Collapsible)
+             ==================================================== -->
+        <div class="snoc-observability-section" id="snocObsSection">
+          <div class="snoc-collapsible-header" onclick="_snocToggleCollapse('snocObsBody')">
+            <div class="snoc-collapsible-title">
+              <span class="snoc-section-dot" style="background:#a78bfa;box-shadow:0 0 6px #a78bfa;"></span>
+              Layer 3 &mdash; Observability
+            </div>
+            <span class="snoc-chevron" id="snocObsChevron">&#x25BC;</span>
+            <div class="snoc-collapsible-line"></div>
+            <span class="snoc-panel-badge" style="background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.25);" id="snocObsBadge">Active</span>
+          </div>
+          <div class="snoc-collapsible-body" id="snocObsBody" style="max-height:600px;">
+
+            <!-- 3-column grid: SLO | APM | Anomaly -->
+            <div class="snoc-obs-grid">
+
+              <!-- SLO Status Panel -->
+              <div class="snoc-panel">
+                <div class="snoc-panel-hdr">
+                  <div class="snoc-panel-title">
+                    <span class="dot purple"></span> SLO Status
+                  </div>
+                  <span class="snoc-panel-badge" style="background:rgba(167,139,250,0.1);color:#a78bfa;" id="snocSloBadge">6 SLOs</span>
+                </div>
+                <div class="snoc-panel-body">
+                  <div style="max-height:200px;overflow-y:auto;">
+                    <table class="snoc-slo-table">
+                      <thead>
+                        <tr>
+                          <th>Service</th>
+                          <th>SLO</th>
+                          <th>Current</th>
+                          <th>Budget</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody id="snocSloTableBody">
+                        <!-- populated by JS -->
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <!-- APM / Performance Panel -->
+              <div class="snoc-panel">
+                <div class="snoc-panel-hdr">
+                  <div class="snoc-panel-title">
+                    <span class="dot purple"></span> APM Transactions
+                  </div>
+                  <span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">p50 / p99</span>
+                </div>
+                <div class="snoc-panel-body">
+                  <div style="max-height:200px;overflow-y:auto;">
+                    <table class="snoc-apm-table">
+                      <thead>
+                        <tr>
+                          <th>Endpoint</th>
+                          <th>RPM</th>
+                          <th>p50</th>
+                          <th>p99</th>
+                          <th>Err%</th>
+                          <th>Trend</th>
+                        </tr>
+                      </thead>
+                      <tbody id="snocApmTableBody">
+                        <!-- populated by JS -->
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Anomaly Detection Feed -->
+              <div class="snoc-panel">
+                <div class="snoc-panel-hdr">
+                  <div class="snoc-panel-title">
+                    <span class="dot purple"></span> Anomaly Detection
+                  </div>
+                  <span class="snoc-panel-badge" style="background:rgba(167,139,250,0.1);color:#a78bfa;" id="snocAnomalyBadge">5 detected</span>
+                </div>
+                <div class="snoc-panel-body">
+                  <div class="snoc-anomaly-feed" id="snocAnomalyFeed">
+                    <!-- populated by JS -->
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- end snoc-obs-grid -->
+
+            <!-- Full-width: Log Volume Trends -->
+            <div class="snoc-obs-grid-full">
+              <div class="snoc-panel">
+                <div class="snoc-panel-hdr">
+                  <div class="snoc-panel-title">
+                    <span class="dot purple"></span> Log Volume Trends
+                  </div>
+                  <span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);" id="snocLogVolSub">24h by source</span>
+                </div>
+                <div class="snoc-panel-body">
+                  <div class="snoc-log-volume-wrap">
+                    <canvas id="snocLogVolumeChart"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div><!-- end observability-section -->
+
+        <!-- ====================================================
+             MITRE ATT&CK MINI HEATMAP (Security Ops Layer)
+             ==================================================== -->
+        <div class="snoc-mitre-section" id="snocMitreSection">
+          <div class="snoc-collapsible-header" onclick="_snocToggleCollapse('snocMitreBody')">
+            <div class="snoc-collapsible-title">
+              <span class="snoc-section-dot" style="background:var(--red);box-shadow:0 0 6px var(--red);"></span>
+              MITRE ATT&amp;CK Coverage
+            </div>
+            <span class="snoc-chevron" id="snocMitreChevron">&#x25BC;</span>
+            <div class="snoc-collapsible-line"></div>
+            <span class="snoc-panel-badge" style="background:rgba(239,68,68,0.12);color:var(--red-bright);border:1px solid rgba(239,68,68,0.25);" id="snocMitreBadge">12 tactics</span>
+          </div>
+          <div class="snoc-collapsible-body" id="snocMitreBody" style="max-height:300px;">
+            <div class="snoc-panel" style="border-radius:0 0 8px 8px;">
+              <div class="snoc-panel-body">
+                <div class="snoc-mitre-grid" id="snocMitreGrid">
+                  <!-- populated by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div><!-- end mitre-section -->
+
+        <!-- ====================================================
+             LAYER 5: UNIFIED EVENT TIMELINE (Enhanced)
              ==================================================== -->
         <div class="snoc-timeline-section">
           <div class="snoc-timeline-panel">
@@ -29368,20 +30130,44 @@ body.snoc-fullscreen #page-snoc {
                 Unified Event Timeline
                 <span style="font-size:9px;color:var(--text-muted);font-weight:400;font-family:var(--font-mono);">Last 50 events &mdash; auto-scroll</span>
               </div>
+
+              <!-- Timeline Filters -->
+              <div class="snoc-timeline-filters" id="snocTimelineFilters">
+                <span class="snoc-tl-filter-chip active" data-filter="all" onclick="_snocFilterTimeline('all')">All</span>
+                <span class="snoc-tl-filter-chip" data-filter="net" onclick="_snocFilterTimeline('net')">Network</span>
+                <span class="snoc-tl-filter-chip" data-filter="sec" onclick="_snocFilterTimeline('sec')">Security</span>
+                <span class="snoc-tl-filter-chip" data-filter="obs" onclick="_snocFilterTimeline('obs')">Observability</span>
+                <span class="snoc-tl-filter-chip" data-filter="svc" onclick="_snocFilterTimeline('svc')">Service</span>
+                <select class="snoc-tl-org-filter" id="snocTlOrgFilter" onchange="_snocFilterTimeline(null)">
+                  <option value="all">All Orgs</option>
+                </select>
+              </div>
+
               <div class="snoc-timeline-legend">
                 <div class="snoc-tl-legend-item">
                   <div class="snoc-tl-legend-dot net"></div>
-                  Network Events
+                  Network
                 </div>
                 <div class="snoc-tl-legend-item">
                   <div class="snoc-tl-legend-dot sec"></div>
-                  Security Events
+                  Security
+                </div>
+                <div class="snoc-tl-legend-item">
+                  <div class="snoc-tl-legend-dot obs"></div>
+                  Observability
+                </div>
+                <div class="snoc-tl-legend-item">
+                  <div class="snoc-tl-legend-dot svc"></div>
+                  Service
                 </div>
               </div>
             </div>
+
+            <!-- Episode container + timeline events -->
             <div class="snoc-timeline-body" id="snocTimelineBody">
-              <!-- populated by JS -->
+              <!-- populated by JS: episodes and events -->
             </div>
+
           </div>
         </div><!-- end snoc-timeline-section -->
 
@@ -67368,54 +68154,67 @@ window.addEventListener('unhandledrejection', function(e) {
 
 
 // =====================================================
-//  SNOC — Security & Network Operations Center
-// =====================================================
 /* ============================================================
    SNOC — Security & Network Operations Center
+   5-Layer Architecture: Service Health | Infra/Network |
+   Observability | Security Ops | Unified Timeline
    All functions prefixed with _snoc to avoid namespace conflicts
    ES5 style: var, function(){}, string concatenation
    ============================================================ */
 
 /* ---- State ---- */
-var _snocIsDemo = true;         // true = demo mode, false = live mode
+var _snocIsDemo = true;
 var _snocIsFullscreen = false;
 var _snocCurrentOrg = 'all';
 var _snocTopoAnimId = null;
 var _snocGeoAnimId = null;
+var _snocSvcMapAnimId = null;
 var _snocFwIntervalId = null;
+var _snocRefreshIntervalId = null;
+var _snocRefreshCountdown = 60;
+var _snocTimelineTickId = null;
 var _snocTopoNodes = [];
 var _snocTopoEdges = [];
 var _snocTopoHover = null;
 var _snocTopoSelected = null;
 var _snocDemoData = null;
 var _snocLatencyChartObj = null;
+var _snocLogVolumeChartObj = null;
 var _snocBwSparkCtx = null;
 var _snocFwLogEntries = [];
 var _snocTimelineEvents = [];
-var _snocPrtgConfig = {}; // keyed by orgId
+var _snocTimelineFilter = 'all';
+var _snocPrtgConfig = {};
+var _snocOrgs = [];
 
-/* ---- PRTG API Proxy Notes ----
- * Expected endpoints at /api/prtg.js:
- *   action: 'devices'      => GET /api/table.json?content=devices&columns=objid,device,host,status,message
- *   action: 'sensors'      => GET /api/table.json?content=sensors&columns=objid,sensor,status,lastvalue,device
- *   action: 'sensor_data'  => GET /api/historicdata.json?id={sensorId}&sdate=...&edate=...
- *   action: 'status'       => GET /api/status.json
- * All requests POST to /api/prtg.js with {action, orgId, ...params}
- * Proxy injects PRTG credentials from ORG_CONNECTORS[orgId].prtg
- */
+/* Hardcoded org fallback */
+var _snocOrgsFallback = [
+  { id: '9ce7a126-4e9d-434e-b952-f4c4fce56fa1', name: 'Dacta Global' },
+  { id: '93281f08-dbad-4d0d-8656-ab7618f373a4', name: 'SilverKey' },
+  { id: '3a57db8a-7787-414c-9e28-1c14de388d31', name: 'Naga World' },
+  { id: 'b8672c8b-3907-48b0-8c58-b61aa38fbf4b', name: 'SPMT' },
+  { id: 'f6463102-adc3-4bdc-a014-ba197d0fada6', name: 'Foxwood' },
+  { id: '3a6e0c3a-0bf7-4614-9299-bb9c02b0507d', name: 'Dacta Training' },
+  { id: 'bb0db674-d91f-4a21-9c71-984c10749feb', name: 'ADV Partners' }
+];
 
 /* ============================================================
-   ENTRY POINT — called by navigate() when page = 'snoc'
+   ENTRY POINT
    ============================================================ */
 function _snocInit() {
-  _snocDemoData = _snocGenerateDemoData();
-  _snocRenderAll();
-  _snocStartLiveFwLog();
-  _snocStartTimelineTick();
+  _snocLoadOrgs(function() {
+    _snocPopulateOrgSelect();
+    _snocDemoData = _snocGenerateDemoData();
+    _snocRenderAll();
+    _snocStartLiveFwLog();
+    _snocStartTimelineTick();
+    _snocStartRefreshTimer();
+  });
 }
 
 function _snocRenderAll() {
   _snocRenderKpiBar();
+  _snocRenderServiceHealth();
   _snocRenderDeviceTable();
   _snocRenderBandwidthBars();
   _snocRenderLatencyChart();
@@ -67423,10 +68222,68 @@ function _snocRenderAll() {
   _snocRenderIncidents();
   _snocRenderIocList();
   _snocRenderFwLog();
+  _snocRenderSloTable();
+  _snocRenderApmTable();
+  _snocRenderAnomalyFeed();
+  _snocRenderLogVolumeChart();
+  _snocRenderMitreHeatmap();
   _snocRenderTimeline();
   setTimeout(_snocInitTopoCanvas, 80);
   setTimeout(_snocInitGeoCanvas, 120);
+  setTimeout(_snocInitServiceMapCanvas, 160);
   _snocUpdateModeUI();
+}
+
+/* ============================================================
+   ORG LOADING FROM SUPABASE
+   ============================================================ */
+function _snocLoadOrgs(cb) {
+  if (window._supabase) {
+    try {
+      window._supabase.from('organizations').select('id, name').then(function(res) {
+        if (res && res.data && res.data.length > 0) {
+          _snocOrgs = res.data;
+        } else {
+          _snocOrgs = _snocOrgsFallback;
+        }
+        if (cb) cb();
+      }).catch(function() {
+        _snocOrgs = _snocOrgsFallback;
+        if (cb) cb();
+      });
+    } catch (e) {
+      _snocOrgs = _snocOrgsFallback;
+      if (cb) cb();
+    }
+  } else {
+    _snocOrgs = _snocOrgsFallback;
+    if (cb) cb();
+  }
+}
+
+function _snocPopulateOrgSelect() {
+  var sel = document.getElementById('snocOrgSelect');
+  if (!sel) return;
+  var html = '<option value="all">All Organizations</option>';
+  for (var i = 0; i < _snocOrgs.length; i++) {
+    html += '<option value="' + _snocOrgs[i].id + '">' + _snocOrgs[i].name + '</option>';
+  }
+  sel.innerHTML = html;
+  /* Also populate timeline org filter */
+  var tlSel = document.getElementById('snocTlOrgFilter');
+  if (tlSel) tlSel.innerHTML = html;
+}
+
+function _snocGetOrgName(orgId) {
+  for (var i = 0; i < _snocOrgs.length; i++) {
+    if (_snocOrgs[i].id === orgId) return _snocOrgs[i].name;
+  }
+  return 'Unknown';
+}
+
+function _snocRandomOrg() {
+  var idx = Math.floor(Math.random() * _snocOrgs.length);
+  return _snocOrgs.length > 0 ? _snocOrgs[idx] : _snocOrgsFallback[0];
 }
 
 /* ============================================================
@@ -67452,18 +68309,17 @@ function _snocUpdateModeUI() {
   if (_snocIsDemo) {
     track.classList.remove('live');
     knob.classList.remove('live');
-    demoLabel.classList.add('active');
-    liveLabel.classList.remove('active');
+    if (demoLabel) demoLabel.classList.add('active');
+    if (liveLabel) liveLabel.classList.remove('active');
   } else {
     track.classList.add('live');
     knob.classList.add('live');
-    liveLabel.classList.add('active');
-    demoLabel.classList.remove('active');
+    if (liveLabel) liveLabel.classList.add('active');
+    if (demoLabel) demoLabel.classList.remove('active');
   }
 }
 
 function _snocShowLiveMode() {
-  // Check if PRTG is configured for current org
   var orgId = _snocCurrentOrg;
   var hasPrtg = _snocPrtgConfig[orgId] && _snocPrtgConfig[orgId].url;
   var prtgWrap = document.getElementById('snocPrtgConnectWrap');
@@ -67475,13 +68331,11 @@ function _snocShowLiveMode() {
   } else {
     prtgWrap.classList.remove('visible');
     if (topoCanvas) topoCanvas.style.opacity = '1';
-    // Would call _snocFetchPrtgData() in real integration
     _snocShowLivePlaceholder();
   }
 }
 
 function _snocShowLivePlaceholder() {
-  // In live mode without real data, show awaiting message on topology canvas
   var canvas = document.getElementById('snocTopoCanvas');
   if (!canvas) return;
   var ctx = canvas.getContext('2d');
@@ -67508,10 +68362,7 @@ function _snocTestPrtgConnection() {
     return;
   }
   if (status) { status.className = 'snoc-prtg-status'; status.style.display = 'block'; status.textContent = 'Testing connection...'; }
-  // Store config
   _snocPrtgConfig[_snocCurrentOrg] = { url: url, key: key, user: user };
-  // In real integration, POST to /api/prtg.js with action:'status'
-  // Simulate async test
   setTimeout(function() {
     if (status) {
       status.className = 'snoc-prtg-status success';
@@ -67538,67 +68389,116 @@ function _snocToggleFullscreen() {
   var btn = document.getElementById('snocFsBtn');
   if (_snocIsFullscreen) {
     body.classList.add('snoc-fullscreen');
-    if (btn) btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg> Exit';
-    // Resize topology canvas after layout shift
+    if (btn) btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg> Exit';
     setTimeout(function() { _snocInitTopoCanvas(); }, 100);
   } else {
     body.classList.remove('snoc-fullscreen');
-    if (btn) btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg> Fullscreen';
+    if (btn) btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg> Fullscreen';
     setTimeout(function() { _snocInitTopoCanvas(); }, 100);
   }
 }
 
-// ESC key handler
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && _snocIsFullscreen) {
-    _snocToggleFullscreen();
-  }
+  if (e.key === 'Escape' && _snocIsFullscreen) _snocToggleFullscreen();
 });
 
 /* ============================================================
-   DEMO DATA GENERATOR
+   COLLAPSIBLE SECTIONS
+   ============================================================ */
+function _snocToggleSection(sectionId) {
+  var section = document.getElementById(sectionId);
+  if (!section) return;
+  var body = section.querySelector('.snoc-collapsible-body');
+  var chevron = section.querySelector('.snoc-chevron');
+  if (!body) return;
+  var isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  if (chevron) chevron.innerHTML = isHidden ? '&#x25BC;' : '&#x25B6;';
+}
+
+/* ============================================================
+   REFRESH TIMER
+   ============================================================ */
+function _snocStartRefreshTimer() {
+  _snocRefreshCountdown = 60;
+  if (_snocRefreshIntervalId) clearInterval(_snocRefreshIntervalId);
+  _snocRefreshIntervalId = setInterval(function() {
+    _snocRefreshCountdown--;
+    var el = document.getElementById('snocRefreshCountdown');
+    if (el) el.textContent = _snocRefreshCountdown + 's';
+    if (_snocRefreshCountdown <= 0) {
+      _snocRefreshCountdown = 60;
+      if (_snocIsDemo) {
+        _snocDemoData = _snocGenerateDemoData();
+        _snocRenderAll();
+      }
+    }
+  }, 1000);
+}
+
+/* ============================================================
+   DEMO DATA GENERATOR — ALL 5 LAYERS
    ============================================================ */
 function _snocGenerateDemoData() {
   var now = Date.now();
+  var orgNames = [];
+  for (var oi = 0; oi < _snocOrgs.length; oi++) {
+    orgNames.push(_snocOrgs[oi].name);
+  }
+  if (orgNames.length === 0) orgNames = ['Dacta Global', 'SilverKey', 'Naga World', 'SPMT', 'Foxwood', 'Dacta Training', 'ADV Partners'];
 
-  /* ---- Network Devices ---- */
-  var devices = [
-    { id: 'fw01',      name: 'FW-DACTA-01',    model: 'FortiGate 200F',        type: 'firewall', ip: '10.0.0.1',   status: 'up',   cpu: 23, mem: 45, uptime: '247d', ifaces: 4, secEvent: true },
-    { id: 'swcore01',  name: 'SW-CORE-01',      model: 'Cisco Catalyst 9300',   type: 'switch',   ip: '10.0.0.2',   status: 'up',   cpu: 12, mem: 38, uptime: '365d', ifaces: 48 },
-    { id: 'swacc01',   name: 'SW-ACC-01',        model: 'Cisco Catalyst 2960',   type: 'switch',   ip: '10.0.1.1',   status: 'up',   cpu: 8,  mem: 22, uptime: '180d', ifaces: 24 },
-    { id: 'swacc02',   name: 'SW-ACC-02',        model: 'Cisco Catalyst 2960',   type: 'switch',   ip: '10.0.1.2',   status: 'up',   cpu: 11, mem: 25, uptime: '180d', ifaces: 24 },
-    { id: 'srvdc01',   name: 'SRV-DC-01',        model: 'Windows Server 2022',   type: 'server',   ip: '10.0.2.1',   status: 'up',   cpu: 34, mem: 67, uptime: '90d',  ifaces: 2 },
-    { id: 'srvfile01', name: 'SRV-FILE-01',      model: 'Windows Server 2022',   type: 'server',   ip: '10.0.2.2',   status: 'up',   cpu: 15, mem: 52, uptime: '90d',  ifaces: 2 },
-    { id: 'srvmail01', name: 'SRV-MAIL-01',      model: 'Exchange Online',        type: 'server',   ip: '10.0.2.3',   status: 'warn', cpu: 28, mem: 91, uptime: '45d',  ifaces: 2 },
-    { id: 'srvweb01',  name: 'SRV-WEB-01',       model: 'NGINX',                  type: 'server',   ip: '10.0.3.1',   status: 'up',   cpu: 19, mem: 41, uptime: '120d', ifaces: 2 },
-    { id: 'ap01',      name: 'AP-FLOOR1-01',     model: 'Aruba AP-515',           type: 'ap',       ip: '10.0.4.1',   status: 'up',   cpu: 5,  mem: 18, uptime: '200d', ifaces: 2 },
-    { id: 'ap02',      name: 'AP-FLOOR2-01',     model: 'Aruba AP-515',           type: 'ap',       ip: '10.0.4.2',   status: 'up',   cpu: 7,  mem: 20, uptime: '200d', ifaces: 2 },
-    { id: 'rtrwan01',  name: 'RTR-WAN-01',       model: 'Cisco ISR 4331',         type: 'router',   ip: '10.0.0.254', status: 'up',   cpu: 18, mem: 33, uptime: '300d', ifaces: 3 },
-    { id: 'vpngw01',   name: 'VPN-GW-01',        model: 'FortiGate VPN',          type: 'firewall', ip: '10.0.0.3',   status: 'up',   cpu: 15, mem: 28, uptime: '247d', ifaces: 3 },
-    { id: 'srvsiem01', name: 'SRV-SIEM-01',      model: 'Elastic Stack',          type: 'server',   ip: '10.0.5.1',   status: 'up',   cpu: 62, mem: 78, uptime: '60d',  ifaces: 2 },
-    { id: 'srvbkp01',  name: 'SRV-BACKUP-01',    model: 'Veeam B&R',             type: 'server',   ip: '10.0.5.2',   status: 'up',   cpu: 8,  mem: 45, uptime: '90d',  ifaces: 2 },
-    { id: 'prt01',     name: 'PRINTER-01',        model: 'HP LaserJet MFP',        type: 'endpoint', ip: '10.0.6.1',   status: 'down', cpu: 0,  mem: 0,  uptime: '0d',   ifaces: 1 }
+  function rOrg() { return orgNames[Math.floor(Math.random() * orgNames.length)]; }
+  function rOrgFiltered() {
+    if (_snocCurrentOrg === 'all') return rOrg();
+    return _snocGetOrgName(_snocCurrentOrg);
+  }
+
+  /* ---- LAYER 1: Service Health ---- */
+  var services = [
+    { name: 'Email (Exchange/M365)', health: 92, status: '2 warnings', icon: '\u2709', org: rOrgFiltered(), kpis: [{n:'Delivery Rate',v:99.8},{n:'Queue Depth',v:12},{n:'Latency',v:'1.2s'}] },
+    { name: 'Active Directory', health: 100, status: 'All healthy', icon: '\uD83D\uDD11', org: rOrgFiltered(), kpis: [{n:'Auth Success',v:'100%'},{n:'Replication',v:'OK'},{n:'Latency',v:'3ms'}] },
+    { name: 'VPN Gateway', health: 78, status: '1 tunnel degraded', icon: '\uD83D\uDD12', org: rOrgFiltered(), kpis: [{n:'Tunnels Up',v:'3/4'},{n:'Throughput',v:'88Mbps'},{n:'Latency',v:'85ms'}] },
+    { name: 'Web Application', health: 95, status: 'SLO: 99.9%', icon: '\uD83C\uDF10', org: rOrgFiltered(), kpis: [{n:'Uptime',v:'99.94%'},{n:'p95 Latency',v:'182ms'},{n:'Error Rate',v:'0.1%'}] },
+    { name: 'SIEM Platform', health: 88, status: 'High CPU usage', icon: '\uD83D\uDEE1', org: rOrgFiltered(), kpis: [{n:'Ingest Rate',v:'2.4K eps'},{n:'CPU',v:'62%'},{n:'Storage',v:'78%'}] },
+    { name: 'Endpoint Protection', health: 97, status: '2 agents offline', icon: '\uD83D\uDDA5', org: rOrgFiltered(), kpis: [{n:'Coverage',v:'98.5%'},{n:'Agents',v:'247/249'},{n:'Last Scan',v:'2m ago'}] },
+    { name: 'DNS / DHCP', health: 100, status: 'Operational', icon: '\uD83C\uDF0D', org: rOrgFiltered(), kpis: [{n:'Resolution',v:'99.99%'},{n:'Avg Time',v:'12ms'},{n:'Leases',v:'412'}] },
+    { name: 'Backup & Recovery', health: 85, status: 'Last backup 2h ago', icon: '\uD83D\uDCBE', org: rOrgFiltered(), kpis: [{n:'Success Rate',v:'96%'},{n:'Last Run',v:'2h ago'},{n:'Size',v:'4.2TB'}] }
   ];
 
-  /* ---- Bandwidth (last 24h, hourly) ---- */
+  /* ---- LAYER 2: Network Infrastructure (enhanced from original) ---- */
+  var devices = [
+    { id: 'fw01',      name: 'FW-DACTA-01',    model: 'FortiGate 200F',     type: 'firewall', ip: '10.0.0.1',   status: 'up',   cpu: 23, mem: 45, uptime: '247d', ifaces: 4, secEvent: true,  org: rOrgFiltered() },
+    { id: 'swcore01',  name: 'SW-CORE-01',      model: 'Cisco Catalyst 9300',type: 'switch',   ip: '10.0.0.2',   status: 'up',   cpu: 12, mem: 38, uptime: '365d', ifaces: 48, org: rOrgFiltered() },
+    { id: 'swacc01',   name: 'SW-ACC-01',       model: 'Cisco Catalyst 2960',type: 'switch',   ip: '10.0.1.1',   status: 'up',   cpu: 8,  mem: 22, uptime: '180d', ifaces: 24, org: rOrgFiltered() },
+    { id: 'swacc02',   name: 'SW-ACC-02',       model: 'Cisco Catalyst 2960',type: 'switch',   ip: '10.0.1.2',   status: 'up',   cpu: 11, mem: 25, uptime: '180d', ifaces: 24, org: rOrgFiltered() },
+    { id: 'srvdc01',   name: 'SRV-DC-01',       model: 'Windows Server 2022',type: 'server',   ip: '10.0.2.1',   status: 'up',   cpu: 34, mem: 67, uptime: '90d',  ifaces: 2,  org: rOrgFiltered() },
+    { id: 'srvfile01', name: 'SRV-FILE-01',     model: 'Windows Server 2022',type: 'server',   ip: '10.0.2.2',   status: 'up',   cpu: 15, mem: 52, uptime: '90d',  ifaces: 2,  org: rOrgFiltered() },
+    { id: 'srvmail01', name: 'SRV-MAIL-01',     model: 'Exchange Online',    type: 'server',   ip: '10.0.2.3',   status: 'warn', cpu: 28, mem: 91, uptime: '45d',  ifaces: 2,  org: rOrgFiltered() },
+    { id: 'srvweb01',  name: 'SRV-WEB-01',      model: 'NGINX',             type: 'server',   ip: '10.0.3.1',   status: 'up',   cpu: 19, mem: 41, uptime: '120d', ifaces: 2,  org: rOrgFiltered() },
+    { id: 'ap01',      name: 'AP-FLOOR1-01',    model: 'Aruba AP-515',      type: 'ap',       ip: '10.0.4.1',   status: 'up',   cpu: 5,  mem: 18, uptime: '200d', ifaces: 2,  org: rOrgFiltered() },
+    { id: 'ap02',      name: 'AP-FLOOR2-01',    model: 'Aruba AP-515',      type: 'ap',       ip: '10.0.4.2',   status: 'up',   cpu: 7,  mem: 20, uptime: '200d', ifaces: 2,  org: rOrgFiltered() },
+    { id: 'rtrwan01',  name: 'RTR-WAN-01',      model: 'Cisco ISR 4331',    type: 'router',   ip: '10.0.0.254', status: 'up',   cpu: 18, mem: 33, uptime: '300d', ifaces: 3,  org: rOrgFiltered() },
+    { id: 'vpngw01',   name: 'VPN-GW-01',       model: 'FortiGate VPN',     type: 'firewall', ip: '10.0.0.3',   status: 'up',   cpu: 15, mem: 28, uptime: '247d', ifaces: 3,  org: rOrgFiltered() },
+    { id: 'srvsiem01', name: 'SRV-SIEM-01',     model: 'Elastic Stack',     type: 'server',   ip: '10.0.5.1',   status: 'up',   cpu: 62, mem: 78, uptime: '60d',  ifaces: 2,  org: rOrgFiltered() },
+    { id: 'srvbkp01',  name: 'SRV-BACKUP-01',   model: 'Veeam B&R',        type: 'server',   ip: '10.0.5.2',   status: 'up',   cpu: 8,  mem: 45, uptime: '90d',  ifaces: 2,  org: rOrgFiltered() },
+    { id: 'prt01',     name: 'PRINTER-01',      model: 'HP LaserJet MFP',   type: 'endpoint', ip: '10.0.6.1',   status: 'down', cpu: 0,  mem: 0,  uptime: '0d',   ifaces: 1,  org: rOrgFiltered() }
+  ];
+
   var bwData = [];
   for (var h = 0; h < 24; h++) {
-    var hourFactor = (h >= 8 && h <= 18) ? 1.0 : 0.25; // business hours peak
+    var hourFactor = (h >= 8 && h <= 18) ? 1.0 : 0.25;
     var peakFactor = (h >= 13 && h <= 16) ? 1.5 : 1.0;
-    var baseIn  = 80 + Math.random() * 200 * hourFactor * peakFactor + Math.random() * 30;
-    var baseOut = 40 + Math.random() * 120 * hourFactor * peakFactor + Math.random() * 20;
-    bwData.push({ hour: h, inMbps: Math.round(baseIn), outMbps: Math.round(baseOut) });
+    bwData.push({ hour: h, inMbps: Math.round(80 + Math.random() * 200 * hourFactor * peakFactor), outMbps: Math.round(40 + Math.random() * 120 * hourFactor * peakFactor) });
   }
 
-  /* ---- Latency (last 24h, hourly) ---- */
   var latData = [];
-  for (var i = 0; i < 24; i++) {
+  for (var li = 0; li < 24; li++) {
     var lat = 1.5 + Math.random() * 3;
-    if (Math.random() < 0.08) lat = 18 + Math.random() * 15; // occasional spike
-    latData.push({ hour: i, ms: parseFloat(lat.toFixed(1)), pktLoss: parseFloat((Math.random() < 0.05 ? Math.random() * 2 : 0).toFixed(2)) });
+    if (Math.random() < 0.08) lat = 18 + Math.random() * 15;
+    var jitter = 0.2 + Math.random() * 1.5;
+    latData.push({ hour: li, ms: parseFloat(lat.toFixed(1)), pktLoss: parseFloat((Math.random() < 0.05 ? Math.random() * 2 : 0).toFixed(2)), jitter: parseFloat(jitter.toFixed(1)) });
   }
 
-  /* ---- Top interfaces BW ---- */
   var topInterfaces = [
     { name: 'FW-DACTA-01 WAN', inMbps: 284, outMbps: 142, maxMbps: 500 },
     { name: 'SW-CORE-01 Uplink', inMbps: 245, outMbps: 118, maxMbps: 500 },
@@ -67607,62 +68507,152 @@ function _snocGenerateDemoData() {
     { name: 'SRV-WEB-01 eth0', inMbps: 62, outMbps: 28, maxMbps: 100 }
   ];
 
-  /* ---- VPN Tunnels ---- */
   var vpnTunnels = [
-    { name: 'HQ \u2194 Naga World (KH)', status: 'up',   latencyMs: 12,  bwMbps: 45  },
-    { name: 'HQ \u2194 SPMT (SG)',       status: 'up',   latencyMs: 2,   bwMbps: 120 },
-    { name: 'HQ \u2194 Foxwood (MY)',     status: 'warn', latencyMs: 85,  bwMbps: 8   },
-    { name: 'HQ \u2194 ADV Partners (SG)',status: 'up',   latencyMs: 3,   bwMbps: 35  }
+    { name: 'HQ \u2194 Naga World (KH)', status: 'up',   latencyMs: 12, bwMbps: 45,  org: 'Naga World' },
+    { name: 'HQ \u2194 SPMT (SG)',       status: 'up',   latencyMs: 2,  bwMbps: 120, org: 'SPMT' },
+    { name: 'HQ \u2194 Foxwood (MY)',     status: 'warn', latencyMs: 85, bwMbps: 8,   org: 'Foxwood' },
+    { name: 'HQ \u2194 ADV Partners (SG)',status: 'up',   latencyMs: 3,  bwMbps: 35,  org: 'ADV Partners' }
   ];
 
-  /* ---- Active Incidents ---- */
+  /* ---- LAYER 3: Observability ---- */
+  var slos = [
+    { service: 'Web App Availability', target: '99.9%', current: '99.94%', budget: 68, status: 'on-track', org: rOrgFiltered() },
+    { service: 'API Response Time', target: '<200ms', current: '182ms', budget: 45, status: 'at-risk', org: rOrgFiltered() },
+    { service: 'Email Delivery', target: '99.5%', current: '99.8%', budget: 82, status: 'on-track', org: rOrgFiltered() },
+    { service: 'VPN Uptime', target: '99.9%', current: '99.2%', budget: 22, status: 'breached', org: rOrgFiltered() },
+    { service: 'SIEM Ingest Lag', target: '<5min', current: '2.3min', budget: 71, status: 'on-track', org: rOrgFiltered() },
+    { service: 'EDR Agent Heartbeat', target: '99.5%', current: '99.6%', budget: 55, status: 'on-track', org: rOrgFiltered() }
+  ];
+
+  var apmTransactions = [
+    { endpoint: '/api/v1/auth/login', p50: 45, p95: 182, p99: 320, errorRate: 0.3, org: rOrgFiltered() },
+    { endpoint: '/api/v1/reports/generate', p50: 890, p95: 2400, p99: 4800, errorRate: 1.2, org: rOrgFiltered() },
+    { endpoint: '/api/v1/search/elastic', p50: 120, p95: 450, p99: 890, errorRate: 0.1, org: rOrgFiltered() },
+    { endpoint: '/api/v1/alerts/stream', p50: 22, p95: 88, p99: 150, errorRate: 0.0, org: rOrgFiltered() },
+    { endpoint: '/api/v1/dashboard/kpi', p50: 210, p95: 680, p99: 1200, errorRate: 0.5, org: rOrgFiltered() }
+  ];
+
+  var anomalies = [
+    { desc: 'Unusual DNS query volume from 10.0.1.22 \u2014 3x baseline', sev: 'medium', time: '14:32', org: rOrgFiltered() },
+    { desc: 'Login pattern anomaly: admin account at 03:22 from new geo', sev: 'high', time: '14:28', org: rOrgFiltered() },
+    { desc: 'CPU usage correlation break: SRV-SIEM-01 diverged from cluster', sev: 'low', time: '14:15', org: rOrgFiltered() },
+    { desc: 'Network traffic spike on port 445 \u2014 150% above norm', sev: 'high', time: '14:05', org: rOrgFiltered() },
+    { desc: 'New user agent string detected in web proxy logs', sev: 'low', time: '13:58', org: rOrgFiltered() },
+    { desc: 'DHCP lease exhaustion predicted in 4 hours for VLAN 20', sev: 'medium', time: '13:45', org: rOrgFiltered() },
+    { desc: 'Outbound data transfer anomaly: SRV-FILE-01 +200% baseline', sev: 'high', time: '13:30', org: rOrgFiltered() },
+    { desc: 'Email send pattern deviation: bulk send from single account', sev: 'medium', time: '13:20', org: rOrgFiltered() }
+  ];
+
+  var logVolume = [
+    { source: 'Elastic SIEM', events24h: 1240000 },
+    { source: 'Firewall', events24h: 580000 },
+    { source: 'EDR/XDR', events24h: 320000 },
+    { source: 'Windows Events', events24h: 180000 },
+    { source: 'DNS', events24h: 95000 },
+    { source: 'VPN', events24h: 42000 }
+  ];
+
+  /* ---- LAYER 4: Security Operations ---- */
   var incidents = [
-    { sev: 'p1', title: 'Ransomware IOC match on SRV-DC-01',       org: 'Naga World',     time: '14:23', id: 'INC-2026-047' },
-    { sev: 'p2', title: 'Brute-force login attempts — SRV-MAIL-01', org: 'Silver Key',     time: '13:58', id: 'INC-2026-046' },
-    { sev: 'p2', title: 'Lateral movement: PsExec across VLANs',    org: 'ADV Partners',   time: '13:41', id: 'INC-2026-045' },
-    { sev: 'p3', title: 'Suspicious outbound DNS (C2 beaconing)',    org: 'SPMT',           time: '13:15', id: 'INC-2026-044' },
-    { sev: 'p3', title: 'High memory alert — SRV-MAIL-01 (91%)',    org: 'Dacta Global',   time: '12:50', id: 'INC-2026-043' },
-    { sev: 'p3', title: 'Firewall geo-block: RU/CN IPs blocked',    org: 'Dacta Training', time: '12:30', id: 'INC-2026-042' },
-    { sev: 'p3', title: 'Failed MFA — admin account x3',             org: 'Foxwood Tech.',  time: '12:05', id: 'INC-2026-041' }
+    { sev: 'p1', title: 'Ransomware IOC match on SRV-DC-01',       org: rOrgFiltered(), time: '14:23', id: 'INC-2026-047' },
+    { sev: 'p2', title: 'Brute-force login attempts \u2014 SRV-MAIL-01', org: rOrgFiltered(), time: '13:58', id: 'INC-2026-046' },
+    { sev: 'p2', title: 'Lateral movement: PsExec across VLANs',    org: rOrgFiltered(), time: '13:41', id: 'INC-2026-045' },
+    { sev: 'p3', title: 'Suspicious outbound DNS (C2 beaconing)',    org: rOrgFiltered(), time: '13:15', id: 'INC-2026-044' },
+    { sev: 'p3', title: 'High memory alert \u2014 SRV-MAIL-01 (91%)',    org: rOrgFiltered(), time: '12:50', id: 'INC-2026-043' },
+    { sev: 'p3', title: 'Firewall geo-block: RU/CN IPs blocked',    org: rOrgFiltered(), time: '12:30', id: 'INC-2026-042' },
+    { sev: 'p3', title: 'Failed MFA \u2014 admin account x3',             org: rOrgFiltered(), time: '12:05', id: 'INC-2026-041' }
   ];
 
-  /* ---- IOC Watchlist ---- */
   var iocs = [
-    { type: 'ip',     value: '185.220.101.47',                     conf: 'high', matches: 12 },
-    { type: 'domain', value: 'malware-cdn.evil-update.net',         conf: 'high', matches: 7  },
-    { type: 'hash',   value: 'a94f3d2b1c...e5f7',                   conf: 'high', matches: 3  },
-    { type: 'ip',     value: '45.147.229.85',                       conf: 'med',  matches: 5  },
-    { type: 'domain', value: 'c2.redacted-apt.biz',                 conf: 'high', matches: 2  },
-    { type: 'url',    value: 'http://104.21.x.x/payload.exe',       conf: 'high', matches: 4  },
-    { type: 'ip',     value: '91.108.4.121',                        conf: 'med',  matches: 9  },
-    { type: 'hash',   value: '3b7e1f9d0a...c8d2',                   conf: 'med',  matches: 1  },
-    { type: 'domain', value: 'update.microsoft-cdn.top',            conf: 'high', matches: 6  },
-    { type: 'ip',     value: '172.64.155.202',                      conf: 'low',  matches: 2  }
+    { type: 'ip',     value: '185.220.101.47',             conf: 'high', matches: 12, lastSeen: '14:31' },
+    { type: 'domain', value: 'malware-cdn.evil-update.net', conf: 'high', matches: 7,  lastSeen: '14:28' },
+    { type: 'hash',   value: 'a94f3d2b1c...e5f7',          conf: 'high', matches: 3,  lastSeen: '14:20' },
+    { type: 'ip',     value: '45.147.229.85',              conf: 'med',  matches: 5,  lastSeen: '14:15' },
+    { type: 'domain', value: 'c2.redacted-apt.biz',        conf: 'high', matches: 2,  lastSeen: '14:01' },
+    { type: 'url',    value: 'http://104.21.x.x/payload.exe',conf:'high',matches: 4,  lastSeen: '13:55' },
+    { type: 'ip',     value: '91.108.4.121',               conf: 'med',  matches: 9,  lastSeen: '13:48' },
+    { type: 'hash',   value: '3b7e1f9d0a...c8d2',          conf: 'med',  matches: 1,  lastSeen: '13:30' },
+    { type: 'domain', value: 'update.microsoft-cdn.top',   conf: 'high', matches: 6,  lastSeen: '13:22' },
+    { type: 'ip',     value: '172.64.155.202',             conf: 'low',  matches: 2,  lastSeen: '12:45' }
   ];
 
-  /* ---- Firewall log seed entries ---- */
-  var fwSeedEntries = _snocGenFwEntries(30);
+  var mitreTechniques = [
+    { id: 'T1059', name: 'Command & Scripting Interpreter', count: 24, tactic: 'Execution' },
+    { id: 'T1078', name: 'Valid Accounts', count: 18, tactic: 'Persistence' },
+    { id: 'T1566', name: 'Phishing', count: 15, tactic: 'Initial Access' },
+    { id: 'T1021', name: 'Remote Services', count: 12, tactic: 'Lateral Movement' },
+    { id: 'T1053', name: 'Scheduled Task/Job', count: 9, tactic: 'Execution' },
+    { id: 'T1547', name: 'Boot/Logon Autostart', count: 7, tactic: 'Persistence' },
+    { id: 'T1003', name: 'OS Credential Dumping', count: 6, tactic: 'Credential Access' },
+    { id: 'T1027', name: 'Obfuscated Files', count: 5, tactic: 'Defense Evasion' },
+    { id: 'T1105', name: 'Ingress Tool Transfer', count: 4, tactic: 'Command & Control' },
+    { id: 'T1071', name: 'Application Layer Protocol', count: 3, tactic: 'Command & Control' }
+  ];
 
-  /* ---- Unified Timeline ---- */
+  var fwSeedEntries = _snocGenFwEntries(30);
   var timeline = _snocGenTimelineEvents(50);
 
-  /* ---- KPI values ---- */
-  var devicesUp   = devices.filter(function(d) { return d.status === 'up'; }).length;
-  var devicesWarn = devices.filter(function(d) { return d.status === 'warn'; }).length;
-  var devicesDown = devices.filter(function(d) { return d.status === 'down'; }).length;
-  var currentBw   = bwData[bwData.length - 1].inMbps + bwData[bwData.length - 1].outMbps;
-  var avgLat      = (latData.reduce(function(s, d) { return s + d.ms; }, 0) / latData.length).toFixed(1);
+  var episodes = [
+    { id: 'ep1', title: 'Episode: Brute Force Attack on MAIL-01', sev: 'warn', eventCount: 5, collapsed: true, org: rOrgFiltered() },
+    { id: 'ep2', title: 'Episode: Ransomware IOC Chain \u2014 SRV-DC-01', sev: 'crit', eventCount: 4, collapsed: true, org: rOrgFiltered() },
+    { id: 'ep3', title: 'Episode: VPN Tunnel Degradation', sev: 'info', eventCount: 3, collapsed: true, org: rOrgFiltered() }
+  ];
+
+  /* ---- KPIs ---- */
+  var devicesUp = 0, devicesWarn = 0, devicesDown = 0;
+  for (var di = 0; di < devices.length; di++) {
+    if (devices[di].status === 'up') devicesUp++;
+    else if (devices[di].status === 'warn') devicesWarn++;
+    else devicesDown++;
+  }
+  var currentBw = bwData[bwData.length - 1].inMbps + bwData[bwData.length - 1].outMbps;
+  var latSum = 0;
+  for (var lai = 0; lai < latData.length; lai++) latSum += latData[lai].ms;
+  var avgLat = (latSum / latData.length).toFixed(1);
+  var avgJitter = 0;
+  for (var ji = 0; ji < latData.length; ji++) avgJitter += latData[ji].jitter;
+  avgJitter = (avgJitter / latData.length).toFixed(1);
+
+  var svcHealthSum = 0;
+  for (var si = 0; si < services.length; si++) svcHealthSum += services[si].health;
+  var avgSvcHealth = Math.round(svcHealthSum / services.length);
+
+  var p1Count = 0, p2Count = 0, p3Count = 0;
+  for (var ii = 0; ii < incidents.length; ii++) {
+    if (incidents[ii].sev === 'p1') p1Count++;
+    else if (incidents[ii].sev === 'p2') p2Count++;
+    else p3Count++;
+  }
+
+  var iocTotal = 0;
+  for (var ioci = 0; ioci < iocs.length; ioci++) iocTotal += iocs[ioci].matches;
+
+  var logTotal = 0;
+  for (var lvi = 0; lvi < logVolume.length; lvi++) logTotal += logVolume[lvi].events24h;
+
+  var anomalyHigh = 0, anomalyMed = 0;
+  for (var ai = 0; ai < anomalies.length; ai++) {
+    if (anomalies[ai].sev === 'high') anomalyHigh++;
+    else if (anomalies[ai].sev === 'medium') anomalyMed++;
+  }
 
   return {
+    services: services,
     devices: devices,
     bwData: bwData,
     latData: latData,
     topInterfaces: topInterfaces,
     vpnTunnels: vpnTunnels,
+    slos: slos,
+    apmTransactions: apmTransactions,
+    anomalies: anomalies,
+    logVolume: logVolume,
     incidents: incidents,
     iocs: iocs,
+    mitreTechniques: mitreTechniques,
     fwLog: fwSeedEntries,
     timeline: timeline,
+    episodes: episodes,
     kpi: {
       totalDevices: devices.length,
       devicesUp: devicesUp,
@@ -67670,148 +68660,75 @@ function _snocGenerateDemoData() {
       devicesDown: devicesDown,
       bandwidth: currentBw,
       avgLatency: avgLat,
+      avgJitter: avgJitter,
       uptimeSla: 99.87,
       activeAlerts: incidents.length,
-      alertP1: incidents.filter(function(i) { return i.sev === 'p1'; }).length,
-      alertP2: incidents.filter(function(i) { return i.sev === 'p2'; }).length,
-      alertP3: incidents.filter(function(i) { return i.sev === 'p3'; }).length,
+      alertP1: p1Count,
+      alertP2: p2Count,
+      alertP3: p3Count,
       threatsBlocked: 1284,
-      iocMatched: iocs.reduce(function(s, i) { return s + i.matches; }, 0),
+      iocMatched: iocTotal,
       mttdMin: 4.2,
-      mttrMin: 18
+      mttrMin: 18,
+      sloCompliance: 96.2,
+      errorRate: 0.42,
+      anomaliesDetected: anomalies.length,
+      anomalyHigh: anomalyHigh,
+      anomalyMed: anomalyMed,
+      logIngest: logTotal,
+      avgServiceHealth: avgSvcHealth
     }
   };
 }
 
 /* ============================================================
-   GENERATE FIREWALL LOG ENTRIES
-   ============================================================ */
-function _snocGenFwEntries(count) {
-  var srcIps = ['185.220.101.47', '45.147.229.85', '192.168.1.105', '10.0.1.22', '91.108.4.121',
-                '172.217.1.46', '104.26.10.84', '203.0.113.5', '198.51.100.9', '10.0.2.1'];
-  var dstIps = ['10.0.0.1', '10.0.2.3', '10.0.3.1', '10.0.2.1', '10.0.5.1'];
-  var ports  = [443, 80, 22, 3389, 8080, 53, 445, 25, 587, 3306];
-  var entries = [];
-  var now = new Date();
-  for (var i = 0; i < count; i++) {
-    var d = new Date(now.getTime() - i * 4000 - Math.random() * 3000);
-    var src = srcIps[Math.floor(Math.random() * srcIps.length)];
-    var dst = dstIps[Math.floor(Math.random() * dstIps.length)];
-    var port = ports[Math.floor(Math.random() * ports.length)];
-    var isExternal = src.indexOf('10.') !== 0 && src.indexOf('192.168') !== 0;
-    var action = (isExternal && Math.random() < 0.65) ? 'deny' : 'allow';
-    var hh = d.getHours(); var mm = d.getMinutes(); var ss = d.getSeconds();
-    var ts = (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm) + ':' + (ss < 10 ? '0' + ss : ss);
-    entries.push({ ts: ts, action: action, src: src, dst: dst, port: port });
-  }
-  return entries;
-}
-
-/* ============================================================
-   GENERATE UNIFIED TIMELINE EVENTS
-   ============================================================ */
-function _snocGenTimelineEvents(count) {
-  var netEvents = [
-    { type: 'net', icon: '\u21D3', desc: 'Interface GE1/0 link down — FW-DACTA-01', sev: 'warn' },
-    { type: 'net', icon: '\u21D1', desc: 'Interface GE1/0 link restored', sev: 'ok' },
-    { type: 'net', icon: '\u26A0', desc: 'CPU threshold breach — SRV-SIEM-01 (62%)', sev: 'warn' },
-    { type: 'net', icon: '\u21C6', desc: 'Bandwidth spike detected on WAN — 284 Mbps', sev: 'info' },
-    { type: 'net', icon: '\uD83D\uDD12', desc: 'VPN tunnel Foxwood degraded — 85ms latency', sev: 'warn' },
-    { type: 'net', icon: '\u2705', desc: 'SNOC polling cycle completed — 15/15 devices reachable', sev: 'ok' },
-    { type: 'net', icon: '\u26A0', desc: 'Memory critical — SRV-MAIL-01 (91%)', sev: 'warn' },
-    { type: 'net', icon: '\uD83D\uDD01', desc: 'RTR-WAN-01 config backup completed', sev: 'ok' },
-    { type: 'net', icon: '\uD83D\uDCE1', desc: 'SNMP trap received from SW-CORE-01', sev: 'info' },
-    { type: 'net', icon: '\u21D3', desc: 'PRINTER-01 unreachable — ICMP timeout', sev: 'warn' }
-  ];
-  var secEvents = [
-    { type: 'sec', icon: '\u26A1', desc: 'Ransomware IOC matched — SRV-DC-01 outbound', sev: 'crit' },
-    { type: 'sec', icon: '\uD83D\uDEE1', desc: 'Threat blocked: malware download attempt (185.220.101.47)', sev: 'crit' },
-    { type: 'sec', icon: '\uD83D\uDD0D', desc: 'IOC match: domain malware-cdn.evil-update.net', sev: 'crit' },
-    { type: 'sec', icon: '\u26A0', desc: 'Brute-force detected: SRV-MAIL-01 — 47 failed logins', sev: 'warn' },
-    { type: 'sec', icon: '\uD83D\uDEE1', desc: '1,284 firewall blocks in last 24h — above threshold', sev: 'warn' },
-    { type: 'sec', icon: '\uD83D\uDD0D', desc: 'Suspicious DNS query to c2.redacted-apt.biz', sev: 'crit' },
-    { type: 'sec', icon: '\u26A0', desc: 'Failed MFA attempts: admin account (Foxwood)', sev: 'warn' },
-    { type: 'sec', icon: '\uD83D\uDEE1', desc: 'Geo-block: 23 IPs from RU/CN blocked at perimeter', sev: 'info' },
-    { type: 'sec', icon: '\u26A1', desc: 'Lateral movement: PsExec from 10.0.2.1 to 10.0.2.2', sev: 'crit' },
-    { type: 'sec', icon: '\uD83D\uDD0D', desc: 'New IOC added to watchlist: 91.108.4.121', sev: 'info' }
-  ];
-  var events = [];
-  var now = new Date();
-  for (var i = 0; i < count; i++) {
-    var offsetMs = i * 90000 + Math.random() * 60000;
-    var d = new Date(now.getTime() - offsetMs);
-    var hh = d.getHours(); var mm = d.getMinutes(); var ss = d.getSeconds();
-    var ts = (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm) + ':' + (ss < 10 ? '0' + ss : ss);
-    var pool = (Math.random() < 0.5) ? netEvents : secEvents;
-    var template = pool[Math.floor(Math.random() * pool.length)];
-    events.push({ ts: ts, type: template.type, icon: template.icon, desc: template.desc, sev: template.sev });
-  }
-  return events;
-}
-
-/* ============================================================
-   KPI BAR RENDER
+   KPI BAR (12 cards)
    ============================================================ */
 function _snocRenderKpiBar() {
   if (!_snocDemoData) return;
   var k = _snocDemoData.kpi;
 
-  var devVal = document.getElementById('snocKpiDevicesVal');
-  var devUp  = document.getElementById('snocKpiDevUp');
-  var devW   = document.getElementById('snocKpiDevWarn');
-  var devD   = document.getElementById('snocKpiDevDown');
-  if (devVal) devVal.textContent = k.totalDevices;
-  if (devUp)  devUp.textContent  = '\u25CF ' + k.devicesUp + ' up';
-  if (devW)   devW.textContent   = '\u25B2 ' + k.devicesWarn + ' warn';
-  if (devD)   devD.textContent   = '\u25BC ' + k.devicesDown + ' down';
-
-  var bwVal = document.getElementById('snocKpiBwVal');
-  var bwSub = document.getElementById('snocKpiBwSub');
-  if (bwVal) bwVal.textContent = k.bandwidth;
-  if (bwSub) bwSub.textContent = 'Mbps total';
-
-  var latVal = document.getElementById('snocKpiLatVal');
-  if (latVal) latVal.innerHTML = k.avgLatency + '<span style="font-size:13px;color:var(--text-muted);">ms</span>';
-
-  var uptVal = document.getElementById('snocKpiUptimeVal');
-  if (uptVal) uptVal.innerHTML = k.uptimeSla + '<span style="font-size:12px;color:var(--text-muted);">%</span>';
-
-  var alertVal = document.getElementById('snocKpiAlertsVal');
-  var p1 = document.getElementById('snocKpiP1');
-  var p2 = document.getElementById('snocKpiP2');
-  var p3 = document.getElementById('snocKpiP3');
-  if (alertVal) alertVal.textContent = k.activeAlerts;
-  if (p1) p1.textContent = 'P1: ' + k.alertP1;
-  if (p2) p2.textContent = 'P2: ' + k.alertP2;
-  if (p3) p3.textContent = 'P3: ' + k.alertP3;
-
-  var blkVal = document.getElementById('snocKpiBlockedVal');
-  if (blkVal) blkVal.textContent = k.threatsBlocked.toLocaleString();
-
-  var iocVal = document.getElementById('snocKpiIocVal');
-  if (iocVal) iocVal.textContent = k.iocMatched;
-
-  var mttdVal = document.getElementById('snocKpiMttdVal');
-  if (mttdVal) {
-    mttdVal.innerHTML = '<span style="color:var(--amber);">' + k.mttdMin + 'm</span>' +
-      '<span style="color:var(--text-muted);font-size:12px;"> / </span>' +
-      '<span style="color:var(--cyan);">' + k.mttrMin + 'm</span>';
-  }
+  _snocSetText('snocKpiDevicesVal', k.totalDevices);
+  _snocSetText('snocKpiDevUp', '\u25CF ' + k.devicesUp + ' up');
+  _snocSetText('snocKpiDevWarn', '\u25B2 ' + k.devicesWarn + ' warn');
+  _snocSetText('snocKpiDevDown', '\u25BC ' + k.devicesDown + ' down');
+  _snocSetText('snocKpiBwVal', k.bandwidth);
+  _snocSetText('snocKpiBwSub', 'Mbps total');
+  _snocSetHtml('snocKpiLatVal', k.avgLatency + '<span style="font-size:13px;color:var(--text-muted);">ms</span>');
+  _snocSetHtml('snocKpiUptimeVal', k.uptimeSla + '<span style="font-size:12px;color:var(--text-muted);">%</span>');
+  _snocSetText('snocKpiAlertsVal', k.activeAlerts);
+  _snocSetText('snocKpiP1', 'P1: ' + k.alertP1);
+  _snocSetText('snocKpiP2', 'P2: ' + k.alertP2);
+  _snocSetText('snocKpiP3', 'P3: ' + k.alertP3);
+  _snocSetText('snocKpiBlockedVal', k.threatsBlocked.toLocaleString());
+  _snocSetText('snocKpiIocVal', k.iocMatched);
+  _snocSetHtml('snocKpiMttdVal', '<span style="color:var(--amber);">' + k.mttdMin + 'm</span><span style="color:var(--text-muted);font-size:12px;"> / </span><span style="color:var(--cyan);">' + k.mttrMin + 'm</span>');
+  /* Observability KPIs */
+  _snocSetHtml('snocKpiSloVal', k.sloCompliance + '<span style="font-size:12px;color:var(--text-muted);">%</span>');
+  _snocSetText('snocKpiSloSub', _snocDemoData.slos.length + ' SLOs tracked');
+  _snocSetHtml('snocKpiErrVal', k.errorRate + '<span style="font-size:12px;color:var(--text-muted);">%</span>');
+  _snocSetText('snocKpiErrSub', 'p99: 320ms');
+  _snocSetText('snocKpiAnomalyVal', k.anomaliesDetected);
+  _snocSetText('snocKpiAnomalySub', k.anomalyHigh + ' high, ' + k.anomalyMed + ' medium');
+  _snocSetHtml('snocKpiLogVal', (k.logIngest / 1000000).toFixed(1) + '<span style="font-size:12px;color:var(--text-muted);">M</span>');
+  _snocSetText('snocKpiLogSub', 'Events / 24h');
 
   _snocRenderBwSparkline();
 }
+
+function _snocSetText(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
+function _snocSetHtml(id, val) { var el = document.getElementById(id); if (el) el.innerHTML = val; }
 
 function _snocRenderBwSparkline() {
   var canvas = document.getElementById('snocBwSparkline');
   if (!canvas || !_snocDemoData) return;
   var data = _snocDemoData.bwData;
   var dpr = window.devicePixelRatio || 1;
-  canvas.width = 60 * dpr;
-  canvas.height = 30 * dpr;
+  canvas.width = 60 * dpr; canvas.height = 30 * dpr;
   var ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   var vals = [];
-  for (var i = 0; i < data.length; i++) { vals.push(data[i].inMbps + data[i].outMbps); }
+  for (var i = 0; i < data.length; i++) vals.push(data[i].inMbps + data[i].outMbps);
   var minV = Math.min.apply(null, vals);
   var maxV = Math.max.apply(null, vals);
   var range = maxV - minV || 1;
@@ -67822,19 +68739,168 @@ function _snocRenderBwSparkline() {
     var y = 28 - ((vals[j] - minV) / range) * 24;
     if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
-  ctx.strokeStyle = '#00d4ff';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 1.5; ctx.stroke();
 }
 
 /* ============================================================
-   DEVICE TABLE
+   LAYER 1: SERVICE HEALTH CARDS
+   ============================================================ */
+function _snocRenderServiceHealth() {
+  var wrap = document.getElementById('snocServiceStrip');
+  if (!wrap || !_snocDemoData) return;
+  var services = _snocDemoData.services;
+  var badge = document.getElementById('snocServiceHealthBadge');
+  if (badge) badge.textContent = services.length + ' services';
+
+  var html = '';
+  for (var i = 0; i < services.length; i++) {
+    var svc = services[i];
+    var healthColor = svc.health >= 90 ? 'var(--green)' : (svc.health >= 70 ? 'var(--amber)' : 'var(--red-bright)');
+    var healthClass = svc.health >= 90 ? 'healthy' : (svc.health >= 70 ? 'warning' : 'critical');
+    var pct = svc.health;
+    var circumference = 2 * Math.PI * 18;
+    var dashOffset = circumference - (pct / 100) * circumference;
+
+    html += '<div class="snoc-service-card ' + healthClass + '">' +
+      '<div class="snoc-svc-header">' +
+        '<span class="snoc-svc-icon">' + svc.icon + '</span>' +
+        '<div class="snoc-svc-ring">' +
+          '<svg width="44" height="44" viewBox="0 0 44 44">' +
+            '<circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="3"/>' +
+            '<circle cx="22" cy="22" r="18" fill="none" stroke="' + healthColor + '" stroke-width="3" stroke-dasharray="' + circumference + '" stroke-dashoffset="' + dashOffset + '" stroke-linecap="round" transform="rotate(-90 22 22)" style="transition:stroke-dashoffset 0.6s;"/>' +
+          '</svg>' +
+          '<span class="snoc-svc-score" style="color:' + healthColor + ';">' + pct + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="snoc-svc-name">' + svc.name + '</div>' +
+      '<div class="snoc-svc-status">' + svc.status + '</div>' +
+      '<div class="snoc-svc-org">' + svc.org + '</div>' +
+    '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+/* ============================================================
+   LAYER 1: SERVICE MAP CANVAS
+   ============================================================ */
+function _snocInitServiceMapCanvas() {
+  var canvas = document.getElementById('snocServiceMapCanvas');
+  if (!canvas || !_snocDemoData) return;
+  if (_snocSvcMapAnimId) { cancelAnimationFrame(_snocSvcMapAnimId); _snocSvcMapAnimId = null; }
+
+  var parent = canvas.parentElement;
+  if (!parent) return;
+  var dpr = window.devicePixelRatio || 1;
+  var w = parent.clientWidth || 600;
+  var h = 180;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  var services = _snocDemoData.services;
+  var svcNodes = [];
+  var spacing = w / (services.length + 1);
+  for (var i = 0; i < services.length; i++) {
+    svcNodes.push({ x: spacing * (i + 1), y: 90, name: services[i].name.split(' ')[0], health: services[i].health, icon: services[i].icon });
+  }
+
+  /* Dependencies: SIEM connects to all, Web->DNS, Web->AD, Email->AD, EDR->SIEM */
+  var svcEdges = [
+    [3, 6], /* Web -> DNS */
+    [3, 1], /* Web -> AD */
+    [0, 1], /* Email -> AD */
+    [5, 4], /* EDR -> SIEM */
+    [4, 0], /* SIEM -> Email */
+    [4, 2], /* SIEM -> VPN */
+    [7, 4], /* Backup -> SIEM */
+  ];
+
+  var edgeParticles = [];
+  for (var ei = 0; ei < svcEdges.length; ei++) {
+    var parts = [];
+    for (var p = 0; p < 2; p++) {
+      parts.push({ t: Math.random(), speed: 0.003 + Math.random() * 0.002 });
+    }
+    edgeParticles.push(parts);
+  }
+
+  function svcLoop() {
+    ctx.clearRect(0, 0, w, h);
+    /* Grid */
+    ctx.strokeStyle = 'rgba(167,139,250,0.03)';
+    ctx.lineWidth = 0.5;
+    for (var gx = 0; gx < w; gx += 30) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+    for (var gy = 0; gy < h; gy += 30) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
+
+    /* Draw edges */
+    for (var e = 0; e < svcEdges.length; e++) {
+      var fromN = svcNodes[svcEdges[e][0]];
+      var toN = svcNodes[svcEdges[e][1]];
+      if (!fromN || !toN) continue;
+      ctx.beginPath();
+      ctx.moveTo(fromN.x, fromN.y);
+      var cpY = Math.min(fromN.y, toN.y) - 30;
+      ctx.quadraticCurveTo((fromN.x + toN.x) / 2, cpY, toN.x, toN.y);
+      ctx.strokeStyle = 'rgba(167,139,250,0.15)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      /* Particles */
+      var pts = edgeParticles[e];
+      for (var pi = 0; pi < pts.length; pi++) {
+        pts[pi].t += pts[pi].speed;
+        if (pts[pi].t > 1) pts[pi].t -= 1;
+        var t = pts[pi].t;
+        var px = (1 - t) * (1 - t) * fromN.x + 2 * (1 - t) * t * ((fromN.x + toN.x) / 2) + t * t * toN.x;
+        var py = (1 - t) * (1 - t) * fromN.y + 2 * (1 - t) * t * cpY + t * t * toN.y;
+        ctx.beginPath();
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(167,139,250,0.6)';
+        ctx.fill();
+      }
+    }
+
+    /* Draw nodes */
+    for (var ni = 0; ni < svcNodes.length; ni++) {
+      var nd = svcNodes[ni];
+      var col = nd.health >= 90 ? '#10b981' : (nd.health >= 70 ? '#f59e0b' : '#ef4444');
+      ctx.beginPath();
+      ctx.arc(nd.x, nd.y, 16, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(30,40,60,0.9)';
+      ctx.fill();
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      /* Icon */
+      ctx.font = '13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = col;
+      ctx.fillText(nd.icon, nd.x, nd.y + 5);
+
+      /* Label */
+      ctx.font = '500 8px IBM Plex Mono, monospace';
+      ctx.fillStyle = 'rgba(232,237,245,0.5)';
+      ctx.fillText(nd.name, nd.x, nd.y + 28);
+    }
+
+    _snocSvcMapAnimId = requestAnimationFrame(svcLoop);
+  }
+  svcLoop();
+}
+
+/* ============================================================
+   LAYER 2: DEVICE TABLE (with org column)
    ============================================================ */
 function _snocRenderDeviceTable() {
   var tbody = document.getElementById('snocDeviceTableBody');
   if (!tbody || !_snocDemoData) return;
   var devices = _snocDemoData.devices;
   var typeIcons = { firewall: '\uD83D\uDD25', switch: '\uD83D\uDD00', router: '\uD83C\uDF10', server: '\uD83D\uDDA5', ap: '\uD83D\uDCF6', endpoint: '\uD83D\uDDA8' };
+  var badge = document.getElementById('snocDeviceBadge');
+  if (badge) badge.textContent = devices.length + ' devices';
+
   var html = '';
   for (var i = 0; i < devices.length; i++) {
     var d = devices[i];
@@ -67847,15 +68913,10 @@ function _snocRenderDeviceTable() {
       '<td><span class="snoc-device-name">' + d.name + '</span></td>' +
       '<td style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);">' + d.ip + '</td>' +
       '<td><span class="snoc-status-dot ' + dotClass + '"></span></td>' +
-      '<td>' +
-        '<div class="snoc-cpu-bar"><div class="snoc-cpu-bar-fill ' + cpuFill + '" style="width:' + d.cpu + '%;"></div></div>' +
-        '<span style="font-size:9px;font-family:var(--font-mono);color:var(--text-muted);">' + d.cpu + '%</span>' +
-      '</td>' +
-      '<td>' +
-        '<div class="snoc-cpu-bar"><div class="snoc-cpu-bar-fill ' + memFill + '" style="width:' + d.mem + '%;"></div></div>' +
-        '<span style="font-size:9px;font-family:var(--font-mono);color:var(--text-muted);">' + d.mem + '%</span>' +
-      '</td>' +
+      '<td><div class="snoc-cpu-bar"><div class="snoc-cpu-bar-fill ' + cpuFill + '" style="width:' + d.cpu + '%;"></div></div><span style="font-size:9px;font-family:var(--font-mono);color:var(--text-muted);">' + d.cpu + '%</span></td>' +
+      '<td><div class="snoc-cpu-bar"><div class="snoc-cpu-bar-fill ' + memFill + '" style="width:' + d.mem + '%;"></div></div><span style="font-size:9px;font-family:var(--font-mono);color:var(--text-muted);">' + d.mem + '%</span></td>' +
       '<td style="font-size:9px;color:var(--text-muted);">' + d.uptime + '</td>' +
+      '<td style="font-size:8px;color:var(--text-muted);max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + d.org + '</td>' +
     '</tr>';
   }
   tbody.innerHTML = html;
@@ -67867,7 +68928,6 @@ function _snocSelectDeviceById(id) {
   for (var i = 0; i < devices.length; i++) {
     if (devices[i].id === id) {
       _snocShowNodeDetail(devices[i]);
-      // Highlight on topology
       _snocTopoSelected = id;
       return;
     }
@@ -67875,7 +68935,7 @@ function _snocSelectDeviceById(id) {
 }
 
 /* ============================================================
-   BANDWIDTH BARS
+   LAYER 2: BANDWIDTH BARS
    ============================================================ */
 function _snocRenderBandwidthBars() {
   var wrap = document.getElementById('snocBwBars');
@@ -67884,69 +68944,45 @@ function _snocRenderBandwidthBars() {
   var html = '';
   for (var i = 0; i < ifaces.length; i++) {
     var iface = ifaces[i];
-    var inPct  = Math.round((iface.inMbps  / iface.maxMbps) * 100);
+    var inPct = Math.round((iface.inMbps / iface.maxMbps) * 100);
     var outPct = Math.round((iface.outMbps / iface.maxMbps) * 100);
+    var utilColor = inPct > 80 ? 'color:var(--red-bright);' : (inPct > 60 ? 'color:var(--amber);' : '');
     html += '<div class="snoc-bw-row">' +
       '<div class="snoc-bw-label" title="' + iface.name + '">' + iface.name + '</div>' +
       '<div class="snoc-bw-bar-track">' +
         '<div class="snoc-bw-bar-in" style="width:' + inPct + '%;"></div>' +
         '<div class="snoc-bw-bar-out" style="width:' + outPct + '%;"></div>' +
       '</div>' +
-      '<div class="snoc-bw-val">' + iface.inMbps + '/' + iface.outMbps + 'M</div>' +
+      '<div class="snoc-bw-val" style="' + utilColor + '">' + iface.inMbps + '/' + iface.outMbps + 'M</div>' +
     '</div>';
   }
   wrap.innerHTML = html;
 }
 
 /* ============================================================
-   LATENCY CHART (Chart.js)
+   LAYER 2: LATENCY CHART (with jitter)
    ============================================================ */
 function _snocRenderLatencyChart() {
   var canvas = document.getElementById('snocLatencyChart');
   if (!canvas || !_snocDemoData) return;
   if (typeof Chart === 'undefined') return;
   var data = _snocDemoData.latData;
-  var labels = [];
-  var latVals = [];
-  var plVals = [];
+  var labels = [], latVals = [], plVals = [], jitterVals = [];
   for (var i = 0; i < data.length; i++) {
     labels.push(data[i].hour + 'h');
     latVals.push(data[i].ms);
     plVals.push(data[i].pktLoss);
+    jitterVals.push(data[i].jitter);
   }
-
-  if (_snocLatencyChartObj) {
-    _snocLatencyChartObj.destroy();
-    _snocLatencyChartObj = null;
-  }
-
+  if (_snocLatencyChartObj) { _snocLatencyChartObj.destroy(); _snocLatencyChartObj = null; }
   _snocLatencyChartObj = new Chart(canvas, {
     type: 'line',
     data: {
       labels: labels,
       datasets: [
-        {
-          label: 'Latency (ms)',
-          data: latVals,
-          borderColor: '#00d4ff',
-          backgroundColor: 'rgba(0,212,255,0.05)',
-          borderWidth: 1.5,
-          pointRadius: 0,
-          tension: 0.4,
-          fill: true,
-          yAxisID: 'y'
-        },
-        {
-          label: 'Pkt Loss (%)',
-          data: plVals,
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239,68,68,0.08)',
-          borderWidth: 1,
-          pointRadius: 0,
-          tension: 0.3,
-          fill: false,
-          yAxisID: 'y2'
-        }
+        { label: 'Latency (ms)', data: latVals, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.05)', borderWidth: 1.5, pointRadius: 0, tension: 0.4, fill: true, yAxisID: 'y' },
+        { label: 'Jitter (ms)', data: jitterVals, borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.05)', borderWidth: 1, pointRadius: 0, tension: 0.4, fill: false, yAxisID: 'y' },
+        { label: 'Pkt Loss (%)', data: plVals, borderColor: '#ef4444', borderWidth: 1, pointRadius: 0, tension: 0.3, fill: false, yAxisID: 'y2' }
       ]
     },
     options: {
@@ -67955,20 +68991,18 @@ function _snocRenderLatencyChart() {
       animation: false,
       plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
       scales: {
-        x: { ticks: { font: { size: 8 }, color: getThemeTickColor(), maxTicksLimit: 8 }, grid: { color: getThemeGridColor() } },
-        y: { position: 'left', ticks: { font: { size: 8 }, color: getThemeTickColor() }, grid: { color: getThemeGridColor() }, title: { display: false } },
+        x: { ticks: { font: { size: 8 }, color: '#4d5a6e', maxTicksLimit: 8 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { position: 'left', ticks: { font: { size: 8 }, color: '#4d5a6e' }, grid: { color: 'rgba(255,255,255,0.04)' } },
         y2: { position: 'right', ticks: { font: { size: 8 }, color: '#ef4444' }, grid: { display: false } }
       }
     }
   });
-
-  // Update latency avg label
   var avgLabel = document.getElementById('snocLatAvg');
-  if (avgLabel) avgLabel.textContent = 'Avg: ' + _snocDemoData.kpi.avgLatency + 'ms';
+  if (avgLabel) avgLabel.textContent = 'Avg: ' + _snocDemoData.kpi.avgLatency + 'ms | Jitter: ' + _snocDemoData.kpi.avgJitter + 'ms';
 }
 
 /* ============================================================
-   VPN LIST
+   LAYER 2: VPN LIST
    ============================================================ */
 function _snocRenderVpnList() {
   var wrap = document.getElementById('snocVpnList');
@@ -67978,7 +69012,7 @@ function _snocRenderVpnList() {
   for (var i = 0; i < tunnels.length; i++) {
     var t = tunnels[i];
     var badgeClass = t.status === 'up' ? 'up' : (t.status === 'warn' ? 'warn' : 'down');
-    var badgeText  = t.status === 'up' ? 'UP' : (t.status === 'warn' ? 'WARN' : 'DOWN');
+    var badgeText = t.status === 'up' ? 'UP' : (t.status === 'warn' ? 'WARN' : 'DOWN');
     html += '<div class="snoc-vpn-item">' +
       '<span class="snoc-status-dot ' + badgeClass + '"></span>' +
       '<span class="snoc-vpn-name">' + t.name + '</span>' +
@@ -67995,7 +69029,121 @@ function _snocRenderVpnList() {
 }
 
 /* ============================================================
-   ACTIVE INCIDENTS
+   LAYER 3: SLO TABLE
+   ============================================================ */
+function _snocRenderSloTable() {
+  var tbody = document.getElementById('snocSloTableBody');
+  if (!tbody || !_snocDemoData) return;
+  var slos = _snocDemoData.slos;
+  var html = '';
+  for (var i = 0; i < slos.length; i++) {
+    var s = slos[i];
+    var statusClass = s.status === 'on-track' ? 'on-track' : (s.status === 'at-risk' ? 'at-risk' : 'breached');
+    var statusLabel = s.status === 'on-track' ? 'ON TRACK' : (s.status === 'at-risk' ? 'AT RISK' : 'BREACHED');
+    html += '<tr>' +
+      '<td style="color:var(--text-primary);font-weight:500;">' + s.service + '</td>' +
+      '<td style="font-family:var(--font-mono);">' + s.target + '</td>' +
+      '<td style="font-family:var(--font-mono);">' + s.current + '</td>' +
+      '<td>' +
+        '<div class="snoc-slo-budget-bar"><div class="snoc-slo-budget-fill ' + statusClass + '" style="width:' + s.budget + '%;"></div></div>' +
+        '<span style="font-size:8px;color:var(--text-muted);">' + s.budget + '% remaining</span>' +
+      '</td>' +
+      '<td><span class="snoc-slo-status ' + statusClass + '">' + statusLabel + '</span></td>' +
+      '<td style="font-size:8px;color:var(--text-muted);max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + s.org + '</td>' +
+    '</tr>';
+  }
+  tbody.innerHTML = html;
+  var badge = document.getElementById('snocSloBadge');
+  if (badge) badge.textContent = slos.length + ' SLOs';
+}
+
+/* ============================================================
+   LAYER 3: APM TABLE
+   ============================================================ */
+function _snocRenderApmTable() {
+  var tbody = document.getElementById('snocApmTableBody');
+  if (!tbody || !_snocDemoData) return;
+  var txns = _snocDemoData.apmTransactions;
+  var html = '';
+  for (var i = 0; i < txns.length; i++) {
+    var t = txns[i];
+    var p99Color = t.p99 > 1000 ? 'color:var(--red-bright);' : (t.p99 > 500 ? 'color:var(--amber);' : '');
+    var errColor = t.errorRate > 1 ? 'color:var(--red-bright);' : (t.errorRate > 0.2 ? 'color:var(--amber);' : 'color:var(--green);');
+    html += '<tr>' +
+      '<td style="color:var(--text-primary);font-family:var(--font-mono);font-size:9px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + t.endpoint + '">' + t.endpoint + '</td>' +
+      '<td style="font-family:var(--font-mono);">' + t.p50 + 'ms</td>' +
+      '<td style="font-family:var(--font-mono);">' + t.p95 + 'ms</td>' +
+      '<td style="font-family:var(--font-mono);' + p99Color + '">' + t.p99 + 'ms</td>' +
+      '<td style="font-family:var(--font-mono);' + errColor + '">' + t.errorRate + '%</td>' +
+    '</tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+/* ============================================================
+   LAYER 3: ANOMALY FEED
+   ============================================================ */
+function _snocRenderAnomalyFeed() {
+  var wrap = document.getElementById('snocAnomalyFeed');
+  if (!wrap || !_snocDemoData) return;
+  var anomalies = _snocDemoData.anomalies;
+  var badge = document.getElementById('snocAnomalyBadge');
+  if (badge) badge.textContent = anomalies.length + ' detected';
+
+  var html = '';
+  for (var i = 0; i < anomalies.length; i++) {
+    var a = anomalies[i];
+    var sevClass = a.sev === 'high' ? 'high' : (a.sev === 'medium' ? 'med' : 'low');
+    var sevIcon = a.sev === 'high' ? '\u26A1' : (a.sev === 'medium' ? '\u26A0' : '\u2139');
+    html += '<div class="snoc-anomaly-item ' + sevClass + '">' +
+      '<span class="snoc-anomaly-icon">' + sevIcon + '</span>' +
+      '<div class="snoc-anomaly-body">' +
+        '<div class="snoc-anomaly-desc">' + a.desc + '</div>' +
+        '<div class="snoc-anomaly-meta"><span>' + a.time + '</span><span>' + a.org + '</span><span class="snoc-anomaly-sev ' + sevClass + '">' + a.sev.toUpperCase() + '</span></div>' +
+      '</div>' +
+    '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+/* ============================================================
+   LAYER 3: LOG VOLUME CHART
+   ============================================================ */
+function _snocRenderLogVolumeChart() {
+  var canvas = document.getElementById('snocLogVolumeChart');
+  if (!canvas || !_snocDemoData) return;
+  if (typeof Chart === 'undefined') return;
+  var logData = _snocDemoData.logVolume;
+  var labels = [], vals = [], colors = [];
+  var palette = ['#00d4ff', '#ef4444', '#a78bfa', '#f59e0b', '#10b981', '#60a5fa'];
+  for (var i = 0; i < logData.length; i++) {
+    labels.push(logData[i].source);
+    vals.push(logData[i].events24h);
+    colors.push(palette[i % palette.length]);
+  }
+  if (_snocLogVolumeChartObj) { _snocLogVolumeChartObj.destroy(); _snocLogVolumeChartObj = null; }
+  _snocLogVolumeChartObj = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{ label: 'Events 24h', data: vals, backgroundColor: colors, borderWidth: 0, borderRadius: 3 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) { return (ctx.raw / 1000).toFixed(0) + 'K events'; } } } },
+      scales: {
+        x: { ticks: { font: { size: 8 }, color: '#4d5a6e', callback: function(v) { return (v / 1000) + 'K'; } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { ticks: { font: { size: 8 }, color: '#8b9bb4' }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+/* ============================================================
+   LAYER 4: ACTIVE INCIDENTS (with org + investigate)
    ============================================================ */
 function _snocRenderIncidents() {
   var wrap = document.getElementById('snocIncidentsList');
@@ -68010,6 +69158,7 @@ function _snocRenderIncidents() {
         '<div class="snoc-inc-title">' + inc.title + '</div>' +
         '<div class="snoc-inc-meta"><span>' + inc.id + '</span><span>' + inc.org + '</span><span>' + inc.time + '</span></div>' +
       '</div>' +
+      '<button class="snoc-inc-investigate" onclick="event.stopPropagation();navigate(\'investigation\');" title="Open investigation">\uD83D\uDD0D</button>' +
     '</div>';
   }
   wrap.innerHTML = html;
@@ -68018,7 +69167,7 @@ function _snocRenderIncidents() {
 }
 
 /* ============================================================
-   IOC WATCHLIST
+   LAYER 4: IOC WATCHLIST (with lastSeen)
    ============================================================ */
 function _snocRenderIocList() {
   var wrap = document.getElementById('snocIocList');
@@ -68032,20 +69181,71 @@ function _snocRenderIocList() {
       '<span class="snoc-ioc-value">' + ioc.value + '</span>' +
       '<span class="snoc-ioc-conf ' + ioc.conf + '">' + (ioc.conf === 'high' ? '95%' : (ioc.conf === 'med' ? '70%' : '40%')) + '</span>' +
       '<span class="snoc-ioc-matches">' + ioc.matches + 'x</span>' +
+      '<span class="snoc-ioc-lastseen">' + ioc.lastSeen + '</span>' +
     '</div>';
   }
   wrap.innerHTML = html;
   var badge = document.getElementById('snocIocBadge');
   if (badge) {
     var total = 0;
-    for (var j = 0; j < iocs.length; j++) { total += iocs[j].matches; }
+    for (var j = 0; j < iocs.length; j++) total += iocs[j].matches;
     badge.textContent = total + ' hits';
   }
 }
 
 /* ============================================================
+   LAYER 4: MITRE ATT&CK HEATMAP
+   ============================================================ */
+function _snocRenderMitreHeatmap() {
+  var grid = document.getElementById('snocMitreGrid');
+  if (!grid || !_snocDemoData) return;
+  var techniques = _snocDemoData.mitreTechniques;
+  var maxCount = 0;
+  for (var i = 0; i < techniques.length; i++) {
+    if (techniques[i].count > maxCount) maxCount = techniques[i].count;
+  }
+  var html = '';
+  for (var j = 0; j < techniques.length; j++) {
+    var t = techniques[j];
+    var intensity = maxCount > 0 ? (t.count / maxCount) : 0;
+    var r = Math.round(60 + intensity * 179);
+    var g = Math.round(30 + (1 - intensity) * 30);
+    var b = Math.round(30 + (1 - intensity) * 30);
+    var bgColor = 'rgba(' + r + ',' + g + ',' + b + ',' + (0.15 + intensity * 0.5) + ')';
+    var borderColor = 'rgba(' + r + ',' + g + ',' + b + ',' + (0.3 + intensity * 0.4) + ')';
+    html += '<div class="snoc-mitre-cell" style="background:' + bgColor + ';border-color:' + borderColor + ';">' +
+      '<div class="snoc-mitre-id">' + t.id + '</div>' +
+      '<div class="snoc-mitre-name">' + t.name + '</div>' +
+      '<div class="snoc-mitre-count">' + t.count + ' hits</div>' +
+      '<div class="snoc-mitre-tactic">' + t.tactic + '</div>' +
+    '</div>';
+  }
+  grid.innerHTML = html;
+}
+
+/* ============================================================
    FIREWALL LOG
    ============================================================ */
+function _snocGenFwEntries(count) {
+  var srcIps = ['185.220.101.47', '45.147.229.85', '192.168.1.105', '10.0.1.22', '91.108.4.121', '172.217.1.46', '104.26.10.84', '203.0.113.5', '198.51.100.9', '10.0.2.1'];
+  var dstIps = ['10.0.0.1', '10.0.2.3', '10.0.3.1', '10.0.2.1', '10.0.5.1'];
+  var ports = [443, 80, 22, 3389, 8080, 53, 445, 25, 587, 3306];
+  var entries = [];
+  var now = new Date();
+  for (var i = 0; i < count; i++) {
+    var d = new Date(now.getTime() - i * 4000 - Math.random() * 3000);
+    var src = srcIps[Math.floor(Math.random() * srcIps.length)];
+    var dst = dstIps[Math.floor(Math.random() * dstIps.length)];
+    var port = ports[Math.floor(Math.random() * ports.length)];
+    var isExternal = src.indexOf('10.') !== 0 && src.indexOf('192.168') !== 0;
+    var action = (isExternal && Math.random() < 0.65) ? 'deny' : 'allow';
+    var hh = d.getHours(); var mm = d.getMinutes(); var ss = d.getSeconds();
+    var ts = (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm) + ':' + (ss < 10 ? '0' + ss : ss);
+    entries.push({ ts: ts, action: action, src: src, dst: dst, port: port });
+  }
+  return entries;
+}
+
 function _snocRenderFwLog() {
   var wrap = document.getElementById('snocFwLogInner');
   if (!wrap || !_snocDemoData) return;
@@ -68071,7 +69271,7 @@ function _snocRefreshFwLog() {
 }
 
 function _snocStartLiveFwLog() {
-  if (_snocFwIntervalId) { clearInterval(_snocFwIntervalId); }
+  if (_snocFwIntervalId) clearInterval(_snocFwIntervalId);
   _snocFwIntervalId = setInterval(function() {
     if (!_snocIsDemo) return;
     var newEntry = _snocGenFwEntries(1)[0];
@@ -68082,31 +69282,99 @@ function _snocStartLiveFwLog() {
 }
 
 /* ============================================================
-   UNIFIED TIMELINE
+   LAYER 5: UNIFIED TIMELINE (enhanced)
    ============================================================ */
+function _snocGenTimelineEvents(count) {
+  var orgNames = [];
+  for (var oi = 0; oi < _snocOrgs.length; oi++) orgNames.push(_snocOrgs[oi].name);
+  if (orgNames.length === 0) orgNames = ['Dacta Global', 'SilverKey', 'Naga World', 'SPMT', 'Foxwood'];
+  function rOrg() { return orgNames[Math.floor(Math.random() * orgNames.length)]; }
+
+  var netEvents = [
+    { type: 'net', icon: '\u21D3', desc: 'Interface GE1/0 link down \u2014 FW-DACTA-01', sev: 'warn' },
+    { type: 'net', icon: '\u21D1', desc: 'Interface GE1/0 link restored', sev: 'ok' },
+    { type: 'net', icon: '\u26A0', desc: 'CPU threshold breach \u2014 SRV-SIEM-01 (62%)', sev: 'warn' },
+    { type: 'net', icon: '\u21C6', desc: 'Bandwidth spike detected on WAN \u2014 284 Mbps', sev: 'info' },
+    { type: 'net', icon: '\uD83D\uDD12', desc: 'VPN tunnel Foxwood degraded \u2014 85ms latency', sev: 'warn' },
+    { type: 'net', icon: '\u2705', desc: 'SNOC polling cycle completed \u2014 15/15 devices reachable', sev: 'ok' }
+  ];
+  var secEvents = [
+    { type: 'sec', icon: '\u26A1', desc: 'Ransomware IOC matched \u2014 SRV-DC-01 outbound', sev: 'crit' },
+    { type: 'sec', icon: '\uD83D\uDEE1', desc: 'Threat blocked: malware download attempt', sev: 'crit' },
+    { type: 'sec', icon: '\uD83D\uDD0D', desc: 'IOC match: domain malware-cdn.evil-update.net', sev: 'crit' },
+    { type: 'sec', icon: '\u26A0', desc: 'Brute-force detected: SRV-MAIL-01 \u2014 47 failed logins', sev: 'warn' },
+    { type: 'sec', icon: '\uD83D\uDEE1', desc: 'Geo-block: 23 IPs from RU/CN blocked at perimeter', sev: 'info' }
+  ];
+  var obsEvents = [
+    { type: 'obs', icon: '\uD83D\uDCC8', desc: 'SLO budget warning: API Response Time at 45%', sev: 'warn' },
+    { type: 'obs', icon: '\uD83E\uDD16', desc: 'ML anomaly: unusual DNS volume from 10.0.1.22', sev: 'warn' },
+    { type: 'obs', icon: '\u2699', desc: 'Log ingest rate spike: 3.2K eps (baseline: 2.4K)', sev: 'info' },
+    { type: 'obs', icon: '\uD83D\uDCC9', desc: 'Error rate increase on /api/v1/reports \u2014 1.2%', sev: 'warn' }
+  ];
+  var svcEvents = [
+    { type: 'svc', icon: '\u2705', desc: 'Service health: Active Directory restored to 100%', sev: 'ok' },
+    { type: 'svc', icon: '\u26A0', desc: 'Service degraded: VPN Gateway health dropped to 78%', sev: 'warn' },
+    { type: 'svc', icon: '\u2705', desc: 'Backup job completed successfully for SRV-FILE-01', sev: 'ok' }
+  ];
+
+  var allPools = [netEvents, secEvents, obsEvents, svcEvents];
+  var events = [];
+  var now = new Date();
+  for (var i = 0; i < count; i++) {
+    var offsetMs = i * 90000 + Math.random() * 60000;
+    var d = new Date(now.getTime() - offsetMs);
+    var hh = d.getHours(); var mm = d.getMinutes(); var ss = d.getSeconds();
+    var ts = (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm) + ':' + (ss < 10 ? '0' + ss : ss);
+    var poolIdx = Math.floor(Math.random() * allPools.length);
+    var pool = allPools[poolIdx];
+    var template = pool[Math.floor(Math.random() * pool.length)];
+    events.push({ ts: ts, type: template.type, icon: template.icon, desc: template.desc, sev: template.sev, org: rOrg() });
+  }
+  return events;
+}
+
 function _snocRenderTimeline() {
   var wrap = document.getElementById('snocTimelineBody');
   if (!wrap || !_snocDemoData) return;
   var events = _snocDemoData.timeline;
+  var filter = _snocTimelineFilter;
+
+  /* Episodes first */
   var html = '';
+  var episodes = _snocDemoData.episodes;
+  for (var ep = 0; ep < episodes.length; ep++) {
+    var episode = episodes[ep];
+    if (filter !== 'all' && filter !== 'sec') continue;
+    html += '<div class="snoc-tl-episode" onclick="_snocToggleEpisode(\'' + episode.id + '\')">' +
+      '<span class="snoc-tl-episode-chevron" id="snocEpChev_' + episode.id + '">' + (episode.collapsed ? '\u25B6' : '\u25BC') + '</span>' +
+      '<span class="snoc-tl-sev ' + episode.sev + '">' + episode.sev.toUpperCase() + '</span>' +
+      '<span class="snoc-tl-episode-title">' + episode.title + '</span>' +
+      '<span class="snoc-tl-episode-count">' + episode.eventCount + ' events</span>' +
+      '<span style="font-size:8px;color:var(--text-muted);margin-left:auto;">' + episode.org + '</span>' +
+    '</div>';
+  }
+
+  /* Events */
   for (var i = 0; i < events.length && i < 50; i++) {
     var ev = events[i];
+    if (filter !== 'all' && filter !== ev.type) continue;
+    var dotClass = ev.type;
     html += '<div class="snoc-tl-event">' +
-      '<div class="snoc-tl-dot ' + ev.type + '"></div>' +
+      '<div class="snoc-tl-dot ' + dotClass + '"></div>' +
       '<span class="snoc-tl-time">' + ev.ts + '</span>' +
       '<span class="snoc-tl-icon">' + ev.icon + '</span>' +
       '<span class="snoc-tl-desc">' + ev.desc + '</span>' +
       '<span class="snoc-tl-sev ' + ev.sev + '">' + ev.sev.toUpperCase() + '</span>' +
+      '<span style="font-size:8px;color:var(--text-muted);width:55px;text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + ev.org + '</span>' +
     '</div>';
   }
   wrap.innerHTML = html;
-  // Auto-scroll to top (newest)
   wrap.scrollTop = 0;
 }
 
 function _snocStartTimelineTick() {
-  // Periodically inject new events into the timeline
-  setInterval(function() {
+  if (_snocTimelineTickId) clearInterval(_snocTimelineTickId);
+  _snocTimelineTickId = setInterval(function() {
     if (!_snocIsDemo || !_snocDemoData) return;
     var newEv = _snocGenTimelineEvents(1)[0];
     _snocDemoData.timeline.unshift(newEv);
@@ -68115,30 +69383,46 @@ function _snocStartTimelineTick() {
   }, 8000);
 }
 
+function _snocFilterTimeline(type) {
+  if (type !== null && type !== undefined) _snocTimelineFilter = type;
+  /* Update active chip */
+  var chips = document.querySelectorAll('.snoc-tl-filter-chip');
+  for (var i = 0; i < chips.length; i++) {
+    var chipType = chips[i].getAttribute('data-type');
+    if (chipType === _snocTimelineFilter) {
+      chips[i].classList.add('active');
+    } else {
+      chips[i].classList.remove('active');
+    }
+  }
+  _snocRenderTimeline();
+}
+
+function _snocToggleEpisode(episodeId) {
+  if (!_snocDemoData) return;
+  var episodes = _snocDemoData.episodes;
+  for (var i = 0; i < episodes.length; i++) {
+    if (episodes[i].id === episodeId) {
+      episodes[i].collapsed = !episodes[i].collapsed;
+      var chev = document.getElementById('snocEpChev_' + episodeId);
+      if (chev) chev.textContent = episodes[i].collapsed ? '\u25B6' : '\u25BC';
+      break;
+    }
+  }
+}
+
 /* ============================================================
-   TOPOLOGY MAP — HTML5 Canvas
+   TOPOLOGY MAP — HTML5 Canvas (enhanced from original)
    ============================================================ */
-
-/* Layout: top-to-bottom tree
-   INTERNET CLOUD
-         |
-    FW-DACTA-01  ← may show red ring for sec event
-    /           \
-  SW-CORE-01   VPN-GW-01
-  /    |    \        \
-SW-ACC-01  SW-ACC-02  RTR-WAN-01
-Servers   APs   ...
-*/
-
 function _snocResizeCanvas(canvas) {
   var parent = canvas.parentElement;
-  if (!parent) return;
+  if (!parent) return null;
   var dpr = window.devicePixelRatio || 1;
-  var w = parent.clientWidth  || 600;
+  var w = parent.clientWidth || 600;
   var h = parent.clientHeight || 480;
-  canvas.width  = w * dpr;
+  canvas.width = w * dpr;
   canvas.height = h * dpr;
-  canvas.style.width  = w + 'px';
+  canvas.style.width = w + 'px';
   canvas.style.height = h + 'px';
   var ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
@@ -68146,95 +69430,59 @@ function _snocResizeCanvas(canvas) {
 }
 
 function _snocBuildTopoLayout(w, h) {
-  // Returns array of node descriptors with x,y positions
   var cx = w / 2;
   var nodes = [
-    // id,          label,          type,         x,           y,          status, secEvent, deviceId
-    { id: 'internet', label: 'INTERNET', nodeType: 'cloud',    x: cx,       y: 40,           status: 'up',   secEvent: false, deviceId: null },
-    { id: 'fw01',     label: 'FW-01',    nodeType: 'firewall', x: cx,       y: 105,          status: 'up',   secEvent: true,  deviceId: 'fw01' },
-    { id: 'swcore',   label: 'SW-CORE',  nodeType: 'switch',   x: cx - 100, y: 175,          status: 'up',   secEvent: false, deviceId: 'swcore01' },
-    { id: 'vpngw',    label: 'VPN-GW',   nodeType: 'firewall', x: cx + 110, y: 175,          status: 'up',   secEvent: false, deviceId: 'vpngw01' },
-    { id: 'swacc01',  label: 'SW-ACC1',  nodeType: 'switch',   x: cx - 185, y: 250,          status: 'up',   secEvent: false, deviceId: 'swacc01' },
-    { id: 'swacc02',  label: 'SW-ACC2',  nodeType: 'switch',   x: cx - 30,  y: 250,          status: 'up',   secEvent: false, deviceId: 'swacc02' },
-    { id: 'rtrwan',   label: 'RTR-WAN',  nodeType: 'router',   x: cx + 110, y: 250,          status: 'up',   secEvent: false, deviceId: 'rtrwan01' },
-    { id: 'srvdc',    label: 'DC-01',    nodeType: 'server',   x: cx - 230, y: 325,          status: 'up',   secEvent: true,  deviceId: 'srvdc01' },
-    { id: 'srvmail',  label: 'MAIL',     nodeType: 'server',   x: cx - 170, y: 325,          status: 'warn', secEvent: false, deviceId: 'srvmail01' },
-    { id: 'ap01',     label: 'AP-F1',    nodeType: 'ap',       x: cx - 100, y: 325,          status: 'up',   secEvent: false, deviceId: 'ap01' },
-    { id: 'ap02',     label: 'AP-F2',    nodeType: 'ap',       x: cx - 30,  y: 325,          status: 'up',   secEvent: false, deviceId: 'ap02' },
-    { id: 'srvweb',   label: 'WEB',      nodeType: 'server',   x: cx + 25,  y: 325,          status: 'up',   secEvent: false, deviceId: 'srvweb01' },
-    { id: 'srvsiem',  label: 'SIEM',     nodeType: 'server',   x: cx + 110, y: 325,          status: 'up',   secEvent: false, deviceId: 'srvsiem01' },
-    { id: 'printer',  label: 'PRNT',     nodeType: 'endpoint', x: cx + 165, y: 325,          status: 'down', secEvent: false, deviceId: 'prt01' }
+    { id: 'internet', label: 'INTERNET', nodeType: 'cloud', x: cx, y: 40, status: 'up', secEvent: false, deviceId: null },
+    { id: 'fw01', label: 'FW-01', nodeType: 'firewall', x: cx, y: 105, status: 'up', secEvent: true, deviceId: 'fw01' },
+    { id: 'swcore', label: 'SW-CORE', nodeType: 'switch', x: cx - 100, y: 175, status: 'up', secEvent: false, deviceId: 'swcore01' },
+    { id: 'vpngw', label: 'VPN-GW', nodeType: 'firewall', x: cx + 110, y: 175, status: 'up', secEvent: false, deviceId: 'vpngw01' },
+    { id: 'swacc01', label: 'SW-ACC1', nodeType: 'switch', x: cx - 185, y: 250, status: 'up', secEvent: false, deviceId: 'swacc01' },
+    { id: 'swacc02', label: 'SW-ACC2', nodeType: 'switch', x: cx - 30, y: 250, status: 'up', secEvent: false, deviceId: 'swacc02' },
+    { id: 'rtrwan', label: 'RTR-WAN', nodeType: 'router', x: cx + 110, y: 250, status: 'up', secEvent: false, deviceId: 'rtrwan01' },
+    { id: 'srvdc', label: 'DC-01', nodeType: 'server', x: cx - 230, y: 325, status: 'up', secEvent: true, deviceId: 'srvdc01' },
+    { id: 'srvmail', label: 'MAIL', nodeType: 'server', x: cx - 170, y: 325, status: 'warn', secEvent: false, deviceId: 'srvmail01' },
+    { id: 'ap01', label: 'AP-F1', nodeType: 'ap', x: cx - 100, y: 325, status: 'up', secEvent: false, deviceId: 'ap01' },
+    { id: 'ap02', label: 'AP-F2', nodeType: 'ap', x: cx - 30, y: 325, status: 'up', secEvent: false, deviceId: 'ap02' },
+    { id: 'srvweb', label: 'WEB', nodeType: 'server', x: cx + 25, y: 325, status: 'up', secEvent: false, deviceId: 'srvweb01' },
+    { id: 'srvsiem', label: 'SIEM', nodeType: 'server', x: cx + 110, y: 325, status: 'up', secEvent: false, deviceId: 'srvsiem01' },
+    { id: 'printer', label: 'PRNT', nodeType: 'endpoint', x: cx + 165, y: 325, status: 'down', secEvent: false, deviceId: 'prt01' }
   ];
-
   var edges = [
-    { from: 'internet', to: 'fw01' },
-    { from: 'fw01',     to: 'swcore' },
-    { from: 'fw01',     to: 'vpngw' },
-    { from: 'swcore',   to: 'swacc01' },
-    { from: 'swcore',   to: 'swacc02' },
-    { from: 'vpngw',    to: 'rtrwan' },
-    { from: 'swacc01',  to: 'srvdc' },
-    { from: 'swacc01',  to: 'srvmail' },
-    { from: 'swacc01',  to: 'ap01' },
-    { from: 'swacc02',  to: 'ap02' },
-    { from: 'swacc02',  to: 'srvweb' },
-    { from: 'rtrwan',   to: 'srvsiem' },
-    { from: 'rtrwan',   to: 'printer' }
+    { from: 'internet', to: 'fw01' }, { from: 'fw01', to: 'swcore' }, { from: 'fw01', to: 'vpngw' },
+    { from: 'swcore', to: 'swacc01' }, { from: 'swcore', to: 'swacc02' }, { from: 'vpngw', to: 'rtrwan' },
+    { from: 'swacc01', to: 'srvdc' }, { from: 'swacc01', to: 'srvmail' }, { from: 'swacc01', to: 'ap01' },
+    { from: 'swacc02', to: 'ap02' }, { from: 'swacc02', to: 'srvweb' },
+    { from: 'rtrwan', to: 'srvsiem' }, { from: 'rtrwan', to: 'printer' }
   ];
-
   return { nodes: nodes, edges: edges };
 }
-
-
-/* ---- SNOC Canvas Theme Helpers ---- */
-function _snocCanvasBg() { return _themeIsLight() ? '#f0f2f5' : '#0a0f1c'; }
-function _snocCanvasLine() { return _themeIsLight() ? 'rgba(0,136,179,0.35)' : 'rgba(0,212,255,0.25)'; }
-function _snocCanvasNodeBg() { return _themeIsLight() ? '#ffffff' : '#111827'; }
-function _snocCanvasNodeBorder() { return _themeIsLight() ? 'rgba(0,136,179,0.4)' : 'rgba(0,212,255,0.4)'; }
-function _snocCanvasText() { return _themeIsLight() ? '#1a202c' : '#e8edf5'; }
-function _snocCanvasSubtext() { return _themeIsLight() ? '#4a5568' : '#8892a4'; }
-function _snocGeoLand() { return _themeIsLight() ? '#d1d5db' : '#1a2235'; }
-function _snocGeoBorder() { return _themeIsLight() ? '#9ca3af' : '#2a3550'; }
 
 function _snocInitTopoCanvas() {
   var canvas = document.getElementById('snocTopoCanvas');
   if (!canvas) return;
-
-  // Stop previous animation
   if (_snocTopoAnimId) { cancelAnimationFrame(_snocTopoAnimId); _snocTopoAnimId = null; }
-
   var dims = _snocResizeCanvas(canvas);
   if (!dims) return;
-  var w = dims.w;
-  var h = dims.h;
-
+  var w = dims.w, h = dims.h;
   var layout = _snocBuildTopoLayout(w, h);
   _snocTopoNodes = layout.nodes;
   _snocTopoEdges = layout.edges;
 
-  // Particle state for each edge
   var edgeParticles = [];
   for (var i = 0; i < _snocTopoEdges.length; i++) {
     var particles = [];
-    for (var p = 0; p < 3; p++) {
-      particles.push({ t: Math.random(), speed: 0.004 + Math.random() * 0.003 });
-    }
+    for (var p = 0; p < 3; p++) particles.push({ t: Math.random(), speed: 0.004 + Math.random() * 0.003 });
     edgeParticles.push(particles);
   }
-
-  // Security event pulse state
   var pulseT = 0;
 
-  // Mouse tracking for hover
   canvas.onmousemove = function(e) {
     var rect = canvas.getBoundingClientRect();
-    var mx = e.clientX - rect.left;
-    var my = e.clientY - rect.top;
+    var mx = e.clientX - rect.left, my = e.clientY - rect.top;
     var found = null;
     for (var ni = 0; ni < _snocTopoNodes.length; ni++) {
       var nd = _snocTopoNodes[ni];
-      var dx = mx - nd.x;
-      var dy = my - nd.y;
+      var dx = mx - nd.x, dy = my - nd.y;
       var r = nd.nodeType === 'cloud' ? 28 : 18;
       if (dx * dx + dy * dy < r * r) { found = nd; break; }
     }
@@ -68242,25 +69490,17 @@ function _snocInitTopoCanvas() {
     canvas.style.cursor = found ? 'pointer' : 'crosshair';
     _snocUpdateTopoTooltip(found, mx, my);
   };
-  canvas.onmouseleave = function() {
-    _snocTopoHover = null;
-    _snocUpdateTopoTooltip(null, 0, 0);
-  };
+  canvas.onmouseleave = function() { _snocTopoHover = null; _snocUpdateTopoTooltip(null, 0, 0); };
   canvas.onclick = function(e) {
     var rect = canvas.getBoundingClientRect();
-    var mx = e.clientX - rect.left;
-    var my = e.clientY - rect.top;
+    var mx = e.clientX - rect.left, my = e.clientY - rect.top;
     for (var ni = 0; ni < _snocTopoNodes.length; ni++) {
       var nd = _snocTopoNodes[ni];
-      var dx = mx - nd.x;
-      var dy = my - nd.y;
+      var dx = mx - nd.x, dy = my - nd.y;
       var r = nd.nodeType === 'cloud' ? 28 : 18;
       if (dx * dx + dy * dy < r * r) {
         _snocTopoSelected = nd.id;
-        if (nd.deviceId) {
-          var dev = _snocFindDeviceById(nd.deviceId);
-          if (dev) _snocShowNodeDetail(dev);
-        }
+        if (nd.deviceId) { var dev = _snocFindDeviceById(nd.deviceId); if (dev) _snocShowNodeDetail(dev); }
         return;
       }
     }
@@ -68269,198 +69509,85 @@ function _snocInitTopoCanvas() {
   };
 
   function nodeById(id) {
-    for (var k = 0; k < _snocTopoNodes.length; k++) {
-      if (_snocTopoNodes[k].id === id) return _snocTopoNodes[k];
-    }
+    for (var k = 0; k < _snocTopoNodes.length; k++) { if (_snocTopoNodes[k].id === id) return _snocTopoNodes[k]; }
     return null;
   }
 
   function loop() {
     var ctx = canvas.getContext('2d');
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.restore();
     ctx.clearRect(0, 0, w, h);
-
-    // ---- Grid background ----
-    ctx.strokeStyle = 'rgba(0,212,255,0.03)';
-    ctx.lineWidth = 0.5;
-    for (var gx = 0; gx < w; gx += 30) {
-      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
-    }
-    for (var gy = 0; gy < h; gy += 30) {
-      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
-    }
-
+    ctx.strokeStyle = 'rgba(0,212,255,0.03)'; ctx.lineWidth = 0.5;
+    for (var gx = 0; gx < w; gx += 30) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+    for (var gy = 0; gy < h; gy += 30) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
     pulseT += 0.025;
 
-    // ---- Draw edges ----
     for (var ei = 0; ei < _snocTopoEdges.length; ei++) {
       var edge = _snocTopoEdges[ei];
-      var fromNode = nodeById(edge.from);
-      var toNode   = nodeById(edge.to);
+      var fromNode = nodeById(edge.from), toNode = nodeById(edge.to);
       if (!fromNode || !toNode) continue;
-
-      // Edge line
-      ctx.beginPath();
-      ctx.moveTo(fromNode.x, fromNode.y);
-      ctx.lineTo(toNode.x, toNode.y);
-      ctx.strokeStyle = 'rgba(0,212,255,0.18)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Animated traffic particles
+      ctx.beginPath(); ctx.moveTo(fromNode.x, fromNode.y); ctx.lineTo(toNode.x, toNode.y);
+      ctx.strokeStyle = 'rgba(0,212,255,0.18)'; ctx.lineWidth = 1.5; ctx.stroke();
       var parts = edgeParticles[ei];
       for (var pi = 0; pi < parts.length; pi++) {
-        var prt = parts[pi];
-        prt.t += prt.speed;
-        if (prt.t > 1) prt.t -= 1;
-        var px = fromNode.x + (toNode.x - fromNode.x) * prt.t;
-        var py = fromNode.y + (toNode.y - fromNode.y) * prt.t;
-        ctx.beginPath();
-        ctx.arc(px, py, 2, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0,212,255,0.7)';
-        ctx.fill();
+        parts[pi].t += parts[pi].speed; if (parts[pi].t > 1) parts[pi].t -= 1;
+        var px = fromNode.x + (toNode.x - fromNode.x) * parts[pi].t;
+        var py = fromNode.y + (toNode.y - fromNode.y) * parts[pi].t;
+        ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,212,255,0.7)'; ctx.fill();
       }
     }
 
-    // ---- Draw nodes ----
     for (var ni = 0; ni < _snocTopoNodes.length; ni++) {
       var nd = _snocTopoNodes[ni];
       var col = nd.status === 'up' ? '#10b981' : (nd.status === 'warn' ? '#f59e0b' : '#ef4444');
-      var isHover    = _snocTopoHover && _snocTopoHover.id === nd.id;
+      var isHover = _snocTopoHover && _snocTopoHover.id === nd.id;
       var isSelected = _snocTopoSelected === nd.id;
-
-      // Security event pulsing ring
       if (nd.secEvent) {
         var ringR = 18 + 10 * Math.abs(Math.sin(pulseT));
-        var ringAlpha = 0.5 * (1 - Math.abs(Math.sin(pulseT)));
-        ctx.beginPath();
-        ctx.arc(nd.x, nd.y, ringR, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(239,68,68,' + ringAlpha + ')';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.beginPath(); ctx.arc(nd.x, nd.y, ringR, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(239,68,68,' + (0.5 * (1 - Math.abs(Math.sin(pulseT)))) + ')'; ctx.lineWidth = 2; ctx.stroke();
       }
-
-      // Selection ring
-      if (isSelected) {
-        ctx.beginPath();
-        ctx.arc(nd.x, nd.y, 22, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(0,212,255,0.7)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-
-      // Node shape
+      if (isSelected) { ctx.beginPath(); ctx.arc(nd.x, nd.y, 22, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(0,212,255,0.7)'; ctx.lineWidth = 2; ctx.stroke(); }
       ctx.save();
       var r = 14;
       if (nd.nodeType === 'cloud') {
-        // Cloud oval
-        ctx.beginPath();
-        ctx.ellipse(nd.x, nd.y, 28, 18, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(30,40,60,0.9)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(nd.x, nd.y, 28, 18, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(30,40,60,0.9)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.stroke();
       } else if (nd.nodeType === 'firewall') {
-        // Hexagon
         ctx.beginPath();
-        for (var hp = 0; hp < 6; hp++) {
-          var angle = (Math.PI / 3) * hp - Math.PI / 6;
-          var hx = nd.x + r * Math.cos(angle);
-          var hy = nd.y + r * Math.sin(angle);
-          if (hp === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
-        }
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(239,68,68,0.15)';
-        ctx.fill();
-        ctx.strokeStyle = col;
-        ctx.lineWidth = isHover ? 2 : 1.5;
-        ctx.stroke();
+        for (var hp = 0; hp < 6; hp++) { var angle = (Math.PI / 3) * hp - Math.PI / 6; var hx = nd.x + r * Math.cos(angle); var hy = nd.y + r * Math.sin(angle); if (hp === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy); }
+        ctx.closePath(); ctx.fillStyle = 'rgba(239,68,68,0.15)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = isHover ? 2 : 1.5; ctx.stroke();
       } else if (nd.nodeType === 'switch') {
-        // Diamond
-        ctx.beginPath();
-        ctx.moveTo(nd.x, nd.y - r);
-        ctx.lineTo(nd.x + r, nd.y);
-        ctx.lineTo(nd.x, nd.y + r);
-        ctx.lineTo(nd.x - r, nd.y);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(0,212,255,0.1)';
-        ctx.fill();
-        ctx.strokeStyle = col;
-        ctx.lineWidth = isHover ? 2 : 1.5;
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(nd.x, nd.y - r); ctx.lineTo(nd.x + r, nd.y); ctx.lineTo(nd.x, nd.y + r); ctx.lineTo(nd.x - r, nd.y); ctx.closePath();
+        ctx.fillStyle = 'rgba(0,212,255,0.1)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = isHover ? 2 : 1.5; ctx.stroke();
       } else if (nd.nodeType === 'router') {
-        // Circle
-        ctx.beginPath();
-        ctx.arc(nd.x, nd.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(139,92,246,0.12)';
-        ctx.fill();
-        ctx.strokeStyle = col;
-        ctx.lineWidth = isHover ? 2 : 1.5;
-        ctx.stroke();
+        ctx.beginPath(); ctx.arc(nd.x, nd.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(139,92,246,0.12)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = isHover ? 2 : 1.5; ctx.stroke();
       } else if (nd.nodeType === 'server') {
-        // Rectangle
-        ctx.beginPath();
-        ctx.roundRect(nd.x - r, nd.y - r * 0.7, r * 2, r * 1.4, 3);
-        ctx.fillStyle = 'rgba(59,130,246,0.1)';
-        ctx.fill();
-        ctx.strokeStyle = col;
-        ctx.lineWidth = isHover ? 2 : 1.5;
-        ctx.stroke();
+        ctx.beginPath(); ctx.roundRect(nd.x - r, nd.y - r * 0.7, r * 2, r * 1.4, 3);
+        ctx.fillStyle = 'rgba(59,130,246,0.1)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = isHover ? 2 : 1.5; ctx.stroke();
       } else if (nd.nodeType === 'ap') {
-        // Triangle
-        ctx.beginPath();
-        ctx.moveTo(nd.x, nd.y - r);
-        ctx.lineTo(nd.x + r * 0.9, nd.y + r * 0.7);
-        ctx.lineTo(nd.x - r * 0.9, nd.y + r * 0.7);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(245,158,11,0.1)';
-        ctx.fill();
-        ctx.strokeStyle = col;
-        ctx.lineWidth = isHover ? 2 : 1.5;
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(nd.x, nd.y - r); ctx.lineTo(nd.x + r * 0.9, nd.y + r * 0.7); ctx.lineTo(nd.x - r * 0.9, nd.y + r * 0.7); ctx.closePath();
+        ctx.fillStyle = 'rgba(245,158,11,0.1)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = isHover ? 2 : 1.5; ctx.stroke();
       } else {
-        // Endpoint: small circle
-        ctx.beginPath();
-        ctx.arc(nd.x, nd.y, r * 0.7, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(77,90,110,0.15)';
-        ctx.fill();
-        ctx.strokeStyle = col;
-        ctx.lineWidth = isHover ? 2 : 1;
-        ctx.stroke();
+        ctx.beginPath(); ctx.arc(nd.x, nd.y, r * 0.7, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(77,90,110,0.15)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = isHover ? 2 : 1; ctx.stroke();
       }
       ctx.restore();
-
-      // Status dot (inner)
-      if (nd.nodeType !== 'cloud') {
-        ctx.beginPath();
-        ctx.arc(nd.x, nd.y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = col;
-        ctx.fill();
-      }
-
-      // Label
+      if (nd.nodeType !== 'cloud') { ctx.beginPath(); ctx.arc(nd.x, nd.y, 3, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill(); }
       ctx.font = '500 9px IBM Plex Mono, monospace';
       ctx.fillStyle = isHover ? '#e8edf5' : 'rgba(232,237,245,0.55)';
       ctx.textAlign = 'center';
       ctx.fillText(nd.label, nd.x, nd.y + r + 11);
     }
-
     _snocTopoAnimId = requestAnimationFrame(loop);
   }
-
   loop();
 
-  // Show security badge if any sec events
   var secBadge = document.getElementById('snocTopoSecBadge');
   if (secBadge) {
     var hasSecEvents = false;
-    for (var sni = 0; sni < _snocTopoNodes.length; sni++) {
-      if (_snocTopoNodes[sni].secEvent) { hasSecEvents = true; break; }
-    }
+    for (var sni = 0; sni < _snocTopoNodes.length; sni++) { if (_snocTopoNodes[sni].secEvent) { hasSecEvents = true; break; } }
     secBadge.style.display = hasSecEvents ? 'flex' : 'none';
   }
 }
@@ -68470,29 +69597,28 @@ function _snocUpdateTopoTooltip(node, mx, my) {
   if (!tt) return;
   if (!node) { tt.classList.remove('visible'); return; }
   var dev = node.deviceId ? _snocFindDeviceById(node.deviceId) : null;
-  document.getElementById('snocTtName').textContent  = dev ? dev.name : node.label;
-  document.getElementById('snocTtType').textContent  = dev ? dev.type : node.nodeType;
-  document.getElementById('snocTtIp').textContent    = dev ? dev.ip : '-';
-  document.getElementById('snocTtStatus').textContent= dev ? dev.status.toUpperCase() : node.status.toUpperCase();
-  document.getElementById('snocTtCpu').textContent   = dev ? (dev.cpu + '%') : '-';
-  document.getElementById('snocTtMem').textContent   = dev ? (dev.mem + '%') : '-';
-  tt.style.left = (mx + 12) + 'px';
-  tt.style.top  = (my - 20) + 'px';
+  _snocSetText('snocTtName', dev ? dev.name : node.label);
+  _snocSetText('snocTtType', dev ? dev.type : node.nodeType);
+  _snocSetText('snocTtIp', dev ? dev.ip : '-');
+  _snocSetText('snocTtStatus', dev ? dev.status.toUpperCase() : node.status.toUpperCase());
+  _snocSetText('snocTtCpu', dev ? (dev.cpu + '%') : '-');
+  _snocSetText('snocTtMem', dev ? (dev.mem + '%') : '-');
+  tt.style.left = (mx + 12) + 'px'; tt.style.top = (my - 20) + 'px';
   tt.classList.add('visible');
 }
 
 function _snocShowNodeDetail(dev) {
   var panel = document.getElementById('snocNodeDetail');
   if (!panel) return;
-  document.getElementById('snocNdName').textContent   = dev.name;
-  document.getElementById('snocNdModel').textContent  = dev.model || '-';
-  document.getElementById('snocNdType').textContent   = dev.type;
-  document.getElementById('snocNdIp').textContent     = dev.ip;
-  document.getElementById('snocNdStatus').textContent = dev.status.toUpperCase();
-  document.getElementById('snocNdCpu').textContent    = dev.cpu + '%';
-  document.getElementById('snocNdMem').textContent    = dev.mem + '%';
-  document.getElementById('snocNdUptime').textContent = dev.uptime;
-  document.getElementById('snocNdIface').textContent  = (dev.ifaces || 2) + ' active';
+  _snocSetText('snocNdName', dev.name);
+  _snocSetText('snocNdModel', dev.model || '-');
+  _snocSetText('snocNdType', dev.type);
+  _snocSetText('snocNdIp', dev.ip);
+  _snocSetText('snocNdStatus', dev.status.toUpperCase());
+  _snocSetText('snocNdCpu', dev.cpu + '%');
+  _snocSetText('snocNdMem', dev.mem + '%');
+  _snocSetText('snocNdUptime', dev.uptime);
+  _snocSetText('snocNdIface', (dev.ifaces || 2) + ' active');
   panel.classList.add('visible');
 }
 
@@ -68505,139 +69631,122 @@ function _snocCloseNodeDetail() {
 function _snocFindDeviceById(id) {
   if (!_snocDemoData) return null;
   var devices = _snocDemoData.devices;
-  for (var i = 0; i < devices.length; i++) {
-    if (devices[i].id === id) return devices[i];
-  }
+  for (var i = 0; i < devices.length; i++) { if (devices[i].id === id) return devices[i]; }
   return null;
 }
 
 /* ============================================================
-   GEO CANVAS — Simple threat origin map
-   (Reuses dot-based approach, no full world map — fast canvas)
+   GEO CANVAS — Threat origin map with attack lines
    ============================================================ */
 function _snocInitGeoCanvas() {
   var canvas = document.getElementById('snocGeoCanvas');
   if (!canvas) return;
   if (_snocGeoAnimId) { cancelAnimationFrame(_snocGeoAnimId); _snocGeoAnimId = null; }
-
   var parent = canvas.parentElement;
   if (!parent) return;
   var dpr = window.devicePixelRatio || 1;
   var w = parent.clientWidth || 280;
   var h = 110;
-  canvas.width  = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width  = w + 'px';
-  canvas.style.height = h + 'px';
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
   var ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  // Threat sources: [longitude, latitude, intensity]
+  var sgPos = { lon: 103.8, lat: 1.3 }; /* Singapore / DACTA HQ */
   var threats = [
-    [105, 35, 0.9],   // China
-    [37,  55, 0.8],   // Russia
-    [-74, 40, 0.4],   // US East
-    [28,  51, 0.7],   // Ukraine/Eastern EU
-    [80,  28, 0.5],   // India
-    [116, 39, 0.85],  // Beijing
-    [31,  30, 0.6],   // Egypt
-    [139, 35, 0.4],   // Japan
-    [10,  51, 0.3],   // Germany
-    [-46, -23, 0.4],  // Brazil
-    [103, 1,  0.5]    // Singapore (legitimate)
+    [105, 35, 0.9], [37, 55, 0.8], [-74, 40, 0.4], [28, 51, 0.7], [80, 28, 0.5],
+    [116, 39, 0.85], [31, 30, 0.6], [139, 35, 0.4], [10, 51, 0.3], [-46, -23, 0.4]
   ];
 
-  // Convert lon/lat to canvas x/y (simple equirectangular)
-  function lonLatToXY(lon, lat) {
-    var x = (lon + 180) * (w / 360);
-    var y = (90 - lat) * (h / 180);
-    return { x: x, y: y };
+  function lonLatToXY(lon, lat) { return { x: (lon + 180) * (w / 360), y: (90 - lat) * (h / 180) }; }
+  var sgXY = lonLatToXY(sgPos.lon, sgPos.lat);
+
+  /* Attack line state */
+  var attackLines = [];
+  for (var ai = 0; ai < threats.length; ai++) {
+    if (threats[ai][2] > 0.5) {
+      attackLines.push({ from: lonLatToXY(threats[ai][0], threats[ai][1]), progress: Math.random(), speed: 0.008 + Math.random() * 0.005, active: true });
+    }
   }
 
   var pulsePhase = 0;
-
   function drawGeo() {
     ctx.clearRect(0, 0, w, h);
-    // Background
-    ctx.fillStyle = 'rgba(8,12,24,0.6)';
-    ctx.fillRect(0, 0, w, h);
-
-    // Grid lines
-    ctx.strokeStyle = 'rgba(0,212,255,0.05)';
-    ctx.lineWidth = 0.5;
-    for (var gx = 0; gx < w; gx += w / 6) {
-      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
-    }
-    for (var gy = 0; gy < h; gy += h / 3) {
-      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
-    }
-
+    ctx.fillStyle = 'rgba(8,12,24,0.6)'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(0,212,255,0.05)'; ctx.lineWidth = 0.5;
+    for (var gx = 0; gx < w; gx += w / 6) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+    for (var gy = 0; gy < h; gy += h / 3) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
     pulsePhase += 0.04;
 
+    /* Attack lines to Singapore */
+    for (var ali = 0; ali < attackLines.length; ali++) {
+      var al = attackLines[ali];
+      al.progress += al.speed;
+      if (al.progress > 1) al.progress = 0;
+      var fx = al.from.x, fy = al.from.y;
+      var cpx = (fx + sgXY.x) / 2, cpy = Math.min(fy, sgXY.y) - 15;
+      /* Trail */
+      ctx.beginPath(); ctx.moveTo(fx, fy);
+      ctx.quadraticCurveTo(cpx, cpy, sgXY.x, sgXY.y);
+      ctx.strokeStyle = 'rgba(239,68,68,0.08)'; ctx.lineWidth = 1; ctx.stroke();
+      /* Head */
+      var t = al.progress;
+      var headX = (1 - t) * (1 - t) * fx + 2 * (1 - t) * t * cpx + t * t * sgXY.x;
+      var headY = (1 - t) * (1 - t) * fy + 2 * (1 - t) * t * cpy + t * t * sgXY.y;
+      ctx.beginPath(); ctx.arc(headX, headY, 2, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(239,68,68,0.8)'; ctx.fill();
+    }
+
+    /* Singapore dot (target) */
+    ctx.beginPath(); ctx.arc(sgXY.x, sgXY.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,212,255,0.8)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(sgXY.x, sgXY.y, 7 + 3 * Math.abs(Math.sin(pulsePhase)), 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0,212,255,' + (0.3 * (1 - Math.abs(Math.sin(pulsePhase)))) + ')'; ctx.lineWidth = 1; ctx.stroke();
+
+    /* Threat dots */
     for (var ti = 0; ti < threats.length; ti++) {
-      var t = threats[ti];
-      var pos = lonLatToXY(t[0], t[1]);
-      var intensity = t[2];
-      var r = 3 + intensity * 5;
+      var thr = threats[ti];
+      var pos = lonLatToXY(thr[0], thr[1]);
+      var intensity = thr[2];
+      var rr = 3 + intensity * 5;
       var alpha = 0.5 + 0.3 * Math.sin(pulsePhase + ti * 0.7);
       var isHostile = intensity > 0.6;
-      var dotColor = isHostile ? ('rgba(239,68,68,' + alpha + ')') : ('rgba(0,212,255,' + (alpha * 0.6) + ')');
-
-      // Pulsing ring for high-intensity
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, rr, 0, Math.PI * 2);
+      ctx.fillStyle = isHostile ? ('rgba(239,68,68,' + alpha + ')') : ('rgba(0,212,255,' + (alpha * 0.6) + ')');
+      ctx.fill();
       if (intensity > 0.7) {
         var ringAlpha = 0.3 * (1 - Math.abs(Math.sin(pulsePhase + ti)));
-        var ringR = r + 8 * Math.abs(Math.sin(pulsePhase + ti * 0.5));
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, ringR, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(239,68,68,' + ringAlpha + ')';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, rr + 8 * Math.abs(Math.sin(pulsePhase + ti * 0.5)), 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(239,68,68,' + ringAlpha + ')'; ctx.lineWidth = 1; ctx.stroke();
       }
-
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = dotColor;
-      ctx.fill();
     }
-
-    // Labels for key threat origins
-    ctx.font = '8px IBM Plex Mono, monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.textAlign = 'center';
-    var labels = [
-      { lon: 105, lat: 35, text: 'CN' },
-      { lon: 37,  lat: 55, text: 'RU' },
-      { lon: 28,  lat: 51, text: 'UA' }
-    ];
-    for (var li = 0; li < labels.length; li++) {
-      var lp = lonLatToXY(labels[li].lon, labels[li].lat);
-      ctx.fillText(labels[li].text, lp.x, lp.y - 8);
+    /* Labels */
+    ctx.font = '8px IBM Plex Mono, monospace'; ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.textAlign = 'center';
+    var labels = [{ lon: 105, lat: 35, text: 'CN' }, { lon: 37, lat: 55, text: 'RU' }, { lon: 103.8, lat: 1.3, text: 'SG' }];
+    for (var lli = 0; lli < labels.length; lli++) {
+      var lp = lonLatToXY(labels[lli].lon, labels[lli].lat);
+      ctx.fillText(labels[lli].text, lp.x, lp.y - 8);
     }
-
     _snocGeoAnimId = requestAnimationFrame(drawGeo);
   }
-
   drawGeo();
 }
 
 /* ============================================================
-   NAVIGATE HOOK — add to existing navigate() function
-   The navigate() function in the main app already calls:
-     if (page === 'snoc') setTimeout(_snocInit, 50);
-   Add this line to the navigate() function in the main app.
-   ============================================================ */
-
-/* ============================================================
-   CLEANUP — called when leaving the SNOC page
-   (called from main navigate() before switching pages)
+   CLEANUP
    ============================================================ */
 function _snocCleanup() {
   if (_snocTopoAnimId) { cancelAnimationFrame(_snocTopoAnimId); _snocTopoAnimId = null; }
-  if (_snocGeoAnimId)  { cancelAnimationFrame(_snocGeoAnimId);  _snocGeoAnimId = null; }
+  if (_snocGeoAnimId) { cancelAnimationFrame(_snocGeoAnimId); _snocGeoAnimId = null; }
+  if (_snocSvcMapAnimId) { cancelAnimationFrame(_snocSvcMapAnimId); _snocSvcMapAnimId = null; }
   if (_snocFwIntervalId) { clearInterval(_snocFwIntervalId); _snocFwIntervalId = null; }
+  if (_snocRefreshIntervalId) { clearInterval(_snocRefreshIntervalId); _snocRefreshIntervalId = null; }
+  if (_snocTimelineTickId) { clearInterval(_snocTimelineTickId); _snocTimelineTickId = null; }
   if (_snocLatencyChartObj) { _snocLatencyChartObj.destroy(); _snocLatencyChartObj = null; }
-  if (_snocIsFullscreen) { _snocToggleFullscreen(); }
+  if (_snocLogVolumeChartObj) { _snocLogVolumeChartObj.destroy(); _snocLogVolumeChartObj = null; }
+  if (_snocIsFullscreen) _snocToggleFullscreen();
 }
+
 
 </script>
 
