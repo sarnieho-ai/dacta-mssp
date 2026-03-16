@@ -107,21 +107,23 @@ module.exports = async function handler(req, res) {
     }
 
     if (!parsed) {
-      // Return a clear error that the client can display
+      // Return a clear error with the raw AI text so client can try its own extraction
       return res.status(200).json({
         _v: 4,
         _ok: false,
-        error: 'Could not parse AI response',
+        _ts: new Date().toISOString(),
+        error: 'Could not parse AI response on server',
+        response: rawText,
         raw: rawText.substring(0, 500)
       });
     }
 
     // Return the parsed data FLAT — every field at top level
-    // The client reads format_name, vendor, delimiter, fields, regex_pattern, parsed_sample, notes
-    // directly from the response object. No nesting.
+    // Also include the raw response text so the client can re-extract if needed
     return res.status(200).json({
       _v: 4,
       _ok: true,
+      _ts: new Date().toISOString(),
       format_name: parsed.format_name || 'Unknown',
       vendor: parsed.vendor || 'Unknown',
       delimiter: parsed.delimiter || 'N/A',
@@ -129,6 +131,7 @@ module.exports = async function handler(req, res) {
       regex_pattern: parsed.regex_pattern || '',
       parsed_sample: parsed.parsed_sample || {},
       notes: parsed.notes || '',
+      response: rawText,
       model: data.model,
       usage: data.usage
     });
