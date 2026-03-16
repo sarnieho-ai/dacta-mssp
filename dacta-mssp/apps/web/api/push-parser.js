@@ -213,6 +213,13 @@ module.exports = async function handler(req, res) {
       })
     });
 
+    // Extract short SIEM label from URL (e.g. "dacta-global.es.ap-southeast-1" from full URL)
+    let siemLabel = elasticUrl;
+    try {
+      const u = new URL(elasticUrl);
+      siemLabel = u.hostname.replace('.aws.found.io', '').replace('.elastic-cloud.com', '');
+    } catch(e) {}
+
     return res.status(200).json({
       success: true,
       pipeline_name: pipelineName,
@@ -220,7 +227,9 @@ module.exports = async function handler(req, res) {
       elastic_acknowledged: elasticData.acknowledged || false,
       parser_name: parser.parser_name,
       vendor: parser.vendor,
-      message: `Parser "${parser.parser_name}" successfully deployed to SIEM as ingest pipeline "${pipelineName}"`
+      siem_url: elasticUrl,
+      siem_label: siemLabel,
+      message: `Parser "${parser.parser_name}" deployed to ${siemLabel} as pipeline "${pipelineName}"`
     });
 
   } catch (err) {
