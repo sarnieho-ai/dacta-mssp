@@ -566,9 +566,9 @@ const INVESTIGATION_TOOLS = [
         index: { type: "string", description: "Elasticsearch index pattern. Use the EXACT index patterns from the 'Available Elasticsearch Indices' section in the alert context. If no specific indices listed, use 'logs-*-{namespace}' (no trailing wildcard)." },
         query: { type: "object", description: "Elasticsearch DSL query. IMPORTANT: Use ONLY the exact field names listed in the 'ACTUAL Elasticsearch Field Names' section of the alert context. Do NOT guess field names — wrong field names will return 0 results." },
         size: { type: "integer", description: "Results count (default 10, max 50)" },
-        sort: { type: "array", description: "Sort order. Default: [{'@timestamp': 'desc'}]" },
+        sort: { type: "array", items: { type: "object" }, description: "Sort order. Default: [{'@timestamp': 'desc'}]" },
         aggs: { type: "object", description: "Aggregations for statistics" },
-        _source: { type: "array", description: "Fields to return" }
+        _source: { type: "array", items: { type: "string" }, description: "Fields to return" }
       },
       required: ["query"]
     }
