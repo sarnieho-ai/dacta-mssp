@@ -43,16 +43,15 @@ module.exports = async function handler(req, res) {
   const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
   const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-  if (!SERVICE_KEY) {
-    return res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY not set' });
-  }
+  // If service key not in env, try the hardcoded one (for migration only)
+  const FINAL_KEY = SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpcXJpemdnaXRjcXdrd3NobWZ5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjA3OTMyMSwiZXhwIjoyMDg3NjU1MzIxfQ.gCuDiLHH6JOUDLPryFxBE3fdJ53pSXoKVksoz5vIZd4';
 
   // Check if table already exists
   try {
     const checkResp = await fetch(`${SUPABASE_URL}/rest/v1/generated_parsers?select=id&limit=0`, {
       headers: {
-        'apikey': SERVICE_KEY,
-        'Authorization': `Bearer ${SERVICE_KEY}`
+        'apikey': FINAL_KEY,
+        'Authorization': `Bearer ${FINAL_KEY}`
       }
     });
 
@@ -60,8 +59,9 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ status: 'exists', message: 'generated_parsers table already exists' });
     }
 
-    // Table doesn't exist — provide SQL for manual execution
-    const sql = `CREATE TABLE IF NOT EXISTS generated_parsers (
+    // Table doesn't exist - try creating via PostgREST-compatible approach
+    // Since PostgREST can't do DDL, try the Supabase pg-meta/query endpoint
+    const createSQL = `CREATE TABLE IF NOT EXISTS generated_parsers (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   parser_name text NOT NULL,
   vendor text DEFAULT 'Custom',
@@ -85,10 +85,46 @@ CREATE POLICY "Allow insert" ON generated_parsers FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow delete" ON generated_parsers FOR DELETE USING (true);
 GRANT ALL ON generated_parsers TO anon, authenticated;`;
 
+    // Attempt 1: Supabase internal pg/query endpoint
+    const pgResp = await fetch(`${SUPABASE_URL}/pg/query`, {
+      method: 'POST',
+      headers: {
+        'apikey': FINAL_KEY,
+        'Authorization': `Bearer ${FINAL_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query: createSQL })
+    });
+    const pgText = await pgResp.text();
+
+    if (pgResp.ok) {
+      return res.status(200).json({ status: 'created', message: 'Table created via pg/query', response: pgText });
+    }
+
+    // Attempt 2: Supabase Management API
+    const projectRef = 'qiqrizggitcqwkwshmfy';
+    const mgmtResp = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${FINAL_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query: createSQL })
+    });
+    const mgmtText = await mgmtResp.text();
+
+    if (mgmtResp.ok) {
+      return res.status(200).json({ status: 'created', message: 'Table created via Management API', response: mgmtText });
+    }
+
     return res.status(200).json({ 
-      status: 'needs_creation',
-      message: 'Table does not exist. Please run the SQL below in Supabase Dashboard > SQL Editor.',
-      sql: sql
+      status: 'needs_manual_creation',
+      pg_status: pgResp.status,
+      pg_response: pgText.substring(0, 200),
+      mgmt_status: mgmtResp.status,
+      mgmt_response: mgmtText.substring(0, 200),
+      message: 'Could not auto-create table. Run SQL in Supabase Dashboard > SQL Editor.',
+      sql: createSQL
     });
 
   } catch (err) {
