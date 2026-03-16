@@ -1364,56 +1364,83 @@ const MODEL_ROUTING = {
   phase3: { primary: 'claude', fallback: 'openai' }
 };
 
-async function callClaude(body, retries = 2) {
+async function callClaude(body, retries = 3) {
   if (!ANTHROPIC_API_KEY) throw new Error('Anthropic API key not configured');
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-    if (resp.status === 429 && attempt < retries) {
-      const waitSec = 8 + (attempt * 5);
-      console.log(`[Investigate] Claude rate limited, waiting ${waitSec}s (attempt ${attempt + 1})`);
-      await new Promise(r => setTimeout(r, waitSec * 1000));
-      continue;
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      if (resp.status === 429 && attempt < retries) {
+        const waitSec = 10 + (attempt * 10);
+        console.log(`[Investigate] Claude rate limited, waiting ${waitSec}s (attempt ${attempt + 1}/${retries})`);
+        await new Promise(r => setTimeout(r, waitSec * 1000));
+        continue;
+      }
+      if (resp.status === 529 && attempt < retries) {
+        const waitSec = 15 + (attempt * 10);
+        console.log(`[Investigate] Claude overloaded (529), waiting ${waitSec}s (attempt ${attempt + 1}/${retries})`);
+        await new Promise(r => setTimeout(r, waitSec * 1000));
+        continue;
+      }
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error('[Investigate] Claude API error:', resp.status, errText);
+        throw new Error(`Claude API error: ${resp.status}`);
+      }
+      return await resp.json();
+    } catch (fetchErr) {
+      if (fetchErr.message.includes('Claude API error')) throw fetchErr;
+      // Network error — retry
+      if (attempt < retries) {
+        console.warn(`[Investigate] Claude fetch error (attempt ${attempt + 1}/${retries}):`, fetchErr.message);
+        await new Promise(r => setTimeout(r, 5000));
+        continue;
+      }
+      throw fetchErr;
     }
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error('[Investigate] Claude API error:', resp.status, errText);
-      throw new Error(`Claude API error: ${resp.status}`);
-    }
-    return await resp.json();
   }
 }
 
-async function callOpenAI(body, retries = 2) {
+async function callOpenAI(body, retries = 3) {
   if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-    if (resp.status === 429 && attempt < retries) {
-      const waitSec = 8 + (attempt * 5);
-      console.log(`[Investigate] OpenAI rate limited, waiting ${waitSec}s (attempt ${attempt + 1})`);
-      await new Promise(r => setTimeout(r, waitSec * 1000));
-      continue;
+    try {
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      if (resp.status === 429 && attempt < retries) {
+        const waitSec = 10 + (attempt * 10);
+        console.log(`[Investigate] OpenAI rate limited, waiting ${waitSec}s (attempt ${attempt + 1}/${retries})`);
+        await new Promise(r => setTimeout(r, waitSec * 1000));
+        continue;
+      }
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error('[Investigate] OpenAI API error:', resp.status, errText);
+        throw new Error(`OpenAI API error: ${resp.status}`);
+      }
+      return await resp.json();
+    } catch (fetchErr) {
+      if (fetchErr.message.includes('OpenAI API error')) throw fetchErr;
+      if (attempt < retries) {
+        console.warn(`[Investigate] OpenAI fetch error (attempt ${attempt + 1}/${retries}):`, fetchErr.message);
+        await new Promise(r => setTimeout(r, 5000));
+        continue;
+      }
+      throw fetchErr;
     }
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error('[Investigate] OpenAI API error:', resp.status, errText);
-      throw new Error(`OpenAI API error: ${resp.status}`);
-    }
-    return await resp.json();
   }
 }
 
@@ -1684,7 +1711,7 @@ async function logInvestigationUsage({ ticketKey, phase, model, usage, toolCallL
 // Vercel Config
 // ═══════════════════════════════════════════════
 export const config = {
-  maxDuration: 90
+  maxDuration: 300
 };
 
 // ═══════════════════════════════════════════════
