@@ -1358,6 +1358,10 @@ async function executeTool(name, input) {
 // ═══════════════════════════════════════════════
 
 // Model routing: which model is primary/fallback per phase
+// Track provider availability — if Claude credits exhausted, skip it entirely
+let _claudeDisabled = false;
+let _openaiDisabled = false;
+
 const MODEL_ROUTING = {
   phase1: { primary: 'claude', fallback: 'openai' },
   phase2: { primary: 'openai', fallback: 'claude' },
@@ -1392,6 +1396,11 @@ async function callClaude(body, retries = 3) {
       if (!resp.ok) {
         const errText = await resp.text();
         console.error('[Investigate] Claude API error:', resp.status, errText);
+        // Detect credit exhaustion — disable Claude for this request cycle
+        if (resp.status === 400 && errText.includes('credit balance')) {
+          _claudeDisabled = true;
+          console.warn('[Investigate] Claude credits exhausted — disabling Claude for this session');
+        }
         throw new Error(`Claude API error: ${resp.status} — ${errText.substring(0, 200)}`);
       }
       return await resp.json();
@@ -1634,11 +1643,29 @@ async function runPhaseWithFallback(phase, systemPrompt, userMessage, vault, max
   let provider = routing.primary;
   let fallbackUsed = false;
 
+  // Skip disabled provider — go straight to fallback
+  const primaryDisabled = (provider === 'claude' && _claudeDisabled) || (provider === 'openai' && _openaiDisabled);
+  const fallbackDisabled = (routing.fallback === 'claude' && _claudeDisabled) || (routing.fallback === 'openai' && _openaiDisabled);
+
+  if (primaryDisabled && !fallbackDisabled) {
+    console.log(`[Investigate] ${phase}: primary ${provider} disabled, using ${routing.fallback} directly`);
+    provider = routing.fallback;
+    fallbackUsed = true;
+    const result = await runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds, provider, toolDefs);
+    return { ...result, model: provider === 'claude' ? 'claude-haiku/sonnet-4' : 'gpt-4o', fallback_used: true };
+  }
+  if (primaryDisabled && fallbackDisabled) {
+    throw new Error(`Both providers disabled for ${phase} (Claude: ${_claudeDisabled ? 'credits exhausted' : 'ok'}, OpenAI: ${_openaiDisabled ? 'unavailable' : 'ok'})`);
+  }
+
   try {
     const result = await runAgenticPhase(systemPrompt, userMessage, vault, maxToolRounds, provider, toolDefs);
     return { ...result, model: provider === 'claude' ? 'claude-haiku/sonnet-4' : 'gpt-4o', fallback_used: false };
   } catch (primaryErr) {
     console.warn(`[Investigate] ${phase} primary (${provider}) failed: ${primaryErr.message}. Falling back to ${routing.fallback}`);
+    if (fallbackDisabled) {
+      throw new Error(`${phase} primary (${provider}) failed and fallback ${routing.fallback} is disabled: ${primaryErr.message}`);
+    }
     provider = routing.fallback;
     fallbackUsed = true;
     try {
@@ -1723,19 +1750,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  // Diagnostic: GET returns API key status (no secrets)
-  if (req.method === 'GET') {
-    return res.status(200).json({
-      status: 'ok',
-      anthropic_key_set: !!ANTHROPIC_API_KEY,
-      anthropic_key_prefix: ANTHROPIC_API_KEY ? ANTHROPIC_API_KEY.substring(0, 10) + '...' : 'NOT SET',
-      openai_key_set: !!OPENAI_API_KEY,
-      openai_key_prefix: OPENAI_API_KEY ? OPENAI_API_KEY.substring(0, 10) + '...' : 'NOT SET',
-      supabase_service_key_set: !!SUPABASE_SERVICE_KEY,
-      elastic_url_set: !!ELASTIC_URL,
-      maxDuration: 300
-    });
-  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   const requestStart = Date.now();
@@ -2016,7 +2030,7 @@ ${relevanceSummary}`;
         vault.tokenize(INVESTIGATOR_PROMPT),
         tokenizedBrief,
         vault,
-        6, // Allow up to 6 tool rounds for thorough investigation
+        3, // Reduced from 6 to fit within Vercel Hobby 60s timeout
         relevantToolset
       );
 
@@ -2141,7 +2155,7 @@ ${relevanceSummary}`;
         vault.tokenize(ADVERSARIAL_PROMPT),
         adversarialInput,
         vault,
-        4, // Fewer tool rounds — focused challenge
+        2, // Reduced from 4 to fit within Vercel Hobby 60s timeout
         relevantToolset
       );
 
