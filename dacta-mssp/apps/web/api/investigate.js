@@ -1646,7 +1646,7 @@ async function runPhaseWithFallback(phase, systemPrompt, userMessage, vault, max
       return { ...result, model: provider === 'claude' ? 'claude-haiku/sonnet-4' : 'gpt-4o', fallback_used: true };
     } catch (fallbackErr) {
       console.error(`[Investigate] ${phase} fallback (${provider}) also failed: ${fallbackErr.message}`);
-      throw new Error(`Both ${routing.primary} and ${routing.fallback} failed for ${phase}`);
+      throw new Error(`Both ${routing.primary} and ${routing.fallback} failed for ${phase}: primary=${primaryErr.message}, fallback=${fallbackErr.message}`);
     }
   }
 }
@@ -1723,6 +1723,19 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
+  // Diagnostic: GET returns API key status (no secrets)
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      status: 'ok',
+      anthropic_key_set: !!ANTHROPIC_API_KEY,
+      anthropic_key_prefix: ANTHROPIC_API_KEY ? ANTHROPIC_API_KEY.substring(0, 10) + '...' : 'NOT SET',
+      openai_key_set: !!OPENAI_API_KEY,
+      openai_key_prefix: OPENAI_API_KEY ? OPENAI_API_KEY.substring(0, 10) + '...' : 'NOT SET',
+      supabase_service_key_set: !!SUPABASE_SERVICE_KEY,
+      elastic_url_set: !!ELASTIC_URL,
+      maxDuration: 300
+    });
+  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   const requestStart = Date.now();
