@@ -1392,7 +1392,7 @@ async function callClaude(body, retries = 3) {
       if (!resp.ok) {
         const errText = await resp.text();
         console.error('[Investigate] Claude API error:', resp.status, errText);
-        throw new Error(`Claude API error: ${resp.status}`);
+        throw new Error(`Claude API error: ${resp.status} — ${errText.substring(0, 200)}`);
       }
       return await resp.json();
     } catch (fetchErr) {
@@ -1429,7 +1429,7 @@ async function callOpenAI(body, retries = 3) {
       if (!resp.ok) {
         const errText = await resp.text();
         console.error('[Investigate] OpenAI API error:', resp.status, errText);
-        throw new Error(`OpenAI API error: ${resp.status}`);
+        throw new Error(`OpenAI API error: ${resp.status} — ${errText.substring(0, 200)}`);
       }
       return await resp.json();
     } catch (fetchErr) {
