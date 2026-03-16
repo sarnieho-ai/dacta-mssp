@@ -1750,45 +1750,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  // Health check: GET tests Claude API key directly
-  if (req.method === 'GET') {
-    const results = { claude: null, openai: null, _claudeDisabled,
-      anthropic_key_hint: ANTHROPIC_API_KEY ? ANTHROPIC_API_KEY.substring(0, 15) + '...' + ANTHROPIC_API_KEY.slice(-4) : 'NOT SET'
-    };
-    // Test Claude with multiple models
-    const modelsToTest = ['claude-haiku-4-5-20251001', 'claude-3-5-haiku-20241022', 'claude-sonnet-4-20250514'];
-    results.claude_tests = {};
-    for (const testModel of modelsToTest) {
-      try {
-        const cr = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-          body: JSON.stringify({ model: testModel, max_tokens: 10, messages: [{ role: 'user', content: 'Say OK' }] })
-        });
-        if (cr.ok) {
-          const data = await cr.json();
-          results.claude_tests[testModel] = 'OK: ' + (data.content?.[0]?.text || '');
-          results.claude = 'OK';
-          _claudeDisabled = false;
-        } else {
-          const t = await cr.text();
-          results.claude_tests[testModel] = `ERROR ${cr.status}: ${t.substring(0, 300)}`;
-        }
-      } catch(e) { results.claude_tests[testModel] = `FETCH_ERROR: ${e.message}`; }
-    }
-    if (!results.claude) results.claude = 'ALL_MODELS_FAILED';
-    // Test OpenAI
-    try {
-      const or = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'gpt-4o', max_tokens: 10, messages: [{ role: 'user', content: 'Say OK' }] })
-      });
-      if (or.ok) results.openai = 'OK';
-      else { const t = await or.text(); results.openai = `ERROR ${or.status}: ${t.substring(0, 200)}`; }
-    } catch(e) { results.openai = `FETCH_ERROR: ${e.message}`; }
-    return res.status(200).json(results);
-  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   const requestStart = Date.now();
