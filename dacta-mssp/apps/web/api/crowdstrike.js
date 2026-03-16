@@ -49,7 +49,16 @@ async function getToken() {
 
 async function csGet(path, params = {}) {
   const token = await getToken();
-  const qs = new URLSearchParams(params).toString();
+  // Build query string — handle arrays by repeating the key (CrowdStrike requirement)
+  const sp = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (Array.isArray(val)) {
+      val.forEach(v => sp.append(key, v));
+    } else if (val !== undefined && val !== null) {
+      sp.append(key, val);
+    }
+  }
+  const qs = sp.toString();
   const url = `${CS_BASE}${path}${qs ? '?' + qs : ''}`;
   const resp = await fetch(url, {
     headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
