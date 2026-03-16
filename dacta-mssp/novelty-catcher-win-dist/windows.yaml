@@ -41,8 +41,10 @@ inputs:
     enabled: true
     url: "${ELASTIC_URL}"
     api_key: "${ELASTIC_API_KEY}"
-    indices:
-      - "logs-*"
+    # Indices are auto-discovered from SIEMLess DB on startup.
+    # Only set this to override or restrict which indices are polled.
+    # Leave empty to let the catcher discover indices from client_log_sources.
+    indices: []
     poll_interval_seconds: 60
     lookback_minutes: 5
     batch_size: 1000
@@ -57,24 +59,22 @@ detection:
     high_confidence_threshold: 0.90
     cooldown_minutes: 5
 
+  # Feature extraction schemas are pulled dynamically from SIEMLess DB
+  # based on the org's log sources and connectors. No need to hardcode.
+  # The catcher discovers field mappings at startup and refreshes every
+  # sync_interval_minutes from /api/novelty-catcher?action=feature_schema.
   features:
-    fortigate:
-      categorical: ["fortinet.firewall.subtype", "fortinet.firewall.action", "fortinet.firewall.type", "event.action", "log.level"]
-      ip_fields: ["source.ip", "destination.ip"]
-    m365_defender:
-      categorical: ["event.action", "event.category", "event.kind", "m365_defender.alert.detector_id"]
-      ip_fields: ["source.ip"]
-    crowdstrike:
-      categorical: ["event.action", "event.category", "event.module", "crowdstrike.event.OperationName"]
-      ip_fields: ["source.ip", "destination.ip"]
-    generic:
+    auto_discover: true
+    sync_interval_minutes: 60
+    # Fallback fields used when a log source has no schema in SIEMLess DB
+    fallback:
       categorical: ["event.action", "event.category", "event.module", "event.dataset", "log.level"]
       ip_fields: ["source.ip", "destination.ip"]
 
   source_detection:
     enabled: true
     alert_on_new_source: true
-    auto_learn_new_sources: false
+    auto_learn_new_sources: true
 
 outputs:
   elastic:
@@ -87,6 +87,8 @@ outputs:
     enabled: true
     url: "https://dacta-siemless.vercel.app"
     endpoint: "/api/novelty-catcher"
+    # Auth token is auto-generated at catcher registration.
+    # The catcher_id is used for authentication against the API.
 
   file:
     enabled: true

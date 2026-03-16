@@ -224,6 +224,50 @@ export default async function handler(req, res) {
         return res.status(200).json({ config, install_commands: generateInstallCommands(hostname) });
       }
 
+      // ── Catcher → SIEMLess: Pull Feature Schema for Auto-Discovery ──
+      case 'feature_schema': {
+        const fsOrgId = req.query.org_id;
+        if (!fsOrgId) return res.status(400).json({ error: 'Missing org_id' });
+
+        // Pull the org's log sources from client_log_sources
+        const lsResult = await supabaseRequest('GET',
+          `client_log_sources?org_id=eq.${fsOrgId}&select=id,source_name,vendor,source_type,index_pattern,field_mappings,status`
+        );
+        // Pull the org's connectors for SIEM/EDR discovery
+        const connResult = await supabaseRequest('GET',
+          `client_connectors?org_id=eq.${fsOrgId}&select=id,connector_type,connector_name,config,status`
+        );
+
+        // Build feature schema dynamically from log sources
+        const logSources = Array.isArray(lsResult.data) ? lsResult.data : [];
+        const connectors = Array.isArray(connResult.data) ? connResult.data : [];
+
+        // Collect indices to monitor
+        const indices = logSources
+          .filter(ls => ls.status === 'active' && ls.index_pattern)
+          .map(ls => ls.index_pattern);
+
+        // Build per-source feature extraction config
+        const features = {};
+        for (const ls of logSources) {
+          if (ls.field_mappings && typeof ls.field_mappings === 'object') {
+            features[ls.source_name.toLowerCase().replace(/\s+/g, '_')] = ls.field_mappings;
+          }
+        }
+
+        return res.status(200).json({
+          org_id: fsOrgId,
+          indices,
+          features,
+          connectors: connectors.map(c => ({
+            type: c.connector_type,
+            name: c.connector_name,
+            status: c.status
+          })),
+          generated_at: new Date().toISOString()
+        });
+      }
+
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -234,9 +278,17 @@ export default async function handler(req, res) {
 }
 
 function generateConfigYaml({ orgName, hostname, syslogPort, indices, learningHours }) {
-  const indexList = indices.length > 0
-    ? indices.map(i => `      - "${i}"`).join('\n')
-    : '      - "logs-*"';
+  // If user specified indices, include them as overrides; otherwise leave empty for auto-discovery
+  let indicesBlock;
+  if (indices.length > 0) {
+    indicesBlock = '    # Override: specific indices set during deployment\n'
+      + '    indices:\n'
+      + indices.map(i => `      - "${i}"`).join('\n');
+  } else {
+    indicesBlock = '    # Auto-discovered from SIEMLess DB (client_log_sources + client_connectors)\n'
+      + '    # Set specific indices here only to override auto-discovery\n'
+      + '    indices: []';
+  }
 
   return `# ============================================================
 # DACTA Novelty Catcher -- ${orgName}
@@ -273,8 +325,7 @@ inputs:
     enabled: true
     url: "\${ELASTIC_URL}"
     api_key: "\${ELASTIC_API_KEY}"
-    indices:
-${indexList}
+${indicesBlock}
     poll_interval_seconds: 60
     lookback_minutes: 5
     batch_size: 1000
@@ -289,21 +340,20 @@ detection:
     high_confidence_threshold: 0.90
     cooldown_minutes: 5
 
+  # Feature schemas are auto-discovered from SIEMLess DB on startup.
+  # The catcher pulls field mappings for this org's log sources via
+  # /api/novelty-catcher?action=feature_schema&org_id=...
   features:
-    fortigate:
-      categorical: ["fortinet.firewall.subtype", "fortinet.firewall.action", "fortinet.firewall.type", "event.action", "log.level"]
-      ip_fields: ["source.ip", "destination.ip"]
-    m365_defender:
-      categorical: ["event.action", "event.category", "event.kind", "m365_defender.alert.detector_id"]
-      ip_fields: ["source.ip"]
-    generic:
+    auto_discover: true
+    sync_interval_minutes: 60
+    fallback:
       categorical: ["event.action", "event.category", "event.module", "event.dataset", "log.level"]
       ip_fields: ["source.ip", "destination.ip"]
 
   source_detection:
     enabled: true
     alert_on_new_source: true
-    auto_learn_new_sources: false
+    auto_learn_new_sources: true
 
 outputs:
   elastic:
@@ -316,6 +366,7 @@ outputs:
     enabled: true
     url: "https://dacta-siemless.vercel.app"
     endpoint: "/api/novelty-catcher"
+    # Catcher authenticates via its catcher_id assigned at registration
 
   file:
     enabled: true

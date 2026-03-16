@@ -161,7 +161,7 @@ REM   net start $ServiceName
 set ELASTIC_URL=https://your-elastic-instance:9200
 set ELASTIC_API_KEY=your-api-key-here
 set SIEMLESS_URL=https://dacta-siemless.vercel.app
-set SIEMLESS_API_KEY=
+REM Auth is via catcher_id assigned at registration -- no separate API key needed
 set NC_LOG_LEVEL=INFO
 "@
     Set-Content -Path $envFile -Value $envContent -Encoding ASCII
@@ -181,7 +181,7 @@ if (-not (Test-Path $envPs1File)) {
 `$env:ELASTIC_URL = "https://your-elastic-instance:9200"
 `$env:ELASTIC_API_KEY = "your-api-key-here"
 `$env:SIEMLESS_URL = "https://dacta-siemless.vercel.app"
-`$env:SIEMLESS_API_KEY = ""
+# Auth is via catcher_id assigned at registration -- no separate API key needed
 `$env:NC_LOG_LEVEL = "INFO"
 "@
     Set-Content -Path $envPs1File -Value $envPs1Content -Encoding ASCII
