@@ -176,6 +176,24 @@ export default async function handler(req, res) {
         const { org_id, hostname, config, platform, indices } = req.body;
         if (!org_id || !hostname) return res.status(400).json({ error: 'Missing org_id or hostname' });
 
+        // Upsert: check if catcher with same org_id + hostname already exists
+        const existing = await supabaseRequest('GET',
+          `novelty_catchers?org_id=eq.${org_id}&hostname=eq.${encodeURIComponent(hostname)}&select=id`);
+        if (existing.data && existing.data.length > 0) {
+          // Update existing record, reset to pending
+          const existingId = existing.data[0].id;
+          await supabaseRequest('PATCH', `novelty_catchers?id=eq.${existingId}`, {
+            version: '2.0.0',
+            mode: 'learn',
+            status: 'pending',
+            platform: platform || 'linux',
+            config: config || {},
+            indices: indices || [],
+            updated_at: new Date().toISOString(),
+          });
+          return res.status(200).json({ ok: true, catcher: { id: existingId, org_id, hostname, platform: platform || 'linux' } });
+        }
+
         const result = await supabaseRequest('POST', 'novelty_catchers', {
           org_id,
           hostname,
