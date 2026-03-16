@@ -1,4 +1,12 @@
 {
+  "functions": {
+    "apps/web/api/parser-generator.js": {
+      "maxDuration": 60
+    },
+    "apps/web/api/*.js": {
+      "maxDuration": 60
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",
