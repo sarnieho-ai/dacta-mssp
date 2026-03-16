@@ -2,8 +2,9 @@
 // Handles auth account creation, password reset via Supabase Admin API.
 // Service role key stays server-side — never exposed to browser.
 
+function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

@@ -2,8 +2,9 @@
 // Server-side query for llm_usage_log, bypasses RLS with service role key.
 // This ensures the AI Usage Dashboard always loads data regardless of client auth state.
 
+function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

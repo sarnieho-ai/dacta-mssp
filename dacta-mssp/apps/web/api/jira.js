@@ -35,7 +35,7 @@ function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
 
 // ── Supabase REST API helpers (server-side, uses service role key to bypass RLS) ──
 const _SB_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const _SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW5GcGNYSnBlbWRuYVhSamNYZHJkM05vYldaNUlpd2ljbTlzWlNJNkluTmxjblpwWTJWZmNtOXNaU0lzSW1saGRDSTZNVGMzTWpBM09UTXlNU3dpWlhod0lqb3lNRGczTmpVMU16SXhmUS5nQ3VEaUxISDZKT1VETFByeUZ4QkUzZmRKNTNwU1hvS1Zrc296NXZJWmQ0');
+const _SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
 
 async function _sbGet(table, query) {
   try {
