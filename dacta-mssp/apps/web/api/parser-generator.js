@@ -55,7 +55,7 @@ module.exports = async function handler(req, res) {
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-3-5-haiku-20241022',
         max_tokens: 4096,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userPrompt }]
@@ -65,7 +65,12 @@ module.exports = async function handler(req, res) {
     if (!resp.ok) {
       const errText = await resp.text();
       console.error('[ParserGen] Claude API error:', resp.status, errText);
-      return res.status(502).json({ error: `AI service error: ${resp.status}` });
+      let errMsg = `AI service error: ${resp.status}`;
+      try {
+        const errObj = JSON.parse(errText);
+        if (errObj.error && errObj.error.message) errMsg = errObj.error.message;
+      } catch(e) { /* ignore */ }
+      return res.status(502).json({ error: errMsg });
     }
 
     const data = await resp.json();
