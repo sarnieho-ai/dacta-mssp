@@ -1,6 +1,6 @@
-// Vercel Serverless Function — DACTA Parser Generator
-// Lightweight Claude-powered log parser that analyses sample log lines
-// and returns structured parser definitions (fields, regex, parsed sample).
+// Vercel Serverless Function — DACTA Parser Generator v4
+// Returns ONLY the parsed JSON object — no wrapper, no raw text.
+// The client gets exactly the fields/regex/sample it needs, nothing more.
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 
@@ -27,6 +27,12 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // Disable ALL caching
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
@@ -77,22 +83,52 @@ module.exports = async function handler(req, res) {
     const textBlock = (data.content || []).find(b => b.type === 'text');
     const rawText = textBlock ? textBlock.text : '';
 
-    // Try to parse JSON from Claude's response
+    // Parse JSON from Claude's response — try multiple strategies
     let parsed = null;
-    try {
-      // Try direct parse first
-      parsed = JSON.parse(rawText.trim());
-    } catch (e) {
-      // Try extracting from markdown fences
-      const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/) || rawText.match(/(\{[\s\S]*\})/);
-      if (jsonMatch) {
-        try { parsed = JSON.parse(jsonMatch[1].trim()); } catch (e2) { /* fall through */ }
+
+    // Strategy 1: Direct parse
+    try { parsed = JSON.parse(rawText.trim()); } catch(e) {}
+
+    // Strategy 2: Extract from markdown fences
+    if (!parsed) {
+      const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (fenceMatch) {
+        try { parsed = JSON.parse(fenceMatch[1].trim()); } catch(e) {}
       }
     }
 
+    // Strategy 3: Brute force — first { to last }
+    if (!parsed) {
+      const fb = rawText.indexOf('{');
+      const lb = rawText.lastIndexOf('}');
+      if (fb >= 0 && lb > fb) {
+        try { parsed = JSON.parse(rawText.substring(fb, lb + 1)); } catch(e) {}
+      }
+    }
+
+    if (!parsed) {
+      // Return a clear error that the client can display
+      return res.status(200).json({
+        _v: 4,
+        _ok: false,
+        error: 'Could not parse AI response',
+        raw: rawText.substring(0, 500)
+      });
+    }
+
+    // Return the parsed data FLAT — every field at top level
+    // The client reads format_name, vendor, delimiter, fields, regex_pattern, parsed_sample, notes
+    // directly from the response object. No nesting.
     return res.status(200).json({
-      response: rawText,
-      parsed: parsed,
+      _v: 4,
+      _ok: true,
+      format_name: parsed.format_name || 'Unknown',
+      vendor: parsed.vendor || 'Unknown',
+      delimiter: parsed.delimiter || 'N/A',
+      fields: parsed.fields || [],
+      regex_pattern: parsed.regex_pattern || '',
+      parsed_sample: parsed.parsed_sample || {},
+      notes: parsed.notes || '',
       model: data.model,
       usage: data.usage
     });
