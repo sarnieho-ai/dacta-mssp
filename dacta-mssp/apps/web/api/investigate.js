@@ -1752,7 +1752,9 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   // Health check: GET tests Claude API key directly
   if (req.method === 'GET') {
-    const results = { claude: null, openai: null, _claudeDisabled };
+    const results = { claude: null, openai: null, _claudeDisabled,
+      anthropic_key_hint: ANTHROPIC_API_KEY ? ANTHROPIC_API_KEY.substring(0, 15) + '...' + ANTHROPIC_API_KEY.slice(-4) : 'NOT SET'
+    };
     // Test Claude
     try {
       const cr = await fetch('https://api.anthropic.com/v1/messages', {
