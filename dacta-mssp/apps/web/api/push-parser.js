@@ -70,30 +70,36 @@ module.exports = async function handler(req, res) {
     const pipelineName = 'siemless-parser-' + parser.parser_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const processors = [];
 
-    // Add grok processor if regex_pattern exists
-    if (parser.regex_pattern) {
-      // Convert Python named groups (?P<name>...) to Elastic grok %{pattern:name}
-      // But also support standard (?<name>...) syntax → use grok's custom patterns
-      processors.push({
-        grok: {
-          field: 'message',
-          patterns: [parser.regex_pattern],
-          ignore_failure: true,
-          description: 'Parse log using regex pattern from SIEMLess Parser Generator'
-        }
-      });
-    }
+    // Detect if this is a key=value format (Fortinet, Palo Alto, etc.)
+    const isKVFormat = (parser.delimiter && (parser.delimiter.includes('=') || parser.delimiter.toLowerCase().includes('key')))
+      || (parser.format_type && parser.format_type.toLowerCase().includes('key'))
+      || (parser.parsed_sample && Object.keys(parser.parsed_sample).length > 10); // Many fields = likely KV
 
-    // Add dissect/KV processors for key=value formats (common in firewall logs)
-    if (parser.delimiter && parser.delimiter.includes('=')) {
+    if (isKVFormat) {
+      // Use KV processor for key=value log formats
       processors.push({
         kv: {
           field: 'message',
           field_split: ' ',
           value_split: '=',
           strip_brackets: true,
+          trim_value: '"',
           ignore_failure: true,
-          description: 'Parse key=value pairs'
+          description: 'Parse key=value pairs from ' + parser.parser_name
+        }
+      });
+    } else if (parser.regex_pattern) {
+      // Convert Python named groups (?P<name>...) to Oniguruma (?<name>...) for Elastic grok
+      let grokPattern = parser.regex_pattern
+        .replace(/\(\?P</g, '(?<')  // (?P<name>...) → (?<name>...)
+        .replace(/\\\\([dswDSW])/g, '\\$1'); // Unescape double-escaped
+
+      processors.push({
+        grok: {
+          field: 'message',
+          patterns: [grokPattern],
+          ignore_failure: true,
+          description: 'Parse log using regex from SIEMLess Parser Generator'
         }
       });
     }
