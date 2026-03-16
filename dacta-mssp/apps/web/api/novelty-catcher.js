@@ -53,20 +53,34 @@ export default async function handler(req, res) {
         const { catcher_id, hostname, version, mode, events_processed, alerts_24h, stats } = req.body;
         if (!catcher_id) return res.status(400).json({ error: 'Missing catcher_id' });
 
-        const result = await supabaseRequest('PATCH',
-          `novelty_catchers?id=eq.${catcher_id}`,
-          {
-            status: mode === 'learn' ? 'learning' : 'online',
-            version: version || '2.0.0',
-            mode: mode || 'monitor',
-            events_processed: events_processed || 0,
-            alerts_24h: alerts_24h || 0,
-            last_heartbeat: new Date().toISOString(),
-            stats: stats || {},
-            updated_at: new Date().toISOString(),
-          }
+        const hbPayload = {
+          status: mode === 'learn' ? 'learning' : 'online',
+          version: version || '2.0.0',
+          mode: mode || 'monitor',
+          events_processed: events_processed || 0,
+          alerts_24h: alerts_24h || 0,
+          last_heartbeat: new Date().toISOString(),
+          stats: stats || {},
+          updated_at: new Date().toISOString(),
+        };
+        if (hostname) hbPayload.hostname = hostname;
+
+        // Try matching by UUID first, then fall back to hostname
+        let result = await supabaseRequest('PATCH',
+          `novelty_catchers?id=eq.${catcher_id}`, hbPayload,
+          { 'Prefer': 'return=representation' }
         );
-        return res.status(200).json({ ok: true, message: 'Heartbeat received' });
+        // If no rows matched by id (agent sends name, not UUID), try hostname
+        if (!result.data || (Array.isArray(result.data) && result.data.length === 0)) {
+          if (hostname) {
+            result = await supabaseRequest('PATCH',
+              `novelty_catchers?hostname=eq.${hostname}`, hbPayload,
+              { 'Prefer': 'return=representation' }
+            );
+          }
+        }
+        const matched = Array.isArray(result.data) ? result.data.length : 0;
+        return res.status(200).json({ ok: true, matched, message: 'Heartbeat received' });
       }
 
       // ── Catcher → SIEMLess: Push Alert ──
@@ -89,11 +103,24 @@ export default async function handler(req, res) {
       // ── Catcher → SIEMLess: Pull Config ──
       case 'config': {
         const catcher_id = req.query.catcher_id;
-        if (!catcher_id) return res.status(400).json({ error: 'Missing catcher_id' });
+        const cfgHostname = req.query.hostname;
+        if (!catcher_id && !cfgHostname) return res.status(400).json({ error: 'Missing catcher_id or hostname' });
 
-        const result = await supabaseRequest('GET',
+        // Try by UUID first, then by hostname
+        let result = await supabaseRequest('GET',
           `novelty_catchers?id=eq.${catcher_id}&select=id,config,mode,org_id`
         );
+        if (!result.data?.[0] && cfgHostname) {
+          result = await supabaseRequest('GET',
+            `novelty_catchers?hostname=eq.${cfgHostname}&select=id,config,mode,org_id&limit=1`
+          );
+        }
+        // Also try matching catcher_id against hostname
+        if (!result.data?.[0] && catcher_id) {
+          result = await supabaseRequest('GET',
+            `novelty_catchers?hostname=eq.${catcher_id}&select=id,config,mode,org_id&limit=1`
+          );
+        }
         if (!result.ok || !result.data?.[0]) return res.status(404).json({ error: 'Catcher not found' });
         return res.status(200).json(result.data[0]);
       }
