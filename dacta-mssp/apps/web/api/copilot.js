@@ -115,11 +115,20 @@ const SYSTEM_PROMPT = `You are DACTA Copilot, an AI-powered SOC investigation as
 ## Client Context
 When a client is selected, the system will provide you with that client's ACTUAL configured log sources and Elasticsearch index patterns loaded from the database. You MUST use ONLY those specific index patterns — never assume or guess index patterns based on vendor names.
 
+## Jira Organization Names
+When searching Jira tickets by organization, use the EXACT Jira organization names in the "Organizations" custom field:
+- Foxwood Technology → use "Foxwood" (NOT "Foxwood Technology")
+- Silver Key → use "SilverKey" (one word, NOT "Silver Key")
+- Naga World → use "Naga World"
+- Dacta Global → use "Dacta Global"
+- SPMT → use "SPMT"
+Example: To search for Foxwood tickets: \`project = DAC AND "Organizations" = "Foxwood" ORDER BY created DESC\`
+
 ## Important Rules
 1. ALWAYS use tools to verify claims. Never say "this IP is malicious" without checking DACTA TIP and Elastic first.
 2. When searching logs, use appropriate index patterns based on the selected client.
 3. For IP lookups, check BOTH DACTA TIP (threat intel) AND Elastic (log presence). For comprehensive enrichment, use enrich_ioc_multi to query VirusTotal, AbuseIPDB, and CrowdStrike simultaneously.
-4. For ticket searches, construct appropriate JQL queries.
+4. For ticket searches, construct appropriate JQL queries. Use the correct Jira organization names listed above when filtering by org.
 5. When you find something interesting in logs, proactively suggest follow-up queries the analyst could run.
 6. If the user asks about a specific host, search across multiple data sources to build a complete picture.
 7. Acknowledge limitations — if a client has no EDR, say so rather than searching non-existent EDR indices.
@@ -423,10 +432,11 @@ async function executeJiraSearch(params) {
   
   const jql = params.jql;
   const maxResults = Math.min(params.max_results || 10, 50);
-  const fields = params.fields || ['summary', 'status', 'priority', 'created', 'assignee', 'description', 'customfield_10050'];
+  const fields = params.fields || ['summary', 'status', 'priority', 'created', 'assignee', 'description', 'customfield_10050', 'customfield_10002'];
   
   try {
-    const resp = await fetch(`https://${JIRA_INSTANCE}/rest/api/3/search`, {
+    // Use the /search/jql endpoint (Atlassian deprecated the older /search endpoint)
+    const resp = await fetch(`https://${JIRA_INSTANCE}/rest/api/3/search/jql`, {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64')}`,
@@ -439,19 +449,21 @@ async function executeJiraSearch(params) {
     
     const issues = (data.issues || []).map(iss => {
       const f = iss.fields || {};
+      const orgs = (f.customfield_10002 || []).map(o => o.name);
       return {
         key: iss.key,
         summary: f.summary,
         status: f.status?.name,
         priority: f.priority?.name,
         severity: f.customfield_10050?.value,
+        organization: orgs[0] || null,
         created: f.created,
         assignee: f.assignee?.displayName,
         description: f.description ? extractJiraText(f.description).substring(0, 500) : null
       };
     });
     
-    return { total: data.total || 0, issues };
+    return { total: data.total || issues.length, issues };
   } catch (err) {
     return { error: `Jira search failed: ${err.message}` };
   }
