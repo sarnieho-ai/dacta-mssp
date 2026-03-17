@@ -33,6 +33,24 @@ function _setCache(key, data) {
 
 function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
 
+// Map SIEMLess display names → Jira JSM organization names
+// Jira stores org names in customfield_10002 which may differ from ORG_CONNECTORS display names
+const _ORG_NAME_MAP = {
+  'foxwood technology': 'Foxwood',
+  'foxwood': 'Foxwood',
+  'silver key': 'SilverKey',
+  'silverkey': 'SilverKey',
+  'naga world': 'Naga World',
+  'nagaworld': 'Naga World',
+  'dacta global': 'Dacta Global',
+  'spmt': 'SPMT',
+  'adv partners': 'ADV Partners',
+};
+function _toJiraOrgName(displayName) {
+  if (!displayName) return '';
+  return _ORG_NAME_MAP[displayName.toLowerCase().trim()] || displayName;
+}
+
 // ── Supabase REST API helpers (server-side, uses service role key to bypass RLS) ──
 const _SB_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
 const _SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
@@ -237,7 +255,7 @@ export default async function handler(req, res) {
     if (action === 'dashboard') {
       // Time range mapping for JQL
       const timeRange = req.query.timeRange || '24h';
-      const orgFilter = req.query.org || '';
+      const orgFilter = _toJiraOrgName(req.query.org || '');
       const timeRangeMap = {
         '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': '-24h',
         '7d': '-168h', '30d': '-720h'
@@ -305,7 +323,10 @@ export default async function handler(req, res) {
 
       if (body.status && body.status !== 'all') jqlParts.push(`status="${body.status}"`);
       if (body.priority && body.priority !== 'all') jqlParts.push(`priority="${body.priority}"`);
-      if (body.org && body.org !== 'all') jqlParts.push(`"Organizations" = "${body.org}"`);
+      if (body.org && body.org !== 'all') {
+        const jiraOrgName = _toJiraOrgName(body.org);
+        jqlParts.push(`"Organizations" = "${jiraOrgName}"`);
+      }
       if (body.assignee && body.assignee !== 'all') {
         jqlParts.push(body.assignee === 'Unassigned' ? 'assignee is EMPTY' : `assignee = "${body.assignee}"`);
       }
@@ -676,7 +697,8 @@ export default async function handler(req, res) {
       const ruleEscaped = rule.replace(/"/g, '\\"');
       let jql = `project = DAC AND status IN ("Closed", "Completed", "Reported To") AND summary ~ "${ruleEscaped}" ORDER BY resolved DESC`;
       if (org) {
-        jql = `project = DAC AND status IN ("Closed", "Completed", "Reported To") AND summary ~ "${ruleEscaped}" AND "Organizations" = "${org.replace(/"/g, '\\"')}" ORDER BY resolved DESC`;
+        const jiraOrg = _toJiraOrgName(org).replace(/"/g, '\\"');
+        jql = `project = DAC AND status IN ("Closed", "Completed", "Reported To") AND summary ~ "${ruleEscaped}" AND "Organizations" = "${jiraOrg}" ORDER BY resolved DESC`;
       }
 
       try {
@@ -1155,7 +1177,7 @@ export default async function handler(req, res) {
     if (action === 'dashvisuals') {
       // Time range support — same mapping as dashboard action
       const timeRange = req.query.timeRange || '24h';
-      const orgFilter = req.query.org || '';
+      const orgFilter = _toJiraOrgName(req.query.org || '');
       const timeRangeMap = {
         '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': '-24h',
         '7d': '-168h', '30d': '-720h'
@@ -1283,7 +1305,7 @@ export default async function handler(req, res) {
     if (action === 'telemetry') {
       // Time range support
       const timeRange = req.query.timeRange || '24h';
-      const orgFilter = req.query.org || '';
+      const orgFilter = _toJiraOrgName(req.query.org || '');
       const timeRangeMap = {
         '1h': '-1h', '4h': '-4h', '12h': '-12h', '24h': '-24h',
         '7d': '-168h', '30d': '-720h'
