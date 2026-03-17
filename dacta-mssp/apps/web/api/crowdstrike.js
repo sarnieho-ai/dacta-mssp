@@ -171,7 +171,7 @@ async function searchActors(params = {}) {
     offset = 0
   } = params;
 
-  const queryParams = { limit, offset, fields: 'name,slug,short_description,target_countries,target_industries,motivations,capabilities,group_status,origins,known_as,first_activity_date,last_activity_date,active,kill_chain,image' };
+  const queryParams = { limit, offset };
   if (q) queryParams.q = q;
   if (target_countries) queryParams.target_countries = target_countries;
   if (target_industries) queryParams.target_industries = target_industries;
