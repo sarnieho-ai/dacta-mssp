@@ -272,7 +272,7 @@ export default async function handler(req, res) {
         res.setHeader('X-Cache', 'HIT');
         return res.status(200).json(cached);
       }
-      const B = 'project = DAC AND type = "[System] Incident"' + (orgFilter ? ' AND "Organizations" = "' + orgFilter + '"' : '');
+      const B = 'project = DAC AND type in ("[System] Incident", "[System] Service request")' + (orgFilter ? ' AND "Organizations" = "' + orgFilter + '"' : '');
       const [
         openCount, p1Count, p2Count, p3Count, p4Count,
         closedTodayCount, canceledTodayCount, completedTodayCount,
@@ -311,7 +311,7 @@ export default async function handler(req, res) {
     // ─── ACTION: triage ───────────────────────────────────────
     if (action === 'triage') {
       const body = req.body || {};
-      let jqlParts = ['project = DAC AND type = "[System] Incident"'];
+      let jqlParts = ['project = DAC AND type in ("[System] Incident", "[System] Service request")'];
 
       // Date range filter — convert datetime-local format (2026-03-12T09:00) to Jira JQL format (2026/03/12 09:00)
       function toJiraDate(dtLocal) {
@@ -383,7 +383,7 @@ export default async function handler(req, res) {
     // ─── ACTION: search (generic) ─────────────────────────────
     if (action === 'search') {
       const data = await searchJql(
-        body.jql || 'project = DAC AND type = "[System] Incident" ORDER BY created DESC',
+        body.jql || 'project = DAC AND type in ("[System] Incident", "[System] Service request") ORDER BY created DESC',
         body.fields || ['summary','status','priority','assignee','created','updated','issuetype','labels','customfield_10002','customfield_10050','customfield_10072','customfield_10038'],
         body.maxResults || 50,
         body.nextPageToken
@@ -1193,7 +1193,7 @@ export default async function handler(req, res) {
         res.setHeader('X-Cache', 'HIT');
         return res.status(200).json(cachedVis);
       }
-      const B = 'project = DAC AND type = "[System] Incident"' + (orgFilter ? ' AND "Organizations" = "' + orgFilter + '"' : '');
+      const B = 'project = DAC AND type in ("[System] Incident", "[System] Service request")' + (orgFilter ? ' AND "Organizations" = "' + orgFilter + '"' : '');
       const BT = `${B} AND ${createdFilter}`; // time-filtered base
 
       // Parallel: count queries + fetch recent tickets for distribution analysis
@@ -1321,7 +1321,7 @@ export default async function handler(req, res) {
         res.setHeader('X-Cache', 'HIT');
         return res.status(200).json(cachedTele);
       }
-      const B = 'project = DAC AND type = "[System] Incident"' + (orgFilter ? ' AND "Organizations" = "' + orgFilter + '"' : '');
+      const B = 'project = DAC AND type in ("[System] Incident", "[System] Service request")' + (orgFilter ? ' AND "Organizations" = "' + orgFilter + '"' : '');
       const BT = `${B} AND ${createdFilter}`; // time-filtered base
       const now = new Date();
       const queries = {};
