@@ -206,7 +206,7 @@ const TOOLS = [
   },
   {
     name: "search_jira_tickets",
-    description: "Search Jira Service Management tickets using JQL (Jira Query Language). Use to find incident tickets, check alert history, look up specific tickets by key, or search by priority/status/assignee. The project key is DAC.",
+    description: "Search Jira Service Management tickets using JQL (Jira Query Language). Use to find incident tickets, check alert history, look up specific tickets by key, or search by priority/status/assignee. The project key is DAC. Supports up to 200 results with auto-pagination. For management queries ('all alerts for X this month'), set max_results high (e.g. 200) and include a count_only option for quick totals.",
     input_schema: {
       type: "object",
       properties: {
@@ -216,7 +216,11 @@ const TOOLS = [
         },
         max_results: {
           type: "integer",
-          description: "Maximum number of results. Default 10, max 50."
+          description: "Maximum number of results to return. Default 10, max 200. For management-level queries, use higher values."
+        },
+        count_only: {
+          type: "boolean",
+          description: "If true, only return the total count and a breakdown by priority/status — no individual ticket details. Efficient for 'how many alerts' type questions."
         },
         fields: {
           type: "array",
@@ -431,23 +435,69 @@ async function executeJiraSearch(params) {
   }
   
   const jql = params.jql;
-  const maxResults = Math.min(params.max_results || 10, 50);
-  const fields = params.fields || ['summary', 'status', 'priority', 'created', 'assignee', 'description', 'customfield_10050', 'customfield_10002'];
+  const wantedMax = Math.min(params.max_results || 10, 200);
+  const countOnly = params.count_only || false;
+  const fields = countOnly
+    ? ['summary', 'status', 'priority', 'customfield_10002']
+    : (params.fields || ['summary', 'status', 'priority', 'created', 'assignee', 'description', 'customfield_10050', 'customfield_10002']);
+  const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64');
   
   try {
-    // Use the /search/jql endpoint (Atlassian deprecated the older /search endpoint)
-    const resp = await fetch(`https://${JIRA_INSTANCE}/rest/api/3/search/jql`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64')}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ jql, maxResults, fields })
-    });
-    const data = await resp.json();
+    // Paginate through results (Jira returns max 100 per page)
+    let allIssues = [];
+    let nextPageToken = null;
+    let page = 0;
+    const perPage = Math.min(wantedMax, 100);
     
-    const issues = (data.issues || []).map(iss => {
+    while (allIssues.length < wantedMax && page < 10) {
+      const payload = { jql, maxResults: perPage, fields };
+      if (nextPageToken) payload.nextPageToken = nextPageToken;
+      
+      const resp = await fetch(`https://${JIRA_INSTANCE}/rest/api/3/search/jql`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      const pageIssues = data.issues || [];
+      allIssues = allIssues.concat(pageIssues);
+      page++;
+      
+      if (data.isLast || !data.nextPageToken || pageIssues.length === 0) break;
+      nextPageToken = data.nextPageToken;
+    }
+    
+    // Trim to requested max
+    if (allIssues.length > wantedMax) allIssues = allIssues.slice(0, wantedMax);
+    
+    // If count_only, return aggregate breakdown instead of individual tickets
+    if (countOnly) {
+      const byPriority = {};
+      const byStatus = {};
+      const byOrg = {};
+      allIssues.forEach(iss => {
+        const f = iss.fields || {};
+        const prio = (f.priority || {}).name || 'None';
+        const stat = (f.status || {}).name || 'Unknown';
+        const orgs = (f.customfield_10002 || []).map(o => o.name);
+        const org = orgs[0] || 'Unknown';
+        byPriority[prio] = (byPriority[prio] || 0) + 1;
+        byStatus[stat] = (byStatus[stat] || 0) + 1;
+        byOrg[org] = (byOrg[org] || 0) + 1;
+      });
+      return {
+        total: allIssues.length,
+        fetched_all: allIssues.length < wantedMax || page < 10,
+        breakdown: { by_priority: byPriority, by_status: byStatus, by_organization: byOrg }
+      };
+    }
+    
+    // Full results with ticket details
+    const issues = allIssues.map(iss => {
       const f = iss.fields || {};
       const orgs = (f.customfield_10002 || []).map(o => o.name);
       return {
@@ -463,7 +513,7 @@ async function executeJiraSearch(params) {
       };
     });
     
-    return { total: data.total || issues.length, issues };
+    return { total: issues.length, issues };
   } catch (err) {
     return { error: `Jira search failed: ${err.message}` };
   }
