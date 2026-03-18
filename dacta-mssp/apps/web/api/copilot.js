@@ -5,6 +5,9 @@
 // Optional: OPENCTI_URL, OPENCTI_TOKEN (DACTA TIP credentials)
 // Optional: ELASTIC_SKIP_SSL_VERIFY=true (for self-signed certs)
 
+const { SUPABASE_URL, sbHeaders, sbFetch, SUPABASE_SECRET_KEY } = require('./lib/supabase');
+const { setCors, requireAuth } = require('./lib/auth');
+
 const { PiiVault } = require('./lib/pii-vault.js');
 const https = require('https');
 
@@ -24,20 +27,16 @@ function elasticFetchOptions(opts) {
   return opts;
 }
 // SIEMLess DB — server-side logging (bypasses RLS with service role)
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
-
 // DACTA TIP — fallback to base64-encoded defaults if env vars not set
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
-const OPENCTI_URL = process.env.OPENCTI_URL || _d('aHR0cDovLzYxLjEzLjIxNC4xOTg6ODA4MA==');
-const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || _d('NjE4OTZjMTQtNWM0OS00NDQ2LTllMDEtYTI4MWRmNTNmY2Qz');
+const OPENCTI_URL = process.env.OPENCTI_URL || '';
+const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || '';
 
 // ── Load org-specific log sources from DB ──
 async function loadOrgLogSources(orgName) {
-  if (!SUPABASE_SERVICE_KEY || !orgName) return { orgId: null, logSources: [], indexPatterns: [], connectors: [] };
+  if (!SUPABASE_SECRET_KEY || !orgName) return { orgId: null, logSources: [], indexPatterns: [], connectors: [] };
   const headers = {
-    'apikey': SUPABASE_SERVICE_KEY,
-    'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+    'apikey': SUPABASE_SECRET_KEY,
+    'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
     'Accept': 'application/json'
   };
   try {
@@ -714,13 +713,13 @@ async function executeTool(name, input) {
 // Logs LLM usage with service role key, bypassing RLS safely.
 // Fire-and-forget — errors are logged but do not block the response.
 async function logUsageServerSide({ model, usage, toolCallLog, piiStats, sessionId, latencyMs }) {
-  if (!SUPABASE_SERVICE_KEY) return; // Skip if not configured
+  if (!SUPABASE_SECRET_KEY) return; // Skip if not configured
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/llm_usage_log`, {
       method: 'POST',
       headers: {
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'apikey': SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -810,11 +809,13 @@ function trimConversation(messages) {
 
 // ── Main Handler ──
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   const requestStart = Date.now();

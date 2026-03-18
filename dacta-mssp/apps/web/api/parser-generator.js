@@ -2,6 +2,7 @@
 // maxDuration: 60s (set in vercel.json)
 // Returns flat JSON with all parser fields at top level.
 
+const { setCors, requireAuth } = require('./lib/auth');
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 
 const SYSTEM_PROMPT = `You are a log parsing expert. Analyse sample log lines and produce a structured parser definition.
@@ -21,12 +22,15 @@ Extract ALL fields. Respond ONLY with valid JSON.`;
 
 module.exports = async function handler(req, res) {
   // CORS + no-cache
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCors(req, res);
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
 

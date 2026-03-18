@@ -12,6 +12,7 @@
 //
 // Rate limit: 1,000 checks/day (free tier). Returns 429 on limit.
 
+const { setCors, requireAuth } = require('./lib/auth');
 const ABUSEIPDB_BASE = 'https://api.abuseipdb.com/api/v2';
 const ABUSEIPDB_KEY = process.env.ABUSEIPDB_API_KEY || '';
 
@@ -178,10 +179,13 @@ async function checkBatch(ips, maxAgeInDays = 90) {
 
 // ── Main handler ──
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
 
   const body = req.method === 'POST'
     ? (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) || {}

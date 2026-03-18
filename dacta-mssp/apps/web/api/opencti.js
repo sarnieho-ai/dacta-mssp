@@ -2,16 +2,11 @@
 // Proxies DACTA TIP GraphQL queries from the frontend, hiding credentials server-side
 // Supports: observable lookups (IP, hash, domain), indicator queries, report searches
 
-const _OU = 'aHR0cDovLzYxLjEzLjIxNC4xOTg6ODA4MA=='; // DACTA TIP URL
-const _OK = 'NjE4OTZjMTQtNWM0OS00NDQ2LTllMDEtYTI4MWRmNTNmY2Qz'; // api token
 
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
+const { setCors, requireAuth } = require('./lib/auth');
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   // Health check: GET without params returns service status
@@ -19,8 +14,12 @@ export default async function handler(req, res) {
     return res.status(200).json({ status: 'ok', service: 'dacta-tip-proxy', timestamp: new Date().toISOString() });
   }
 
-  const OPENCTI_URL = process.env.OPENCTI_URL || _d(_OU);
-  const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || _d(_OK);
+  // SECURITY: Require authenticated session for TIP queries
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
+  const OPENCTI_URL = process.env.OPENCTI_URL || '';
+  const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || '';
 
   try {
     const { query, variables } = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;

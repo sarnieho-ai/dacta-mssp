@@ -13,11 +13,13 @@
 //   dacta.simulation_id = <unique run ID>
 //   dacta.simulation_technique = <MITRE ID>
 
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
+const { SUPABASE_URL, sbHeaders, sbFetch, SUPABASE_SECRET_KEY } = require('./lib/supabase');
+const { setCors, requireAuth } = require('./lib/auth');
+
 import https from 'https';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
+// SUPABASE_URL, SUPABASE_SECRET_KEY imported from lib/supabase above
+const SUPABASE_KEY = SUPABASE_SECRET_KEY; // alias for compatibility
 
 // Default Elastic (fallback if org has no specific SIEM)
 const DEFAULT_ELASTIC_URL = process.env.ELASTIC_URL || '';
@@ -709,10 +711,13 @@ async function cleanupSimulation(elasticUrl, apiKey, simId, fallbackUrl, fallbac
 // ═════════════════════════════════════════════════════
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   try {

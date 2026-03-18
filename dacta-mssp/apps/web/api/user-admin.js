@@ -2,15 +2,8 @@
 // Handles auth account creation, password reset via Supabase Admin API.
 // Service role key stays server-side — never exposed to browser.
 
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
-
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-}
+const { SUPABASE_URL, sbHeaders, sbFetch, SUPABASE_SECRET_KEY } = require('./lib/supabase');
+const { setCors, requireAuth } = require('./lib/auth');
 
 // Generate a secure random temporary password
 function generateTempPassword() {
@@ -37,11 +30,15 @@ function generateTempPassword() {
 }
 
 export default async function handler(req, res) {
-  cors(res);
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  if (!SUPABASE_SERVICE_KEY) {
+  // SECURITY: Require authenticated session for all user admin operations
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
+  if (!SUPABASE_SECRET_KEY) {
     return res.status(500).json({ error: 'Service key not configured' });
   }
 
@@ -58,8 +55,8 @@ export default async function handler(req, res) {
       // Check if auth user already exists
       const listResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?per_page=50`, {
         headers: {
-          'apikey': SUPABASE_SERVICE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+          'apikey': SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
         },
       });
       const listData = await listResp.json();
@@ -76,8 +73,8 @@ export default async function handler(req, res) {
       const createResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
         method: 'POST',
         headers: {
-          'apikey': SUPABASE_SERVICE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+          'apikey': SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -122,8 +119,8 @@ export default async function handler(req, res) {
       // Find the auth user by email
       const listResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?per_page=50`, {
         headers: {
-          'apikey': SUPABASE_SERVICE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+          'apikey': SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
         },
       });
       const listData = await listResp.json();
@@ -137,8 +134,8 @@ export default async function handler(req, res) {
       const updateResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
         method: 'PUT',
         headers: {
-          'apikey': SUPABASE_SERVICE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+          'apikey': SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -171,8 +168,8 @@ export default async function handler(req, res) {
     try {
       const listResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?per_page=50`, {
         headers: {
-          'apikey': SUPABASE_SERVICE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+          'apikey': SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
         },
       });
       const listData = await listResp.json();
@@ -203,8 +200,8 @@ export default async function handler(req, res) {
     try {
       const listResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?per_page=50`, {
         headers: {
-          'apikey': SUPABASE_SERVICE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+          'apikey': SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
         },
       });
       const listData = await listResp.json();
@@ -233,8 +230,8 @@ export default async function handler(req, res) {
         const createResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
           method: 'POST',
           headers: {
-            'apikey': SUPABASE_SERVICE_KEY,
-            'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+            'apikey': SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({

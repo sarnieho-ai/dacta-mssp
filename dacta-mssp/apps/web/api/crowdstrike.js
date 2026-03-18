@@ -18,6 +18,7 @@
 //   get_vulnerabilities — CVE intelligence lookup
 //   device_search    — Find endpoint by local_ip or FQL filter; returns hostname, OS, last_seen, tags
 
+const { setCors, requireAuth } = require('./lib/auth');
 const CS_BASE = process.env.CROWDSTRIKE_BASE_URL || 'https://api.us-2.crowdstrike.com';
 const CS_CLIENT_ID = process.env.CROWDSTRIKE_CLIENT_ID || '';
 const CS_CLIENT_SECRET = process.env.CROWDSTRIKE_CLIENT_SECRET || '';
@@ -260,10 +261,13 @@ async function getVulnerabilities(params = {}) {
 // ── Main handler ──
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
 
   if (!CS_CLIENT_ID || !CS_CLIENT_SECRET) {
     return res.status(503).json({ error: 'CrowdStrike credentials not configured', configured: false });

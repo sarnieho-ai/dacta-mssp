@@ -17,6 +17,7 @@
 // POST body: { indicators: ["1.2.3.4", "evil.com", "abc123..."] }
 // Returns:   { results: { "1.2.3.4": { verdict, confidence, scanners: {...} }, ... }, meta: {...} }
 
+const { setCors, requireAuth } = require('./lib/auth');
 const VT_API_KEY = process.env.VIRUSTOTAL_API_KEY || '';
 const ABUSEIPDB_API_KEY = process.env.ABUSEIPDB_API_KEY || '';
 const CS_BASE = process.env.CROWDSTRIKE_BASE_URL || 'https://api.us-2.crowdstrike.com';
@@ -408,10 +409,13 @@ function aggregateVerdict(scannerResults) {
 // ── Main handler ──
 module.exports = async function handler(req, res) {
   // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   const { indicators, action } = req.body || {};

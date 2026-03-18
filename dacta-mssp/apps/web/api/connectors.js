@@ -14,17 +14,16 @@
 //   list_connectors   — List connectors for an org
 //   create_platform_settings_table — Create platform_settings table if missing
 
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
+const { SUPABASE_URL, sbHeaders, sbFetch, SUPABASE_SECRET_KEY } = require('./lib/supabase');
+const { setCors, requireAuth } = require('./lib/auth');
 
 async function supabaseRequest(method, path, body, headers = {}) {
   const url = `${SUPABASE_URL}/rest/v1/${path}`;
   const opts = {
     method,
     headers: {
-      'apikey': SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'apikey': SUPABASE_SECRET_KEY,
+      'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
       'Content-Type': 'application/json',
       'Prefer': 'return=representation',
       ...headers
@@ -39,10 +38,12 @@ async function supabaseRequest(method, path, body, headers = {}) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, PATCH, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session for connector CRUD
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
 
   const body = req.method === 'POST' || req.method === 'DELETE' || req.method === 'PATCH'
     ? (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) || {}
@@ -53,7 +54,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing action parameter' });
   }
 
-  if (!SUPABASE_SERVICE_KEY) {
+  if (!SUPABASE_SECRET_KEY) {
     return res.status(500).json({ error: 'Service key not configured' });
   }
 

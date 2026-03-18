@@ -7,6 +7,7 @@
 import https from 'https';
 
 // Custom fetch options for SSL certificate handling
+const { setCors, requireAuth } = require('./lib/auth');
 function getFetchOptions(baseOpts) {
   // If ELASTIC_SKIP_SSL_VERIFY is set, use a custom agent that skips SSL verification
   if (process.env.ELASTIC_SKIP_SSL_VERIFY === 'true') {
@@ -17,11 +18,13 @@ function getFetchOptions(baseOpts) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
 
   // Health check: GET without params returns service status
   if (req.method === 'GET' && (!req.query || !req.query.action)) {

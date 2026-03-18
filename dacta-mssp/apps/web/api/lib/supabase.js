@@ -1,18 +1,22 @@
 // Centralized Supabase configuration for all API endpoints
-// New API key format (publishable / secret) after key rotation 2026-03-16
+// SECURITY: All credentials must come from environment variables (Vercel dashboard).
+// No fallback secrets in code — missing env vars will cause a clear startup error.
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
 
-// Secret key (replaces old service_role JWT)
-// Env var takes priority, fallback for immediate deployment
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
-const _sk = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
+if (!SUPABASE_URL) {
+  console.error('[SECURITY] SUPABASE_URL env var is not set. All API calls will fail.');
+}
+if (!SUPABASE_SECRET_KEY) {
+  console.error('[SECURITY] SUPABASE_SERVICE_ROLE_KEY env var is not set. All API calls will fail.');
+}
 
 // Standard headers for PostgREST calls
 function sbHeaders() {
   return {
-    'apikey': _sk,
-    'Authorization': `Bearer ${_sk}`,
+    'apikey': SUPABASE_SECRET_KEY,
+    'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
     'Content-Type': 'application/json',
     'Prefer': 'return=representation'
   };
@@ -28,4 +32,4 @@ async function sbFetch(path, opts = {}) {
   return res;
 }
 
-module.exports = { SUPABASE_URL, sbHeaders, sbFetch, SUPABASE_SECRET_KEY: _sk };
+module.exports = { SUPABASE_URL, sbHeaders, sbFetch, SUPABASE_SECRET_KEY };

@@ -19,22 +19,21 @@
 //   ping                 — Health check
 
 
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
+const { SUPABASE_URL, sbHeaders, sbFetch, SUPABASE_SECRET_KEY } = require('./lib/supabase');
+const { setCors, requireAuth } = require('./lib/auth');
+
 const FN_BASE = process.env.FORTINET_BASE_URL || '';
 const FN_API_KEY = process.env.FORTINET_API_KEY || '';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
-
 // ── Per-org credential resolution (fetch-based, no npm deps) ──
 async function getOrgCredentials(orgId) {
-  if (!orgId || !SUPABASE_SERVICE_KEY) return null;
+  if (!orgId || !SUPABASE_SECRET_KEY) return null;
   try {
     const url = `${SUPABASE_URL}/rest/v1/org_connectors?org_id=eq.${orgId}&vendor=ilike.*fortinet*&is_enabled=eq.true&select=api_endpoint,auth_type,credentials_ref&limit=1`;
     const resp = await fetch(url, {
       headers: {
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'apikey': SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
         'Accept': 'application/json'
       }
     });
@@ -183,10 +182,13 @@ async function getVPNEvents(auth, params = {}) {
 // ── Main handler ──
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
 
   const body = req.method === 'POST'
     ? (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) || {}

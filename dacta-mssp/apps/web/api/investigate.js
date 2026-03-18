@@ -3,6 +3,9 @@
 // Uses same PII vault and tool infrastructure as copilot.js
 // Required env vars: ANTHROPIC_API_KEY, ELASTIC_URL, ELASTIC_API_KEY
 
+const { SUPABASE_URL, sbHeaders, sbFetch, SUPABASE_SECRET_KEY } = require('./lib/supabase');
+const { setCors, requireAuth } = require('./lib/auth');
+
 const { PiiVault } = require('./lib/pii-vault.js');
 const https = require('https');
 
@@ -19,17 +22,13 @@ function elasticFetchOptions(opts) {
   return opts;
 }
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
-
 // Heimdal credentials (for direct EDR calls)
 const HM_BASE = process.env.HEIMDAL_BASE_URL || 'https://dashboard.heimdalsecurity.com/api/heimdalapi/2.0';
 const HM_API_KEY = process.env.HEIMDAL_API_KEY || '';
 const HM_CUSTOMER_ID = process.env.HEIMDAL_CUSTOMER_ID || '';
 
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
-const OPENCTI_URL = process.env.OPENCTI_URL || _d('aHR0cDovLzYxLjEzLjIxNC4xOTg6ODA4MA==');
-const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || _d('NjE4OTZjMTQtNWM0OS00NDQ2LTllMDEtYTI4MWRmNTNmY2Qz');
+const OPENCTI_URL = process.env.OPENCTI_URL || '';
+const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || '';
 
 // CrowdStrike credentials
 const CS_CLIENT_ID = process.env.CROWDSTRIKE_CLIENT_ID || '';
@@ -77,10 +76,10 @@ const ORG_NAME_TO_NAMESPACE = {
 //   3. Use the namespace parameter directly → NAMESPACE_TO_ORG_ID
 // ═══════════════════════════════════════════════
 async function loadOrgContext(orgName, namespace) {
-  if (!SUPABASE_SERVICE_KEY) return { orgId: null, connectors: [], logSources: [], indexPatterns: [], edrStatus: null };
+  if (!SUPABASE_SECRET_KEY) return { orgId: null, connectors: [], logSources: [], indexPatterns: [], edrStatus: null };
   const headers = {
-    'apikey': SUPABASE_SERVICE_KEY,
-    'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+    'apikey': SUPABASE_SECRET_KEY,
+    'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
     'Accept': 'application/json'
   };
   try {
@@ -1706,14 +1705,14 @@ function parsePhaseJSON(text) {
 // Server-Side Usage Logging
 // ═══════════════════════════════════════════════
 async function logInvestigationUsage({ ticketKey, phase, model, usage, toolCallLog, latencyMs, fallbackUsed }) {
-  if (!SUPABASE_SERVICE_KEY) return;
+  if (!SUPABASE_SECRET_KEY) return;
   const provider = (model || '').includes('gpt') ? 'openai' : 'anthropic';
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/llm_usage_log`, {
       method: 'POST',
       headers: {
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'apikey': SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -1745,11 +1744,13 @@ export const config = {
 // Main Handler
 // ═══════════════════════════════════════════════
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   const requestStart = Date.now();

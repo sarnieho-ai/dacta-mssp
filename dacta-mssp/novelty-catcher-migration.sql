@@ -48,8 +48,15 @@ END $$;
 ALTER TABLE public.novelty_catchers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.novelty_alerts ENABLE ROW LEVEL SECURITY;
 
+-- Drop legacy anon policies (SECURITY: anon FOR ALL was too permissive)
 DO $$ BEGIN DROP POLICY IF EXISTS novelty_catchers_anon_all ON public.novelty_catchers; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN DROP POLICY IF EXISTS novelty_alerts_anon_all ON public.novelty_alerts; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
-CREATE POLICY novelty_catchers_anon_all ON public.novelty_catchers FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY novelty_alerts_anon_all ON public.novelty_alerts FOR ALL TO anon USING (true) WITH CHECK (true);
+-- Authenticated users (dashboard) get full access
+CREATE POLICY novelty_catchers_auth_all ON public.novelty_catchers FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY novelty_alerts_auth_all ON public.novelty_alerts FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- IMPORTANT: Novelty Catcher agents communicate through the /api/novelty-catcher
+-- serverless function, which uses the service_role key server-side.
+-- Agents authenticate via SIEMLESS_API_KEY header, verified in the API handler.
+-- No direct anon access to these tables is needed.

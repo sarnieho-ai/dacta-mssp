@@ -3,6 +3,9 @@
 // All credentials read from Vercel Environment Variables — never hardcode secrets
 
 // Required env vars: JIRA_EMAIL, JIRA_API_TOKEN, JIRA_INSTANCE, JIRA_CLOUD_ID, JIRA_TEAM_ID, JIRA_ORG_ID, SUPABASE_URL, SUPABASE_ANON_KEY
+const { SUPABASE_URL, sbHeaders, sbFetch, SUPABASE_SECRET_KEY } = require('./lib/supabase');
+const { setCors, requireAuth } = require('./lib/auth');
+
 const _JE = process.env.JIRA_EMAIL || '';
 const _JT = process.env.JIRA_API_TOKEN || '';
 const _JI = process.env.JIRA_INSTANCE || 'dactaglobal-sg.atlassian.net';
@@ -31,8 +34,6 @@ function _setCache(key, data) {
   _serverCacheTime[key] = Date.now();
 }
 
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
-
 // Map SIEMLess display names → Jira JSM organization names
 // Jira stores org names in customfield_10002 which may differ from ORG_CONNECTORS display names
 const _ORG_NAME_MAP = {
@@ -52,13 +53,10 @@ function _toJiraOrgName(displayName) {
 }
 
 // ── Supabase REST API helpers (server-side, uses service role key to bypass RLS) ──
-const _SB_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const _SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
-
 async function _sbGet(table, query) {
   try {
-    const r = await fetch(`${_SB_URL}/rest/v1/${table}?${query}`, {
-      headers: { 'apikey': _SB_KEY, 'Authorization': `Bearer ${_SB_KEY}`, 'Accept': 'application/json' }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+      headers: { 'apikey': SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`, 'Accept': 'application/json' }
     });
     if (r.status === 404 || r.status === 406) return []; // Table doesn't exist yet
     if (!r.ok) { console.warn('[SB] GET error:', r.status); return []; }
@@ -68,10 +66,10 @@ async function _sbGet(table, query) {
 
 async function _sbUpsert(table, row, conflictCol) {
   try {
-    const r = await fetch(`${_SB_URL}/rest/v1/${table}`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
       method: 'POST',
       headers: {
-        'apikey': _SB_KEY, 'Authorization': `Bearer ${_SB_KEY}`,
+        'apikey': SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
         'Content-Type': 'application/json', 'Accept': 'application/json',
         'Prefer': `resolution=merge-duplicates${conflictCol ? `,on_conflict=${conflictCol}` : ''}`
       },
@@ -90,11 +88,13 @@ async function _sbUpsert(table, row, conflictCol) {
 
 export default async function handler(req, res) {
   // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  setCors(req, res);
   if (req.method === 'OPTIONS') {
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
     return res.status(200).end();
   }
 

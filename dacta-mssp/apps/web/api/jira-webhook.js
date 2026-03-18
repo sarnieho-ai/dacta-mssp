@@ -4,14 +4,16 @@
 // Events: Issue Created, Issue Updated
 // JQL Filter: project = DAC AND type = "[System] Incident"
 
-export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+const { setCors } = require('./lib/auth');
 
+export default async function handler(req, res) {
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  // NOTE: Jira webhooks use a shared secret for verification.
+  // For now, accept POST from Jira (Atlassian IP ranges). 
+  // TODO: Add Jira webhook signature verification when available.
 
   try {
     const payload = req.body;

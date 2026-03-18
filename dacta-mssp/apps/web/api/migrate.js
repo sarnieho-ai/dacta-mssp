@@ -2,9 +2,8 @@
 // Creates missing tables required by new features
 // Uses service role key for DDL operations via Supabase pg-meta query endpoint
 
-function _d(b) { return Buffer.from(b, 'base64').toString('utf-8'); }
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qiqrizggitcqwkwshmfy.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || _d('c2Jfc2VjcmV0X2txOUJtVVhJd01ndEJDa2lDQXpMX2dfTk1ORDdKVmY=');
+const { SUPABASE_URL, sbHeaders, sbFetch, SUPABASE_SECRET_KEY } = require('./lib/supabase');
+const { setCors, requireAuth } = require('./lib/auth');
 
 async function runSQL(sql) {
   // Use PostgREST's rpc endpoint or fall back to direct pg-meta query
@@ -21,21 +20,24 @@ async function runSQL(sql) {
   // attempt a table check and creation via the pg endpoint
   const resp = await fetch(`${SUPABASE_URL}/rest/v1/simulation_results?select=id&limit=0`, {
     headers: {
-      'apikey': SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`
+      'apikey': SUPABASE_SECRET_KEY,
+      'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`
     }
   });
   return { exists: resp.ok, status: resp.status };
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  if (!SUPABASE_SERVICE_KEY) {
+  if (!SUPABASE_SECRET_KEY) {
     return res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' });
   }
 
@@ -85,8 +87,8 @@ GRANT ALL ON public.simulation_results TO anon, authenticated;
       const pgResp = await fetch(`${SUPABASE_URL}/pg/query`, {
         method: 'POST',
         headers: {
-          'apikey': SUPABASE_SERVICE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+          'apikey': SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ query: sqlQuery })
@@ -100,7 +102,7 @@ GRANT ALL ON public.simulation_results TO anon, authenticated;
       const sqlResp = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+          'Authorization': `Bearer ${SUPABASE_SECRET_KEY}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ query: sqlQuery })

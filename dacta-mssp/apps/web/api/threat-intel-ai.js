@@ -2,6 +2,7 @@
 // Uses Anthropic Claude to extract entities and generate SIGMA rules from threat reports
 // Required env var: ANTHROPIC_API_KEY
 
+const { setCors, requireAuth } = require('./lib/auth');
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 
 async function callClaude(systemPrompt, userPrompt, maxTokens = 2048) {
@@ -115,10 +116,13 @@ Be specific — reference actual techniques, tools, and IOCs from the report. Us
 
 // ── Main handler ──
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: Require authenticated session
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return; // 401 already sent
+
 
   if (!ANTHROPIC_API_KEY) {
     return res.status(503).json({ error: 'AI service not configured', configured: false });
