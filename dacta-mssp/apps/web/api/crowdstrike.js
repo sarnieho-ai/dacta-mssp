@@ -644,8 +644,8 @@ export default async function handler(req, res) {
         const easmIdData = await csGet('/fem/queries/external-assets/v1', easmParams);
         const easmIds = easmIdData.resources || [];
         if (!easmIds.length) { result = { assets: [], total: 0 }; break; }
-        // Fetch full asset details
-        const easmDetails = await csPost('/fem/entities/external-assets/v1', { ids: easmIds.slice(0, 20) });
+        // Fetch full asset details (GET with ids param)
+        const easmDetails = await csGet('/fem/entities/external-assets/v1', { ids: easmIds.slice(0, 20) });
         result = {
           assets: easmDetails.resources || [],
           total: easmIdData.meta?.pagination?.total || easmIds.length
