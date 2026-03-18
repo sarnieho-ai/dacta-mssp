@@ -619,7 +619,8 @@ export default async function handler(req, res) {
         const notifData = await csGet('/recon/queries/notifications/v1', notifParams);
         const notifIds = notifData.resources || [];
         if (!notifIds.length) { result = { notifications: [], total: 0 }; break; }
-        const notifDetails = await csGet('/recon/entities/notifications-detailed-translated/v1', { ids: notifIds });
+        // Use non-translated detailed endpoint (more reliable)
+        const notifDetails = await csGet('/recon/entities/notifications-detailed/v1', { ids: notifIds });
         result = { notifications: notifDetails.resources || [], total: notifData.meta?.pagination?.total || notifIds.length };
         break;
       }
@@ -640,8 +641,15 @@ export default async function handler(req, res) {
       case 'easm_assets': {
         const easmParams = { limit: parseInt(body.limit || 20), offset: parseInt(body.offset || 0) };
         if (body.filter) easmParams.filter = body.filter;
-        const easmData = await csGet('/fem/queries/external-assets/v1', easmParams);
-        result = easmData;
+        const easmIdData = await csGet('/fem/queries/external-assets/v1', easmParams);
+        const easmIds = easmIdData.resources || [];
+        if (!easmIds.length) { result = { assets: [], total: 0 }; break; }
+        // Fetch full asset details
+        const easmDetails = await csPost('/fem/entities/external-assets/v1', { ids: easmIds.slice(0, 20) });
+        result = {
+          assets: easmDetails.resources || [],
+          total: easmIdData.meta?.pagination?.total || easmIds.length
+        };
         break;
       }
 
