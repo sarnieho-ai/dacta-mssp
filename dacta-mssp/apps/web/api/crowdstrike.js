@@ -548,6 +548,122 @@ export default async function handler(req, res) {
         break;
       }
 
+      // ── Scope probe — test which API families are accessible ──
+      case 'probe_scopes': {
+        const token = await getToken();
+        const probes = [
+          // Recon (Digital Risk Protection / External Cyber Risk)
+          { name: 'Recon: Monitoring Rules', path: '/recon/queries/rules/v1?limit=1' },
+          { name: 'Recon: Notifications', path: '/recon/queries/notifications/v1?limit=1' },
+          { name: 'Recon: Exposed Data Records', path: '/recon/queries/notifications-exposed-data-records/v1?limit=1' },
+          // Exposure Management / EASM
+          { name: 'EASM: External Assets', path: '/fem/queries/external-assets/v1?limit=1' },
+          { name: 'Discover: Assets', path: '/discover/queries/assets/v1?limit=1' },
+          // Spotlight (Vulnerability Management)
+          { name: 'Spotlight: Vulnerabilities', path: '/spotlight/queries/vulnerabilities/v1?limit=1&filter=status%3A%5B%27open%27%5D' },
+          { name: 'Spotlight: Combined Vulns', path: '/spotlight/combined/vulnerabilities/v1?limit=1&filter=status%3A%5B%27open%27%5D' },
+          // Zero Trust Assessment
+          { name: 'ZTA: Assessments', path: '/zero-trust-assessment/queries/assessments/v1?limit=1' },
+          // Known working (control)
+          { name: 'Intel: Actors (control)', path: '/intel/queries/actors/v1?limit=1' },
+          { name: 'Devices (control)', path: '/devices/queries/devices/v1?limit=1' },
+          { name: 'Detections', path: '/detects/queries/detects/v1?limit=1' },
+          { name: 'Incidents', path: '/incidents/queries/incidents/v1?limit=1' },
+        ];
+
+        const results = [];
+        for (const probe of probes) {
+          try {
+            const resp = await fetch(`${CS_BASE}${probe.path}`, {
+              headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+            });
+            const data = await resp.json();
+            const resourceCount = data.resources ? data.resources.length : 0;
+            const totalCount = data.meta && data.meta.pagination ? data.meta.pagination.total : null;
+            results.push({
+              name: probe.name,
+              status: resp.status,
+              accessible: resp.status === 200,
+              resources: resourceCount,
+              total: totalCount,
+              error: resp.status !== 200 ? (data.errors || data.message || null) : null
+            });
+          } catch (e) {
+            results.push({ name: probe.name, status: 'error', accessible: false, error: e.message });
+          }
+        }
+        result = { probes: results };
+        break;
+      }
+
+      // ── Recon: Query monitoring rules ──
+      case 'recon_rules': {
+        const ruleData = await csGet('/recon/queries/rules/v1', {
+          limit: parseInt(body.limit || 20),
+          offset: parseInt(body.offset || 0),
+          q: body.q || undefined
+        });
+        const ruleIds = ruleData.resources || [];
+        if (!ruleIds.length) { result = { rules: [], total: 0 }; break; }
+        const ruleDetails = await csGet('/recon/entities/rules/v1', { ids: ruleIds });
+        result = { rules: ruleDetails.resources || [], total: ruleData.meta?.pagination?.total || ruleIds.length };
+        break;
+      }
+
+      // ── Recon: Query notifications ──
+      case 'recon_notifications': {
+        const notifParams = { limit: parseInt(body.limit || 20), offset: parseInt(body.offset || 0) };
+        if (body.filter) notifParams.filter = body.filter;
+        if (body.q) notifParams.q = body.q;
+        if (body.sort) notifParams.sort = body.sort;
+        const notifData = await csGet('/recon/queries/notifications/v1', notifParams);
+        const notifIds = notifData.resources || [];
+        if (!notifIds.length) { result = { notifications: [], total: 0 }; break; }
+        const notifDetails = await csGet('/recon/entities/notifications-detailed-translated/v1', { ids: notifIds });
+        result = { notifications: notifDetails.resources || [], total: notifData.meta?.pagination?.total || notifIds.length };
+        break;
+      }
+
+      // ── Recon: Exposed data records ──
+      case 'recon_exposed_data': {
+        const edrParams = { limit: parseInt(body.limit || 20), offset: parseInt(body.offset || 0) };
+        if (body.filter) edrParams.filter = body.filter;
+        const edrData = await csGet('/recon/queries/notifications-exposed-data-records/v1', edrParams);
+        const edrIds = edrData.resources || [];
+        if (!edrIds.length) { result = { records: [], total: 0 }; break; }
+        const edrDetails = await csGet('/recon/entities/notifications-exposed-data-records/v1', { ids: edrIds.slice(0, 20) });
+        result = { records: edrDetails.resources || [], total: edrData.meta?.pagination?.total || edrIds.length };
+        break;
+      }
+
+      // ── EASM: External assets ──
+      case 'easm_assets': {
+        const easmParams = { limit: parseInt(body.limit || 20), offset: parseInt(body.offset || 0) };
+        if (body.filter) easmParams.filter = body.filter;
+        const easmData = await csGet('/fem/queries/external-assets/v1', easmParams);
+        result = easmData;
+        break;
+      }
+
+      // ── Discover: IT assets ──
+      case 'discover_assets': {
+        const discParams = { limit: parseInt(body.limit || 20), offset: parseInt(body.offset || 0) };
+        if (body.filter) discParams.filter = body.filter;
+        const discData = await csGet('/discover/queries/assets/v1', discParams);
+        result = discData;
+        break;
+      }
+
+      // ── Spotlight: Vulnerabilities ──
+      case 'spotlight_vulns': {
+        const slParams = { limit: parseInt(body.limit || 20) };
+        if (body.filter) slParams.filter = body.filter;
+        else slParams.filter = "status:['open']";
+        const slData = await csGet('/spotlight/combined/vulnerabilities/v1', slParams);
+        result = slData;
+        break;
+      }
+
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });
     }
