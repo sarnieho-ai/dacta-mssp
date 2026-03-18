@@ -632,7 +632,7 @@ export default async function handler(req, res) {
         const edrData = await csGet('/recon/queries/notifications-exposed-data-records/v1', edrParams);
         const edrIds = edrData.resources || [];
         if (!edrIds.length) { result = { records: [], total: 0 }; break; }
-        const edrDetails = await csGet('/recon/entities/notifications-exposed-data-records/v1', { ids: edrIds.slice(0, 20) });
+        const edrDetails = await csGet('/recon/entities/notifications-exposed-data-records/v1', { ids: edrIds.slice(0, 50) });
         result = { records: edrDetails.resources || [], total: edrData.meta?.pagination?.total || edrIds.length };
         break;
       }
@@ -645,7 +645,7 @@ export default async function handler(req, res) {
         const easmIds = easmIdData.resources || [];
         if (!easmIds.length) { result = { assets: [], total: 0 }; break; }
         // Fetch full asset details (GET with ids param)
-        const easmDetails = await csGet('/fem/entities/external-assets/v1', { ids: easmIds.slice(0, 20) });
+        const easmDetails = await csGet('/fem/entities/external-assets/v1', { ids: easmIds.slice(0, 50) });
         result = {
           assets: easmDetails.resources || [],
           total: easmIdData.meta?.pagination?.total || easmIds.length
