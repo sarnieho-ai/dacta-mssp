@@ -55,7 +55,7 @@ export default async function handler(req, res) {
 
         const hbPayload = {
           status: mode === 'learn' ? 'learning' : 'online',
-          version: version || '2.0.0',
+          version: version || '3.0.0',
           mode: mode || 'monitor',
           events_processed: events_processed || 0,
           alerts_24h: alerts_24h || 0,
@@ -183,7 +183,7 @@ export default async function handler(req, res) {
           // Update existing record, reset to pending
           const existingId = existing.data[0].id;
           await supabaseRequest('PATCH', `novelty_catchers?id=eq.${existingId}`, {
-            version: '2.0.0',
+            version: '3.0.0',
             mode: 'learn',
             status: 'pending',
             platform: platform || 'linux',
@@ -197,7 +197,7 @@ export default async function handler(req, res) {
         const result = await supabaseRequest('POST', 'novelty_catchers', {
           org_id,
           hostname,
-          version: '2.0.0',
+          version: '3.0.0',
           mode: 'learn',
           status: 'pending',
           platform: platform || 'linux',
@@ -278,19 +278,39 @@ export default async function handler(req, res) {
         const lsResult = await supabaseRequest('GET',
           `client_log_sources?org_id=eq.${fsOrgId}&select=id,source_name,vendor,source_type,index_pattern,field_mappings,status`
         );
-        // Pull the org's connectors for SIEM/EDR discovery
+        // Pull the org's connectors for SIEM/EDR discovery (correct table: org_connectors)
         const connResult = await supabaseRequest('GET',
-          `client_connectors?org_id=eq.${fsOrgId}&select=id,connector_type,connector_name,config,status`
+          `org_connectors?org_id=eq.${fsOrgId}&select=id,connector_type,vendor,display_name,api_endpoint,auth_type,credentials_ref,health_status,is_enabled,metadata`
         );
 
         // Build feature schema dynamically from log sources
         const logSources = Array.isArray(lsResult.data) ? lsResult.data : [];
         const connectors = Array.isArray(connResult.data) ? connResult.data : [];
 
-        // Collect indices to monitor
-        const indices = logSources
-          .filter(ls => ls.status === 'active' && ls.index_pattern)
-          .map(ls => ls.index_pattern);
+        // Collect indices — accept any non-degraded status (healthy, active, warning)
+        // Split space-separated index patterns into individual entries
+        const indices = [];
+        for (const ls of logSources) {
+          if (ls.index_pattern && ls.status !== 'inactive' && ls.status !== 'decommissioned') {
+            const parts = ls.index_pattern.trim().split(/\s+/);
+            for (const p of parts) {
+              if (p && !indices.includes(p)) indices.push(p);
+            }
+          }
+        }
+
+        // Also collect indices from SIEM connector metadata
+        for (const conn of connectors) {
+          if (conn.connector_type === 'siem' && conn.is_enabled && conn.metadata) {
+            const meta = typeof conn.metadata === 'string' ? JSON.parse(conn.metadata) : conn.metadata;
+            if (meta.index_pattern) {
+              const parts = meta.index_pattern.trim().split(/\s+/);
+              for (const p of parts) {
+                if (p && !indices.includes(p)) indices.push(p);
+              }
+            }
+          }
+        }
 
         // Build per-source feature extraction config
         const features = {};
@@ -300,14 +320,45 @@ export default async function handler(req, res) {
           }
         }
 
+        // Extract SIEM connection details for catcher auto-configuration
+        const siemConnectors = connectors
+          .filter(c => c.connector_type === 'siem' && c.is_enabled)
+          .map(c => {
+            let creds = {};
+            try { creds = typeof c.credentials_ref === 'string' ? JSON.parse(c.credentials_ref) : (c.credentials_ref || {}); } catch {}
+            return {
+              vendor: c.vendor,
+              name: c.display_name,
+              url: c.api_endpoint || '',
+              auth_type: c.auth_type || '',
+              api_key: creds.api_key || '',
+              health: c.health_status,
+              metadata: typeof c.metadata === 'string' ? JSON.parse(c.metadata) : (c.metadata || {}),
+            };
+          });
+
+        // Extract EDR connection details
+        const edrConnectors = connectors
+          .filter(c => c.connector_type === 'edr' && c.is_enabled)
+          .map(c => ({
+            vendor: c.vendor,
+            name: c.display_name,
+            url: c.api_endpoint || '',
+            health: c.health_status,
+          }));
+
         return res.status(200).json({
           org_id: fsOrgId,
           indices,
           features,
+          siem: siemConnectors,
+          edr: edrConnectors,
           connectors: connectors.map(c => ({
             type: c.connector_type,
-            name: c.connector_name,
-            status: c.status
+            vendor: c.vendor,
+            name: c.display_name,
+            status: c.health_status,
+            enabled: c.is_enabled,
           })),
           generated_at: new Date().toISOString()
         });
@@ -342,7 +393,7 @@ function generateConfigYaml({ orgName, hostname, syslogPort, indices, learningHo
 
 agent:
   name: "novelty-catcher-${orgName.toLowerCase().replace(/\s+/g, '-')}"
-  version: "2.0.0"
+  version: "3.0.0"
   log_level: "INFO"
   log_file: "logs/novelty-catcher.log"
   state_dir: "./state"
@@ -430,11 +481,11 @@ function generateInstallCommands(hostname) {
   return `# ── Deploy to ${hostname || 'collector'} ──
 
 # 1. Upload the package
-scp novelty-catcher-v2.0.0-linux-x64.tar.gz root@${hostname || 'collector'}:/tmp/
+scp novelty-catcher-v3.0.0-linux-x64.tar.gz root@${hostname || 'collector'}:/tmp/
 
 # 2. SSH in and install
 ssh root@${hostname || 'collector'}
-cd /tmp && tar xzf novelty-catcher-v2.0.0-linux-x64.tar.gz
+cd /tmp && tar xzf novelty-catcher-v3.0.0-linux-x64.tar.gz
 cd novelty-catcher-dist
 sudo bash install.sh
 
