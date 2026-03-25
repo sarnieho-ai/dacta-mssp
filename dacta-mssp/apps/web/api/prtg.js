@@ -1,6 +1,6 @@
 /**
  * PRTG Network Monitor API Proxy
- * Proxies requests to a customer's PRTG instance for SNOC telemetry.
+ * Proxies requests to a customer's PRTG instance for network telemetry.
  * 
  * Supported actions:
  *   - status:      GET /api/status.json (overall PRTG server status)
