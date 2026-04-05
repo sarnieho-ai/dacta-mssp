@@ -24129,10 +24129,13 @@ body.mode-production .prod-badge { display: flex; }
             <div class="page-title">Data Privacy Engine</div>
             <div class="page-subtitle">PDPA-Compliant Multi-LLM Investigation Pipeline</div>
           </div>
-          <div class="page-actions" style="align-items:center;">
+          <div class="page-actions" style="align-items:center;gap:12px;">
+            <select id="privOrgSelector" class="org-select-dropdown" onchange="_privSwitchOrg(this.value)" style="font-size:12px;padding:6px 12px;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:6px;font-family:var(--font-body);cursor:pointer;min-width:160px;">
+              <option value="all">All Organizations</option>
+            </select>
             <div class="priv-status-indicator">
               <div class="priv-status-dot"></div>
-              All Systems Operational
+              <span id="privStatusText">All Systems Operational</span>
             </div>
             <button class="btn btn-primary btn-sm" onclick="openPrivacyPoliciesModal()"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-flex;vertical-align:middle;flex-shrink:0;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Configure Policies</button>
           </div>
@@ -24178,7 +24181,7 @@ body.mode-production .prod-badge { display: flex; }
                   <div class="priv-ph-num">01</div>
                   <div class="priv-ph-title">Analyst Query</div>
                   <div class="priv-ph-desc">SOC analyst triggers investigation with raw identifiers</div>
-                  <div class="priv-ph-detail" style="color:var(--cyan);background:rgba(0,212,255,0.06);">host:dc01.clientabc.local<br>user:"john.doe"</div>
+                  <div class="priv-ph-detail" id="privPipe01" style="color:var(--cyan);background:rgba(0,212,255,0.06);">host:dc01.clientabc.local<br>user:"john.doe"</div>
                   <div class="priv-ph-badge" style="color:var(--cyan);border-color:rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);">Raw PII Query</div>
                 </div>
               </div>
@@ -24191,7 +24194,7 @@ body.mode-production .prod-badge { display: flex; }
                   <div class="priv-ph-num num-blue">02</div>
                   <div class="priv-ph-title">L1 &mdash; SIEM Search</div>
                   <div class="priv-ph-desc">Query runs against Elastic/Splunk with real values &mdash; SIEM requires actual identifiers to match indexed data</div>
-                  <div class="priv-ph-detail" style="color:#3b82f6;background:rgba(59,130,246,0.06);">host:dc01.clientabc.local<br>user:"john.doe"<br>&rarr; 847 matching events</div>
+                  <div class="priv-ph-detail" id="privPipe02" style="color:#3b82f6;background:rgba(59,130,246,0.06);">host:dc01.clientabc.local<br>user:"john.doe"<br>&rarr; 847 matching events</div>
                   <div class="priv-ph-badge" style="color:#3b82f6;border-color:rgba(59,130,246,0.25);background:rgba(59,130,246,0.08);">Encrypted Transport</div>
                 </div>
               </div>
@@ -24204,7 +24207,7 @@ body.mode-production .prod-badge { display: flex; }
                   <div class="priv-ph-num">03</div>
                   <div class="priv-ph-title">L2 &mdash; Tokenize Results</div>
                   <div class="priv-ph-desc">All PII in SIEM results replaced with reversible tokens &mdash; from this point, no PII in the pipeline</div>
-                  <div class="priv-ph-detail" style="color:var(--cyan);background:rgba(0,212,255,0.06);">Client ABC &rarr; [[CLIENT_0x7A]]<br>john.doe &rarr; [[USER_0x3F]]<br>dc01 &rarr; [[HOST_001]]</div>
+                  <div class="priv-ph-detail" id="privPipe03" style="color:var(--cyan);background:rgba(0,212,255,0.06);">Client ABC &rarr; [[CLIENT_0x7A]]<br>john.doe &rarr; [[USER_0x3F]]<br>dc01 &rarr; [[HOST_001]]</div>
                   <div class="priv-ph-badge" style="color:var(--cyan);border-color:rgba(0,212,255,0.25);background:rgba(0,212,255,0.08);">Vault-Secured</div>
                 </div>
               </div>
@@ -24234,7 +24237,7 @@ body.mode-production .prod-badge { display: flex; }
                   <div class="priv-ph-num num-green">05</div>
                   <div class="priv-ph-title">L4 &mdash; Detokenize Report</div>
                   <div class="priv-ph-desc">LLM findings restored with real identifiers for analyst review &amp; action</div>
-                  <div class="priv-ph-detail" style="color:var(--green);background:rgba(16,185,129,0.06);">[[CLIENT_0x7A]] &rarr; Client ABC<br>[[USER_0x3F]] &rarr; john.doe<br>Human-readable report</div>
+                  <div class="priv-ph-detail" id="privPipe05" style="color:var(--green);background:rgba(16,185,129,0.06);">[[CLIENT_0x7A]] &rarr; Client ABC<br>[[USER_0x3F]] &rarr; john.doe<br>Human-readable report</div>
                   <div class="priv-ph-badge" style="color:var(--green);border-color:rgba(16,185,129,0.25);background:rgba(16,185,129,0.08);">RBAC + MFA</div>
                 </div>
               </div>
@@ -24260,7 +24263,7 @@ body.mode-production .prod-badge { display: flex; }
                   <div class="priv-ph-num num-purple">07</div>
                   <div class="priv-ph-title">L6 &mdash; Re-Tokenize Storage</div>
                   <div class="priv-ph-desc">Final report re-tokenized before audit trail storage &mdash; data at rest contains no PII</div>
-                  <div class="priv-ph-detail" style="color:var(--purple);background:rgba(139,92,246,0.06);">Data at rest = tokenized<br>Immutable audit trail</div>
+                  <div class="priv-ph-detail" id="privPipe07" style="color:var(--purple);background:rgba(139,92,246,0.06);">Data at rest = tokenized<br>Immutable audit trail</div>
                   <div class="priv-ph-badge" style="color:var(--purple);border-color:rgba(139,92,246,0.25);background:rgba(139,92,246,0.08);">Tamper-Proof</div>
                 </div>
               </div>

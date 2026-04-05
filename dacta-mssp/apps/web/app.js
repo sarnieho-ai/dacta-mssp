@@ -11723,6 +11723,8 @@ function initDashboardCharts() {
 //  PRIVACY ENGINE — Live Data Loading
 // ============================================================
 var _privDataLoaded = false;
+var _privSelectedOrg = 'all';
+var _privAllEvents = [];
 
 async function initPrivacyCharts() {
   if (_privDataLoaded) return;
@@ -11730,136 +11732,299 @@ async function initPrivacyCharts() {
   var sb = window._dactaSupabase || window._supabaseRef;
   if (!sb) { console.warn('[Privacy] SIEMLess DB not ready'); _privDataLoaded = false; return; }
 
-  // Load metrics, audit log, and policies in parallel
-  await Promise.all([
-    _loadPrivacyMetrics(sb),
-    loadPrivacyAuditLog(false),
-    _loadPrivacyPolicyCount(sb)
-  ]);
+  // Populate org selector from DB
+  try {
+    var orgRes = await sb.from('organizations').select('id,name,short_name').order('name');
+    var orgs = orgRes.data || [];
+    var sel = document.getElementById('privOrgSelector');
+    if (sel) {
+      sel.innerHTML = '<option value="all">All Organizations</option>';
+      orgs.forEach(function(o) {
+        var opt = document.createElement('option');
+        opt.value = o.name;
+        opt.textContent = o.name + (o.short_name ? ' (' + o.short_name + ')' : '');
+        sel.appendChild(opt);
+      });
+    }
+  } catch(e) { console.warn('[Privacy] Org load error:', e); }
+
+  // Load all privacy events once, then filter client-side
+  await _privLoadAllEvents(sb);
+  _privRenderForOrg(_privSelectedOrg);
+  _loadPrivacyPolicyCount(sb);
 }
 
-async function _loadPrivacyMetrics(sb) {
+async function _privLoadAllEvents(sb) {
   try {
-    // ── Compute metrics LIVE from audit_log privacy events ──
-    var todayStart = new Date(); todayStart.setHours(0,0,0,0);
-    var yesterdayStart = new Date(todayStart.getTime() - 86400000);
-    var todayISO = todayStart.toISOString();
-    var yesterdayISO = yesterdayStart.toISOString();
+    var res = await sb.from('audit_log').select('action,details,user_email,created_at,resource_type')
+      .eq('resource_type', 'copilot')
+      .order('created_at', { ascending: false })
+      .limit(1000);
+    _privAllEvents = res.data || [];
+    console.log('[Privacy] Loaded ' + _privAllEvents.length + ' privacy events from DB');
+  } catch(e) {
+    console.error('[Privacy] Event load error:', e);
+    _privAllEvents = [];
+  }
+}
 
-    // Fetch today's and yesterday's privacy events in parallel
-    var [todayRes, yesterdayRes] = await Promise.all([
-      sb.from('audit_log').select('action,details,created_at').like('action', 'privacy_%').gte('created_at', todayISO).order('created_at', { ascending: false }),
-      sb.from('audit_log').select('action,details,created_at').like('action', 'privacy_%').gte('created_at', yesterdayISO).lt('created_at', todayISO).order('created_at', { ascending: false })
-    ]);
+function _privSwitchOrg(orgName) {
+  _privSelectedOrg = orgName;
+  _privRenderForOrg(orgName);
+}
+window._privSwitchOrg = _privSwitchOrg;
 
-    var todayEvents = (todayRes.data || []);
-    var yesterdayEvents = (yesterdayRes.data || []);
+function _privFilterEvents(orgName) {
+  if (orgName === 'all') return _privAllEvents;
+  return _privAllEvents.filter(function(e) {
+    var d = e.details || {};
+    var evOrg = (d.org_name || d.client_name || '').toLowerCase();
+    return evOrg.indexOf(orgName.toLowerCase()) >= 0 || orgName.toLowerCase().indexOf(evOrg) >= 0;
+  });
+}
 
-    // Compute: Records Tokenized = sum of tokens_generated from tokenize + retokenize events
-    // Also count pii_tokens_redacted from LLM query events (copilot investigations)
-    function sumTokens(events) {
-      var total = 0;
-      events.forEach(function(e) {
-        if (e.action === 'privacy_tokenize' || e.action === 'privacy_retokenize') {
-          total += (e.details && e.details.tokens_generated) ? Number(e.details.tokens_generated) : 0;
-        } else if (e.action === 'privacy_llm_query') {
-          total += (e.details && e.details.pii_tokens_redacted) ? Number(e.details.pii_tokens_redacted) : 0;
-        }
-      });
-      return total;
-    }
-    var todayTokens = sumTokens(todayEvents);
-    var yesterdayTokens = sumTokens(yesterdayEvents);
+function _privRenderForOrg(orgName) {
+  var events = _privFilterEvents(orgName);
+  _privRenderMetrics(events, orgName);
+  _privRenderPipeline(events, orgName);
+  _privRenderAuditLog(events, orgName);
 
-    // Compute PII detection rate from category coverage in events
-    var totalCats = 0, detectedCats = 0;
-    todayEvents.forEach(function(e) {
-      if (e.details && e.details.categories_count) {
-        totalCats += Number(e.details.categories_count);
-        detectedCats += Number(e.details.categories_count); // all detected categories were tokenized
-      }
-    });
-    // PII detection rate: if we have events, calculate from successful tokenizations vs total events
-    var totalPrivEvents = todayEvents.length;
-    var successEvents = todayEvents.filter(function(e) { return !e.details || e.details.status !== 'FAILED'; }).length;
-    var piiRate = totalPrivEvents > 0 ? ((successEvents / totalPrivEvents) * 100).toFixed(1) : '99.5';
-    if (Number(piiRate) > 100) piiRate = '99.9';
+  // Update status text
+  var st = document.getElementById('privStatusText');
+  if (st) st.textContent = events.length + ' events · ' + (orgName === 'all' ? 'All Orgs' : orgName);
+}
 
-    // Compute average latency from tokenize/retokenize events only (not LLM query latency)
-    var latencies = [];
-    todayEvents.concat(yesterdayEvents).forEach(function(e) {
-      if (e.details && e.details.latency_ms && (e.action === 'privacy_tokenize' || e.action === 'privacy_retokenize' || e.action === 'privacy_detokenize')) {
-        latencies.push(Number(e.details.latency_ms));
-      }
-    });
-    var meanLatency = latencies.length > 0 ? (latencies.reduce(function(a,b){return a+b;},0) / latencies.length) : 23;
-    var sortedLat = latencies.slice().sort(function(a,b){return a-b;});
-    var p99Latency = sortedLat.length > 0 ? sortedLat[Math.floor(sortedLat.length * 0.99)] : Math.round(meanLatency * 2);
+function _privRenderMetrics(events, orgName) {
+  var todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  var yesterdayStart = new Date(todayStart.getTime() - 86400000);
 
-    // Compute category percentages from tokenize events
-    var catCounts = { client: 0, ip: 0, email: 0, other: 0 };
-    todayEvents.concat(yesterdayEvents).forEach(function(e) {
-      if (!e.details) return;
-      // Count by event details categories or by summary text
-      var s = (e.details.summary || '').toLowerCase();
+  var todayEvents = events.filter(function(e) { return new Date(e.created_at) >= todayStart; });
+  var yesterdayEvents = events.filter(function(e) { var d = new Date(e.created_at); return d >= yesterdayStart && d < todayStart; });
+
+  function sumTokens(evts) {
+    var total = 0;
+    evts.forEach(function(e) {
+      var d = e.details || {};
       if (e.action === 'privacy_tokenize' || e.action === 'privacy_retokenize') {
-        var toks = e.details.tokens_generated || 1;
-        // Distribute based on known category patterns
-        if (s.indexOf('client') >= 0 || s.indexOf('org') >= 0) catCounts.client += toks * 0.41;
-        if (s.indexOf('ip') >= 0 || s.indexOf('host') >= 0) catCounts.ip += toks * 0.33;
-        if (s.indexOf('email') >= 0) catCounts.email += toks * 0.17;
-        catCounts.other += toks * 0.09;
+        total += Number(d.tokens_generated || 0);
+      } else if (e.action === 'privacy_llm_query') {
+        total += Number(d.pii_tokens_redacted || 0);
       }
     });
-    var catTotal = catCounts.client + catCounts.ip + catCounts.email + catCounts.other;
-    var clientPct = catTotal > 0 ? (catCounts.client / catTotal * 100).toFixed(1) : '41.0';
-    var ipPct = catTotal > 0 ? (catCounts.ip / catTotal * 100).toFixed(1) : '33.0';
-    var emailPct = catTotal > 0 ? (catCounts.email / catTotal * 100).toFixed(1) : '17.0';
-    var otherPct = catTotal > 0 ? (100 - Number(clientPct) - Number(ipPct) - Number(emailPct)).toFixed(1) : '9.0';
+    return total;
+  }
+  var todayTokens = sumTokens(todayEvents);
+  var yesterdayTokens = sumTokens(yesterdayEvents);
+  var allTokens = sumTokens(events);
 
-    // ── Populate metric cards ──
-    var el;
-    el = document.getElementById('privMetricTokenized');
-    if (el) el.textContent = todayTokens.toLocaleString();
-    el = document.getElementById('privMetricTokenizedSub');
-    if (el) {
-      if (yesterdayTokens > 0) {
-        var pctChange = ((todayTokens - yesterdayTokens) / yesterdayTokens * 100).toFixed(0);
-        var arrow = pctChange >= 0 ? '\u2191' : '\u2193';
-        el.textContent = arrow + ' ' + Math.abs(pctChange) + '% from yesterday (' + yesterdayTokens.toLocaleString() + ')';
-      } else {
-        el.textContent = todayEvents.length + ' events today';
-      }
+  // PII detection rate
+  var totalPriv = todayEvents.length || events.length;
+  var successEvents = (todayEvents.length > 0 ? todayEvents : events).filter(function(e) { return !e.details || e.details.status !== 'FAILED'; }).length;
+  var piiRate = totalPriv > 0 ? ((successEvents / totalPriv) * 100).toFixed(1) : '99.5';
+  if (Number(piiRate) > 100) piiRate = '99.9';
+
+  // Latencies
+  var latencies = [];
+  events.forEach(function(e) {
+    var d = e.details || {};
+    if (d.latency_ms && (e.action === 'privacy_tokenize' || e.action === 'privacy_retokenize' || e.action === 'privacy_detokenize')) {
+      latencies.push(Number(d.latency_ms));
     }
+  });
+  var meanLat = latencies.length > 0 ? (latencies.reduce(function(a,b){return a+b;},0) / latencies.length) : 23;
+  var sorted = latencies.slice().sort(function(a,b){return a-b;});
+  var p99 = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.99)] : Math.round(meanLat * 2);
 
-    el = document.getElementById('privMetricPII');
-    if (el) el.textContent = piiRate + '%';
-    el = document.getElementById('privMetricPIISub');
-    if (el) el.textContent = Number(piiRate) >= 99.5 ? 'above 99.5% target' : totalPrivEvents + ' events processed';
+  // Category breakdown from tokenize events
+  var catCounts = { client: 0, ip: 0, email: 0, user: 0, phone: 0, other: 0 };
+  events.forEach(function(e) {
+    if (e.action !== 'privacy_tokenize') return;
+    var cats = (e.details || {}).categories || '';
+    // Parse "CLIENT:9, HOST:4, USER:4, PHONE:2, EMAIL:1"
+    cats.split(',').forEach(function(part) {
+      var p = part.trim().split(':');
+      if (p.length !== 2) return;
+      var cat = p[0].trim().toLowerCase();
+      var count = Number(p[1]) || 0;
+      if (cat === 'client' || cat === 'org') catCounts.client += count;
+      else if (cat === 'host' || cat === 'ip') catCounts.ip += count;
+      else if (cat === 'email') catCounts.email += count;
+      else if (cat === 'user') catCounts.user += count;
+      else if (cat === 'phone') catCounts.phone += count;
+      else catCounts.other += count;
+    });
+  });
+  var catTotal = catCounts.client + catCounts.ip + catCounts.email + catCounts.user + catCounts.phone + catCounts.other;
+  var clientPct = catTotal > 0 ? (catCounts.client / catTotal * 100).toFixed(1) : '41.0';
+  var ipPct = catTotal > 0 ? (catCounts.ip / catTotal * 100).toFixed(1) : '33.0';
+  var emailPct = catTotal > 0 ? ((catCounts.email + catCounts.user) / catTotal * 100).toFixed(1) : '17.0';
+  var otherPct = catTotal > 0 ? ((catCounts.phone + catCounts.other) / catTotal * 100).toFixed(1) : '9.0';
 
-    el = document.getElementById('privMetricLatency');
-    if (el) el.textContent = Math.round(meanLatency) + 'ms';
-    el = document.getElementById('privMetricLatencySub');
-    if (el) el.textContent = 'p99: ' + Math.round(p99Latency) + 'ms';
+  // Populate metric cards
+  var el;
+  var displayTokens = todayTokens > 0 ? todayTokens : allTokens;
+  el = document.getElementById('privMetricTokenized');
+  if (el) el.textContent = displayTokens.toLocaleString();
+  el = document.getElementById('privMetricTokenizedSub');
+  if (el) {
+    if (todayTokens > 0 && yesterdayTokens > 0) {
+      var pctChange = ((todayTokens - yesterdayTokens) / yesterdayTokens * 100).toFixed(0);
+      el.textContent = (pctChange >= 0 ? '\u2191' : '\u2193') + ' ' + Math.abs(pctChange) + '% vs yesterday';
+    } else {
+      el.textContent = events.length + ' total events' + (orgName !== 'all' ? ' for ' + orgName : '');
+    }
+  }
 
-    // ── Doughnut chart ──
-    var doughnutData = { client_name_pct: Number(clientPct), ip_host_pct: Number(ipPct), email_pct: Number(emailPct), other_pii_pct: Number(otherPct) };
-    _renderPrivacyDoughnut(doughnutData);
+  el = document.getElementById('privMetricPII');
+  if (el) el.textContent = piiRate + '%';
+  el = document.getElementById('privMetricPIISub');
+  if (el) el.textContent = Number(piiRate) >= 99.5 ? 'above 99.5% target' : totalPriv + ' events processed';
 
-    el = document.getElementById('privChartCenterVal');
-    if (el) el.textContent = todayTokens > 1000 ? (todayTokens / 1000).toFixed(1) + 'K' : todayTokens.toString();
-    el = document.getElementById('privLegClient');
-    if (el) el.textContent = 'Client Names (' + clientPct + '%)';
-    el = document.getElementById('privLegIP');
-    if (el) el.textContent = 'IP / Hostnames (' + ipPct + '%)';
-    el = document.getElementById('privLegEmail');
-    if (el) el.textContent = 'Email (' + emailPct + '%)';
-    el = document.getElementById('privLegOther');
-    if (el) el.textContent = 'Other PII (' + otherPct + '%)';
+  el = document.getElementById('privMetricLatency');
+  if (el) el.textContent = Math.round(meanLat) + 'ms';
+  el = document.getElementById('privMetricLatencySub');
+  if (el) el.textContent = 'p99: ' + Math.round(p99) + 'ms \u00b7 ' + latencies.length + ' samples';
 
-    console.log('[Privacy] Live metrics: ' + todayTokens + ' tokens today, ' + todayEvents.length + ' events, PII rate ' + piiRate + '%');
+  // Doughnut chart
+  _renderPrivacyDoughnut({ client_name_pct: Number(clientPct), ip_host_pct: Number(ipPct), email_pct: Number(emailPct), other_pii_pct: Number(otherPct) });
 
-  } catch(e) { console.error('[Privacy] Metrics load error:', e); }
+  el = document.getElementById('privChartCenterVal');
+  if (el) el.textContent = catTotal > 1000 ? (catTotal / 1000).toFixed(1) + 'K' : catTotal.toString();
+  el = document.getElementById('privLegClient');
+  if (el) el.textContent = 'Client Names (' + clientPct + '%)';
+  el = document.getElementById('privLegIP');
+  if (el) el.textContent = 'IP / Hostnames (' + ipPct + '%)';
+  el = document.getElementById('privLegEmail');
+  if (el) el.textContent = 'Email / Users (' + emailPct + '%)';
+  el = document.getElementById('privLegOther');
+  if (el) el.textContent = 'Phone / Other (' + otherPct + '%)';
+
+  console.log('[Privacy] Metrics: ' + displayTokens + ' tokens, ' + events.length + ' events, PII ' + piiRate + '% for ' + orgName);
+}
+
+function _privRenderPipeline(events, orgName) {
+  // Extract real values from the latest tokenize event for this org
+  var tokenizeEvent = events.find(function(e) { return e.action === 'privacy_tokenize' && e.details; });
+  var retokenizeEvent = events.find(function(e) { return e.action === 'privacy_retokenize' && e.details; });
+  var llmEvent = events.find(function(e) { return e.action === 'privacy_llm_query' && e.details; });
+
+  var orgDisplay = orgName === 'all' ? 'Dacta Global' : orgName;
+  var namespace = (tokenizeEvent && tokenizeEvent.details.namespace) || orgDisplay.toLowerCase().replace(/\s+/g, '');
+  var cats = (tokenizeEvent && tokenizeEvent.details.categories) || 'CLIENT:5, HOST:3, USER:2';
+  var tokenCount = (tokenizeEvent && tokenizeEvent.details.tokens_generated) || 12;
+  var latency = (tokenizeEvent && tokenizeEvent.details.latency_ms) || 16;
+  var querySnippet = (tokenizeEvent && tokenizeEvent.details.query_snippet) || 'Investigate alert for ' + orgDisplay;
+
+  // Parse categories into individual tokens
+  var catParts = cats.split(',').map(function(c) { return c.trim(); });
+  var tokenHex = function() { return Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase().padStart(4, '0'); };
+
+  // Build org-specific sample data
+  var sampleHost = namespace + '-dc01.local';
+  var sampleUser = 'analyst@' + namespace + '.sg';
+  var sampleIP = '10.' + Math.floor(Math.random()*254+1) + '.' + Math.floor(Math.random()*254+1) + '.' + Math.floor(Math.random()*254+1);
+
+  // Stage 1: Analyst Query
+  var el = document.getElementById('privPipe01');
+  if (el) el.innerHTML = 'host:' + _escHtml(sampleHost) + '<br>user:"' + _escHtml(sampleUser) + '"<br><span style="font-size:9px;opacity:0.6;">' + _escHtml(querySnippet.substring(0, 50)) + '</span>';
+
+  // Stage 2: SIEM Search
+  el = document.getElementById('privPipe02');
+  if (el) el.innerHTML = 'index:logs-*-' + _escHtml(namespace) + '-*<br>host:' + _escHtml(sampleHost) + '<br>&rarr; ' + tokenCount + ' fields matched';
+
+  // Stage 3: Tokenize
+  el = document.getElementById('privPipe03');
+  if (el) {
+    var tokLines = [];
+    catParts.forEach(function(cp) {
+      var p = cp.split(':');
+      if (p.length === 2) {
+        tokLines.push(p[0].trim() + ' &rarr; [[' + p[0].trim() + '_0x' + tokenHex() + ']]');
+      }
+    });
+    el.innerHTML = tokLines.slice(0, 3).join('<br>') + '<br><span style="font-size:9px;opacity:0.6;">' + tokenCount + ' tokens \u00b7 ' + latency + 'ms</span>';
+  }
+
+  // Stage 5: Detokenize
+  el = document.getElementById('privPipe05');
+  if (el) {
+    var detokLines = [];
+    catParts.forEach(function(cp) {
+      var p = cp.split(':');
+      if (p.length === 2) {
+        detokLines.push('[[' + p[0].trim() + '_0x' + tokenHex() + ']] &rarr; ' + p[0].trim().toLowerCase());
+      }
+    });
+    el.innerHTML = detokLines.slice(0, 3).join('<br>') + '<br><span style="font-size:9px;opacity:0.6;">Human-readable for ' + _escHtml(orgDisplay) + '</span>';
+  }
+
+  // Stage 7: Re-tokenize Storage
+  el = document.getElementById('privPipe07');
+  if (el) {
+    var reLat = retokenizeEvent ? retokenizeEvent.details.latency_ms : latency;
+    el.innerHTML = 'Data at rest = tokenized<br>Namespace: ' + _escHtml(namespace) + '<br><span style="font-size:9px;opacity:0.6;">Re-tokenized in ' + reLat + 'ms</span>';
+  }
+}
+
+function _privRenderAuditLog(events, orgName) {
+  var container = document.getElementById('privAuditLogBody');
+  var countEl = document.getElementById('privAuditCount');
+  if (!container) return;
+
+  var display = events.slice(0, 20);
+  if (countEl) countEl.textContent = display.length + ' of ' + events.length + ' events' + (orgName !== 'all' ? ' for ' + orgName : '');
+
+  if (display.length === 0) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">No privacy engine events' + (orgName !== 'all' ? ' for ' + orgName : '') + '.</div>';
+    return;
+  }
+
+  var html = '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+  html += '<thead><tr style="border-bottom:1px solid var(--border-subtle);">';
+  html += '<th style="padding:8px 12px;text-align:left;color:var(--text-muted);font-weight:600;font-size:10px;">TIMESTAMP</th>';
+  html += '<th style="padding:8px 12px;text-align:left;color:var(--text-muted);font-weight:600;font-size:10px;">ACTION</th>';
+  html += '<th style="padding:8px 12px;text-align:left;color:var(--text-muted);font-weight:600;font-size:10px;">ORG</th>';
+  html += '<th style="padding:8px 12px;text-align:left;color:var(--text-muted);font-weight:600;font-size:10px;">ANALYST</th>';
+  html += '<th style="padding:8px 12px;text-align:left;color:var(--text-muted);font-weight:600;font-size:10px;">DETAILS</th>';
+  html += '<th style="padding:8px 12px;text-align:right;color:var(--text-muted);font-weight:600;font-size:10px;">LATENCY</th>';
+  html += '</tr></thead><tbody>';
+
+  display.forEach(function(e) {
+    var d = e.details || {};
+    // Convert to user's local time
+    var ts = new Date(e.created_at);
+    var localStr = ts.toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }) + ' ' + ts.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
+
+    var actionLabel = (e.action || '').replace('privacy_', '').replace(/_/g, ' ');
+    var actionColor = e.action === 'privacy_tokenize' ? '#00d4ff' : e.action === 'privacy_retokenize' ? '#8b5cf6' : e.action === 'privacy_llm_query' ? '#f59e0b' : '#64748b';
+
+    var orgName2 = d.org_name || d.client_name || '—';
+    var analyst = (e.user_email || '').split('@')[0] || '—';
+    var summary = d.summary || d.event_label || '—';
+    var lat = d.latency_ms ? d.latency_ms + 'ms' : '—';
+
+    html += '<tr style="border-bottom:1px solid var(--border-subtle);transition:background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.02)\'" onmouseleave="this.style.background=\'transparent\'">';
+    html += '<td style="padding:8px 12px;color:var(--text-secondary);font-family:var(--font-mono);font-size:10px;white-space:nowrap;">' + localStr + '</td>';
+    html += '<td style="padding:8px 12px;"><span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;background:' + actionColor + '18;color:' + actionColor + ';border:1px solid ' + actionColor + '30;text-transform:uppercase;letter-spacing:0.05em;">' + actionLabel + '</span></td>';
+    html += '<td style="padding:8px 12px;color:var(--text-primary);font-size:11px;">' + _escHtml(orgName2) + '</td>';
+    html += '<td style="padding:8px 12px;color:var(--text-secondary);font-size:11px;">' + _escHtml(analyst) + '</td>';
+    html += '<td style="padding:8px 12px;color:var(--text-muted);font-size:10px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _escHtml(summary.substring(0, 80)) + '</td>';
+    html += '<td style="padding:8px 12px;text-align:right;color:var(--text-muted);font-family:var(--font-mono);font-size:10px;">' + lat + '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+// Keep backward compat
+async function loadPrivacyAuditLog(showToastMsg) {
+  if (showToastMsg) showToast('Refreshing privacy data...', 'info');
+  var sb = window._dactaSupabase || window._supabaseRef;
+  if (!sb) return;
+  await _privLoadAllEvents(sb);
+  _privRenderForOrg(_privSelectedOrg);
+  if (showToastMsg) showToast('Privacy data refreshed', 'success');
 }
 
 function _renderPrivacyDoughnut(m) {
@@ -11869,7 +12034,7 @@ function _renderPrivacyDoughnut(m) {
   charts.privToken = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: ['Client Names', 'IP / Hostnames', 'Email Addresses', 'Other PII'],
+      labels: ['Client Names', 'IP / Hostnames', 'Email / Users', 'Phone / Other'],
       datasets: [{
         data: [m.client_name_pct, m.ip_host_pct, m.email_pct, m.other_pii_pct],
         backgroundColor: ['rgba(0,212,255,0.7)', 'rgba(139,92,246,0.7)', 'rgba(245,158,11,0.7)', 'rgba(16,185,129,0.7)'],
@@ -11908,60 +12073,6 @@ async function _loadPrivacyPolicyCount(sb) {
   } catch(e) { console.error('[Privacy] Policy count error:', e); }
 }
 
-async function loadPrivacyAuditLog(showToastMsg) {
-  var sb = window._dactaSupabase || window._supabaseRef;
-  if (!sb) return;
-  if (showToastMsg) showToast('Refreshing audit log...', 'info');
-  try {
-    var res = await sb.from('audit_log').select('*').like('action', 'privacy_%').order('created_at', { ascending: false }).limit(15);
-    if (!res.data) return;
-    var entries = res.data;
-    var container = document.getElementById('privAuditLogBody');
-    var countEl = document.getElementById('privAuditCount');
-    if (countEl) countEl.textContent = entries.length + ' recent events';
-    if (!container) return;
-
-    if (entries.length === 0) {
-      container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">No privacy engine events recorded yet.</div>';
-      return;
-    }
-
-    var html = '';
-    entries.forEach(function(e, idx) {
-      var d = e.details || {};
-      var ts = new Date(e.created_at);
-      var tsStr = ts.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
-      var typeClass = 'tok';
-      var typeLabel = d.event_label || 'Event';
-      if (e.action === 'privacy_detokenize') typeClass = 'detok';
-      else if (e.action === 'privacy_llm_query') typeClass = 'query';
-      else if (e.action === 'privacy_retokenize') typeClass = 'retok';
-
-      var metaLine = '';
-      if (d.analyst) metaLine += 'Analyst: ' + d.analyst;
-      if (d.policy) metaLine += (metaLine ? ' \u00b7 ' : '') + 'Policy: ' + d.policy;
-      if (d.pipeline) metaLine += (metaLine ? ' \u00b7 ' : '') + 'Pipeline: ' + d.pipeline;
-      if (d.role) metaLine += (metaLine ? ' \u00b7 ' : '') + 'Role: ' + d.role;
-      if (d.mfa_passed) metaLine += ' \u00b7 MFA: \u2713 passed';
-      if (d.models) metaLine += (metaLine ? ' \u00b7 ' : '') + 'Models: ' + d.models;
-
-      var borderStyle = idx === entries.length - 1 ? 'border-bottom:none;' : '';
-      html += '<div class="priv-audit-item" style="' + borderStyle + '">';
-      html += '<div class="priv-audit-ts">' + tsStr + '</div>';
-      html += '<div class="priv-audit-type ' + typeClass + '">' + typeLabel + '</div>';
-      html += '<div class="priv-audit-body">';
-      html += '<div class="priv-audit-main">' + (d.summary || 'Privacy engine event') + '</div>';
-      if (metaLine) html += '<div class="priv-audit-meta">' + metaLine + '</div>';
-      html += '</div>';
-      html += '<div class="priv-audit-status">SUCCESS</div>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-    if (showToastMsg) showToast('Audit log refreshed', 'success');
-  } catch(e) { console.error('[Privacy] Audit log error:', e); }
-}
-
-// ── Privacy Policies Modal ──
 function openPrivacyPoliciesModal() {
   var modal = document.getElementById('privacyPoliciesModal');
   if (!modal) return;
@@ -22246,6 +22357,8 @@ function showToast(message, type) {
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function _escHtml(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
 // Decode HTML entities (&#91; → [, &#93; → ], &amp; → &, etc.)
 function decodeHtmlEntities(s) {
   return s.replace(/&#(\d+);/g, function(m, n) { return String.fromCharCode(parseInt(n)); })
