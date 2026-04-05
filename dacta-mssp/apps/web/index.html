@@ -22050,6 +22050,25 @@ function getThemeTickColor() {
 .tip-ioc-filter-btn.active-domain { border-color: rgba(0,212,255,0.35); background: rgba(0,212,255,0.1); color: #00d4ff; }
 .tip-ioc-filter-btn.active-hash { border-color: rgba(167,139,250,0.35); background: rgba(167,139,250,0.1); color: #a78bfa; }
 .tip-ioc-filter-btn.active-url { border-color: rgba(234,179,8,0.35); background: rgba(234,179,8,0.1); color: #eab308; }
+/* IOC filter pills */
+.tip-ioc-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: #64748b;
+  transition: all 0.15s;
+  outline: none;
+  white-space: nowrap;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+.tip-ioc-filter-pill:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); color: #94a3b8; }
+.tip-ioc-filter-pill.active { background: rgba(0,212,255,0.08); border-color: rgba(0,212,255,0.25); color: #00d4ff; }
 .tip-ioc-filter-count {
   display: inline-flex;
   align-items: center;
@@ -22274,6 +22293,7 @@ function getThemeTickColor() {
   letter-spacing: 0.01em;
 }
 .tip-ioc-actor { font-size: 11px; color: #64748b; white-space: nowrap; }
+.tip-ioc-age { font-size: 9px; color: rgba(148,163,184,0.6); margin-left: auto; white-space: nowrap; }
 
 .tip-vt-score {
   font-family: 'IBM Plex Mono', monospace;
@@ -22585,8 +22605,21 @@ function getThemeTickColor() {
 .tip-prio-low      { background: rgba(16,185,129,0.09);  border: 1px solid rgba(16,185,129,0.2);   color: #10b981; }
 
 /* ---- Actor Cards ---- */
-.tip-actor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
-@media (max-width: 850px) { .tip-actor-grid { grid-template-columns: 1fr; } }
+.tip-actor-grid { display: flex; flex-direction: column; gap: 2px; }
+.tip-actors-grid { display: flex; flex-direction: column; gap: 2px; }
+.tip-actor-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: rgba(13,20,38,0.7);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  flex-wrap: wrap;
+}
+.tip-actor-row:hover { border-color: rgba(255,255,255,0.12); background: rgba(17,24,39,0.85); }
 
 .tip-actor-card {
   background: rgba(13,20,38,0.8);
@@ -23762,16 +23795,16 @@ body.mode-production .prod-badge { display: flex; }
 
       <!-- Right: Sightings + Hunt Hypotheses -->
       <div>
-        <!-- Sightings -->
-        <div class="tip-panel" style="margin-bottom:16px;">
+        <!-- Pyramid of Pain -->
+        <div class="tip-panel" style="margin-bottom:16px;" id="tip-sightings-panel">
           <div class="tip-panel-header">
             <div class="tip-panel-title">
-              <span class="tip-panel-title-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
-              Recent Sightings
+              <span class="tip-panel-title-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 20 2 20"/></svg></span>
+              Pyramid of Pain
             </div>
           </div>
-          <div class="tip-panel-scroll" id="tip-sightings-body" style="max-height:250px;">
-            <div class="tip-empty-state">No sightings recorded yet</div>
+          <div id="tip-pyramid-body" style="padding:12px 14px 14px;">
+            <div class="tip-empty-state">Loading...</div>
           </div>
         </div>
 
@@ -24039,6 +24072,7 @@ function _tipApplyOrgFilter(orgKey) {
   if (orgKey === 'all') {
     // Show everything
     renderIOCFeed(data.indicators || []);
+    renderPyramidOfPain();
     renderHuntHypotheses(data.indicators || []);
     renderActorGrid(data.actors || []);
     var allReports = (data.reports || []).concat(data.csReports || []);
@@ -24105,6 +24139,7 @@ function _tipApplyOrgFilter(orgKey) {
 
   // Render filtered data
   renderIOCFeed(indicators);
+  renderPyramidOfPain();
   renderHuntHypotheses(indicators);
   renderActorGrid(actors);
   renderReportsList(filteredReports);
@@ -24277,6 +24312,7 @@ function renderIOCFeed(indicators) {
     html += '      <span class="tip-conf-val">' + score + '%</span>';
     html += '    </div>';
     html += '    <span class="tip-ioc-actor" style="font-size:10px;color:#64748b;">' + _escHtml(source) + '</span>';
+    html += '    <span class="tip-ioc-age">' + _timeAgo(ind.created_at || ind.valid_from) + '</span>';
     html += '    <div class="tip-ioc-actions">';
     html += '      <button class="tip-btn tip-btn-success tip-btn-xs" onclick="event.stopPropagation();tipApproveIoc(\'' + cardId + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Approve</button>';
     html += '      <button class="tip-btn tip-btn-danger tip-btn-xs" onclick="event.stopPropagation();tipRejectIoc(\'' + cardId + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Reject</button>';
@@ -24421,64 +24457,64 @@ function renderActorGrid(actors) {
       motivations = [a.primary_motivation];
     }
     var actorId = 'tip-actor-' + i;
+    var sourceBadgeClass = source === 'CrowdStrike' ? 'tip-tag-high' : 'tip-tag-sector';
 
-    html += '<div class="tip-actor-card" onclick="tipToggleActor(\'' + actorId + '\')">';
-    html += '  <div class="tip-actor-header">';
-    html += '    <div style="width:40px;height:40px;border-radius:8px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
-    html += '      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>';
-    html += '    </div>';
-    html += '    <div class="tip-actor-name-wrap">';
-    html += '      <div class="tip-actor-name">' + _escHtml(name) + '</div>';
+    // Row header (always visible)
+    html += '<div class="tip-actor-row" onclick="tipToggleActor(\'' + actorId + '\')">';
+    html += '  <span class="tip-actor-name" style="font-size:13px;font-weight:700;color:#e8edf5;white-space:nowrap;">' + _escHtml(name) + '</span>';
     if (aliasStr) {
-      html += '      <div class="tip-actor-alias">aka ' + _escHtml(aliasStr) + '</div>';
+      html += '  <span class="tip-actor-alias" style="font-size:10px;color:#64748b;white-space:nowrap;">aka ' + _escHtml(aliasStr) + '</span>';
     }
-    html += '    </div>';
     if (origin) {
-      html += '    <div class="tip-actor-origin">' + _escHtml(origin) + '</div>';
+      html += '  <span style="font-size:10px;color:#94a3b8;white-space:nowrap;margin-left:4px;">' + _escHtml(origin) + '</span>';
     }
-    html += '    <span class="tip-tag tip-tag-sector" style="font-size:9px;">' + _escHtml(source) + '</span>';
-    html += '  </div>';
-    // Expandable body
-    html += '  <div class="tip-actor-body" id="' + actorId + '-body">';
-    html += '    <div class="tip-actor-expand">';
+    html += '  <span class="tip-tag ' + sourceBadgeClass + '" style="font-size:9px;margin-left:auto;flex-shrink:0;">' + _escHtml(source) + '</span>';
+    if (motivations.length > 0) {
+      for (var mi = 0; mi < Math.min(motivations.length, 3); mi++) {
+        html += '  <span class="tip-sector-tag" style="font-size:9px;flex-shrink:0;">' + _escHtml(motivations[mi]) + '</span>';
+      }
+    }
+    html += '</div>';
+    // Expandable body (detail panel)
+    html += '<div class="tip-actor-body" id="' + actorId + '-body" style="padding:12px 14px 14px;background:rgba(8,13,26,0.6);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 8px 8px;margin-top:-2px;">';
+    html += '  <div class="tip-actor-expand">';
     if (desc) {
-      html += '      <div style="font-size:12px;color:#94a3b8;line-height:1.6;margin-bottom:12px;">' + _escHtml(_truncate(desc, 500)) + '</div>';
+      html += '    <div style="font-size:12px;color:#94a3b8;line-height:1.6;margin-bottom:12px;">' + _escHtml(_truncate(desc, 500)) + '</div>';
     }
-    html += '      <div class="tip-actor-stats">';
+    html += '    <div class="tip-actor-stats">';
     if (firstActive) {
-      html += '        <div class="tip-stat-item"><div class="tip-stat-label">First Seen</div><div class="tip-stat-val" style="font-size:12px;">' + _formatDate(firstActive) + '</div></div>';
+      html += '      <div class="tip-stat-item"><div class="tip-stat-label">First Seen</div><div class="tip-stat-val" style="font-size:12px;">' + _formatDate(firstActive) + '</div></div>';
     }
     if (lastActive) {
-      html += '        <div class="tip-stat-item"><div class="tip-stat-label">Last Active</div><div class="tip-stat-val cyan" style="font-size:12px;">' + _formatDate(lastActive) + '</div></div>';
-    }
-    html += '      </div>';
-    if (motivations.length > 0) {
-      html += '      <div class="tip-actor-section-label">Motivations</div>';
-      html += '      <div class="tip-sector-tags">';
-      for (var m = 0; m < motivations.length; m++) {
-        html += '        <span class="tip-sector-tag">' + _escHtml(motivations[m]) + '</span>';
-      }
-      html += '      </div>';
-    }
-    if (a.target_industries && a.target_industries.length > 0) {
-      html += '      <div class="tip-actor-section-label">Target Industries</div>';
-      html += '      <div class="tip-sector-tags">';
-      for (var ti = 0; ti < Math.min(a.target_industries.length, 6); ti++) {
-        var indVal = a.target_industries[ti].value || a.target_industries[ti];
-        html += '        <span class="tip-sector-tag">' + _escHtml(indVal) + '</span>';
-      }
-      html += '      </div>';
-    }
-    if (a.target_countries && a.target_countries.length > 0) {
-      html += '      <div class="tip-actor-section-label">Target Countries</div>';
-      html += '      <div class="tip-sector-tags">';
-      for (var tc = 0; tc < Math.min(a.target_countries.length, 8); tc++) {
-        var cVal = a.target_countries[tc].value || a.target_countries[tc];
-        html += '        <span class="tip-sector-tag">' + _escHtml(cVal) + '</span>';
-      }
-      html += '      </div>';
+      html += '      <div class="tip-stat-item"><div class="tip-stat-label">Last Active</div><div class="tip-stat-val cyan" style="font-size:12px;">' + _formatDate(lastActive) + '</div></div>';
     }
     html += '    </div>';
+    if (motivations.length > 0) {
+      html += '    <div class="tip-actor-section-label">Motivations</div>';
+      html += '    <div class="tip-sector-tags">';
+      for (var m = 0; m < motivations.length; m++) {
+        html += '      <span class="tip-sector-tag">' + _escHtml(motivations[m]) + '</span>';
+      }
+      html += '    </div>';
+    }
+    if (a.target_industries && a.target_industries.length > 0) {
+      html += '    <div class="tip-actor-section-label">Target Industries</div>';
+      html += '    <div class="tip-sector-tags">';
+      for (var ti = 0; ti < Math.min(a.target_industries.length, 6); ti++) {
+        var indVal = a.target_industries[ti].value || a.target_industries[ti];
+        html += '      <span class="tip-sector-tag">' + _escHtml(indVal) + '</span>';
+      }
+      html += '    </div>';
+    }
+    if (a.target_countries && a.target_countries.length > 0) {
+      html += '    <div class="tip-actor-section-label">Target Countries</div>';
+      html += '    <div class="tip-sector-tags">';
+      for (var tc = 0; tc < Math.min(a.target_countries.length, 8); tc++) {
+        var cVal = a.target_countries[tc].value || a.target_countries[tc];
+        html += '      <span class="tip-sector-tag">' + _escHtml(cVal) + '</span>';
+      }
+      html += '    </div>';
+    }
     html += '  </div>';
     html += '</div>';
   }
@@ -24902,6 +24938,51 @@ function tipShowReportDetail(idx) {
 window.tipShowReportDetail = tipShowReportDetail;
 
 /* =============================================
+   PYRAMID OF PAIN
+   ============================================= */
+function renderPyramidOfPain() {
+  var container = _el('tip-pyramid-body');
+  if (!container) return;
+  var indicators = (window._tipLiveData && window._tipLiveData.indicators) || [];
+
+  // Count by type
+  var counts = { ip: 0, domain: 0, hash: 0, url: 0, artifact: 0, tool: 0, ttp: 0 };
+  for (var i = 0; i < indicators.length; i++) {
+    var ind = indicators[i];
+    var t = _parseIocType(ind.pattern).toLowerCase();
+    if (t === 'ip') counts.ip++;
+    else if (t === 'domain' || t === 'url') counts.domain++;
+    else if (t === 'hash' || t === 'file') counts.hash++;
+    else counts.artifact++;
+  }
+
+  var total = indicators.length || 1;
+  var levels = [
+    { label: 'TTPs', difficulty: 'Tough!',      color: '#ef4444', count: counts.ttp,      minPct: 8 },
+    { label: 'Tools', difficulty: 'Challenging', color: '#f97316', count: counts.tool,     minPct: 16 },
+    { label: 'Network/Host Artifacts', difficulty: 'Annoying', color: '#eab308', count: counts.artifact, minPct: 30 },
+    { label: 'Domain Names', difficulty: 'Simple',  color: '#f59e0b', count: counts.domain,   minPct: 50 },
+    { label: 'IP Addresses', difficulty: 'Easy',    color: '#06b6d4', count: counts.ip,       minPct: 72 },
+    { label: 'Hash Values',  difficulty: 'Trivial', color: '#64748b', count: counts.hash,     minPct: 100 }
+  ];
+
+  var html = '<div style="display:flex;flex-direction:column;gap:3px;align-items:center;">';
+  for (var k = 0; k < levels.length; k++) {
+    var lv = levels[k];
+    var barPct = lv.minPct;
+    html += '<div style="width:' + barPct + '%;background:' + lv.color + '1a;border:1px solid ' + lv.color + '44;border-radius:5px;padding:5px 10px;display:flex;align-items:center;justify-content:space-between;min-width:120px;transition:width 0.3s;">';
+    html += '<span style="font-size:10px;font-weight:600;color:' + lv.color + ';white-space:nowrap;">' + _escHtml(lv.label) + '</span>';
+    html += '<span style="font-size:9px;color:rgba(148,163,184,0.7);white-space:nowrap;margin-left:6px;">' + lv.difficulty + ' &mdash; ' + lv.count + '</span>';
+    html += '</div>';
+  }
+  html += '</div>';
+  html += '<div style="font-size:9px;color:#475569;text-align:center;margin-top:8px;">Hardest to detect at top &uarr;&nbsp; Easiest at bottom &darr;</div>';
+
+  container.innerHTML = html;
+}
+window.renderPyramidOfPain = renderPyramidOfPain;
+
+/* =============================================
    HUNT HYPOTHESES (from indicators)
    ============================================= */
 function renderHuntHypotheses(indicators) {
@@ -25164,6 +25245,7 @@ function loadThreatIntelLive() {
     // ── Render all tabs ──
     console.log('[TIP] Rendering IOC feed (' + allIndicators.length + ' indicators from ' + (tipOnline ? 'DACTA TIP' : '') + (tipOnline && csOnline ? ' + ' : '') + (csOnline ? 'CrowdStrike' : '') + ')');
     renderIOCFeed(allIndicators);
+    renderPyramidOfPain();
 
     console.log('[TIP] Rendering hunt hypotheses');
     renderHuntHypotheses(allIndicators);
