@@ -25456,31 +25456,55 @@ function renderHuntHypotheses(indicators, actors, orgData, orgKey) {
 function _buildIOCSummary(indicators) {
   var typeCounts = {};
   var samples = {};
+  var highScore = [];
   for (var i = 0; i < indicators.length; i++) {
-    var type = _parseIocType(indicators[i].pattern || '').toLowerCase();
+    var ind = indicators[i];
+    var type = _parseIocType(ind.pattern || '').toLowerCase();
     typeCounts[type] = (typeCounts[type] || 0) + 1;
-    if (!samples[type] || samples[type].length < 3) {
-      if (!samples[type]) samples[type] = [];
-      var v = _parseIocValue(indicators[i]);
-      if (v) samples[type].push(v.substring(0, 60));
+    if (!samples[type]) samples[type] = [];
+    if (samples[type].length < 5) {
+      var v = _parseIocValue(ind);
+      var score = ind.x_opencti_score || 0;
+      var src = (ind.createdBy && ind.createdBy.name) || '';
+      if (v) samples[type].push(v.substring(0, 80) + (score ? ' (score:' + score + ')' : '') + (src ? ' [' + src + ']' : ''));
+    }
+    // Track highest-scoring IOCs across all types
+    if ((ind.x_opencti_score || 0) >= 70 && highScore.length < 5) {
+      highScore.push(_parseIocValue(ind).substring(0, 60) + ' (' + type + ', score:' + ind.x_opencti_score + ')');
     }
   }
   var lines = [];
   var types = Object.keys(typeCounts);
   for (var t = 0; t < types.length; t++) {
-    lines.push('- ' + types[t].toUpperCase() + ': ' + typeCounts[types[t]] + ' indicators (e.g. ' + (samples[types[t]] || []).join(', ') + ')');
+    lines.push('- ' + types[t].toUpperCase() + ': ' + typeCounts[types[t]] + ' indicators');
+    for (var s = 0; s < samples[types[t]].length; s++) {
+      lines.push('    ' + samples[types[t]][s]);
+    }
   }
+  if (highScore.length > 0) {
+    lines.push('\nHIGH-PRIORITY IOCs (score >= 70):');
+    for (var h = 0; h < highScore.length; h++) lines.push('  * ' + highScore[h]);
+  }
+  lines.push('\nTotal: ' + indicators.length + ' indicators across ' + types.length + ' IOC types');
   return lines.join('\n') || 'No IOCs available';
 }
 
 function _buildActorSummary(actors) {
   if (!actors || actors.length === 0) return 'No specific threat actors identified for this org.';
   var lines = [];
-  for (var i = 0; i < Math.min(actors.length, 8); i++) {
+  for (var i = 0; i < Math.min(actors.length, 10); i++) {
     var a = actors[i];
-    var industries = (a.target_industries || []).map(function(x) { return x.value || x; }).slice(0, 4).join(', ');
+    var industries = (a.target_industries || []).map(function(x) { return x.value || x; }).slice(0, 5).join(', ');
+    var countries = (a.target_countries || []).map(function(x) { return x.value || x; }).slice(0, 4).join(', ');
     var motivation = a.primary_motivation || (a.motivations || []).slice(0, 2).join(', ') || 'unknown';
-    lines.push('- ' + (a.name || 'Unknown') + ' [' + (a._source || 'Intel') + '] — targets: ' + (industries || 'unspecified') + ', motivation: ' + motivation);
+    var desc = (a.short_description || a.description || '').substring(0, 200);
+    var origin = a.origin || '';
+    lines.push('- ' + (a.name || 'Unknown') + ' [' + (a._source || 'Intel') + ']');
+    if (origin) lines.push('  Origin: ' + origin);
+    if (industries) lines.push('  Targets: ' + industries);
+    if (countries) lines.push('  Countries: ' + countries);
+    lines.push('  Motivation: ' + motivation);
+    if (desc) lines.push('  Intel: ' + desc);
   }
   return lines.join('\n');
 }

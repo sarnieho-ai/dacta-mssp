@@ -27,20 +27,36 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'ioc_summary is required' });
     }
 
+    // Calculate optimal hypothesis count based on data richness
+    const iocLines = (ioc_summary || '').split('\n').filter(l => l.trim().startsWith('-'));
+    const actorLines = (actor_summary || '').split('\n').filter(l => l.trim().startsWith('-'));
+    const iocTypeCount = iocLines.length;
+    const actorCount = actorLines.length;
+    // More IOC types + actors = more hypotheses. Range: 2-8
+    const hypCount = Math.max(2, Math.min(8, iocTypeCount + Math.ceil(actorCount / 2) + 1));
+
     const systemPrompt = `You are an expert SOC threat hunter generating actionable hunt hypotheses for a specific organization.
-You will be given live IOC data and threat actor intelligence. Generate 3-5 hunt hypotheses that are SPECIFIC to this organization's industry and threat landscape.
-Each hypothesis must include a concrete Elastic/SIEM query (ECS field names) that a SOC analyst can copy-paste.
-Focus on the intersection of the IOCs, the actors targeting this sector, and the org's unique attack surface.
+You will be given live IOC data and threat actor intelligence.
+
+Generate EXACTLY ${hypCount} hunt hypotheses. Each must be UNIQUE and SPECIFIC to this organization's industry, attack surface, and the actual IOC data provided.
+
+Rules:
+- NEVER repeat the same MITRE technique or attack pattern across hypotheses
+- Each hypothesis MUST reference a DIFFERENT specific IOC from the data
+- Vary severity levels — not everything is critical
+- If threat actors are provided, at least half the hypotheses must tie to specific actor TTPs
+- Hypotheses should cover different stages of the kill chain (initial access, execution, persistence, lateral movement, exfiltration, C2)
+- Each SIEM query must be distinct and use different ECS fields
 
 RESPOND ONLY WITH A VALID JSON ARRAY — no markdown, no backticks, no explanation outside the JSON.
 Schema: [{"title": "string", "severity": "critical|high|medium", "mitre": "TXXXX.XXX — Technique Name", "description": "2-3 sentences explaining what to hunt for and why it matters for THIS org specifically", "ioc": "specific IOC value or pattern from the data", "siem_query": "Elastic/ECS query syntax", "hunt_scope": "which log sources to check"}]
 
-Guidelines:
-- For gaming/hospitality: focus on POS malware, payment systems, guest data exfiltration, casino management systems, lateral movement through hotel networks
-- For financial services: focus on SWIFT/payment fraud, ATM jackpotting, account takeover, insider trading data theft, supply chain attacks on banking infra
-- For professional services: focus on client data exfiltration, legal privilege exploitation, M&A data theft, email compromise targeting advisory clients
+Sector-specific attack surfaces:
+- Gaming/hospitality: POS systems, payment card data, guest PII, casino management, hotel network segmentation, loyalty program databases, surveillance systems
+- Financial services: SWIFT messaging, core banking, ATM networks, trading platforms, wire transfer systems, regulatory data, customer PII
+- Professional services: client privileged data, M&A documents, email compromise, document management, partner trust relationships
 - Each hypothesis must reference actual IOC values from the provided data
-- SIEM queries must use ECS field names (process.name, destination.ip, url.domain, file.hash.*, dns.question.name, etc.)`;
+- SIEM queries must use ECS field names (process.name, destination.ip, url.domain, file.hash.*, dns.question.name, event.action, etc.)`;
 
     const userContent = `Organization: ${org_name || 'Unknown'}
 Sector: ${sector || 'Multi-Sector'}
@@ -60,7 +76,7 @@ ${actor_summary || 'No specific threat actors identified for this org.'}`;
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
+        max_tokens: 3500,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }]
       })
