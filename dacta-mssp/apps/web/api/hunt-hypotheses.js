@@ -11,9 +11,9 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  // Auth check
-  const authError = await requireAuth(req, res);
-  if (authError) return;
+  // Auth check — requireAuth returns user on success, null on failure (sends 401)
+  const user = await requireAuth(req, res);
+  if (!user) return;
 
   if (!ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
