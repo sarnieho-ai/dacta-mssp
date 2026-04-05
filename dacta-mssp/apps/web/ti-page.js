@@ -43,7 +43,7 @@ var CLIENT_DATA = {
   if (!sb) { setTimeout(_tipLoadOrgsFromDB, 1000); return; }
   sb.from('organizations').select('name,short_name,industry,region,risk_level,service_model').order('name').then(function(res) {
     if (!res.data) return;
-    var sel = document.getElementById('tipOrgSelector');
+    var sel = document.getElementById('tip-client-selector');
     res.data.forEach(function(org) {
       var key = (org.short_name || org.name.substring(0, 4)).toLowerCase();
       var industry = org.industry || 'Technology';

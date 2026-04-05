@@ -23781,11 +23781,7 @@ body.mode-production .prod-badge { display: flex; }
   <div class="tip-client-select-wrap">
     <select class="tip-client-select" id="tip-client-selector" onchange="tipUpdateClientContext(this.value)">
       <option value="all">All Clients</option>
-      <option value="dacta" selected>Dacta Global</option>
-      <option value="spmt">SPMT</option>
-      <option value="gac">Global Advisor Co</option>
-      <option value="naga">Naga World</option>
-      <option value="adv">ADV Partners</option>
+      <!-- Populated dynamically from organizations DB -->
     </select>
     <span class="tip-client-select-icon">&#9662;</span>
   </div>
@@ -23793,8 +23789,8 @@ body.mode-production .prod-badge { display: flex; }
 
   <!-- Context Tags -->
   <div class="tip-ctx-tags" id="tip-ctx-tags">
-    <span class="tip-tag tip-tag-sector" id="tip-ctx-sector">Financial Services</span>
-    <span class="tip-tag tip-tag-region" id="tip-ctx-region">APAC &middot; Singapore</span>
+    <span class="tip-tag tip-tag-sector" id="tip-ctx-sector">Multi-Sector</span>
+    <span class="tip-tag tip-tag-region" id="tip-ctx-region">APAC</span>
     <span class="tip-tag tip-tag-high" id="tip-ctx-risk">HIGH</span>
   </div>
   <div class="tip-divider-v"></div>
