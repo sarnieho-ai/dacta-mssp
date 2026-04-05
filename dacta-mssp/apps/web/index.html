@@ -23661,6 +23661,7 @@ var CLIENT_DATA = {
 function tipUpdateClientContext(val) {
   var d = CLIENT_DATA[val];
   if (!d) return;
+  window._tipSelectedOrg = val;
   var sectorEl = document.getElementById('tip-ctx-sector');
   var regionEl = document.getElementById('tip-ctx-region');
   var riskEl = document.getElementById('tip-ctx-risk');
@@ -23670,8 +23671,110 @@ function tipUpdateClientContext(val) {
     riskEl.textContent = d.risk;
     riskEl.className = 'tip-tag ' + d.riskClass;
   }
+  // Re-render all tabs with filtered data
+  _tipApplyOrgFilter(val);
 }
 window.tipUpdateClientContext = tipUpdateClientContext;
+
+// Sector-to-keyword mapping for relevance filtering
+var _TIP_SECTOR_KEYWORDS = {
+  'Financial Services':    ['financial', 'banking', 'payment', 'swift', 'fin', 'credit', 'atm', 'pos', 'fraud'],
+  'Hospitality / Gaming':  ['hospitality', 'hotel', 'casino', 'gaming', 'pos', 'tourism', 'entertainment'],
+  'Professional Services': ['professional', 'consulting', 'legal', 'audit', 'advisory'],
+  'Multi-Sector':          []  // shows everything
+};
+var _TIP_REGION_KEYWORDS = {
+  'APAC \u00b7 Singapore': ['singapore', 'sg', 'apac', 'asia', 'southeast'],
+  'APAC \u00b7 Australia': ['australia', 'au', 'apac', 'oceania'],
+  'SEA \u00b7 Cambodia':   ['cambodia', 'kh', 'sea', 'southeast', 'asia']
+};
+
+function _tipApplyOrgFilter(orgKey) {
+  var data = window._tipLiveData;
+  if (!data) return;
+  var d = CLIENT_DATA[orgKey];
+  if (!d) return;
+
+  if (orgKey === 'all') {
+    // Show everything
+    renderIOCFeed(data.indicators || []);
+    renderHuntHypotheses(data.indicators || []);
+    renderActorGrid(data.actors || []);
+    var allReports = (data.reports || []).concat(data.csReports || []);
+    renderReportsList(allReports);
+    // Update counters
+    var cIocs = _el('tip-count-iocs'); if (cIocs) cIocs.textContent = (data.indicators || []).length;
+    var cActors = _el('tip-count-actors'); if (cActors) cActors.textContent = (data.actors || []).length;
+    var cReports = _el('tip-count-reports'); if (cReports) cReports.textContent = allReports.length;
+    return;
+  }
+
+  // Build relevance keywords from sector + region
+  var sectorKW = (_TIP_SECTOR_KEYWORDS[d.sector] || []).map(function(k) { return k.toLowerCase(); });
+  var regionKW = (_TIP_REGION_KEYWORDS[d.region] || []).map(function(k) { return k.toLowerCase(); });
+  var allKW = sectorKW.concat(regionKW).concat([d.name.toLowerCase()]);
+
+  // Helper: check if any keyword matches text
+  function matchesContext(text) {
+    if (!text || allKW.length === 0) return true;
+    var lower = text.toLowerCase();
+    return allKW.some(function(kw) { return lower.indexOf(kw) !== -1; });
+  }
+
+  // Filter indicators — show all (IOCs are universal threats) but prioritize by sector relevance
+  // For IOCs we don't actually filter out — all IOCs are relevant to all clients
+  // Instead, sort by relevance (matching labels/actors first)
+  var indicators = (data.indicators || []).slice();
+  indicators.sort(function(a, b) {
+    var aText = (a.name || '') + ' ' + (a.description || '') + ' ' + ((a.objectLabel || []).map(function(l){return l.value;}).join(' '));
+    var bText = (b.name || '') + ' ' + (b.description || '') + ' ' + ((b.objectLabel || []).map(function(l){return l.value;}).join(' '));
+    var aRelevant = matchesContext(aText) ? 0 : 1;
+    var bRelevant = matchesContext(bText) ? 0 : 1;
+    if (aRelevant !== bRelevant) return aRelevant - bRelevant;
+    return (b.x_opencti_score || 0) - (a.x_opencti_score || 0);
+  });
+
+  // Filter actors — show those targeting the client's sector/region
+  var actors = (data.actors || []).filter(function(a) {
+    if (a._source === 'DACTA TIP') {
+      // DACTA TIP intrusion sets — match by description or labels
+      var text = (a.name || '') + ' ' + (a.description || '') + ' ' + (a.primary_motivation || '');
+      return matchesContext(text);
+    } else {
+      // CrowdStrike actors — match by target industries/countries/motivations
+      var industries = (a.target_industries || []).map(function(i) { return (i.value || i || '').toLowerCase(); }).join(' ');
+      var countries = (a.target_countries || []).map(function(c) { return (c.value || c || '').toLowerCase(); }).join(' ');
+      var desc = (a.short_description || a.description || '').toLowerCase();
+      var combined = industries + ' ' + countries + ' ' + desc + ' ' + (a.name || '').toLowerCase();
+      return allKW.some(function(kw) { return combined.indexOf(kw) !== -1; });
+    }
+  });
+  // If filter is too aggressive (< 3 results), show all but sorted
+  if (actors.length < 3) actors = (data.actors || []);
+
+  // Filter reports by relevance
+  var allReports = (data.reports || []).concat(data.csReports || []);
+  var filteredReports = allReports.filter(function(r) {
+    var text = (r.name || '') + ' ' + (r.short_description || r.description || '') + ' ' +
+      ((r.target_industries || []).map(function(i) { return i.value || i; }).join(' ')) + ' ' +
+      ((r.target_countries || []).map(function(c) { return c.value || c; }).join(' '));
+    return matchesContext(text);
+  });
+  if (filteredReports.length < 3) filteredReports = allReports;
+
+  // Render filtered data
+  renderIOCFeed(indicators);
+  renderHuntHypotheses(indicators);
+  renderActorGrid(actors);
+  renderReportsList(filteredReports);
+
+  // Update counters
+  var cIocs = _el('tip-count-iocs'); if (cIocs) cIocs.textContent = indicators.length;
+  var cActors = _el('tip-count-actors'); if (cActors) cActors.textContent = actors.length;
+  var cReports = _el('tip-count-reports'); if (cReports) cReports.textContent = filteredReports.length;
+
+  console.log('[TIP] Org filter applied: ' + d.name + ' — ' + indicators.length + ' IOCs, ' + actors.length + ' actors, ' + filteredReports.length + ' reports');
+}
 
 /* =============================================
    LIVE DATA STORE
