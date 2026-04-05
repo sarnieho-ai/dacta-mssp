@@ -23856,37 +23856,6 @@ body.mode-production .prod-badge { display: flex; }
     TI Copilot
   </button>
 
-  <!-- TI Copilot Drawer -->
-  <div class="tip-copilot-drawer" id="tipCopilotDrawer" onclick="if(event.target===this)tipCloseCopilot()">
-    <div class="tip-copilot-modal">
-    <div class="tip-copilot-header">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M10 17h4"/></svg>
-        <span style="font-size:12px;font-weight:700;color:#f1f5f9;letter-spacing:0.05em;">TI COPILOT</span>
-        <span style="font-size:8px;padding:2px 6px;border-radius:4px;background:rgba(0,212,255,0.1);color:#00d4ff;border:1px solid rgba(0,212,255,0.2);font-weight:600;">AI</span>
-      </div>
-      <button class="tip-copilot-close" onclick="tipCloseCopilot()">&times;</button>
-    </div>
-    <div class="tip-copilot-messages" id="tipCopilotMessages">
-      <div class="tip-copilot-msg assistant">
-        <div class="tip-copilot-msg-content">I'm your Threat Intelligence Copilot. Ask me anything about IOCs, threat actors, attack patterns, or use natural language to search across DACTA TIP, CrowdStrike Intel, and your SIEM.
-        <div class="tip-copilot-suggestions">
-          <button onclick="tipCopilotAsk('What are the latest high-confidence IOCs from CrowdStrike?')">Latest high-confidence IOCs</button>
-          <button onclick="tipCopilotAsk('Which threat actors target financial services in APAC?')">Actors targeting APAC finance</button>
-          <button onclick="tipCopilotAsk('Summarize the top threats for this week')">Top threats this week</button>
-          <button onclick="tipCopilotAsk('Search for any IOCs related to APT41')">IOCs related to APT41</button>
-        </div>
-        </div>
-      </div>
-    </div>
-    <div class="tip-copilot-input-wrap">
-      <input type="text" class="tip-copilot-input" id="tipCopilotInput" placeholder="Ask about IOCs, actors, campaigns..." onkeydown="if(event.key==='Enter')tipCopilotSend()">
-      <button class="tip-copilot-send" onclick="tipCopilotSend()">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-      </button>
-    </div>
-    </div><!-- end tip-copilot-modal -->
-  </div>
 </div>
 
 <!-- ============================================================
@@ -31976,6 +31945,38 @@ Analyst: K. Rasmussen | 2026-02-28
 
 
 
+
+<!-- TI Copilot Drawer (outside all containers so position:fixed works) -->
+<div class="tip-copilot-drawer" id="tipCopilotDrawer" onclick="if(event.target===this)tipCloseCopilot()">
+  <div class="tip-copilot-modal">
+    <div class="tip-copilot-header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M10 17h4"/></svg>
+        <span style="font-size:12px;font-weight:700;color:#f1f5f9;letter-spacing:0.05em;">TI COPILOT</span>
+        <span style="font-size:8px;padding:2px 6px;border-radius:4px;background:rgba(0,212,255,0.1);color:#00d4ff;border:1px solid rgba(0,212,255,0.2);font-weight:600;">AI</span>
+      </div>
+      <button class="tip-copilot-close" onclick="tipCloseCopilot()">&times;</button>
+    </div>
+    <div class="tip-copilot-messages" id="tipCopilotMessages">
+      <div class="tip-copilot-msg assistant">
+        <div class="tip-copilot-msg-content">I'm your Threat Intelligence Copilot. Ask me anything about IOCs, threat actors, attack patterns, or use natural language to search across DACTA TIP, CrowdStrike Intel, and your SIEM.
+          <div class="tip-copilot-suggestions">
+            <button onclick="tipCopilotAsk('What are the latest high-confidence IOCs from CrowdStrike?')">Latest high-confidence IOCs</button>
+            <button onclick="tipCopilotAsk('Which threat actors target financial services in APAC?')">Actors targeting APAC finance</button>
+            <button onclick="tipCopilotAsk('Summarize the top threats for this week')">Top threats this week</button>
+            <button onclick="tipCopilotAsk('Search for any IOCs related to APT41')">IOCs related to APT41</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tip-copilot-input-wrap">
+      <input type="text" class="tip-copilot-input" id="tipCopilotInput" placeholder="Ask about IOCs, actors, campaigns..." onkeydown="if(event.key==='Enter')tipCopilotSend()">
+      <button class="tip-copilot-send" onclick="tipCopilotSend()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
