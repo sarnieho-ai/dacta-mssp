@@ -22017,15 +22017,19 @@ function getThemeTickColor() {
 .tip-copilot-btn:hover { background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(139,92,246,0.15)); border-color: rgba(0,212,255,0.4); box-shadow: 0 0 12px rgba(0,212,255,0.1); }
 
 .tip-copilot-drawer {
-  display: none; position: fixed; right: 0; top: 0; bottom: 0;
-  width: 420px; max-width: 100vw; z-index: 9500;
-  background: linear-gradient(180deg, #0d1220 0%, #0a0e1a 100%);
-  border-left: 1px solid rgba(0,212,255,0.12);
-  box-shadow: -8px 0 40px rgba(0,0,0,0.5);
-  flex-direction: column; font-family: 'Sora', sans-serif;
+  display: none; position: fixed; inset: 0; z-index: 9500;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+  align-items: center; justify-content: center;
 }
-.tip-copilot-drawer.open { display: flex; animation: tipCopilotSlideIn 0.25s ease; }
-@keyframes tipCopilotSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.tip-copilot-drawer.open { display: flex; }
+.tip-copilot-modal {
+  width: 680px; max-width: 90vw; height: 600px; max-height: 85vh;
+  background: linear-gradient(180deg, #0d1220 0%, #0a0e1a 100%);
+  border: 1px solid rgba(0,212,255,0.12);
+  border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  font-family: 'Sora', sans-serif;
+}
 
 .tip-copilot-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -22260,10 +22264,13 @@ function getThemeTickColor() {
 /* ---- Grid Layouts ---- */
 .tip-ops-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 420px;
   gap: 16px;
+  min-height: calc(100vh - 260px);
 }
 @media (max-width: 900px) { .tip-ops-grid { grid-template-columns: 1fr; } }
+.tip-ops-grid > .tip-panel { display: flex; flex-direction: column; }
+.tip-ops-grid > .tip-panel > .tip-panel-scroll { flex: 1; }
 
 /* ---- Buttons ---- */
 .tip-btn {
@@ -22570,18 +22577,12 @@ function getThemeTickColor() {
 
 /* ---- Hunt Hypotheses — polished cards ---- */
 .tip-hunt-card {
-  background: rgba(13,20,38,0.8);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 10px;
-  margin-bottom: 8px;
-  overflow: hidden;
-  transition: border-color 0.18s, box-shadow 0.18s;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+  padding: 12px 14px; margin-bottom: 8px;
+  background: rgba(255,255,255,0.02); border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.15s;
 }
-.tip-hunt-card:hover {
-  border-color: rgba(0,212,255,0.18);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-}
+.tip-hunt-card:hover { background: rgba(255,255,255,0.04); }
 /* Threat-level left border color coding */
 .tip-hunt-card[data-priority="critical"] { border-left: 3px solid #ff6b6b; }
 .tip-hunt-card[data-priority="high"]     { border-left: 3px solid #f97316; }
@@ -22716,6 +22717,7 @@ function getThemeTickColor() {
   flex-wrap: wrap;
 }
 .tip-actor-row:hover { border-color: rgba(255,255,255,0.12); background: rgba(17,24,39,0.85); }
+.tip-actor-row.selected { border-color: rgba(0,212,255,0.3); background: rgba(0,212,255,0.06); }
 
 .tip-actor-card {
   background: rgba(13,20,38,0.8);
@@ -23143,7 +23145,10 @@ function getThemeTickColor() {
 .tip-toggle:checked::after { left: 21px; background: #00d4ff; }
 
 /* ---- Reporting Tab ---- */
-.tip-report-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.tip-report-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-height: calc(100vh - 260px); }
+.tip-report-layout > div { display: flex; flex-direction: column; }
+.tip-report-layout > div > .tip-panel { display: flex; flex-direction: column; flex: 1; }
+.tip-report-layout > div > .tip-panel > .tip-panel-scroll { flex: 1; max-height: none; }
 @media (max-width: 900px) { .tip-report-layout { grid-template-columns: 1fr; } }
 
 .tip-checkboxes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -23852,7 +23857,8 @@ body.mode-production .prod-badge { display: flex; }
   </button>
 
   <!-- TI Copilot Drawer -->
-  <div class="tip-copilot-drawer" id="tipCopilotDrawer">
+  <div class="tip-copilot-drawer" id="tipCopilotDrawer" onclick="if(event.target===this)tipCloseCopilot()">
+    <div class="tip-copilot-modal">
     <div class="tip-copilot-header">
       <div style="display:flex;align-items:center;gap:8px;">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M10 17h4"/></svg>
@@ -23879,6 +23885,7 @@ body.mode-production .prod-badge { display: flex; }
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       </button>
     </div>
+    </div><!-- end tip-copilot-modal -->
   </div>
 </div>
 
@@ -23910,7 +23917,7 @@ body.mode-production .prod-badge { display: flex; }
           <button class="tip-ioc-filter-pill" onclick="tipFilterIOCType('hash', this)">Hash</button>
           <button class="tip-ioc-filter-pill" onclick="tipFilterIOCType('url', this)">URL</button>
         </div>
-        <div class="tip-panel-scroll" id="tip-ioc-feed" style="max-height:560px;">
+        <div class="tip-panel-scroll" id="tip-ioc-feed" style="flex:1;overflow-y:auto;">
           <div class="tip-empty-state" id="tip-ioc-loading">
             <div style="color:#00d4ff;margin-bottom:8px;">&#8987;</div>
             Loading live indicators from DACTA TIP...
@@ -23941,7 +23948,7 @@ body.mode-production .prod-badge { display: flex; }
               Hunt Hypotheses
             </div>
           </div>
-          <div class="tip-panel-scroll" id="tip-hunt-hypotheses" style="max-height:280px;">
+          <div class="tip-panel-scroll" id="tip-hunt-hypotheses" style="flex:1;overflow-y:auto;min-height:180px;">
             <div class="tip-empty-state" id="tip-hunt-loading">Loading hunt hypotheses...</div>
           </div>
         </div>
@@ -23951,11 +23958,32 @@ body.mode-production .prod-badge { display: flex; }
 
   <!-- ======== TAB 2: ACTORS & CAMPAIGNS ======== -->
   <div class="tip-tab-panel" id="tip-panel-actors">
-    <div class="tip-section-title">Threat Actors &amp; Intrusion Sets</div>
-    <div class="tip-actor-grid" id="tip-actors-grid">
-      <div class="tip-empty-state" id="tip-actors-loading">
-        <div style="color:#00d4ff;margin-bottom:8px;">&#8987;</div>
-        Loading threat actors from CrowdStrike &amp; DACTA TIP...
+    <div class="tip-actors-layout" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;min-height:calc(100vh - 260px);">
+      <div class="tip-panel" style="display:flex;flex-direction:column;">
+        <div class="tip-panel-header">
+          <div class="tip-panel-title">
+            <span class="tip-panel-title-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            Threat Actors &amp; Intrusion Sets
+            <span class="tip-badge-count" id="tip-actors-count2">0</span>
+          </div>
+        </div>
+        <div class="tip-panel-scroll" id="tip-actors-grid" style="flex:1;overflow-y:auto;">
+          <div class="tip-empty-state" id="tip-actors-loading">
+            <div style="color:#00d4ff;margin-bottom:8px;">&#8987;</div>
+            Loading threat actors from CrowdStrike &amp; DACTA TIP...
+          </div>
+        </div>
+      </div>
+      <div class="tip-panel" style="display:flex;flex-direction:column;">
+        <div class="tip-panel-header">
+          <div class="tip-panel-title">
+            <span class="tip-panel-title-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+            Actor Detail
+          </div>
+        </div>
+        <div class="tip-panel-scroll" id="tip-actor-detail" style="flex:1;overflow-y:auto;">
+          <div class="tip-empty-state">Select an actor to view details</div>
+        </div>
       </div>
     </div>
   </div>
@@ -24035,7 +24063,7 @@ body.mode-production .prod-badge { display: flex; }
               Latest Reports
             </div>
           </div>
-          <div class="tip-panel-scroll" style="max-height:600px;">
+          <div class="tip-panel-scroll" style="flex:1;overflow-y:auto;">
             <div class="tip-recent-reports" id="tip-reports-list">
               <div class="tip-empty-state" id="tip-reports-loading">Loading intelligence reports...</div>
             </div>
@@ -24043,7 +24071,7 @@ body.mode-production .prod-badge { display: flex; }
         </div>
       </div>
       <div>
-        <div class="tip-panel" id="tip-report-detail-panel" style="position:sticky;top:120px;">
+        <div class="tip-panel" id="tip-report-detail-panel" style="display:flex;flex-direction:column;flex:1;">
           <div class="tip-panel-header">
             <div class="tip-panel-title">Report Detail</div>
           </div>
@@ -24726,7 +24754,11 @@ window.tipAutoApprove = tipAutoApprove;
 /* =============================================
    ACTORS RENDERER
    ============================================= */
+// Store actors for detail lookup
+var _tipActorsList = [];
+
 function renderActorGrid(actors) {
+  _tipActorsList = actors || [];
   var container = _el('tip-actors-grid');
   if (!container) return;
   if (!actors || actors.length === 0) {
@@ -24737,7 +24769,6 @@ function renderActorGrid(actors) {
   for (var i = 0; i < actors.length; i++) {
     var a = actors[i];
     var name = a.name || 'Unknown Actor';
-    var desc = a.short_description || a.description || '';
     var aliases = a.aliases || a.known_as || [];
     if (typeof aliases === 'string') aliases = [aliases];
     var aliasStr = aliases.length > 0 ? aliases.slice(0, 3).join(', ') : '';
@@ -24748,19 +24779,15 @@ function renderActorGrid(actors) {
       origin = a.country;
     }
     var source = a._source || 'DACTA TIP';
-    var lastActive = a.last_activity_date || a.last_seen || '';
-    var firstActive = a.first_activity_date || a.first_seen || '';
     var motivations = [];
     if (a.motivations && a.motivations.length > 0) {
       motivations = a.motivations.map(function(m) { return m.value || m; });
     } else if (a.primary_motivation) {
       motivations = [a.primary_motivation];
     }
-    var actorId = 'tip-actor-' + i;
     var sourceBadgeClass = source === 'CrowdStrike' ? 'tip-tag-high' : 'tip-tag-sector';
 
-    // Row header (always visible)
-    html += '<div class="tip-actor-row" onclick="tipToggleActor(\'' + actorId + '\')">';
+    html += '<div class="tip-actor-row" onclick="tipShowActorDetail(' + i + ')" style="cursor:pointer;">';
     html += '  <span class="tip-actor-name" style="font-size:13px;font-weight:700;color:#e8edf5;white-space:nowrap;">' + _escHtml(name) + '</span>';
     if (aliasStr) {
       html += '  <span class="tip-actor-alias" style="font-size:10px;color:#64748b;white-space:nowrap;">aka ' + _escHtml(aliasStr) + '</span>';
@@ -24770,63 +24797,117 @@ function renderActorGrid(actors) {
     }
     html += '  <span class="tip-tag ' + sourceBadgeClass + '" style="font-size:9px;margin-left:auto;flex-shrink:0;">' + _escHtml(source) + '</span>';
     if (motivations.length > 0) {
-      for (var mi = 0; mi < Math.min(motivations.length, 3); mi++) {
+      for (var mi = 0; mi < Math.min(motivations.length, 2); mi++) {
         html += '  <span class="tip-sector-tag" style="font-size:9px;flex-shrink:0;">' + _escHtml(motivations[mi]) + '</span>';
       }
     }
     html += '</div>';
-    // Expandable body (detail panel)
-    html += '<div class="tip-actor-body" id="' + actorId + '-body" style="padding:12px 14px 14px;background:rgba(8,13,26,0.6);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 8px 8px;margin-top:-2px;">';
-    html += '  <div class="tip-actor-expand">';
-    if (desc) {
-      html += '    <div style="font-size:12px;color:#94a3b8;line-height:1.6;margin-bottom:12px;">' + _escHtml(_truncate(desc, 500)) + '</div>';
-    }
-    html += '    <div class="tip-actor-stats">';
-    if (firstActive) {
-      html += '      <div class="tip-stat-item"><div class="tip-stat-label">First Seen</div><div class="tip-stat-val" style="font-size:12px;">' + _formatDate(firstActive) + '</div></div>';
-    }
-    if (lastActive) {
-      html += '      <div class="tip-stat-item"><div class="tip-stat-label">Last Active</div><div class="tip-stat-val cyan" style="font-size:12px;">' + _formatDate(lastActive) + '</div></div>';
-    }
-    html += '    </div>';
-    if (motivations.length > 0) {
-      html += '    <div class="tip-actor-section-label">Motivations</div>';
-      html += '    <div class="tip-sector-tags">';
-      for (var m = 0; m < motivations.length; m++) {
-        html += '      <span class="tip-sector-tag">' + _escHtml(motivations[m]) + '</span>';
-      }
-      html += '    </div>';
-    }
-    if (a.target_industries && a.target_industries.length > 0) {
-      html += '    <div class="tip-actor-section-label">Target Industries</div>';
-      html += '    <div class="tip-sector-tags">';
-      for (var ti = 0; ti < Math.min(a.target_industries.length, 6); ti++) {
-        var indVal = a.target_industries[ti].value || a.target_industries[ti];
-        html += '      <span class="tip-sector-tag">' + _escHtml(indVal) + '</span>';
-      }
-      html += '    </div>';
-    }
-    if (a.target_countries && a.target_countries.length > 0) {
-      html += '    <div class="tip-actor-section-label">Target Countries</div>';
-      html += '    <div class="tip-sector-tags">';
-      for (var tc = 0; tc < Math.min(a.target_countries.length, 8); tc++) {
-        var cVal = a.target_countries[tc].value || a.target_countries[tc];
-        html += '      <span class="tip-sector-tag">' + _escHtml(cVal) + '</span>';
-      }
-      html += '    </div>';
-    }
-    html += '  </div>';
-    html += '</div>';
   }
   container.innerHTML = html;
-  // Update count
+  // Update counts
   var countEl = _el('tip-actors-count');
   if (countEl) countEl.textContent = actors.length;
+  var countEl2 = _el('tip-actors-count2');
+  if (countEl2) countEl2.textContent = actors.length;
 }
 
+function tipShowActorDetail(idx) {
+  var panel = _el('tip-actor-detail');
+  if (!panel) return;
+  var a = _tipActorsList[idx];
+  if (!a) return;
+
+  // Highlight selected row
+  var rows = document.querySelectorAll('#tip-actors-grid .tip-actor-row');
+  for (var r = 0; r < rows.length; r++) { rows[r].classList.remove('selected'); }
+  if (rows[idx]) rows[idx].classList.add('selected');
+
+  var name = a.name || 'Unknown Actor';
+  var desc = a.description || a.short_description || '';
+  var aliases = a.aliases || a.known_as || [];
+  if (typeof aliases === 'string') aliases = [aliases];
+  var origin = '';
+  if (a.origins && a.origins.length > 0) {
+    origin = a.origins.map(function(o) { return o.value || o; }).join(', ');
+  } else if (a.country) {
+    origin = a.country;
+  }
+  var source = a._source || 'DACTA TIP';
+  var lastActive = a.last_activity_date || a.last_seen || '';
+  var firstActive = a.first_activity_date || a.first_seen || '';
+  var motivations = [];
+  if (a.motivations && a.motivations.length > 0) {
+    motivations = a.motivations.map(function(m) { return m.value || m; });
+  } else if (a.primary_motivation) {
+    motivations = [a.primary_motivation];
+  }
+  var sourceBadgeClass = source === 'CrowdStrike' ? 'tip-tag-high' : 'tip-tag-sector';
+
+  var html = '<div style="padding:16px 14px;">';
+  // Name + source badge
+  html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px;">';
+  html += '  <div style="font-size:18px;font-weight:700;color:#e8edf5;line-height:1.2;">' + _escHtml(name) + '</div>';
+  html += '  <span class="tip-tag ' + sourceBadgeClass + '" style="font-size:9px;flex-shrink:0;margin-left:8px;margin-top:3px;">' + _escHtml(source) + '</span>';
+  html += '</div>';
+  // Aliases
+  if (aliases.length > 0) {
+    html += '<div style="font-size:11px;color:#64748b;margin-bottom:12px;">aka ' + _escHtml(aliases.join(', ')) + '</div>';
+  }
+  if (origin) {
+    html += '<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">Origin: <span style="color:#e2e8f0;">' + _escHtml(origin) + '</span></div>';
+  }
+  // Dates
+  if (firstActive || lastActive) {
+    html += '<div class="tip-actor-stats" style="margin-bottom:14px;">';
+    if (firstActive) {
+      html += '<div class="tip-stat-item"><div class="tip-stat-label">First Seen</div><div class="tip-stat-val" style="font-size:12px;">' + _formatDate(firstActive) + '</div></div>';
+    }
+    if (lastActive) {
+      html += '<div class="tip-stat-item"><div class="tip-stat-label">Last Active</div><div class="tip-stat-val cyan" style="font-size:12px;">' + _formatDate(lastActive) + '</div></div>';
+    }
+    html += '</div>';
+  }
+  // Description
+  if (desc) {
+    html += '<div class="tip-actor-section-label">Description</div>';
+    html += '<div style="font-size:12px;color:#94a3b8;line-height:1.6;margin-bottom:14px;">' + _escHtml(desc) + '</div>';
+  }
+  // Motivations
+  if (motivations.length > 0) {
+    html += '<div class="tip-actor-section-label">Motivations</div>';
+    html += '<div class="tip-sector-tags" style="margin-bottom:12px;">';
+    for (var m = 0; m < motivations.length; m++) {
+      html += '<span class="tip-sector-tag">' + _escHtml(motivations[m]) + '</span>';
+    }
+    html += '</div>';
+  }
+  // Target Industries
+  if (a.target_industries && a.target_industries.length > 0) {
+    html += '<div class="tip-actor-section-label">Target Industries</div>';
+    html += '<div class="tip-sector-tags" style="margin-bottom:12px;">';
+    for (var ti = 0; ti < a.target_industries.length; ti++) {
+      var indVal = a.target_industries[ti].value || a.target_industries[ti];
+      html += '<span class="tip-sector-tag">' + _escHtml(indVal) + '</span>';
+    }
+    html += '</div>';
+  }
+  // Target Countries
+  if (a.target_countries && a.target_countries.length > 0) {
+    html += '<div class="tip-actor-section-label">Target Countries</div>';
+    html += '<div class="tip-sector-tags" style="margin-bottom:12px;">';
+    for (var tc = 0; tc < a.target_countries.length; tc++) {
+      var cVal = a.target_countries[tc].value || a.target_countries[tc];
+      html += '<span class="tip-sector-tag">' + _escHtml(cVal) + '</span>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  panel.innerHTML = html;
+}
+window.tipShowActorDetail = tipShowActorDetail;
+
 function tipToggleActor(id) {
-  var body = _el(id + '-body');
-  if (body) body.classList.toggle('open');
+  // Legacy: no-op (detail now shown in right panel)
 }
 window.tipToggleActor = tipToggleActor;
 
@@ -25289,47 +25370,107 @@ function renderHuntHypotheses(indicators) {
   var container = _el('tip-hunt-hypotheses');
   if (!container) return;
   if (!indicators || indicators.length === 0) {
-    container.innerHTML = '<div class="tip-empty-state">No hunt hypotheses available</div>';
+    container.innerHTML = '<div class="tip-empty-state">No indicators to generate hunt hypotheses</div>';
     return;
   }
-  // Generate hypotheses from high-confidence indicators
-  var highConf = indicators.filter(function(ind) { return (ind.x_opencti_score || 0) >= 50; }).slice(0, 5);
-  if (highConf.length === 0) {
-    container.innerHTML = '<div class="tip-empty-state">No high-confidence indicators for hunt hypotheses</div>';
-    return;
-  }
-  var html = '';
-  for (var i = 0; i < highConf.length; i++) {
-    var ind = highConf[i];
-    var iocValue = _parseIocValue(ind);
-    var iocType = _parseIocType(ind.pattern);
-    var labels = (ind.objectLabel || []).map(function(l) { return l.value; });
-    var malwareLabel = '';
-    for (var j = 0; j < labels.length; j++) {
-      if (labels[j].indexOf('malware/') === 0) {
-        malwareLabel = labels[j].replace('malware/', '');
-        break;
-      }
-    }
-    var hypothesis = malwareLabel ? 'Hunt for ' + malwareLabel + ' activity' : 'Hunt for ' + iocType.toUpperCase() + ' indicator activity';
 
-    html += '<div class="tip-hunt-card">';
-    html += '  <div class="tip-hunt-top">';
-    html += '    <span class="tip-ioc-badge ' + _iocBadgeClass(iocType) + '">' + iocType.toUpperCase() + '</span>';
-    html += '    <div class="tip-hunt-name">' + _escHtml(hypothesis) + '</div>';
-    html += '    <span class="tip-priority-badge tip-prio-' + (ind.x_opencti_score >= 70 ? 'critical' : 'high') + '">' + (ind.x_opencti_score >= 70 ? 'CRITICAL' : 'HIGH') + '</span>';
-    html += '  </div>';
-    html += '  <div class="tip-hunt-meta">';
-    html += '    <div class="tip-hunt-meta-item">IOC: <span>' + _escHtml(_truncate(iocValue, 32)) + '</span></div>';
-    html += '    <div class="tip-hunt-meta-item">Score: <span>' + (ind.x_opencti_score || 0) + '/100</span></div>';
-    html += '  </div>';
-    if (ind.pattern) {
-      html += '  <div class="tip-hunt-query">' + _escHtml(_truncate(ind.pattern, 120)) + '</div>';
+  // Generate meaningful hypotheses from indicators
+  var hypotheses = [];
+  var seen = {};
+
+  for (var i = 0; i < indicators.length && hypotheses.length < 8; i++) {
+    var ind = indicators[i];
+    var type = _parseIocType(ind.pattern || '');
+    var val = _parseIocValue(ind);
+    var score = ind.x_opencti_score || 0;
+    if (seen[val] || !val) continue;
+    seen[val] = true;
+
+    if (type === 'url' && score >= 70) {
+      hypotheses.push({
+        title: 'HTTP/S callback to malicious URL',
+        severity: 'critical',
+        ioc: val,
+        iocType: 'URL',
+        description: 'Investigate outbound HTTP/S connections to this URL. Check if any endpoint resolved or connected to this destination via proxy logs, DNS, or EDR telemetry.',
+        siem_query: 'url.full:"' + val.substring(0, 60) + '*" OR url.domain:"' + (val.split('/')[2] || '') + '"',
+        mitre: 'T1071.001 — Application Layer Protocol: Web',
+        hunt_scope: 'Proxy logs, DNS queries, EDR network events (last 30 days)'
+      });
+    } else if (type === 'hash' && score >= 40) {
+      var hashType = val.length === 64 ? 'SHA-256' : val.length === 32 ? 'MD5' : 'SHA-1';
+      hypotheses.push({
+        title: 'Malicious file execution (' + hashType + ')',
+        severity: score >= 70 ? 'critical' : 'high',
+        ioc: val.substring(0, 20) + '...',
+        iocType: 'HASH',
+        description: 'Search for this file hash across all endpoints. Check if any process loaded, executed, or downloaded a file matching this hash. Correlate with parent process tree.',
+        siem_query: 'process.hash.sha256:"' + val + '" OR file.hash.sha256:"' + val + '"',
+        mitre: 'T1204.002 — User Execution: Malicious File',
+        hunt_scope: 'EDR process creation events, file creation logs, download history'
+      });
+    } else if (type === 'ip') {
+      hypotheses.push({
+        title: 'C2 communication to suspicious IP',
+        severity: score >= 70 ? 'critical' : 'high',
+        ioc: val,
+        iocType: 'IP',
+        description: 'Check for any endpoint communicating with this IP. Look for beaconing patterns (regular intervals), unusual ports, or encrypted tunnels. Cross-reference with DNS logs for associated domains.',
+        siem_query: 'destination.ip:"' + val + '" OR dns.resolved_ip:"' + val + '"',
+        mitre: 'T1071 — Application Layer Protocol',
+        hunt_scope: 'Firewall logs, DNS resolution logs, EDR network connections'
+      });
+    } else if (type === 'domain') {
+      hypotheses.push({
+        title: 'DNS resolution to malicious domain',
+        severity: score >= 70 ? 'critical' : 'high',
+        ioc: val,
+        iocType: 'DOMAIN',
+        description: 'Search DNS query logs for any internal host that resolved this domain. Check if the resolution was followed by a network connection. Look for DGA patterns in related domains.',
+        siem_query: 'dns.question.name:"' + val + '" OR url.domain:"' + val + '"',
+        mitre: 'T1568 — Dynamic Resolution',
+        hunt_scope: 'DNS logs, proxy logs, EDR DNS events'
+      });
     }
+  }
+
+  if (hypotheses.length === 0) {
+    container.innerHTML = '<div class="tip-empty-state">No actionable hunt hypotheses from current indicators</div>';
+    return;
+  }
+
+  var html = '';
+  for (var h = 0; h < hypotheses.length; h++) {
+    var hyp = hypotheses[h];
+    var sevColor = hyp.severity === 'critical' ? '#ef4444' : '#f59e0b';
+    var sevLabel = hyp.severity.toUpperCase();
+    html += '<div class="tip-hunt-card" style="border-left:3px solid ' + sevColor + ';">';
+    html += '  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">';
+    html += '    <div>';
+    html += '      <div style="font-size:12px;font-weight:700;color:#f1f5f9;margin-bottom:2px;">' + _escHtml(hyp.title) + '</div>';
+    html += '      <div style="font-size:10px;color:#64748b;">' + _escHtml(hyp.mitre) + '</div>';
+    html += '    </div>';
+    html += '    <span style="font-size:8px;font-weight:700;padding:2px 8px;border-radius:4px;background:' + sevColor + '20;color:' + sevColor + ';border:1px solid ' + sevColor + '40;letter-spacing:0.05em;">' + sevLabel + '</span>';
+    html += '  </div>';
+    html += '  <div style="font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:8px;">' + _escHtml(hyp.description) + '</div>';
+    html += '  <div style="font-size:9px;color:#475569;margin-bottom:4px;">IOC: <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;color:#00d4ff;font-size:9px;">' + _escHtml(hyp.ioc) + '</code></div>';
+    html += '  <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">';
+    html += '    <button class="tip-btn tip-btn-secondary tip-btn-xs" onclick="tipCopyToClipboard(\'' + _escHtml(hyp.siem_query.replace(/\\/g, '\\\\').replace(/'/g, "\\'")) + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy SIEM Query</button>';
+    html += '    <span style="font-size:8px;color:#475569;">Scope: ' + _escHtml(hyp.hunt_scope) + '</span>';
+    html += '  </div>';
     html += '</div>';
   }
   container.innerHTML = html;
 }
+
+function tipCopyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(function() {
+    if (typeof showToast === 'function') showToast('Query copied to clipboard', 'success');
+  }).catch(function() {
+    prompt('Copy this query:', text);
+  });
+}
+window.tipCopyToClipboard = tipCopyToClipboard;
 
 /* =============================================
    GLOBAL SEARCH
