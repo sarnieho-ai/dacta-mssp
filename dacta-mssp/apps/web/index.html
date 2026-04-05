@@ -32018,9 +32018,7 @@ Analyst: K. Rasmussen | 2026-02-28
 
 
 
-</div><!-- end #app -->
-
-<!-- TI Copilot Drawer (outside all containers so position:fixed works) -->
+<!-- TI Copilot Drawer — moved to body level via JS below -->
 <div class="tip-copilot-drawer" id="tipCopilotDrawer" onclick="if(event.target===this)tipCloseCopilot()">
   <div class="tip-copilot-modal">
     <div class="tip-copilot-header">
@@ -32051,6 +32049,15 @@ Analyst: K. Rasmussen | 2026-02-28
     </div>
   </div>
 </div>
+<script>
+// Move copilot drawer to be a direct child of body (HTML parser may nest it inside #app)
+(function() {
+  var drawer = document.getElementById('tipCopilotDrawer');
+  if (drawer && drawer.parentElement !== document.body) {
+    document.body.appendChild(drawer);
+  }
+})();
+</script>
 
 </body>
 </html>
