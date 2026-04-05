@@ -31,14 +31,47 @@ window.switchTiTab = switchTiTab;
 /* =============================================
    CLIENT CONTEXT DATA
    ============================================= */
+// CLIENT_DATA is loaded dynamically from the organizations DB table.
+// Fallback values are used until the DB loads.
 var CLIENT_DATA = {
-  all:    { name:'All Clients',       sector:'Multi-Sector',         region:'APAC',               risk:'HIGH',   riskClass:'tip-tag-high' },
-  dacta:  { name:'Dacta Global',      sector:'Financial Services',   region:'APAC \u00b7 Singapore', risk:'HIGH',   riskClass:'tip-tag-high' },
-  spmt:   { name:'SPMT',              sector:'Financial Services',   region:'APAC \u00b7 Singapore', risk:'HIGH',   riskClass:'tip-tag-high' },
-  gac:    { name:'Global Advisor Co', sector:'Financial Services',   region:'APAC \u00b7 Australia', risk:'MEDIUM', riskClass:'tip-tag-medium' },
-  naga:   { name:'Naga World',        sector:'Hospitality / Gaming', region:'SEA \u00b7 Cambodia',   risk:'HIGH',   riskClass:'tip-tag-high' },
-  adv:    { name:'ADV Partners',      sector:'Professional Services',region:'APAC \u00b7 Singapore', risk:'MEDIUM', riskClass:'tip-tag-medium' }
+  all: { name:'All Clients', sector:'Multi-Sector', region:'APAC', risk:'HIGH', riskClass:'tip-tag-high' }
 };
+
+// Load orgs from DB and populate CLIENT_DATA + the org selector dropdown
+(function _tipLoadOrgsFromDB() {
+  var sb = window._dactaSupabase || window._supabaseRef;
+  if (!sb) { setTimeout(_tipLoadOrgsFromDB, 1000); return; }
+  sb.from('organizations').select('name,short_name,industry,region,risk_level,service_model').order('name').then(function(res) {
+    if (!res.data) return;
+    var sel = document.getElementById('tipOrgSelector');
+    res.data.forEach(function(org) {
+      var key = (org.short_name || org.name.substring(0, 4)).toLowerCase();
+      var industry = org.industry || 'Technology';
+      var region = org.region || 'APAC';
+      var risk = (org.risk_level || 'HIGH').toUpperCase();
+      var riskClass = risk === 'HIGH' ? 'tip-tag-high' : risk === 'CRITICAL' ? 'tip-tag-critical' : 'tip-tag-medium';
+      CLIENT_DATA[key] = {
+        name: org.name,
+        sector: industry,
+        region: region,
+        risk: risk,
+        riskClass: riskClass
+      };
+      // Add to TI org selector dropdown if it exists and option not already present
+      if (sel) {
+        var exists = false;
+        for (var i = 0; i < sel.options.length; i++) { if (sel.options[i].value === key) { exists = true; break; } }
+        if (!exists) {
+          var opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = org.name;
+          sel.appendChild(opt);
+        }
+      }
+    });
+    console.log('[TIP] Loaded ' + res.data.length + ' orgs from DB into CLIENT_DATA');
+  }).catch(function(e) { console.warn('[TIP] DB org load failed, using fallback:', e); });
+})();
 
 function tipUpdateClientContext(val) {
   var d = CLIENT_DATA[val];
@@ -60,9 +93,16 @@ window.tipUpdateClientContext = tipUpdateClientContext;
 
 // Sector-to-keyword mapping for relevance filtering
 var _TIP_SECTOR_KEYWORDS = {
-  'Financial Services':    ['financial', 'banking', 'payment', 'swift', 'fin', 'credit', 'atm', 'pos', 'fraud', 'insurance', 'investment', 'capital market', 'fintech'],
-  'Hospitality / Gaming':  ['hospitality', 'hotel', 'casino', 'gaming', 'entertainment', 'tourism', 'leisure', 'resort', 'food', 'beverage', 'point-of-sale', 'retail', 'travel'],
-  'Professional Services': ['professional', 'consulting', 'legal', 'audit', 'advisory', 'accounting', 'management consulting', 'law firm'],
+  // DB industry values (source of truth from organizations table)
+  'Financial':             ['financial', 'banking', 'payment', 'swift', 'fin', 'credit', 'atm', 'pos', 'fraud', 'insurance', 'investment', 'fintech'],
+  'Financial Services':    ['financial', 'banking', 'payment', 'swift', 'fin', 'credit', 'atm', 'pos', 'fraud', 'insurance', 'investment', 'fintech'],
+  'Technology':            ['technology', 'tech', 'software', 'saas', 'cloud', 'cyber', 'security', 'it services', 'managed services', 'msp'],
+  'Hospitality':           ['hospitality', 'hotel', 'casino', 'gaming', 'entertainment', 'tourism', 'leisure', 'resort', 'food', 'beverage', 'retail', 'travel'],
+  'Hospitality / Gaming':  ['hospitality', 'hotel', 'casino', 'gaming', 'entertainment', 'tourism', 'leisure', 'resort', 'food', 'beverage', 'retail', 'travel'],
+  'Maritime':              ['maritime', 'shipping', 'port', 'logistics', 'marine', 'vessel', 'cargo', 'transport'],
+  'Real Estate':           ['real estate', 'property', 'construction', 'building', 'development', 'reit'],
+  'Legal':                 ['legal', 'law', 'attorney', 'solicitor', 'litigation', 'compliance', 'regulatory'],
+  'Professional Services': ['professional', 'consulting', 'legal', 'audit', 'advisory', 'accounting', 'law firm'],
   'Multi-Sector':          []  // shows everything
 };
 var _TIP_REGION_KEYWORDS = {

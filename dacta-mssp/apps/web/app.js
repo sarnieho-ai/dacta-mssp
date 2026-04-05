@@ -14403,6 +14403,8 @@ async function loadClientsPage() {
           _clientsLogSourceCounts[ls.org_id] = (_clientsLogSourceCounts[ls.org_id] || 0) + 1;
         });
       }
+      // Fetch Jira ticket counts per org (async, don't block render)
+      _loadJiraOrgTicketCounts(orgs);
     } catch(e) { console.warn('[Clients] DB load failed, falling back to hardcoded:', e.message); }
   }
 
@@ -14463,6 +14465,73 @@ async function loadClientsPage() {
     html += '</tr>';
   });
   tbody.innerHTML = html;
+}
+
+// Load Jira ticket counts per org asynchronously, then update the table cells
+async function _loadJiraOrgTicketCounts(orgs) {
+  try {
+    if (!window._dactaJiraOrgCounts) window._dactaJiraOrgCounts = {};
+    // Get total ticket counts from Jira via a single search call per org
+    // Use the Jira API with Organizations filter
+    var orgNames = orgs.map(function(o) { return o.name; }).filter(Boolean);
+    console.log('[Clients] Fetching Jira ticket counts for ' + orgNames.length + ' orgs...');
+
+    // Fetch all tickets with organization field in one call
+    var resp = await _siemFetch('/api/jira', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'search',
+        jql: 'project = DAC AND type in ("[System] Incident", "[System] Service request") ORDER BY created DESC',
+        maxResults: 200,
+        fields: ['key', 'summary', 'customfield_10002']
+      })
+    });
+    if (!resp.ok) throw new Error('Jira API ' + resp.status);
+    var data = await resp.json();
+    var issues = data.issues || [];
+
+    // Count tickets per org by matching the Organizations custom field
+    var counts = {};
+    issues.forEach(function(issue) {
+      // customfield_10002 is the JSM Organizations field
+      var orgsField = issue.fields && issue.fields.customfield_10002;
+      if (orgsField && Array.isArray(orgsField)) {
+        orgsField.forEach(function(jiraOrg) {
+          var name = jiraOrg.name || '';
+          counts[name] = (counts[name] || 0) + 1;
+        });
+      }
+    });
+
+    window._dactaJiraOrgCounts = counts;
+    var totalTickets = 0;
+    Object.values(counts).forEach(function(v) { totalTickets += v; });
+
+    console.log('[Clients] Jira ticket counts loaded:', JSON.stringify(counts), 'total:', totalTickets);
+
+    // Update the Total Tickets stat card
+    var statTickets = document.getElementById('clientStatTickets');
+    if (statTickets) statTickets.textContent = totalTickets || 0;
+
+    // Update individual rows in the table
+    var tbody = document.getElementById('clientsTableBody');
+    if (!tbody) return;
+    var rows = tbody.querySelectorAll('tr');
+    rows.forEach(function(row) {
+      var cells = row.querySelectorAll('td');
+      if (cells.length < 8) return;
+      // Column 0 is org name (inside <strong>)
+      var orgNameEl = cells[0].querySelector('strong');
+      var orgName = orgNameEl ? orgNameEl.textContent.trim() : '';
+      // Column 7 is Jira Tickets
+      var ticketCell = cells[7];
+      var count = counts[orgName] || 0;
+      ticketCell.innerHTML = count > 0 ? '<span style="font-weight:600;color:var(--cyan);">' + count + '</span>' : '<span style="color:var(--text-muted);">0</span>';
+    });
+  } catch(e) {
+    console.warn('[Clients] Jira ticket count load failed:', e.message);
+  }
 }
 
 function filterClientsList() {
