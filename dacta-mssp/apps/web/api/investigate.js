@@ -27,8 +27,7 @@ const HM_BASE = process.env.HEIMDAL_BASE_URL || 'https://dashboard.heimdalsecuri
 const HM_API_KEY = process.env.HEIMDAL_API_KEY || '';
 const HM_CUSTOMER_ID = process.env.HEIMDAL_CUSTOMER_ID || '';
 
-const OPENCTI_URL = process.env.OPENCTI_URL || '';
-const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || '';
+const { OPENCTI_URL, OPENCTI_TOKEN } = require('./lib/config');
 
 // CrowdStrike credentials
 const CS_CLIENT_ID = process.env.CROWDSTRIKE_CLIENT_ID || '';

@@ -28,8 +28,7 @@ function elasticFetchOptions(opts) {
 }
 // SIEMLess DB — server-side logging (bypasses RLS with service role)
 // DACTA TIP — fallback to base64-encoded defaults if env vars not set
-const OPENCTI_URL = process.env.OPENCTI_URL || '';
-const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || '';
+const { OPENCTI_URL, OPENCTI_TOKEN } = require('./lib/config');
 
 // ── Load org-specific log sources from DB ──
 async function loadOrgLogSources(orgName) {

@@ -4,6 +4,7 @@
 
 
 const { setCors, requireAuth } = require('./lib/auth');
+const { OPENCTI_URL, OPENCTI_TOKEN } = require('./lib/config');
 
 export default async function handler(req, res) {
   setCors(req, res);
@@ -11,15 +12,16 @@ export default async function handler(req, res) {
 
   // Health check: GET without params returns service status
   if (req.method === 'GET' && (!req.body || !req.body.query)) {
-    return res.status(200).json({ status: 'ok', service: 'dacta-tip-proxy', timestamp: new Date().toISOString() });
+    return res.status(200).json({ status: 'ok', service: 'dacta-tip-proxy', configured: !!OPENCTI_URL, timestamp: new Date().toISOString() });
   }
 
   // SECURITY: Require authenticated session for TIP queries
   const authUser = await requireAuth(req, res);
   if (!authUser) return; // 401 already sent
 
-  const OPENCTI_URL = process.env.OPENCTI_URL || '';
-  const OPENCTI_TOKEN = process.env.OPENCTI_TOKEN || '';
+  if (!OPENCTI_URL) {
+    return res.status(503).json({ error: 'DACTA TIP service not configured' });
+  }
 
   try {
     const { query, variables } = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
