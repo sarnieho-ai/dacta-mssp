@@ -24174,9 +24174,9 @@ window.tipUpdateClientContext = tipUpdateClientContext;
 
 // Sector-to-keyword mapping for relevance filtering
 var _TIP_SECTOR_KEYWORDS = {
-  'Financial Services':    ['financial', 'banking', 'payment', 'swift', 'fin', 'credit', 'atm', 'pos', 'fraud'],
-  'Hospitality / Gaming':  ['hospitality', 'hotel', 'casino', 'gaming', 'pos', 'tourism', 'entertainment'],
-  'Professional Services': ['professional', 'consulting', 'legal', 'audit', 'advisory'],
+  'Financial Services':    ['financial', 'banking', 'payment', 'swift', 'fin', 'credit', 'atm', 'pos', 'fraud', 'insurance', 'investment', 'capital market', 'fintech'],
+  'Hospitality / Gaming':  ['hospitality', 'hotel', 'casino', 'gaming', 'entertainment', 'tourism', 'leisure', 'resort', 'food', 'beverage', 'point-of-sale', 'retail', 'travel'],
+  'Professional Services': ['professional', 'consulting', 'legal', 'audit', 'advisory', 'accounting', 'management consulting', 'law firm'],
   'Multi-Sector':          []  // shows everything
 };
 var _TIP_REGION_KEYWORDS = {
@@ -24193,63 +24193,84 @@ function _tipApplyOrgFilter(orgKey) {
 
   if (orgKey === 'all') {
     // Show everything
-    renderIOCFeed(data.indicators || []);
-    renderPyramidOfPain(data.indicators || []);
-    renderHuntHypotheses(data.indicators || []);
+    var allIndicators = data.indicators || [];
+    renderIOCFeed(allIndicators);
+    renderPyramidOfPain(allIndicators);
     renderActorGrid(data.actors || []);
     var allReports = (data.reports || []).concat(data.csReports || []);
     renderReportsList(allReports);
-    // Update counters
-    var cIocs = _el('tip-count-iocs'); if (cIocs) cIocs.textContent = (data.indicators || []).length;
+    var cIocs = _el('tip-count-iocs'); if (cIocs) cIocs.textContent = allIndicators.length;
     var cActors = _el('tip-count-actors'); if (cActors) cActors.textContent = (data.actors || []).length;
     var cReports = _el('tip-count-reports'); if (cReports) cReports.textContent = allReports.length;
+    // AI-generated hypotheses for all orgs
+    renderHuntHypotheses(allIndicators, data.actors || [], d, orgKey);
     return;
   }
 
-  // Build relevance keywords from sector + region
+  // ── Build relevance keywords from sector + region ──
   var sectorKW = (_TIP_SECTOR_KEYWORDS[d.sector] || []).map(function(k) { return k.toLowerCase(); });
   var regionKW = (_TIP_REGION_KEYWORDS[d.region] || []).map(function(k) { return k.toLowerCase(); });
   var allKW = sectorKW.concat(regionKW).concat([d.name.toLowerCase()]);
 
-  // Helper: check if any keyword matches text
   function matchesContext(text) {
     if (!text || allKW.length === 0) return true;
     var lower = text.toLowerCase();
     return allKW.some(function(kw) { return lower.indexOf(kw) !== -1; });
   }
 
-  // Filter indicators — show all (IOCs are universal threats) but prioritize by sector relevance
-  // For IOCs we don't actually filter out — all IOCs are relevant to all clients
-  // Instead, sort by relevance (matching labels/actors first)
-  var indicators = (data.indicators || []).slice();
-  indicators.sort(function(a, b) {
-    var aText = (a.name || '') + ' ' + (a.description || '') + ' ' + ((a.objectLabel || []).map(function(l){return l.value;}).join(' '));
-    var bText = (b.name || '') + ' ' + (b.description || '') + ' ' + ((b.objectLabel || []).map(function(l){return l.value;}).join(' '));
-    var aRelevant = matchesContext(aText) ? 0 : 1;
-    var bRelevant = matchesContext(bText) ? 0 : 1;
-    if (aRelevant !== bRelevant) return aRelevant - bRelevant;
-    return (b.x_opencti_score || 0) - (a.x_opencti_score || 0);
-  });
-
-  // Filter actors — show those targeting the client's sector/region
+  // ── Filter actors FIRST — strict industry+region matching ──
+  // Only show actors whose target_industries actually match the org's sector
   var actors = (data.actors || []).filter(function(a) {
     if (a._source === 'DACTA TIP') {
-      // DACTA TIP intrusion sets — match by description or labels
       var text = (a.name || '') + ' ' + (a.description || '') + ' ' + (a.primary_motivation || '');
       return matchesContext(text);
-    } else {
-      // CrowdStrike actors — match by target industries/countries/motivations
-      var industries = (a.target_industries || []).map(function(i) { return (i.value || i || '').toLowerCase(); }).join(' ');
-      var countries = (a.target_countries || []).map(function(c) { return (c.value || c || '').toLowerCase(); }).join(' ');
-      var desc = (a.short_description || a.description || '').toLowerCase();
-      var combined = industries + ' ' + countries + ' ' + desc + ' ' + (a.name || '').toLowerCase();
-      return allKW.some(function(kw) { return combined.indexOf(kw) !== -1; });
     }
+    // CrowdStrike actors — must match EITHER sector keywords in target_industries OR region keywords in target_countries
+    var industries = (a.target_industries || []).map(function(i) { return (i.value || i || '').toLowerCase(); });
+    var countries = (a.target_countries || []).map(function(c) { return (c.value || c || '').toLowerCase(); });
+    // Check sector match (industry keywords against target_industries)
+    var sectorMatch = sectorKW.length === 0 || industries.some(function(ind) {
+      return sectorKW.some(function(kw) { return ind.indexOf(kw) !== -1; });
+    });
+    // Check region match (region keywords against target_countries + description)
+    var desc = (a.short_description || a.description || '').toLowerCase();
+    var regionMatch = regionKW.length === 0 || countries.concat([desc]).some(function(txt) {
+      return regionKW.some(function(kw) { return txt.indexOf(kw) !== -1; });
+    });
+    // Actor must match BOTH sector AND region to be relevant, OR sector if no countries listed
+    if (countries.length === 0) return sectorMatch;
+    return sectorMatch && regionMatch;
   });
-  // If filter is too aggressive (< 3 results), show all but sorted
-  if (actors.length < 3) actors = (data.actors || []);
+  // NO fallback — if 0 actors match, show 0 (shows empty state message)
 
-  // Filter reports by relevance
+  // ── Collect IOC values from matched actors to correlate indicators ──
+  var actorNames = actors.map(function(a) { return (a.name || '').toLowerCase(); });
+
+  // ── Filter indicators: prioritize IOCs linked to relevant actors/reports ──
+  var allIndicators = data.indicators || [];
+  var relevantIOCs = [];
+  var genericIOCs = [];
+  for (var ix = 0; ix < allIndicators.length; ix++) {
+    var ind = allIndicators[ix];
+    var indText = (ind.name || '') + ' ' + (ind.description || '') + ' ' +
+      ((ind.objectLabel || []).map(function(l){ return l.value || ''; }).join(' ')) + ' ' +
+      ((ind.createdBy || {}).name || '');
+    if (matchesContext(indText)) {
+      relevantIOCs.push(ind);
+    } else {
+      genericIOCs.push(ind);
+    }
+  }
+  // Sort relevant first by score, then append generics sorted by score
+  relevantIOCs.sort(function(a, b) { return (b.x_opencti_score || 0) - (a.x_opencti_score || 0); });
+  genericIOCs.sort(function(a, b) { return (b.x_opencti_score || 0) - (a.x_opencti_score || 0); });
+  var sortedIndicators = relevantIOCs.concat(genericIOCs);
+
+  // For Pyramid of Pain + Hunt Hypotheses, use only relevant IOCs
+  // (so the pyramid changes per org). If none match, use top-scoring generics.
+  var filteredForPyramid = relevantIOCs.length > 0 ? relevantIOCs : genericIOCs.slice(0, 20);
+
+  // ── Filter reports by relevance ──
   var allReports = (data.reports || []).concat(data.csReports || []);
   var filteredReports = allReports.filter(function(r) {
     var text = (r.name || '') + ' ' + (r.short_description || r.description || '') + ' ' +
@@ -24257,21 +24278,23 @@ function _tipApplyOrgFilter(orgKey) {
       ((r.target_countries || []).map(function(c) { return c.value || c; }).join(' '));
     return matchesContext(text);
   });
-  if (filteredReports.length < 3) filteredReports = allReports;
+  // No fallback for reports either — show what's relevant
 
-  // Render filtered data
-  renderIOCFeed(indicators);
-  renderPyramidOfPain(indicators);
-  renderHuntHypotheses(indicators);
-  renderActorGrid(actors);
-  renderReportsList(filteredReports);
+  // ── Render everything ──
+  renderIOCFeed(sortedIndicators);          // IOC feed: all IOCs, relevant first
+  renderPyramidOfPain(filteredForPyramid);   // Pyramid: only relevant IOCs
+  renderActorGrid(actors);                  // Actors: strictly filtered
+  renderReportsList(filteredReports.length > 0 ? filteredReports : allReports);
 
   // Update counters
-  var cIocs = _el('tip-count-iocs'); if (cIocs) cIocs.textContent = indicators.length;
+  var cIocs = _el('tip-count-iocs'); if (cIocs) cIocs.textContent = sortedIndicators.length;
   var cActors = _el('tip-count-actors'); if (cActors) cActors.textContent = actors.length;
-  var cReports = _el('tip-count-reports'); if (cReports) cReports.textContent = filteredReports.length;
+  var cReports = _el('tip-count-reports'); if (cReports) cReports.textContent = (filteredReports.length > 0 ? filteredReports : allReports).length;
 
-  console.log('[TIP] Org filter applied: ' + d.name + ' — ' + indicators.length + ' IOCs, ' + actors.length + ' actors, ' + filteredReports.length + ' reports');
+  // AI-generated hypotheses with org context
+  renderHuntHypotheses(filteredForPyramid, actors, d, orgKey);
+
+  console.log('[TIP] Org filter applied: ' + d.name + ' — ' + filteredForPyramid.length + ' relevant IOCs (of ' + sortedIndicators.length + '), ' + actors.length + ' actors, ' + filteredReports.length + ' reports');
 }
 
 /* =============================================
@@ -25333,9 +25356,11 @@ function renderPyramidOfPain(filteredIndicators) {
 window.renderPyramidOfPain = renderPyramidOfPain;
 
 /* =============================================
-   HUNT HYPOTHESES (from indicators)
+   HUNT HYPOTHESES — AI-generated per org
    ============================================= */
-function renderHuntHypotheses(indicators) {
+var _huntHypAbort = null; // cancel previous in-flight request
+
+function renderHuntHypotheses(indicators, actors, orgData, orgKey) {
   var container = _el('tip-hunt-hypotheses');
   if (!container) return;
   if (!indicators || indicators.length === 0) {
@@ -25343,107 +25368,152 @@ function renderHuntHypotheses(indicators) {
     return;
   }
 
-  // Collect best IOC per type (highest score) — max 1 hypothesis per type
+  // Show loading state
+  container.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;gap:12px;">' +
+    '<div class="tip-copilot-thinking" style="display:flex;gap:6px;"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>' +
+    '<div style="font-size:11px;color:#64748b;">AI is analyzing ' + indicators.length + ' IOCs' + (actors && actors.length ? ' + ' + actors.length + ' threat actors' : '') + ' for ' + _escHtml((orgData && orgData.name) || 'all organizations') + '...</div>' +
+    '<div style="font-size:9px;color:#475569;">Generating contextual hunt hypotheses with SIEM queries</div></div>';
+
+  // Abort any previous in-flight hypothesis generation
+  if (_huntHypAbort) { try { _huntHypAbort.abort(); } catch(e) {} }
+  _huntHypAbort = new AbortController();
+
+  // Build context summary for AI
+  var iocSummary = _buildIOCSummary(indicators);
+  var actorSummary = _buildActorSummary(actors || []);
+  var sectorInfo = orgData ? (orgData.sector + ' / ' + orgData.region) : 'Multi-Sector';
+  var orgName = orgData ? orgData.name : 'All Organizations';
+
+  // Call dedicated hunt hypothesis AI endpoint
+  var signal = _huntHypAbort.signal;
+  _siemFetch('/api/hunt-hypotheses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      org_name: orgName,
+      sector: sectorInfo,
+      ioc_summary: iocSummary,
+      actor_summary: actorSummary
+    }),
+    signal: signal
+  }).then(function(resp) {
+    if (!resp.ok) throw new Error('API ' + resp.status);
+    return resp.json();
+  }).then(function(data) {
+    var hypotheses = data.hypotheses;
+    if (!Array.isArray(hypotheses) || hypotheses.length === 0) throw new Error('Empty hypotheses');
+    _renderHuntCards(container, hypotheses);
+  }).catch(function(err) {
+    if (err.name === 'AbortError') return; // user switched org, ignore
+    console.warn('[TIP] AI hypothesis generation failed, using fallback:', err.message);
+    // Fallback: generate static hypotheses from IOC data
+    var fallback = _buildFallbackHypotheses(indicators, orgData);
+    _renderHuntCards(container, fallback);
+  });
+}
+
+function _buildIOCSummary(indicators) {
+  var typeCounts = {};
+  var samples = {};
+  for (var i = 0; i < indicators.length; i++) {
+    var type = _parseIocType(indicators[i].pattern || '').toLowerCase();
+    typeCounts[type] = (typeCounts[type] || 0) + 1;
+    if (!samples[type] || samples[type].length < 3) {
+      if (!samples[type]) samples[type] = [];
+      var v = _parseIocValue(indicators[i]);
+      if (v) samples[type].push(v.substring(0, 60));
+    }
+  }
+  var lines = [];
+  var types = Object.keys(typeCounts);
+  for (var t = 0; t < types.length; t++) {
+    lines.push('- ' + types[t].toUpperCase() + ': ' + typeCounts[types[t]] + ' indicators (e.g. ' + (samples[types[t]] || []).join(', ') + ')');
+  }
+  return lines.join('\n') || 'No IOCs available';
+}
+
+function _buildActorSummary(actors) {
+  if (!actors || actors.length === 0) return 'No specific threat actors identified for this org.';
+  var lines = [];
+  for (var i = 0; i < Math.min(actors.length, 8); i++) {
+    var a = actors[i];
+    var industries = (a.target_industries || []).map(function(x) { return x.value || x; }).slice(0, 4).join(', ');
+    var motivation = a.primary_motivation || (a.motivations || []).slice(0, 2).join(', ') || 'unknown';
+    lines.push('- ' + (a.name || 'Unknown') + ' [' + (a._source || 'Intel') + '] — targets: ' + (industries || 'unspecified') + ', motivation: ' + motivation);
+  }
+  return lines.join('\n');
+}
+
+function _buildFallbackHypotheses(indicators, orgData) {
+  // Quick static fallback when AI is unavailable
+  var hypotheses = [];
+  var typeCounts = {};
   var bestByType = {};
   for (var i = 0; i < indicators.length; i++) {
-    var ind = indicators[i];
-    var type = _parseIocType(ind.pattern || '').toLowerCase();
-    var val = _parseIocValue(ind);
-    var score = ind.x_opencti_score || 0;
-    if (!val || type === 'unknown') continue;
-    if (!bestByType[type] || score > bestByType[type].score) {
+    var type = _parseIocType(indicators[i].pattern || '').toLowerCase();
+    typeCounts[type] = (typeCounts[type] || 0) + 1;
+    var val = _parseIocValue(indicators[i]);
+    var score = indicators[i].x_opencti_score || 0;
+    if (val && (!bestByType[type] || score > bestByType[type].score)) {
       bestByType[type] = { val: val, score: score };
     }
   }
-
-  // Count by type for summary
-  var typeCounts = {};
-  for (var j = 0; j < indicators.length; j++) {
-    var t2 = _parseIocType(indicators[j].pattern || '').toLowerCase();
-    typeCounts[t2] = (typeCounts[t2] || 0) + 1;
-  }
-
-  var hypotheses = [];
+  var sector = orgData ? orgData.sector : 'General';
   if (bestByType.url) {
-    var u = bestByType.url;
-    var dom = (u.val.split('/')[2] || '').split(':')[0];
-    hypotheses.push({
-      title: 'Outbound callback to malicious URL via browser or script',
-      severity: u.score >= 70 ? 'critical' : 'high',
-      ioc: u.val.length > 55 ? u.val.substring(0, 53) + '...' : u.val,
-      count: typeCounts.url || 0,
-      description: 'Hunt for endpoints making HTTP/S requests to this URL or domain. Check proxy logs for the full URI, EDR for the initiating process (browser, PowerShell, curl), and DNS for resolution of ' + dom + '.',
-      siem_query: 'url.domain:"' + dom + '" OR process.command_line:(*' + dom + '* OR *curl* OR *wget*)',
-      mitre: 'T1071.001 — Web Protocols',
-      hunt_scope: 'Proxy logs, EDR process+network, DNS'
-    });
+    hypotheses.push({ title: 'Outbound callback to malicious URL', severity: 'critical', mitre: 'T1071.001 — Web Protocols',
+      description: 'Hunt for ' + sector + ' endpoints making HTTP/S requests to known malicious URLs. Check proxy logs and EDR for the initiating process.',
+      ioc: bestByType.url.val.substring(0, 55), siem_query: 'url.full:*' + (bestByType.url.val.split('/')[2] || '') + '*', hunt_scope: 'Proxy logs, EDR, DNS' });
   }
   if (bestByType.hash) {
-    var h = bestByType.hash;
-    var ht = h.val.length === 64 ? 'SHA-256' : h.val.length === 32 ? 'MD5' : 'SHA-1';
-    hypotheses.push({
-      title: 'Malicious file ' + ht + ' — check execution and parent process',
-      severity: h.score >= 70 ? 'critical' : 'high',
-      ioc: h.val.substring(0, 20) + '...',
-      count: typeCounts.hash || 0,
-      description: 'Search all endpoints for this file hash. Investigate the parent process tree — was it downloaded by a browser, email client, or script? Check if executed, loaded as DLL, or written to startup.',
-      siem_query: 'file.hash.' + ht.toLowerCase().replace('-','') + ':"' + h.val + '"',
-      mitre: 'T1204.002 — Malicious File',
-      hunt_scope: 'EDR file creation, process creation, DLL loads'
-    });
+    hypotheses.push({ title: 'Malicious file detected in ' + sector + ' environment', severity: 'critical', mitre: 'T1204.002 — Malicious File',
+      description: 'Search all endpoints for this file hash. Prioritize ' + sector + ' critical systems and user workstations.',
+      ioc: bestByType.hash.val.substring(0, 20) + '...', siem_query: 'file.hash.*:"' + bestByType.hash.val + '"', hunt_scope: 'EDR file + process events' });
   }
   if (bestByType.ip) {
-    var ip = bestByType.ip;
-    hypotheses.push({
-      title: 'C2 beaconing to ' + ip.val + ' — check periodic callbacks',
-      severity: ip.score >= 70 ? 'critical' : 'high',
-      ioc: ip.val,
-      count: typeCounts.ip || 0,
-      description: 'Search firewall and EDR network logs for connections to this IP. Look for beaconing patterns (regular intervals), unusual ports, long-lived sessions, or encrypted traffic on non-standard ports.',
-      siem_query: 'destination.ip:"' + ip.val + '"',
-      mitre: 'T1571 — Non-Standard Port / T1573 — Encrypted Channel',
-      hunt_scope: 'Firewall logs, EDR network, NetFlow'
-    });
+    hypotheses.push({ title: 'C2 beaconing from ' + sector + ' network', severity: 'high', mitre: 'T1571 — Non-Standard Port',
+      description: 'Check for beaconing patterns to this IP from ' + sector + ' assets. Look for periodic callbacks, unusual ports, or encrypted tunnels.',
+      ioc: bestByType.ip.val, siem_query: 'destination.ip:"' + bestByType.ip.val + '"', hunt_scope: 'Firewall, EDR network, NetFlow' });
   }
   if (bestByType.domain) {
-    var dm = bestByType.domain;
-    hypotheses.push({
-      title: 'DNS exfil or C2 via domain: ' + dm.val,
-      severity: dm.score >= 70 ? 'critical' : 'high',
-      ioc: dm.val,
-      count: typeCounts.domain || 0,
-      description: 'Check DNS query logs for internal hosts resolving this domain. Look for unusually long subdomains (DNS tunneling) or high query volume from a single host.',
-      siem_query: 'dns.question.name:"' + dm.val + '" OR dns.question.name:*.' + dm.val,
-      mitre: 'T1048.001 — Exfiltration Over DNS',
-      hunt_scope: 'DNS query logs, passive DNS, EDR DNS events'
-    });
+    hypotheses.push({ title: 'DNS-based C2 or exfiltration', severity: 'high', mitre: 'T1048.001 — Exfiltration Over DNS',
+      description: 'Hunt for DNS queries to this domain from internal hosts. Look for DNS tunneling patterns (long subdomains, high query volume).',
+      ioc: bestByType.domain.val, siem_query: 'dns.question.name:*' + bestByType.domain.val + '*', hunt_scope: 'DNS logs, passive DNS' });
   }
+  return hypotheses;
+}
 
-  if (hypotheses.length === 0) {
-    container.innerHTML = '<div class="tip-empty-state">No actionable hunt hypotheses from current indicators</div>';
-    return;
-  }
-
+function _renderHuntCards(container, hypotheses) {
   var html = '';
   for (var k = 0; k < hypotheses.length; k++) {
     var hyp = hypotheses[k];
-    var sevColor = hyp.severity === 'critical' ? '#ef4444' : '#f59e0b';
+    var sev = (hyp.severity || 'high').toLowerCase();
+    var sevColor = sev === 'critical' ? '#ef4444' : sev === 'medium' ? '#eab308' : '#f59e0b';
+    var safeQuery = _escHtml(hyp.siem_query || '').replace(/'/g, "\\'");
     html += '<div class="tip-hunt-card" style="border-left:3px solid ' + sevColor + ';">';
     html += '  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">';
     html += '    <div style="flex:1;min-width:0;">';
-    html += '      <div style="font-size:12px;font-weight:700;color:#f1f5f9;margin-bottom:2px;">' + _escHtml(hyp.title) + '</div>';
-    html += '      <div style="font-size:10px;color:#64748b;">' + _escHtml(hyp.mitre) + ' &middot; ' + hyp.count + ' indicator' + (hyp.count !== 1 ? 's' : '') + ' of this type</div>';
+    html += '      <div style="font-size:12px;font-weight:700;color:#f1f5f9;margin-bottom:2px;">' + _escHtml(hyp.title || '') + '</div>';
+    html += '      <div style="font-size:10px;color:#64748b;">' + _escHtml(hyp.mitre || '') + '</div>';
     html += '    </div>';
-    html += '    <span style="font-size:8px;font-weight:700;padding:2px 8px;border-radius:4px;background:' + sevColor + '20;color:' + sevColor + ';border:1px solid ' + sevColor + '40;flex-shrink:0;">' + hyp.severity.toUpperCase() + '</span>';
+    html += '    <span style="font-size:8px;font-weight:700;padding:2px 8px;border-radius:4px;background:' + sevColor + '20;color:' + sevColor + ';border:1px solid ' + sevColor + '40;flex-shrink:0;">' + sev.toUpperCase() + '</span>';
     html += '  </div>';
-    html += '  <div style="font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:8px;">' + _escHtml(hyp.description) + '</div>';
-    html += '  <div style="font-size:9px;color:#475569;margin-bottom:6px;">IOC: <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;color:#00d4ff;font-size:9px;">' + _escHtml(hyp.ioc) + '</code></div>';
+    html += '  <div style="font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:8px;">' + _escHtml(hyp.description || '') + '</div>';
+    if (hyp.ioc) {
+      html += '  <div style="font-size:9px;color:#475569;margin-bottom:6px;">IOC: <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;color:#00d4ff;font-size:9px;">' + _escHtml(hyp.ioc) + '</code></div>';
+    }
     html += '  <div style="display:flex;align-items:center;gap:8px;">';
-    html += '    <button class="tip-btn tip-btn-secondary tip-btn-xs" onclick="tipCopyToClipboard(\'' + hyp.siem_query.replace(/'/g, "\\'") + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy SIEM Query</button>';
-    html += '    <span style="font-size:8px;color:#475569;">' + _escHtml(hyp.hunt_scope) + '</span>';
+    if (hyp.siem_query) {
+      html += '    <button class="tip-btn tip-btn-secondary tip-btn-xs" onclick="tipCopyToClipboard(\'' + safeQuery + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy SIEM Query</button>';
+    }
+    if (hyp.hunt_scope) {
+      html += '    <span style="font-size:8px;color:#475569;">' + _escHtml(hyp.hunt_scope) + '</span>';
+    }
     html += '  </div>';
     html += '</div>';
   }
+  html += '<div style="font-size:8px;color:#475569;text-align:center;padding:6px 0;margin-top:4px;border-top:1px solid rgba(255,255,255,0.04);">' +
+    '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="2" style="vertical-align:-2px;margin-right:4px;"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/></svg>' +
+    'AI-generated hypotheses based on live TI data &amp; org context</div>';
   container.innerHTML = html;
 }
 
@@ -25673,7 +25743,9 @@ function loadThreatIntelLive() {
     renderPyramidOfPain(allIndicators);
 
     console.log('[TIP] Rendering hunt hypotheses');
-    renderHuntHypotheses(allIndicators);
+    var _curOrg = window._tipSelectedOrg || 'all';
+    var _curOrgData = CLIENT_DATA[_curOrg] || CLIENT_DATA['all'];
+    renderHuntHypotheses(allIndicators, allActors, _curOrgData, _curOrg);
 
     console.log('[TIP] Rendering actors (' + allActors.length + ' actors)');
     renderActorGrid(allActors);
