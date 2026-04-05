@@ -24630,11 +24630,17 @@ async function tipCopilotSend() {
   _tipCopilotHistory.push({ role: 'user', content: query });
 
   try {
-    var messages = [{ role: 'system', content: systemPrompt }];
-    // Include last 6 messages for context
+    // Build messages — inject TI context into the first user message (not as 'system' role which Claude rejects)
+    var messages = [];
     var histSlice = _tipCopilotHistory.slice(-6);
     for (var i = 0; i < histSlice.length; i++) {
-      messages.push(histSlice[i]);
+      var msg = histSlice[i];
+      if (i === 0 && msg.role === 'user') {
+        // Prepend TI context to the first user message
+        messages.push({ role: 'user', content: '[TI COPILOT CONTEXT]\n' + systemPrompt + '\n\n[USER QUERY]\n' + msg.content });
+      } else {
+        messages.push(msg);
+      }
     }
 
     var resp = await _siemFetch('/api/copilot', {
@@ -24653,7 +24659,7 @@ async function tipCopilotSend() {
 
     if (!resp.ok) throw new Error('API error: ' + resp.status);
     var data = await resp.json();
-    var answer = data.content || data.message || data.text || 'No response received.';
+    var answer = data.response || data.content || data.message || data.text || 'No response received.';
 
     // Convert markdown-ish formatting
     answer = answer

@@ -926,8 +926,10 @@ export default async function handler(req, res) {
       }
     }
 
+    // Filter out 'system' role messages (Claude API only accepts 'user' and 'assistant')
+    const cleanedMessages = messages.filter(m => m.role !== 'system');
     // Trim conversation history to avoid timeout on follow-ups
-    let currentMessages = trimConversation(messages);
+    let currentMessages = trimConversation(cleanedMessages);
 
     // Tokenize ALL messages before Claude sees them
     currentMessages = vault.tokenizeMessages(currentMessages);
