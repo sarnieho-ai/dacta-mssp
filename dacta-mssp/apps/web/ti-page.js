@@ -33,9 +33,10 @@ window.switchTiTab = switchTiTab;
    ============================================= */
 // CLIENT_DATA is loaded dynamically from the organizations DB table.
 // Fallback values are used until the DB loads.
-var CLIENT_DATA = {
+var CLIENT_DATA = window.CLIENT_DATA || {
   all: { name:'All Clients', sector:'Multi-Sector', region:'APAC', risk:'HIGH', riskClass:'tip-tag-high' }
 };
+window.CLIENT_DATA = CLIENT_DATA;
 
 // Load orgs from DB and populate CLIENT_DATA + the org selector dropdown
 var _tipOrgLoadAttempts = 0;
