@@ -38,18 +38,29 @@ var CLIENT_DATA = {
 };
 
 // Load orgs from DB and populate CLIENT_DATA + the org selector dropdown
+var _tipOrgLoadAttempts = 0;
 (function _tipLoadOrgsFromDB() {
   var sb = window._dactaSupabase || window._supabaseRef;
-  if (!sb) { setTimeout(_tipLoadOrgsFromDB, 1000); return; }
-  sb.from('organizations').select('name,short_name,industry,region,risk_level,service_model').order('name').then(function(res) {
+  _tipOrgLoadAttempts++;
+  if (!sb) {
+    if (_tipOrgLoadAttempts < 20) setTimeout(_tipLoadOrgsFromDB, 500);
+    else console.warn('[TIP] Gave up waiting for SIEMLess DB after 10s');
+    return;
+  }
+  sb.from('organizations').select('name,short_name,industry,region,timezone,sla_tier,service_model').order('name').then(function(res) {
     if (!res.data) return;
     var sel = document.getElementById('tip-client-selector');
     res.data.forEach(function(org) {
       var key = (org.short_name || org.name.substring(0, 4)).toLowerCase();
       var industry = org.industry || 'Technology';
-      var region = org.region || 'APAC';
-      var risk = (org.risk_level || 'HIGH').toUpperCase();
-      var riskClass = risk === 'HIGH' ? 'tip-tag-high' : risk === 'CRITICAL' ? 'tip-tag-critical' : 'tip-tag-medium';
+      // Build readable region from DB region + timezone
+      var regionBase = org.region || 'APAC';
+      var tz = org.timezone || '';
+      var country = tz.includes('Singapore') ? 'Singapore' : tz.includes('Phnom_Penh') ? 'Cambodia' : tz.includes('Sydney') ? 'Australia' : '';
+      var region = regionBase + (country ? ' \u00b7 ' + country : '');
+      // Risk from SLA tier
+      var risk = org.sla_tier === 'platinum' || org.sla_tier === 'gold' ? 'HIGH' : 'MEDIUM';
+      var riskClass = risk === 'HIGH' ? 'tip-tag-high' : 'tip-tag-medium';
       CLIENT_DATA[key] = {
         name: org.name,
         sector: industry,
@@ -106,9 +117,12 @@ var _TIP_SECTOR_KEYWORDS = {
   'Multi-Sector':          []  // shows everything
 };
 var _TIP_REGION_KEYWORDS = {
+  'APAC':                  ['apac', 'asia', 'pacific'],
   'APAC \u00b7 Singapore': ['singapore', 'sg', 'apac', 'asia', 'southeast'],
   'APAC \u00b7 Australia': ['australia', 'au', 'apac', 'oceania'],
-  'SEA \u00b7 Cambodia':   ['cambodia', 'kh', 'sea', 'southeast', 'asia']
+  'SEA':                   ['sea', 'southeast', 'asia', 'cambodia', 'singapore', 'indonesia', 'malaysia', 'thailand', 'vietnam'],
+  'SEA \u00b7 Cambodia':   ['cambodia', 'kh', 'sea', 'southeast', 'asia'],
+  'SEA \u00b7 Singapore':  ['singapore', 'sg', 'sea', 'southeast', 'asia']
 };
 
 function _tipApplyOrgFilter(orgKey) {
